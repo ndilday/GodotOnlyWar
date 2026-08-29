@@ -1,7 +1,9 @@
+using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -22,18 +24,24 @@ namespace OnlyWar.Helpers.Orders
         // context. This is separate from row visibility/selection: like squads, an attached
         // specialist remains a selectable roster row so he can be recalled.
         public bool IsAvailable { get; }
+        public CharacterAvailabilityReasonCode ReasonCode { get; }
+        public string Reason { get; }
         public bool IsSelectable => true;
 
         public SpecialistOption(
             PlayerSoldier soldier,
             Squad homeSquad,
             string statusLabel,
-            bool isAvailable = true)
+            bool isAvailable = true,
+            CharacterAvailabilityReasonCode reasonCode = CharacterAvailabilityReasonCode.None,
+            string reason = null)
         {
             Soldier = soldier;
             HomeSquad = homeSquad;
             StatusLabel = statusLabel;
             IsAvailable = isAvailable;
+            ReasonCode = reasonCode;
+            Reason = reason;
         }
 
         public string Label => $"{Soldier.Name} | {Soldier.Template.Name} | {HomeSquad?.Name}";
@@ -50,12 +58,12 @@ namespace OnlyWar.Helpers.Orders
         /// </summary>
         public static bool IsMissionSquadFormation(Squad squad)
         {
-            if (squad == null || squad.IsAdministrative) return false;
+            if (squad == null || !squad.CanAcceptSquadOrder
+                || squad.SquadTemplate?.PermitsIndividualDetachment == true) return false;
 
             SquadTypes type = squad.SquadTemplate?.SquadType ?? SquadTypes.None;
             return (type & (SquadTypes.HQ
-                | SquadTypes.Administrative
-                | SquadTypes.PermitsIndividualDetachment)) == 0;
+                | SquadTypes.Administrative)) == 0;
         }
 
         /// <summary>
@@ -66,9 +74,10 @@ namespace OnlyWar.Helpers.Orders
         public static bool IsDeployableFormation(Squad squad)
         {
             return squad != null
-                && squad.IsOperational
+                && squad.CanMoveAsFormation
                 && squad.Members.Count > 0
-                && squad.SquadTemplate?.PermitsIndividualDetachment != true;
+                && !squad.PermitsIndividualDeployment
+                && !squad.SquadTemplate.PermitsIndividualDetachment;
         }
 
         /// <summary>
@@ -108,33 +117,74 @@ namespace OnlyWar.Helpers.Orders
                 return [];
             }
 
-            return playerRegionFaction.LandedSquads
-                .Where(squad => squad?.SquadTemplate?.PermitsIndividualDetachment == true)
-                .SelectMany(squad => squad.Members
-                    .OfType<PlayerSoldier>()
-                    .Select(soldier =>
+            IEnumerable<PlayerSoldier> globalCharacters = GameDataSingleton.Instance?.Sector?.PlayerForce
+                ?.Army?.PlayerSoldierMap?.Values
+                ?? Enumerable.Empty<PlayerSoldier>();
+            IEnumerable<PlayerSoldier> localCharacters = playerRegionFaction.LandedSquads
+                .Where(squad => squad?.PermitsIndividualDeployment == true
+                    || squad?.SquadTemplate?.PermitsIndividualDetachment == true)
+                .SelectMany(squad => squad.Members.OfType<PlayerSoldier>());
+            return globalCharacters
+                .Concat(localCharacters)
+                .GroupBy(soldier => soldier.Id)
+                .Select(group => group.First())
+                .Where(soldier => soldier.AssignedSquad?.PermitsIndividualDeployment == true
+                    || soldier.AssignedSquad?.SquadTemplate?.PermitsIndividualDetachment == true)
+                .Select(soldier =>
                     {
-                        bool isAvailable = OrderAttachment.CanAttach(
-                            soldier, contextOrder, null, originRegion, out _);
+                        bool assignedToContext = contextOrder != null
+                            && ReferenceEquals(soldier.CurrentOrder, contextOrder);
+                        CharacterAvailabilityEvaluation evaluation = assignedToContext
+                            ? CharacterAvailabilityEvaluation.Allowed
+                            : soldier.AssignedSquad?.PermitsIndividualDeployment == true
+                                ? new CharacterAvailabilityService()
+                                    .EvaluateOrderAssignment(
+                                        soldier,
+                                        contextOrder,
+                                        originRegion,
+                                        contextOrder?.AssignedSquads)
+                                : EvaluateLegacyCandidate(
+                                    soldier, contextOrder, originRegion);
                         return new SpecialistOption(
                             soldier,
-                            squad,
-                            DescribeStatus(soldier, isAvailable),
-                            isAvailable);
-                    }))
-                .OrderBy(option => option.HomeSquad.Name)
+                            soldier.AssignedSquad,
+                            DescribeStatus(soldier, evaluation),
+                            evaluation.IsAllowed,
+                            evaluation.ReasonCode,
+                            evaluation.Reason);
+                    })
+                .OrderBy(option => option.HomeSquad?.Name)
                 .ThenBy(option => option.Soldier.Name)
                 .ToList();
         }
 
-        private static string DescribeStatus(PlayerSoldier soldier, bool isAvailable)
+        private static CharacterAvailabilityEvaluation EvaluateLegacyCandidate(
+            PlayerSoldier soldier,
+            Order contextOrder,
+            Region originRegion)
         {
-            if (soldier.AttachedOrder != null)
+            bool isAvailable = OrderAttachment.CanAttach(
+                soldier, contextOrder, null, originRegion, out string reason);
+            return isAvailable
+                ? CharacterAvailabilityEvaluation.Allowed
+                : new CharacterAvailabilityEvaluation(
+                    false,
+                    CharacterAvailabilityReasonCode.NotAtOrigin,
+                    reason ?? "The character is not available at this origin.");
+        }
+
+        private static string DescribeStatus(
+            PlayerSoldier soldier,
+            CharacterAvailabilityEvaluation evaluation)
+        {
+            if (soldier.CurrentOrder != null)
             {
-                string regionName = soldier.AttachedOrder.Mission?.RegionFaction?.Region?.Name;
+                string regionName = soldier.CurrentOrder.Mission?.RegionFaction?.Region?.Name;
                 return regionName ?? "None";
             }
-            return isAvailable ? "None" : "Unavailable";
+            return evaluation.IsAllowed
+                ? "None"
+                : evaluation.Reason ?? "Unavailable";
         }
 
         /// <summary>
@@ -143,7 +193,7 @@ namespace OnlyWar.Helpers.Orders
         /// </summary>
         public static IReadOnlyList<PlayerSoldier> AttachedTo(Order order)
         {
-            return order?.AttachedSoldiers.ToList() ?? [];
+            return order?.AssignedCharacters.ToList() ?? [];
         }
     }
 }

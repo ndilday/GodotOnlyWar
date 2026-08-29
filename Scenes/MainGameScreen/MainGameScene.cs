@@ -37,6 +37,7 @@ public partial class MainGameScene : Control
 	private SquadScreenController _squadScreen;
 	private PlanetaryOperationsScreenController _planetaryOperationsScreen;
 	private bool _planetaryOperationsReturnsToStack;
+	private string _planetaryOperationsReturnTitle;
 	private Stack<Control> _previousScreenStack;
 	private CanvasLayer _mainUILayer;
 	private Control _primaryContentHost;
@@ -70,6 +71,7 @@ public partial class MainGameScene : Control
 		_leftMapTools = GetNode<LeftMapTools>("UILayer/LeftMapTools");
 		_systemInspector = GetNode<SystemInspector>("UILayer/SystemInspector");
 		_topMenu.SystemOptionsButtonPressed += OnSystemOptionsButtonPressed;
+		_topMenu.ScreenTitlePressed += OnTopMenuScreenTitlePressed;
 		_leftMapTools.MapToolPressed += OnMapToolPressed;
 		_systemInspector.OpenSystemPressed += OnInspectorOpenSystemPressed;
 		_systemInspector.PlotCoursePressed += OnInspectorPlotCoursePressed;
@@ -203,6 +205,14 @@ public partial class MainGameScene : Control
 	{
 		_topMenu.SetDateText(GameDataSingleton.Instance.Date.ToString());
 		_topMenu.SetRequisitionAmount(GameDataSingleton.Instance.Sector.PlayerForce.Army.Requisition);
+	}
+
+	private void OnTopMenuScreenTitlePressed(object sender, EventArgs e)
+	{
+		if (_planetaryOperationsScreen?.Visible == true)
+		{
+			_planetaryOperationsScreen.ShowWorldDossierOverlay();
+		}
 	}
 
 	private void OnMapToolPressed(object sender, string actionKey)
@@ -779,7 +789,7 @@ public partial class MainGameScene : Control
 			GameDataSingleton.Instance.GameRulesData.ChapterTemplates;
 		SquadTemplate targetTemplate = templates.ScoutSquad;
 		List<Squad> targets = force.Army.OrderOfBattle.GetAllSquads()
-			.Where(squad => squad.IsOperational)
+			.Where(squad => squad.IsPresentOperationalForce)
 			.Where(squad => squad.SquadTemplate == targetTemplate)
 			.Where(squad =>
 				(squad.CurrentRegion?.Planet
@@ -945,6 +955,7 @@ public partial class MainGameScene : Control
 
 	private void OpenPlanetaryOperations(Planet planet)
 	{
+		RememberPlanetaryOperationsReturnTitle();
 		if (_planetaryOperationsScreen == null)
 		{
 			PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetaryOperationsScreen/planetary_operations_screen.tscn");
@@ -959,6 +970,7 @@ public partial class MainGameScene : Control
 		}
 		_planetaryOperationsReturnsToStack = false;
 		_planetaryOperationsScreen.DisplayPlanet(planet);
+		SetPlanetaryOperationsTitle(planet);
 		_planetaryOperationsScreen.Visible = true;
 		_planetaryOperationsScreen.MoveToFront();
 		GD.Print($"Planet {planet.Id} Clicked");
@@ -974,10 +986,61 @@ public partial class MainGameScene : Control
 		if (_planetaryOperationsReturnsToStack)
 		{
 			_planetaryOperationsReturnsToStack = false;
+			_planetaryOperationsReturnTitle = null;
 			OnCloseScreen(sender, e);
 			return;
 		}
 		OnDialogClosed(sender, e);
+		_topMenu.SetScreenText(_planetaryOperationsReturnTitle ?? "Sector Map");
+		_planetaryOperationsReturnTitle = null;
+	}
+
+	private void OpenPlanetaryOperationsRegion(Region region, int? selectedSquadId, Control returnSurface)
+	{
+		if (region == null)
+		{
+			return;
+		}
+
+		RememberPlanetaryOperationsReturnTitle();
+		if (_planetaryOperationsScreen == null)
+		{
+			PackedScene operationsScene = GD.Load<PackedScene>("res://Scenes/PlanetaryOperationsScreen/planetary_operations_screen.tscn");
+			_planetaryOperationsScreen = (PlanetaryOperationsScreenController)operationsScene.Instantiate();
+			_planetaryOperationsScreen.CloseButtonPressed += OnPlanetaryOperationsClosed;
+			_planetaryOperationsScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+			_planetaryOperationsScreen.FleetManagementRequested += OnPlanetaryFleetManagementRequested;
+			_planetaryOperationsScreen.RecoveryOperationsRequested += OnPlanetaryRecoveryOperationsRequested;
+			_planetaryOperationsScreen.CampaignChanged += OnCampaignChanged;
+			_modalLayer.AddChild(_planetaryOperationsScreen);
+		}
+		_planetaryOperationsScreen.DisplayRegion(region, selectedSquadId);
+		SetPlanetaryOperationsTitle(region?.Planet);
+		_planetaryOperationsScreen.Visible = true;
+		_planetaryOperationsScreen.MoveToFront();
+		if (returnSurface != null)
+		{
+			_planetaryOperationsReturnsToStack = true;
+			_previousScreenStack.Push(returnSurface);
+			returnSurface.Visible = false;
+		}
+		else
+		{
+			_planetaryOperationsReturnsToStack = false;
+		}
+	}
+
+	private void RememberPlanetaryOperationsReturnTitle()
+	{
+		if (_planetaryOperationsScreen?.Visible != true)
+		{
+			_planetaryOperationsReturnTitle = _topMenu.GetScreenText();
+		}
+	}
+
+	private void SetPlanetaryOperationsTitle(Planet planet)
+	{
+		_topMenu.SetScreenText($"PLANETARY OPERATIONS / {planet?.Name?.ToUpperInvariant()}");
 	}
 
 	private void PlaceMainContentOverlay(Control overlay)
@@ -1264,39 +1327,6 @@ public partial class MainGameScene : Control
 	private void OnRegionDoubleClicked(object sender, Region region)
 	{
 		OpenPlanetaryOperationsRegion(region, null, sender as Control);
-	}
-
-	private void OpenPlanetaryOperationsRegion(Region region, int? selectedSquadId, Control returnSurface)
-	{
-		if (region == null)
-		{
-			return;
-		}
-
-		if (_planetaryOperationsScreen == null)
-		{
-			PackedScene operationsScene = GD.Load<PackedScene>("res://Scenes/PlanetaryOperationsScreen/planetary_operations_screen.tscn");
-			_planetaryOperationsScreen = (PlanetaryOperationsScreenController)operationsScene.Instantiate();
-			_planetaryOperationsScreen.CloseButtonPressed += OnPlanetaryOperationsClosed;
-			_planetaryOperationsScreen.SquadDoubleClicked += OnSquadDoubleClicked;
-			_planetaryOperationsScreen.FleetManagementRequested += OnPlanetaryFleetManagementRequested;
-			_planetaryOperationsScreen.RecoveryOperationsRequested += OnPlanetaryRecoveryOperationsRequested;
-			_planetaryOperationsScreen.CampaignChanged += OnCampaignChanged;
-			_modalLayer.AddChild(_planetaryOperationsScreen);
-		}
-		_planetaryOperationsScreen.DisplayRegion(region, selectedSquadId);
-		_planetaryOperationsScreen.Visible = true;
-		_planetaryOperationsScreen.MoveToFront();
-		if (returnSurface != null)
-		{
-			_planetaryOperationsReturnsToStack = true;
-			_previousScreenStack.Push(returnSurface);
-			returnSurface.Visible = false;
-		}
-		else
-		{
-			_planetaryOperationsReturnsToStack = false;
-		}
 	}
 
 	private void OnPlanetaryRecoveryOperationsRequested(object sender, PlayerSoldier soldier)

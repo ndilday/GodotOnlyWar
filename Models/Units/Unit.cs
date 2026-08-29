@@ -35,7 +35,7 @@ namespace OnlyWar.Models.Units
             get
             {
                 return _squads
-                    .Where(squad => squad.IsOperational)
+                    .Where(squad => squad.IsPresentOperationalForce)
                     .Sum(squad => squad.SquadTemplate.BattleValue)
                     + ChildUnits.Sum(u => u.BattleValue);
             }

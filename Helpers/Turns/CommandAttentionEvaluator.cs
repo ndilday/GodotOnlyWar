@@ -245,9 +245,9 @@ namespace OnlyWar.Helpers.Turns
                 };
 
             return squad?.Faction?.IsPlayerFaction == true
-                && squad.IsOperational
+                && squad.CanAcceptSquadOrder
                 && squad.CurrentOrders == null
-                && squad.SquadTemplate?.PermitsIndividualDetachment != true
+                && !squad.PermitsIndividualDeployment
                 && !OrderAttachment.HasAttachedMembers(squad)
                 && canDeployFromCurrentLocation
                 && squad.Members.Any(member => member.IsCombatEffective);
@@ -255,7 +255,7 @@ namespace OnlyWar.Helpers.Turns
 
         private static bool IsLeaderlessSquad(Squad squad) =>
             squad?.Faction?.IsPlayerFaction == true
-                && squad.IsOperational
+                && squad.CanAcceptSquadOrder
                 && squad.Members.Count > 0
                 && squad.SquadLeader == null
                 && squad.SquadTemplate.Elements.Any(element => element.SoldierTemplate.IsSquadLeader);

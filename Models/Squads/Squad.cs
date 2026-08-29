@@ -15,7 +15,9 @@ namespace OnlyWar.Models.Squads
     {
         private static int _nextId = 0;
         private readonly List<ISoldier> _members;
-        private bool _isAdministrative;
+        // Compatibility-only state for format-13 callers that toggled administration on a live
+        // squad. New campaigns derive the identity entirely from SquadTemplate.
+        private bool _legacyAdministrativeOverride;
         public int Id { get; }
         public string Name { get; set; }
         /// <summary>
@@ -29,21 +31,24 @@ namespace OnlyWar.Models.Squads
         /// </summary>
         public bool HasBattleHistory { get; set; }
         public SquadTemplate SquadTemplate { get; }
+        [Obsolete("Administration is authored on SquadTemplate; use SquadTemplate.IsAdministrative.")]
         public bool IsAdministrative
         {
-            get => _isAdministrative;
+            get => SquadTemplate?.IsAdministrative == true || _legacyAdministrativeOverride;
             set
             {
-                if (_isAdministrative == value)
+                if (!value)
                 {
+                    // A rules-authored administrative template cannot be made operational by
+                    // a legacy caller. A compatibility-only live override can still be cleared.
+                    if (SquadTemplate?.IsAdministrative != true)
+                    {
+                        _legacyAdministrativeOverride = false;
+                    }
                     return;
                 }
 
-                _isAdministrative = value;
-                if (!value)
-                {
-                    return;
-                }
+                _legacyAdministrativeOverride = SquadTemplate?.IsAdministrative != true;
 
                 // Administrative duty is mutually exclusive with an operational
                 // posting. The 10th Company HQ may be aboard ship, landed, or under
@@ -72,8 +77,18 @@ namespace OnlyWar.Models.Squads
                 CurrentRegion = null;
             }
         }
-        public bool IsOperational =>
-            !_isAdministrative && SquadTemplate?.IsOperational == true;
+        public bool CanMoveAsFormation => SquadTemplate?.CanMoveAsFormation == true
+            && !IsAdministrative;
+        public bool CanAcceptSquadOrder => SquadTemplate?.CanAcceptSquadOrder == true
+            && !IsAdministrative;
+        public bool IsPresentOperationalForce => SquadTemplate?.IsPresentOperationalForce == true
+            && !IsAdministrative;
+        public bool MayProvideLocalSupport => SquadTemplate?.MayProvideLocalSupport == true;
+        public bool PermitsIndividualDeployment =>
+            SquadTemplate?.PermitsIndividualDeployment == true;
+
+        [Obsolete("Use the capability that matches the operation being evaluated.")]
+        public bool IsOperational => !IsAdministrative;
         public ISoldier SquadLeader { get => Members.FirstOrDefault(m => m.Template.IsSquadLeader); }
         public IReadOnlyCollection<ISoldier> Members { get => _members; }
         public Faction Faction
@@ -93,6 +108,12 @@ namespace OnlyWar.Models.Squads
         public bool UsesLoadoutDoctrine { get; set; }
         public Region CurrentRegion { get; set; }
         public Ship BoardedLocation { get; set; }
+        /// <summary>
+        /// Physical station for a MembersOnly administrative formation. It is deliberately
+        /// separate from CurrentRegion/BoardedLocation because the formation is not itself a
+        /// manoeuvre element and its roster must never leak into regional or ship combat lists.
+        /// </summary>
+        public CampaignLocation DutyStation { get; internal set; }
         public Order CurrentOrders { get; set; }
         public TrainingFocuses TrainingFocus { get; set; }
         //public List<int> AssignedVehicles;
@@ -103,7 +124,6 @@ namespace OnlyWar.Models.Squads
             ParentUnit = parentUnit;
             SquadTemplate = template;
             UsesLoadoutDoctrine = template?.Faction?.IsPlayerFaction == true;
-            _isAdministrative = template?.IsOperational == false;
             _members = [];
             //AssignedVehicles = new List<int>();
             Loadout = [];
@@ -124,7 +144,6 @@ namespace OnlyWar.Models.Squads
             ParentUnit = parentUnit;
             SquadTemplate = template;
             UsesLoadoutDoctrine = template?.Faction?.IsPlayerFaction == true;
-            _isAdministrative = template?.IsOperational == false;
             _members = [];
             //AssignedVehicles = new List<int>();
             Loadout = [];
@@ -133,7 +152,10 @@ namespace OnlyWar.Models.Squads
         public object Clone()
         {
             Squad clone = new Squad(Id, Name, ParentUnit, SquadTemplate);
-            clone.IsAdministrative = IsAdministrative;
+            clone._legacyAdministrativeOverride = _legacyAdministrativeOverride;
+            clone.DutyStation = DutyStation;
+            clone.CurrentRegion = CurrentRegion;
+            clone.BoardedLocation = BoardedLocation;
             foreach (ISoldier soldier in Members)
             {
                 clone.AddSquadMember((ISoldier)soldier.Clone());

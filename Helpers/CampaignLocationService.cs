@@ -8,6 +8,10 @@ namespace OnlyWar.Helpers
     {
         public static CampaignLocation ForSquad(Squad squad)
         {
+            if (squad?.PermitsIndividualDeployment == true && squad.DutyStation != null)
+            {
+                return squad.DutyStation;
+            }
             if (squad?.BoardedLocation != null)
             {
                 return CampaignLocation.Aboard(squad.BoardedLocation);
@@ -18,6 +22,9 @@ namespace OnlyWar.Helpers
         public static CampaignLocation ForSoldier(PlayerSoldier soldier) =>
             soldier?.IndividualPosting?.Location ?? ForSquad(soldier?.AssignedSquad);
 
+        public static CampaignLocation ForPlayerSoldier(PlayerSoldier soldier) =>
+            ForSoldier(soldier);
+
         public static bool AreCoLocated(PlayerSoldier soldier, Squad squad) =>
             ForSoldier(soldier)?.IsSamePlace(ForSquad(squad)) == true;
 
@@ -25,10 +32,8 @@ namespace OnlyWar.Helpers
             ForSoldier(first)?.IsSamePlace(ForSoldier(second)) == true;
 
         public static string Format(CampaignLocation location) =>
-            location?.Ship != null
-                ? $"Aboard {location.Ship.Name}"
-                : location?.Region != null
-                    ? $"{location.Region.Planet?.Name} / {location.Region.Name}"
-                    : "No operational location";
+            location?.Ship?.Name
+                ?? location?.Region?.Name
+                ?? "No operational location";
     }
 }

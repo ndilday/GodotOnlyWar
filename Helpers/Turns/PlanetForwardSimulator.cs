@@ -71,23 +71,24 @@ namespace OnlyWar.Helpers.Turns
                     _result.StrategicCombatResults);
 
                 List<Order> combatOrders = orders
-                    .Where(order => order.AssignedSquads.Any())
+                    .Where(order => !order.Force.IsEmpty
+                        && order.Mission?.MissionType != MissionType.Recruitment)
                     .ToList();
                 GameLog.Debug(() =>
                     $"  week {week + 1}/{turns} '{planet.Name}': {orders.Count} orders, "
                     + $"{strategicCombatOrders.Count} strategic, {combatOrders.Count} combat "
-                    + $"({combatOrders.Sum(order => order.AssignedSquads.Sum(squad => squad.Members.Count))} soldiers committed)");
+                    + $"({combatOrders.Sum(order => order.Force.AllSoldiers.Count())} soldiers committed)");
 
                 _missionTurnProcessor.ProcessCombatMissions(
                     combatOrders,
                     _result.MissionContexts);
                 MissionTurnProcessor.ProcessConstructionOrders(
                     orders.Where(order =>
-                        !order.AssignedSquads.Any()
+                        order.Force.IsEmpty
                         && order.Mission is ConstructionMission));
                 MissionTurnProcessor.ProcessFeedOrders(
                     orders.Where(order =>
-                        !order.AssignedSquads.Any()
+                        order.Force.IsEmpty
                         && order.Mission is FeedMission));
 
                 _missionAftermathProcessor.ApplyMissionResults(_result.MissionContexts);

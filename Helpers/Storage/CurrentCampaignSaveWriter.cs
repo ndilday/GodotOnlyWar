@@ -48,7 +48,10 @@ namespace OnlyWar.Helpers.Storage
                 campaignIdentity: force.CampaignIdentity,
                 relationshipLedger: game.Sector.RelationshipLedger,
                 equipmentLoadoutDoctrine: force.Army.EquipmentLoadoutDoctrine,
-                worldControlEpisodes: force.WorldControlEpisodes.States);
+                worldControlEpisodes: force.WorldControlEpisodes.States,
+                additionalOrders: force.RecruitmentProgram?.TaskOrder == null
+                    ? []
+                    : [force.RecruitmentProgram.TaskOrder]);
             // A current-format save has committed successfully at this point. SaveData is
             // atomic, so reaching this line is the success boundary.
             game.UpgradePending = false;

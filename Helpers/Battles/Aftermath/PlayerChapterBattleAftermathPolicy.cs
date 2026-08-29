@@ -621,7 +621,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             }
 
             inflicter.EnemiesTakenDown++;
-            int factionId = sufferer.BattleSquad.Squad.Faction.Id;
+            int factionId = sufferer.BattleSquad.Faction.Id;
             if (weapon.RelatedSkill.Category == SkillCategory.Melee)
             {
                 playerSoldier.AddMeleeKill(factionId, weapon.Id);
@@ -635,7 +635,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 eventSink.RecordCreditedKill(
                     _dependencies.Date,
                     playerSoldier,
-                    sufferer.BattleSquad?.Squad?.Faction,
+                    sufferer.BattleSquad?.Faction,
                     weapon,
                     _context.Region,
                     sufferer.Soldier.Name);

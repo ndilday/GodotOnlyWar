@@ -37,7 +37,9 @@ namespace OnlyWar.Helpers.Orders
             Aggression aggression,
             IReadOnlyList<PlayerSoldier> attachedSoldiers = null)
         {
-            if (squads == null || squads.Count == 0 || squads.Any(squad => squad?.IsOperational != true))
+            if (squads == null || squads.Count == 0
+                || squads.Any(squad => squad?.CanAcceptSquadOrder != true
+                    || squad.SquadTemplate?.PermitsIndividualDetachment == true))
             {
                 return null;
             }
@@ -46,10 +48,6 @@ namespace OnlyWar.Helpers.Orders
             // offices are personnel pools: their people reach the field only by attachment.
             // Note this is enforced here rather than by marking them Administrative -- their
             // IsOperational must stay true, since surgery staffing and recruitment gate on it.
-            if (squads.Any(squad => squad.SquadTemplate?.PermitsIndividualDetachment == true))
-            {
-                return null;
-            }
             List<Squad> distinctSquads = squads
                 .GroupBy(squad => squad.Id)
                 .Select(group => group.First())
@@ -128,13 +126,156 @@ namespace OnlyWar.Helpers.Orders
             // The Order constructor sets squad.CurrentOrders = this for every squad passed in,
             // so assigning CurrentOrders separately afterwards is unnecessary.
             Order newOrder = new Order(
-                distinctSquads, true, false, aggression, builtMission);
+                distinctSquads,
+                true,
+                false,
+                aggression,
+                builtMission,
+                sector.PlayerForce?.Faction);
             sector.AddNewOrder(newOrder);
             foreach (PlayerSoldier specialist in distinctSpecialists)
             {
                 OrderAttachment.Attach(specialist, newOrder);
             }
             return newOrder;
+        }
+
+        /// <summary>
+        /// Creates or updates a mission from a mixed movement force. Characters are first-class
+        /// order participants here: a character-only selection is legal and remains a warning/UI
+        /// concern rather than an order invariant violation.
+        /// </summary>
+        public static Order AssignParticipantsToMission(
+            IReadOnlyList<Squad> squads,
+            IReadOnlyList<PlayerSoldier> characters,
+            Region targetRegion,
+            AvailableMission mission,
+            int targetFactionId,
+            Aggression aggression)
+        {
+            List<Squad> distinctSquads = (squads ?? [])
+                .Where(squad => squad != null)
+                .GroupBy(squad => squad.Id)
+                .Select(group => group.First())
+                .ToList();
+            List<PlayerSoldier> distinctCharacters = (characters ?? [])
+                .Where(character => character != null)
+                .GroupBy(character => character.Id)
+                .Select(group => group.First())
+                .ToList();
+            if (distinctSquads.Count == 0 && distinctCharacters.Count == 0
+                || distinctSquads.Any(squad => squad.CanAcceptSquadOrder != true))
+            {
+                return null;
+            }
+
+            Sector sector = GameDataSingleton.Instance.Sector;
+            if (sector == null) return null;
+            RecruitmentProgram program = sector.PlayerForce?.RecruitmentProgram;
+            if (distinctSquads.SelectMany(squad => squad.Members)
+                    .Concat(distinctCharacters)
+                    .Any(soldier => RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
+                        program, soldier.Id)))
+            {
+                return null;
+            }
+
+            Mission builtMission = BuildMission(targetRegion, mission, targetFactionId);
+            if (builtMission == null) return null;
+
+            List<Order> equivalentOrders = sector.Orders.Values
+                .Where(order => IsPlayerOrder(order)
+                    && RepresentsEffectiveMission(order, targetRegion, mission, targetFactionId))
+                .ToList();
+            Order targetOrder = equivalentOrders.FirstOrDefault();
+            if (targetOrder == null)
+            {
+                Faction ownerFaction = distinctSquads.Select(squad => squad.Faction)
+                    .Concat(distinctCharacters.Select(character => character.AssignedSquad?.Faction))
+                    .FirstOrDefault(faction => faction != null)
+                    ?? sector.PlayerForce?.Faction;
+                targetOrder = new Order(
+                    [],
+                    isQuiet: true,
+                    isActivelyEngaging: false,
+                    aggression,
+                    builtMission,
+                    ownerFaction);
+                IReadOnlyList<Squad> staging = distinctSquads;
+                Region explicitOrigin = staging.Count == 0 ? targetRegion : null;
+                CharacterAvailabilityService availability = new();
+                if (distinctCharacters.Any(character =>
+                    !availability.EvaluateOrderAssignment(
+                        character, targetOrder, explicitOrigin, staging).IsAllowed))
+                {
+                    return null;
+                }
+                foreach (Squad squad in distinctSquads)
+                {
+                    if (!OrderForceService.AssignSquad(targetOrder, squad))
+                    {
+                        OrderForceService.ReleaseOrder(targetOrder);
+                        return null;
+                    }
+                }
+                if (distinctCharacters.Any(character =>
+                    !OrderForceService.AssignCharacter(targetOrder, character)))
+                {
+                    OrderForceService.ReleaseOrder(targetOrder);
+                    return null;
+                }
+                sector.AddNewOrder(targetOrder);
+                return targetOrder;
+            }
+
+            if (distinctSquads.Any(squad => squad.CurrentOrders != null
+                    && !ReferenceEquals(squad.CurrentOrders, targetOrder)))
+            {
+                return null;
+            }
+
+            foreach (Order duplicateOrder in equivalentOrders.Skip(1))
+            {
+                foreach (Squad duplicateSquad in duplicateOrder.AssignedSquads.ToList())
+                {
+                    OrderForceService.RemoveSquad(duplicateOrder, duplicateSquad);
+                    OrderForceService.AssignSquad(targetOrder, duplicateSquad);
+                }
+                foreach (PlayerSoldier duplicateCharacter in duplicateOrder.AssignedCharacters.ToList())
+                {
+                    OrderForceService.RemoveCharacter(duplicateOrder, duplicateCharacter);
+                    OrderForceService.AssignCharacter(targetOrder, duplicateCharacter);
+                }
+                sector.RemoveOrder(duplicateOrder);
+            }
+
+            CharacterAvailabilityService targetAvailability = new();
+            List<Squad> stagingSquads = targetOrder.AssignedSquads
+                .Concat(distinctSquads)
+                .ToList();
+            Region origin = stagingSquads.Count == 0 ? targetRegion : null;
+            if (distinctCharacters.Any(character =>
+                !targetAvailability.EvaluateOrderAssignment(
+                    character, targetOrder, origin, stagingSquads).IsAllowed))
+            {
+                return null;
+            }
+            foreach (Squad squad in distinctSquads)
+            {
+                if (!OrderForceService.AssignSquad(targetOrder, squad))
+                {
+                    return null;
+                }
+            }
+            foreach (PlayerSoldier character in distinctCharacters)
+            {
+                if (!OrderForceService.AssignCharacter(targetOrder, character))
+                {
+                    return null;
+                }
+            }
+            targetOrder.SetAggression(aggression);
+            return targetOrder;
         }
 
         // Every specialist must clear OrderAttachment.CanAttach against the force actually
@@ -181,11 +322,11 @@ namespace OnlyWar.Helpers.Orders
             }
             bool changed = false;
             foreach (PlayerSoldier soldier in soldiers
-                .Where(soldier => soldier?.AttachedOrder != null)
+                .Where(soldier => soldier?.CurrentOrder != null)
                 .GroupBy(soldier => soldier.Id)
                 .Select(group => group.First()))
             {
-                OrderAttachment.Detach(soldier);
+                OrderForceService.RemoveCharacter(soldier);
                 changed = true;
             }
             return changed;
@@ -193,9 +334,9 @@ namespace OnlyWar.Helpers.Orders
 
         private static bool IsPlayerOrder(Order order)
         {
-            return order?.AssignedSquads?.Count > 0
-                && order.AssignedSquads.All(
-                    squad => squad?.Faction?.IsPlayerFaction != false);
+            return order?.Force?.OwnerFaction?.IsPlayerFaction == true
+                || (order?.Force?.OwnerFaction == null
+                    && order?.Force?.AllPlayerSoldiers?.Any() == true);
         }
 
         private static bool RepresentsEffectiveMission(
@@ -279,13 +420,22 @@ namespace OnlyWar.Helpers.Orders
             if (squad.CurrentOrders == null) return;
 
             Order oldOrder = squad.CurrentOrders;
-            oldOrder.AssignedSquads.Remove(squad);
-            squad.CurrentOrders = null;
+            OrderForceService.RemoveSquad(oldOrder, squad);
+            // Format-13's attachment façade required at least one squad to keep an order alive.
+            // Preserve that behavior only for its operational-posting projection; format-14
+            // character-only orders remain valid and are governed by OrderForceService.
             if (oldOrder.AssignedSquads.Count == 0)
             {
-                // An order must always carry at least one squad, so losing the last one ends
-                // the operation -- and any specialists lent to it come home with it.
-                OrderAttachment.ReleaseAll(oldOrder);
+                foreach (PlayerSoldier character in oldOrder.AssignedCharacters.ToList())
+                {
+                    if (character.IndividualPosting?.Kind == IndividualPostingKind.OperationalAttachment)
+                    {
+                        OrderAttachment.Detach(character);
+                    }
+                }
+            }
+            if (oldOrder.Force.IsEmpty)
+            {
                 sector.RemoveOrder(oldOrder);
             }
         }

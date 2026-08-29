@@ -398,8 +398,11 @@ public partial class ChapterMusterScreenController : MainScreenController
         label.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
         label.AddThemeFontSizeOverride("font_size", 14);
 
+        // GetLabel() is an internal-front child of AcceptDialog, so its index can't be
+        // queried with include_internal:false. Reparenting it under a scroll frame and
+        // appending that frame is enough: non-internal children sort after the internal
+        // label and before the internal button row.
         Node labelParent = label.GetParent();
-        int labelIndex = label.GetIndex();
         labelParent.RemoveChild(label);
         MarginContainer contentMargin = new()
         {
@@ -425,7 +428,6 @@ public partial class ChapterMusterScreenController : MainScreenController
         scrollFrame.AddChild(scroll);
         contentMargin.AddChild(scrollFrame);
         labelParent.AddChild(contentMargin);
-        labelParent.MoveChild(contentMargin, labelIndex);
 
         OnlyWarStyle.ApplyActionButton(dialog.GetOkButton());
         Button cancel = dialog.GetCancelButton();
@@ -890,6 +892,7 @@ public partial class ChapterMusterScreenController : MainScreenController
     {
         FormationVacancyGroup.NeedsLeaders => OnlyWarStyle.Critical,
         FormationVacancyGroup.AvailableNewFormations => OnlyWarStyle.Gold,
+        FormationVacancyGroup.AtStrength => OnlyWarStyle.MedicalStable,
         _ => OnlyWarStyle.MutedText
     };
 
@@ -1119,6 +1122,8 @@ public partial class ChapterMusterScreenController : MainScreenController
                 "New formation: provisional until confirmation; no permanent identity, ordinal, or location is allocated while staged.",
             FormationVacancyGroup.NeedsLeaders =>
                 "Needs leader: this formation cannot operate normally until a leader-eligible soldier is assigned.",
+            FormationVacancyGroup.AtStrength =>
+                "At strength: staged assignments fill this formation to capacity, so it can take no one else.",
             _ => "Understrength: this formation has open roster capacity."
         });
         if (row.Location == "—")

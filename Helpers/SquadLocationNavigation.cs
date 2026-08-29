@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -21,23 +22,26 @@ public static class SquadLocationNavigation
 {
     public static SquadLocationNavigationTarget Resolve(Squad squad)
     {
-        if (squad?.CurrentRegion != null)
+        CampaignLocation location = CampaignLocationService.ForSquad(squad);
+        if (location?.Region != null)
         {
             return new SquadLocationNavigationTarget(
                 SquadLocationNavigationKind.Region,
                 squad,
-                Region: squad.CurrentRegion);
+                Region: location.Region);
         }
 
-        Ship ship = squad?.BoardedLocation;
-        if (ship?.Fleet != null && ship.Fleet.TravelPhase != FleetTravelPhase.InWarp)
+        Ship stationedShip = location?.Ship;
+        if (stationedShip?.Fleet != null
+            && stationedShip.Fleet.TravelPhase != FleetTravelPhase.InWarp)
         {
             return new SquadLocationNavigationTarget(
                 SquadLocationNavigationKind.Ship,
                 squad,
-                Ship: ship);
+                Ship: stationedShip);
         }
 
+        // A squad with no effective location is unlocated (for example a historical empty Scout).
         return null;
     }
 }

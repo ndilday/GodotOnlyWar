@@ -15,6 +15,7 @@ public partial class HierarchyTreeView : ScrollContainer
 {
     public const int DefaultIconMaxWidth = 20;
     private const int IndentWidth = 8;
+    private const int TextMinimumWidth = 96;
     private const int ExpanderWidth = 14;
     private const int RowDefaultHeight = 34;
 
@@ -326,12 +327,16 @@ public partial class HierarchyTreeView : ScrollContainer
         Label text = new()
         {
             Text = entry.Text,
+            // Keep the name column from collapsing to the width of a single glyph when the
+            // trailing badge has a larger minimum width. Rows are fixed-height, so wrapping
+            // would only hide the rest of the name; trim it on one line instead.
+            CustomMinimumSize = new Vector2(TextMinimumWidth, 0),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
             VerticalAlignment = VerticalAlignment.Center,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            ClipText = false,
-            TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming,
+            AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             MouseFilter = MouseFilterEnum.Ignore
         };
         text.AddThemeColorOverride("font_color", primaryColor);

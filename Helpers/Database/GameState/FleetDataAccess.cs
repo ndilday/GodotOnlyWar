@@ -26,6 +26,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     string name = reader[3].ToString();
 
                     Ship ship = new Ship(id, name, shipTemplateMap[shipTemplateId]);
+                    if (reader.FieldCount > 4 && reader[4].GetType() != typeof(DBNull))
+                    {
+                        ship.IsFlagship = reader.GetBoolean(4);
+                    }
 
                     if (!fleetShipMap.ContainsKey(fleetId))
                     {
@@ -140,12 +144,14 @@ namespace OnlyWar.Helpers.Database.GameState
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                command.CommandText = @"INSERT INTO Ship VALUES
-                    (@id, @templateId, @fleetId, @name);";
+                command.CommandText = @"INSERT INTO Ship
+                    (Id, ShipTemplateId, FleetId, Name, IsFlagship) VALUES
+                    (@id, @templateId, @fleetId, @name, @isFlagship);";
                 command.AddParam("@id", ship.Id);
                 command.AddParam("@templateId", ship.Template.Id);
                 command.AddParam("@fleetId", ship.Fleet.Id);
                 command.AddParam("@name", ship.Name);
+                command.AddParam("@isFlagship", ship.IsFlagship ? 1 : 0);
                 command.ExecuteNonQuery();
             }
         }

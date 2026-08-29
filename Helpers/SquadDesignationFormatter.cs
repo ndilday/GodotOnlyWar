@@ -19,8 +19,7 @@ namespace OnlyWar.Helpers
         public static bool IsNumberedLineFormation(Squad squad)
         {
             SquadTypes type = squad?.SquadTemplate?.SquadType ?? SquadTypes.None;
-            SquadTypes excluded = SquadTypes.HQ | SquadTypes.Scout |
-                SquadTypes.Administrative | SquadTypes.PermitsIndividualDetachment;
+            SquadTypes excluded = SquadTypes.HQ | SquadTypes.Scout | SquadTypes.Administrative;
             return squad?.Faction?.IsPlayerFaction == true && (type & excluded) == 0;
         }
 

@@ -117,7 +117,7 @@ namespace OnlyWar.Helpers
             return force.Army.OrderOfBattle.GetAllMembers().Any(member =>
                 // Fit for duty: the staff member must be neither downed nor immobilized.
                 member.IsCombatEffective
-                && member.AssignedSquad?.IsOperational == true
+                && member.AssignedSquad?.MayProvideLocalSupport == true
                 && member.Template != null
                 && templateNames.Contains(member.Template.Name)
                 && SameLocation(ResolveLocation(member), (woundedShip, woundedRegion)));

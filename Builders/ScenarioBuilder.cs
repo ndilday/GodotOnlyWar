@@ -396,8 +396,24 @@ namespace OnlyWar.Builders
         // squad that is in neither, so every squad must be placed onto a ship here.
         private static void PlaceFleetInOrbit(Sector sector, PlayerForce playerForce, Planet promised)
         {
+            List<Ship> playerShips = playerForce.Fleet.TaskForces
+                .SelectMany(taskForce => taskForce.Ships)
+                .ToList();
+            Ship flagship = new FlagshipService().SelectInitialFlagship(
+                playerForce.Faction, playerShips);
+            AdministrativeStationResult stationResult = new AdministrativeStationService()
+                .SeatAll(playerForce.Army.OrderOfBattle, flagship);
+            if (!stationResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to seat Chapter administrative formations: {stationResult.Message}");
+            }
+
+            // Administrative stations consume the same ship capacity as their unposted members,
+            // but they are not loaded combat squads. Seat them before embarking manoeuvre
+            // formations so the embark pass fills only the capacity that remains available.
             IEnumerator<Squad> squads = playerForce.Army.SquadMap.Values
-                .Where(s => s.IsOperational && s.Members.Count > 0).GetEnumerator();
+                .Where(s => s.CanMoveAsFormation && s.Members.Count > 0).GetEnumerator();
             bool hasSquad = squads.MoveNext();
             foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
             {
@@ -414,6 +430,7 @@ namespace OnlyWar.Builders
                 }
                 sector.AddNewFleet(taskForce);
             }
+
             if (hasSquad)
             {
                 int remainingSoldiers = 0;

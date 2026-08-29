@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
@@ -375,6 +376,60 @@ public class PlanetaryOperationsServiceTests
             card => card.Title == "Imperial Defenses");
         Assert.Equal("Test Chapter", defenses.Subtitle);
         Assert.Equal("2", defenses.Rows.Single(row => row.Item1 == "Forces").Item2);
+    }
+
+    [Fact]
+    public void LandedIndependentCharacterCountsInImperialDefensesAndHeader()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        AddPlayerSquad(fixture, region, "Chapter Squad");
+        Squad administrative = AddPlayerSquad(
+            fixture, region, "Apothecarion", members: 0,
+            squadTypes: SquadTypes.Administrative);
+        PlayerSoldier character = new(TestModelFactory.CreateSoldier(), "Brother Medicus");
+        administrative.AddSquadMember(character);
+        fixture.Sector.PlayerForce.Army.PlayerSoldierMap[character.Id] = character;
+        new IndividualPostingService().RestorePhysical(
+            character,
+            IndividualPostingPurpose.Independent,
+            CampaignLocation.Landed(region),
+            new Date(1));
+
+        DossierCardData defenses = Assert.Single(
+            PlanetaryOperationsViewModelBuilder.BuildRegionCards(region, fixture.Sector),
+            card => card.Title == "Imperial Defenses");
+        PlanetaryOperationsHeaderViewModel header =
+            PlanetaryOperationsViewModelBuilder.BuildHeader(fixture.Sector, fixture.Planet);
+
+        Assert.Equal("2", defenses.Rows.Single(row => row.Item1 == "Forces").Item2);
+        Assert.Equal(2, header.Landed);
+    }
+
+    [Fact]
+    public void LandedAdministrativeStationCharacterCountsInImperialDefensesAndHeader()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        Squad administrative = CreatePlayerSquad(
+            fixture, "Apothecarion", members: 0,
+            squadTypes: SquadTypes.Administrative);
+        PlayerSoldier character = new(TestModelFactory.CreateSoldier(), "Brother Medicus");
+        administrative.AddSquadMember(character);
+        fixture.Sector.PlayerForce.Army.PlayerSoldierMap[character.Id] = character;
+
+        AdministrativeStationResult result = new AdministrativeStationService().SeatFormation(
+            administrative, CampaignLocation.Landed(region));
+
+        Assert.True(result.Succeeded);
+        DossierCardData defenses = Assert.Single(
+            PlanetaryOperationsViewModelBuilder.BuildRegionCards(region, fixture.Sector),
+            card => card.Title == "Imperial Defenses");
+        PlanetaryOperationsHeaderViewModel header =
+            PlanetaryOperationsViewModelBuilder.BuildHeader(fixture.Sector, fixture.Planet);
+
+        Assert.Equal("1", defenses.Rows.Single(row => row.Item1 == "Forces").Item2);
+        Assert.Equal(1, header.Landed);
     }
 
     [Fact]

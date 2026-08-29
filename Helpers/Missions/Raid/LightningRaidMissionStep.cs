@@ -69,7 +69,7 @@ namespace OnlyWar.Helpers.Missions.Raid
 
             context.OpposingSquads = opposingSquads;
             GameLog.Debug(() =>
-                $"Lightning raid {context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "Unknown"} -> "
+                $"Lightning raid {context.MissionSquads.FirstOrDefault()?.Faction?.Name ?? "Unknown"} -> "
                 + $"{enemyFaction.Region.Planet.Name}/{enemyFaction.Region.Name}: "
                 + $"attackerBV={attackerBattleValue}, defenderBV={defenderBattleValue}, "
                 + $"tacticsDifficulty={difficulty:F2}, margin={margin:F2}, targetBV={targetBattleValue}, "

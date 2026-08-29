@@ -9,6 +9,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
@@ -294,12 +295,17 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         private static int CurrentWeek() =>
             GameDataSingleton.Instance?.Date?.GetTotalWeeks() ?? 0;
 
+        private static bool HasPlayerParticipant(Order order) =>
+            order?.OwnerFaction?.IsPlayerFaction == true
+            || order?.AssignedSquads.Any(squad => squad?.Faction?.IsPlayerFaction == true) == true
+            || order?.AssignedCharacters.Any(character =>
+                character?.AssignedSquad?.Faction?.IsPlayerFaction == true) == true;
+
         private static string OrderOverlay(Sector sector, Region region)
         {
             int count = sector?.Orders.Values.Count(order =>
                 order?.Mission?.RegionFaction?.Region == region
-                && order.AssignedSquads.Any(squad =>
-                    squad?.Faction?.IsPlayerFaction == true)) ?? 0;
+                && HasPlayerParticipant(order)) ?? 0;
             return $"Orders: {count}";
         }
 
@@ -348,6 +354,12 @@ namespace OnlyWar.Helpers.PlanetaryOperations
 
     public static class PlanetaryOperationsViewModelBuilder
     {
+        private static bool HasPlayerParticipant(Order order) =>
+            order?.OwnerFaction?.IsPlayerFaction == true
+            || order?.AssignedSquads.Any(squad => squad?.Faction?.IsPlayerFaction == true) == true
+            || order?.AssignedCharacters.Any(character =>
+                character?.AssignedSquad?.Faction?.IsPlayerFaction == true) == true;
+
         public static WorldDossierViewModel BuildWorld(
             Sector sector,
             Planet planet,
@@ -439,17 +451,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     OnlyWarStyle.PlayerAccent));
             }
 
-            int landed = planet.Regions
-                .Where(region => region != null)
-                .SelectMany(region => region.RegionFactionMap.Values)
-                .Where(presence => presence.PlanetFaction.Faction == player)
-                .SelectMany(presence => presence.LandedSquads)
-                .DistinctBy(squad => squad.Id)
-                .Sum(SoldierPresenceService.PresentCount);
-            int orbit = PlanetForceMovementService.GetOrbitingPlayerShips(planet, player)
-                .SelectMany(ship => ship.LoadedSquads)
-                .DistinctBy(squad => squad.Id)
-                .Sum(SoldierPresenceService.PresentCount);
+            int landed = CountLandedPlayerForce(sector, planet, player);
+            int orbit = CountOrbitingPlayerForce(sector, planet, player);
             int controlled = planet.Regions.Count(region =>
                 region != null
                 && RegionControlPresentation.Build(region).State
@@ -506,14 +509,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Faction player = sector?.PlayerForce?.Faction;
             int held = planet.Regions.Count(region => region != null
                 && RegionControlPresentation.Build(region).State == RegionControlState.Imperial);
-            int landed = planet.Regions.Where(region => region != null)
-                .SelectMany(region => region.RegionFactionMap.Values)
-                .Where(presence => presence.PlanetFaction.Faction == player)
-                .SelectMany(presence => presence.LandedSquads)
-                .DistinctBy(squad => squad.Id).Sum(SoldierPresenceService.PresentCount);
-            int orbit = PlanetForceMovementService.GetOrbitingPlayerShips(planet, player)
-                .SelectMany(ship => ship.LoadedSquads).DistinctBy(squad => squad.Id)
-                .Sum(SoldierPresenceService.PresentCount);
+            int landed = CountLandedPlayerForce(sector, planet, player);
+            int orbit = CountOrbitingPlayerForce(sector, planet, player);
             IRequest request = planet.Governor?.ActiveRequest;
             string clock = request == null ? "No request"
                 : request.Status is RequestStatus.Fulfilled or RequestStatus.Failed
@@ -541,15 +538,14 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 .ToList();
             List<Order> active = sector?.Orders.Values
                 .Where(order => order?.Mission?.RegionFaction?.Region == target
-                    && order.AssignedSquads.Any(squad =>
-                        squad?.Faction?.IsPlayerFaction == true))
+                    && HasPlayerParticipant(order))
                 .OrderBy(order => MissionAvailability.GetOrderLabel(order.Mission))
                 .ThenBy(order => order.Id)
                 .ToList() ?? [];
             return new RegionalOperationsViewModel(
                 RegionalOrderEligibilityService.Build(
                     sector, target, selectedMission, selectedOrder),
-                BuildRegionCards(target),
+                BuildRegionCards(target, sector),
                 active,
                 all.Where(option => option.Kind != MissionAvailabilityKind.Special).ToList(),
                 all.Where(option => option.Kind == MissionAvailabilityKind.Special).ToList());
@@ -578,8 +574,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             {
                 int activeOrders = sector.Orders.Values.Count(order =>
                     order?.Mission?.RegionFaction?.Region == region
-                    && order.AssignedSquads.Any(squad =>
-                        squad?.Faction?.IsPlayerFaction == true));
+                    && HasPlayerParticipant(order));
                 regionRows.Add(Row("Active Orders", activeOrders.ToString()));
             }
             List<DossierCardData> cards =
@@ -611,13 +606,15 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             if (imperialPresences.Count > 0)
             {
                 RegionFaction representative = imperialPresences[0];
+                List<Squad> imperialSquads = imperialPresences
+                    .SelectMany(presence => presence.LandedSquads)
+                    .DistinctBy(squad => squad.Id)
+                    .ToList();
+                int imperialForces = imperialSquads.Sum(SoldierPresenceService.PresentCount)
+                    + CountLandedPlayerCharacters(sector, region, imperialSquads);
                 List<(string Label, string Value)> forceRows =
                 [
-                    Row("Forces", imperialPresences
-                        .SelectMany(presence => presence.LandedSquads)
-                        .DistinctBy(squad => squad.Id)
-                        .Sum(SoldierPresenceService.PresentCount)
-                        .ToString("N0"))
+                    Row("Forces", imperialForces.ToString("N0"))
                 ];
                 forceRows.Add(Row("Entrenchment", DescribeDefense(
                     representative, DefenseType.Entrenchment, true)));
@@ -669,6 +666,90 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             double value = RegionDefenses.GetShared(presence, type);
             string description = RegionFactionExtensions.GetDefenseLevelDescription(value);
             return exact ? $"{description} ({value:0.##})" : description;
+        }
+
+        private static int CountLandedPlayerForce(
+            Sector sector,
+            Planet planet,
+            Faction player)
+        {
+            if (planet == null || player == null) return 0;
+            List<Squad> landedSquads = planet.Regions
+                .Where(region => region != null)
+                .SelectMany(region => region.RegionFactionMap.Values)
+                .Where(presence => presence?.PlanetFaction?.Faction == player)
+                .SelectMany(presence => presence.LandedSquads ?? [])
+                .Where(squad => squad != null)
+                .DistinctBy(squad => squad.Id)
+                .ToList();
+            return landedSquads.Sum(SoldierPresenceService.PresentCount)
+                + CountLandedPlayerCharacters(sector, planet, landedSquads);
+        }
+
+        private static int CountLandedPlayerCharacters(
+            Sector sector,
+            Planet planet,
+            IEnumerable<Squad> accountedSquads) =>
+            planet == null
+                ? 0
+                : GetUnrepresentedPlayerCharacters(sector, accountedSquads)
+                    .Count(character => CampaignLocationService.ForSoldier(character)?.Region?.Planet
+                        == planet);
+
+        private static int CountLandedPlayerCharacters(
+            Sector sector,
+            Region region,
+            IEnumerable<Squad> accountedSquads) =>
+            region == null
+                ? 0
+                : GetUnrepresentedPlayerCharacters(sector, accountedSquads)
+                    .Count(character => CampaignLocationService.ForSoldier(character)?.Region
+                        == region);
+
+        private static IEnumerable<PlayerSoldier> GetUnrepresentedPlayerCharacters(
+            Sector sector,
+            IEnumerable<Squad> accountedSquads)
+        {
+            Faction player = sector?.PlayerForce?.Faction;
+            if (player == null) return Enumerable.Empty<PlayerSoldier>();
+
+            HashSet<int> accountedCharacterIds = (accountedSquads
+                    ?? Enumerable.Empty<Squad>())
+                .Where(squad => squad != null)
+                .SelectMany(squad => squad.Members.OfType<PlayerSoldier>())
+                .Where(character => character.IndividualPosting == null)
+                .Select(character => character.Id)
+                .ToHashSet();
+            return (sector.PlayerForce.Army?.PlayerSoldierMap?.Values
+                    ?? Enumerable.Empty<PlayerSoldier>())
+                .Where(character => character != null
+                    && character.AssignedSquad?.Faction == player
+                    && !accountedCharacterIds.Contains(character.Id));
+        }
+
+        private static int CountOrbitingPlayerForce(
+            Sector sector,
+            Planet planet,
+            Faction player)
+        {
+            if (planet == null || player == null) return 0;
+            IReadOnlyList<Ship> orbitingShips = PlanetForceMovementService
+                .GetOrbitingPlayerShips(planet, player);
+            List<Squad> orbitingSquads = orbitingShips
+                .SelectMany(ship => ship.LoadedSquads.Concat(ship.AdministrativeStations))
+                .Where(squad => squad != null)
+                .DistinctBy(squad => squad.Id)
+                .ToList();
+            int squadStrength = orbitingShips
+                .SelectMany(ship => ship.LoadedSquads.Concat(ship.AdministrativeStations))
+                .Where(squad => squad != null)
+                .DistinctBy(squad => squad.Id)
+                .Sum(SoldierPresenceService.PresentCount);
+            HashSet<Ship> shipSet = orbitingShips.ToHashSet();
+            int postedCharacters = GetUnrepresentedPlayerCharacters(sector, orbitingSquads)
+                .Count(character => shipSet.Contains(
+                    CampaignLocationService.ForSoldier(character)?.Ship));
+            return squadStrength + postedCharacters;
         }
 
         private static string FormatDate(Date date) =>

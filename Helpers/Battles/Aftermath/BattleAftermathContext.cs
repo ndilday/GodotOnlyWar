@@ -74,7 +74,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                         .Select(soldier => (PlayerSoldier)soldier.Soldier)
                         .ToList();
                     Order order = participants
-                        .Select(soldier => soldier.AssignedSquad?.CurrentOrders)
+                        .Select(soldier => soldier.CurrentOrder ?? soldier.AssignedSquad?.CurrentOrders)
                         .FirstOrDefault(candidate => candidate != null);
                     Mission mission = order?.Mission;
                     return new StartingPlayerSquad(
@@ -92,11 +92,11 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 .ToList();
             FirstSideStartingSoldierCount = firstSideSquads.SelectMany(squad => squad.AbleSoldiers).Count();
             SecondSideStartingSoldierCount = secondSideSquads.SelectMany(squad => squad.AbleSoldiers).Count();
-            FirstSideFaction = firstSideSquads.FirstOrDefault()?.Squad?.Faction;
-            SecondSideFaction = secondSideSquads.FirstOrDefault()?.Squad?.Faction;
+            FirstSideFaction = firstSideSquads.FirstOrDefault()?.Faction;
+            SecondSideFaction = secondSideSquads.FirstOrDefault()?.Faction;
             Order order = StartingPlayerSoldiers
                 .Select(soldier => soldier.Soldier is PlayerSoldier player
-                    ? player.AssignedSquad?.CurrentOrders
+                    ? player.CurrentOrder ?? player.AssignedSquad?.CurrentOrders
                     : null)
                 .FirstOrDefault(candidate => candidate != null);
             BattleEventContext = Dependencies.CreateBattleEventContext(region, order);
@@ -148,7 +148,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 return FirstSideFaction ?? SecondSideFaction;
             }
 
-            Faction ownFaction = soldier.BattleSquad?.Squad?.Faction;
+            Faction ownFaction = soldier.BattleSquad?.Faction;
             if (ownFaction == FirstSideFaction)
             {
                 return SecondSideFaction ?? FirstSideFaction;

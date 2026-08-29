@@ -21,14 +21,7 @@ namespace OnlyWar.Helpers
         public static IReadOnlyList<PlayerSoldier> OrderParticipants(Order order)
         {
             if (order == null) return [];
-            return order.AssignedSquads
-                .SelectMany(PresentMembers)
-                .OfType<PlayerSoldier>()
-                .Concat(order.AttachedSoldiers.Where(soldier =>
-                    soldier.IndividualPosting?.Kind == IndividualPostingKind.OperationalAttachment
-                    && ReferenceEquals(soldier.IndividualPosting.Order, order)))
-                .Distinct()
-                .ToList();
+            return order.Force.AllPlayerSoldiers.Distinct().ToList();
         }
 
         public static int NominalCount(Squad squad) => squad?.Members?.Count ?? 0;

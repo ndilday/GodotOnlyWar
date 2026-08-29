@@ -20,7 +20,9 @@ namespace OnlyWar.Helpers.Database.GameState
         // 11: persisted world-control narrative episode state.
         // 12: stable line-formation ordinals and durable squad battle-history retention.
         // 13: IndividualPosting replaces OrderSoldier as the physical-location source of truth.
-        internal const int CurrentVersion = 13;
-        internal const int FirstMigratableVersion = 13;
+        // 14: administrative duty stations, explicit order owners/characters, and physical-only
+        //     individual postings. This is a deliberate incompatible save break.
+        internal const int CurrentVersion = 14;
+        internal const int FirstMigratableVersion = 14;
     }
 }

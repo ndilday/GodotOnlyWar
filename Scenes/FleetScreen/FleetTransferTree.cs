@@ -12,14 +12,61 @@ public partial class FleetTransferTree : Tree
     public Func<int, int, int, bool> CanTransferUnitToShip { get; set; }
     public Action<int, int, int> TransferUnitToShip { get; set; }
     private bool _isDraggingTransfer;
+    private TreeItem _pendingFoldItem;
 
     public override void _Ready()
     {
         MouseExited += ResetCursorShape;
     }
 
+    /// <summary>
+    /// Tree folds a non-selectable row (a company) on mouse-down, which happens before the
+    /// viewport can promote the press into a drag. Dragging a company therefore read as a
+    /// click: the row folded and everything beneath it shifted out from under the cursor.
+    /// Hold the fold until release, and abandon it once the press becomes a drag.
+    /// </summary>
+    public override void _GuiInput(InputEvent @event)
+    {
+        if (@event is not InputEventMouseButton mouseButton
+            || mouseButton.ButtonIndex != MouseButton.Left)
+        {
+            return;
+        }
+
+        if (mouseButton.Pressed)
+        {
+            TreeItem item = GetItemAtPosition(mouseButton.Position);
+            if (item == null || item.GetChildCount() == 0 || item.IsSelectable(0))
+            {
+                return;
+            }
+
+            _pendingFoldItem = item;
+            // Accepting the event keeps Tree's own handler from folding the row, without
+            // clearing the viewport's mouse focus, so drag detection still works.
+            AcceptEvent();
+        }
+        else if (_pendingFoldItem != null)
+        {
+            TreeItem item = _pendingFoldItem;
+            _pendingFoldItem = null;
+            if (IsInstanceValid(item) && item == GetItemAtPosition(mouseButton.Position))
+            {
+                item.Collapsed = !item.Collapsed;
+            }
+
+            AcceptEvent();
+        }
+    }
+
     public override void _Notification(int what)
     {
+        if (what == NotificationDragBegin)
+        {
+            // The press became a drag; the release never reaches _GuiInput, so drop the fold.
+            _pendingFoldItem = null;
+        }
+
         if (what == NotificationDragEnd && _isDraggingTransfer)
         {
             _isDraggingTransfer = false;

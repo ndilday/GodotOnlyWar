@@ -4,7 +4,9 @@ using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -47,11 +49,21 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Planet planet,
             Faction playerFaction,
             IReadOnlyList<Squad> selectedSquads)
+            => BuildCapacityChoices(
+                planet,
+                playerFaction,
+                new MovementParty(selectedSquads ?? [], []));
+
+        public static IReadOnlyList<ShipCapacityChoice> BuildCapacityChoices(
+            Planet planet,
+            Faction playerFaction,
+            MovementParty party)
         {
-            int passengers = (selectedSquads ?? [])
+            int passengers = Distinct(party).Squads
                 .Where(squad => squad != null)
                 .DistinctBy(squad => squad.Id)
-                .Sum(SoldierPresenceService.PresentCount);
+                .Sum(SoldierPresenceService.PresentCount)
+                + Distinct(party).Characters.Count;
             return GetOrbitingPlayerShips(planet, playerFaction)
                 .Select(ship =>
                 {
@@ -74,27 +86,45 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Region destination,
             IReadOnlyList<Squad> selectedSquads)
         {
-            List<Squad> squads = Distinct(selectedSquads);
+            return Land(sector, planet, destination,
+                new MovementParty(selectedSquads ?? [], []));
+        }
+
+        public static ForceMovementResult Land(
+            Sector sector,
+            Planet planet,
+            Region destination,
+            MovementParty party)
+        {
+            MovementParty distinctParty = Distinct(party);
+            List<Squad> squads = distinctParty.Squads.ToList();
+            List<PlayerSoldier> characters = distinctParty.Characters.ToList();
             if (sector?.PlayerForce?.Faction == null
                 || planet == null
                 || destination?.Planet != planet
-                || squads.Count == 0)
+                || squads.Count == 0 && characters.Count == 0)
             {
-                return Failure("Select orbiting squads and a valid destination region.");
+                return Failure("Select orbiting squads or characters and a valid destination region.");
             }
 
             Faction playerFaction = sector.PlayerForce.Faction;
             HashSet<Ship> validShips = GetOrbitingPlayerShips(planet, playerFaction).ToHashSet();
             if (squads.Any(squad =>
                     squad.Faction != playerFaction
-                    || !squad.IsOperational
+                    || !squad.CanMoveAsFormation
                     || squad.CurrentRegion != null
                     || squad.CurrentOrders != null
                     || squad.BoardedLocation == null
                     || !validShips.Contains(squad.BoardedLocation)
-                    || !squad.BoardedLocation.LoadedSquads.Contains(squad)))
+                    || !squad.BoardedLocation.LoadedSquads.Contains(squad))
+                || characters.Any(character =>
+                    squads.Any(squad => squad.Members.Contains(character))
+                    || character.AssignedSquad?.Faction != playerFaction
+                    || !validShips.Contains(CampaignLocationService.ForSoldier(character)?.Ship)
+                    || !new CharacterAvailabilityService().EvaluateMovement(
+                        character, CampaignLocation.Landed(destination)).IsAllowed))
             {
-                return Failure("The force changed and at least one selected squad can no longer land.");
+                return Failure("The force changed and at least one selected participant can no longer land.");
             }
 
             RegionFaction destinationPresence = GetOrCreatePlayerPresence(
@@ -104,7 +134,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 return Failure("The Chapter has no valid planetary presence on this world.");
             }
 
-            int passengers = squads.Sum(SoldierPresenceService.PresentCount);
+            int passengers = squads.Sum(SoldierPresenceService.PresentCount)
+                + characters.Count;
             foreach (Squad squad in squads)
             {
                 squad.BoardedLocation.RemoveSquad(squad);
@@ -116,9 +147,19 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 }
             }
 
+            IndividualPostingService postings = new();
+            foreach (PlayerSoldier character in characters)
+            {
+                postings.RestorePhysical(
+                    character,
+                    IndividualPostingPurpose.Independent,
+                    CampaignLocation.Landed(destination),
+                    GameDataSingleton.Instance?.Date ?? new Date(1));
+            }
+
             return new ForceMovementResult(
                 true,
-                squads.Count == 1 ? "Squad landed." : $"{squads.Count} squads landed.",
+                Describe("landed", squads.Count, characters.Count),
                 ForceMovementKind.Landed,
                 squads.Count,
                 passengers);
@@ -131,14 +172,27 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Ship destinationShip,
             IReadOnlyList<Squad> selectedSquads)
         {
-            List<Squad> squads = Distinct(selectedSquads);
+            return Embark(sector, planet, source, destinationShip,
+                new MovementParty(selectedSquads ?? [], []));
+        }
+
+        public static ForceMovementResult Embark(
+            Sector sector,
+            Planet planet,
+            Region source,
+            Ship destinationShip,
+            MovementParty party)
+        {
+            MovementParty distinctParty = Distinct(party);
+            List<Squad> squads = distinctParty.Squads.ToList();
+            List<PlayerSoldier> characters = distinctParty.Characters.ToList();
             if (sector?.PlayerForce?.Faction == null
                 || planet == null
                 || source?.Planet != planet
                 || destinationShip == null
-                || squads.Count == 0)
+                || squads.Count == 0 && characters.Count == 0)
             {
-                return Failure("Select surface squads and a destination ship.");
+                return Failure("Select surface squads or characters and a destination ship.");
             }
 
             Faction playerFaction = sector.PlayerForce.Faction;
@@ -147,15 +201,21 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     playerFaction.Id, out RegionFaction sourcePresence)
                 || squads.Any(squad =>
                     squad.Faction != playerFaction
-                    || !squad.IsOperational
+                    || !squad.CanMoveAsFormation
                     || !ReferenceEquals(squad.CurrentRegion, source)
                     || squad.BoardedLocation != null
-                    || !sourcePresence.LandedSquads.Contains(squad)))
+                    || !sourcePresence.LandedSquads.Contains(squad))
+                || characters.Any(character =>
+                    squads.Any(squad => squad.Members.Contains(character))
+                    || character.AssignedSquad?.Faction != playerFaction
+                    || !new CharacterAvailabilityService().EvaluateMovement(
+                        character, CampaignLocation.Aboard(destinationShip)).IsAllowed
+                    || CampaignLocationService.ForSoldier(character)?.Region != source))
             {
-                return Failure("The force changed and at least one selected squad can no longer embark.");
+                return Failure("The force changed and at least one selected participant can no longer embark.");
             }
 
-            int passengers = squads.Sum(SoldierPresenceService.PresentCount);
+            int passengers = squads.Sum(SoldierPresenceService.PresentCount) + characters.Count;
             if (!ShipCapacityService.CanBoard(destinationShip, passengers))
             {
                 int shortfall = System.Math.Max(
@@ -172,7 +232,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 order.AssignedSquads.All(squads.Contains));
             int specialistsReleased = affectedOrders
                 .Where(order => order.AssignedSquads.All(squads.Contains))
-                .Sum(order => order.AttachedSoldiers.Count);
+                .Sum(order => order.AssignedCharacters.Count);
 
             // All validations are complete. Order cleanup cannot fail for these live squad/order
             // pointer pairs, and loading cannot throw after the capacity check above.
@@ -184,11 +244,20 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 squad.CurrentRegion = null;
                 squad.BoardedLocation = destinationShip;
             }
+            IndividualPostingService postings = new();
+            foreach (PlayerSoldier character in characters)
+            {
+                postings.RestorePhysical(
+                    character,
+                    IndividualPostingPurpose.Independent,
+                    CampaignLocation.Aboard(destinationShip),
+                    GameDataSingleton.Instance?.Date ?? new Date(1));
+            }
             CleanupVacatedPresence(source, sourcePresence);
 
             return new ForceMovementResult(
                 true,
-                squads.Count == 1 ? "Squad embarked." : $"{squads.Count} squads embarked.",
+                Describe("embarked", squads.Count, characters.Count),
                 ForceMovementKind.Embarked,
                 squads.Count,
                 passengers,
@@ -209,11 +278,24 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 .ThenBy(ship => ship.Id)
                 .ToList() ?? [];
 
-        private static List<Squad> Distinct(IReadOnlyList<Squad> squads) =>
-            (squads ?? [])
+        private static MovementParty Distinct(MovementParty party) =>
+            new(
+                (party?.Squads ?? [])
                 .Where(squad => squad != null)
                 .DistinctBy(squad => squad.Id)
-                .ToList();
+                .ToList(),
+                (party?.Characters ?? [])
+                .Where(character => character != null)
+                .DistinctBy(character => character.Id)
+                .ToList());
+
+        private static string Describe(string verb, int squadCount, int characterCount)
+        {
+            List<string> parts = [];
+            if (squadCount > 0) parts.Add($"{squadCount} squad{(squadCount == 1 ? "" : "s")}");
+            if (characterCount > 0) parts.Add($"{characterCount} character{(characterCount == 1 ? "" : "s")}");
+            return string.Join(" and ", parts) + $" {verb}.";
+        }
 
         private static RegionFaction GetOrCreatePlayerPresence(
             Region region,

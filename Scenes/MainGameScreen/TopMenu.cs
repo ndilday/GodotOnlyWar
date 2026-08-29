@@ -6,7 +6,8 @@ using System.Globalization;
 public partial class TopMenu : Control
 {
     public event EventHandler SystemOptionsButtonPressed;
-    private Label _screenLabel;
+    public event EventHandler ScreenTitlePressed;
+    private Button _screenLabel;
     private Label _requisitionAmountLabel;
     private Label _dateLabel;
     private Label _debugLabel;
@@ -14,13 +15,14 @@ public partial class TopMenu : Control
 
     public override void _Ready()
     {
-        _screenLabel = GetNode<Label>("Panel/MarginContainer/CommandRow/CenterSection/ScreenLabel");
+        _screenLabel = GetNode<Button>("Panel/MarginContainer/CommandRow/CenterSection/ScreenLabel");
         _requisitionAmountLabel = GetNode<Label>("Panel/MarginContainer/CommandRow/LeftSection/RequisitionAmountLabel");
         _dateLabel = GetNode<Label>("Panel/MarginContainer/CommandRow/RightSection/DateGroup/DateLabel");
         _debugLabel = GetNodeOrNull<Label>("Panel/MarginContainer/CommandRow/DebugLabel");
         _systemOptionsButton = GetNode<Button>("Panel/MarginContainer/CommandRow/RightSection/SystemOptionsButton");
         IconAtlas.ApplyIconButton(_systemOptionsButton, "settings");
         _systemOptionsButton.Pressed += () => SystemOptionsButtonPressed?.Invoke(this, EventArgs.Empty);
+        _screenLabel.Pressed += () => ScreenTitlePressed?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetDebugText(string newText)
@@ -35,6 +37,8 @@ public partial class TopMenu : Control
     {
         _screenLabel.Text = newText;
     }
+
+    public string GetScreenText() => _screenLabel.Text;
 
     public void SetRequisitionAmount(int amount)
     {

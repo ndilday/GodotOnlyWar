@@ -693,14 +693,14 @@ public partial class ChapterController : MainScreenController
         ChapterBrowserDetail detail =
             _soldierDetailBuilder.Build(soldier, false, includeSquadInTitle: true);
 
-        // A brother attached to an operation (Design/Reference/SpecialistAttachment.md) is in the
+        // A brother assigned to an operation is in the field with someone else's force. The
         // field with someone else's force. Surface that, offer the recall, and withhold the
         // transfer options - SoldierTransferService.ApplyTransfer refuses him anyway (§3.4),
         // so offering them would only produce a silent no-op.
         PlayerSoldier attached = soldier as PlayerSoldier;
-        if (attached?.AttachedOrder != null)
+        if (attached?.CurrentOrder != null)
         {
-            string where = attached.AttachedOrder.Mission?.RegionFaction?.Region?.Name
+            string where = attached.CurrentOrder.Mission?.RegionFaction?.Region?.Name
                 ?? "an ongoing operation";
             detail = detail with
             {
@@ -708,9 +708,9 @@ public partial class ChapterController : MainScreenController
                 [
                     new ChapterBrowserDetailCard(
                         "target",
-                        "Attached to Operation",
+                        "Assigned to Operation",
                         where,
-                        $"{soldier.Name} is detached from {attached.AssignedSquad?.Name} and "
+                        $"{soldier.Name} is away from {attached.AssignedSquad?.Name} and "
                         + $"serving with the force committed to {where}. He returns when the "
                         + "operation ends, or on recall. Transfers are unavailable while he is "
                         + "in the field."),
@@ -740,20 +740,20 @@ public partial class ChapterController : MainScreenController
         }
     }
 
-    // "Recall from operation" on an attached brother's detail card. Routed through the same
+    // "Recall from operation" on an assigned brother's detail card. Routed through the same
     // confirmation dialog transfers use, so the two destructive-ish actions read alike.
     private void OnDetailPrimaryActionPressed(object sender, EventArgs e)
     {
         if (!_currentDetailSoldierId.HasValue
             || GetSoldier(_currentDetailSoldierId.Value) is not PlayerSoldier soldier
-            || soldier.AttachedOrder == null)
+            || soldier.CurrentOrder == null)
         {
             return;
         }
         _pendingRecallSoldierId = soldier.Id;
         _recallConfirmationDialog.DialogText =
             $"Recall {soldier.Template.Name} {soldier.Name} from the operation in "
-            + $"{soldier.AttachedOrder.Mission?.RegionFaction?.Region?.Name ?? "the field"}? "
+            + $"{soldier.CurrentOrder.Mission?.RegionFaction?.Region?.Name ?? "the field"}? "
             + $"He rejoins {soldier.AssignedSquad?.Name} immediately.";
         _recallConfirmationDialog.PopupCentered();
     }
@@ -765,7 +765,7 @@ public partial class ChapterController : MainScreenController
         _pendingRecallSoldierId = null;
         if (GetSoldier(soldierId) is not PlayerSoldier soldier) return;
 
-        OnlyWar.Helpers.Orders.OrderAttachment.Detach(soldier);
+        OnlyWar.Helpers.Orders.OrderForceService.RemoveCharacter(soldier);
         CampaignChanged?.Invoke(this, EventArgs.Empty);
         RenderCurrentPath();
     }
@@ -1075,16 +1075,16 @@ public partial class ChapterController : MainScreenController
         int woundedCount = squad.Members.Count(soldier => !soldier.IsCombatEffective);
         // Headcount stays whole (attachment never touches Squad.Members); this is the
         // "available right now" counterpart the roster needs.
-        int attachedCount = squad.Members
+        int assignedCount = squad.Members
             .OfType<PlayerSoldier>()
-            .Count(soldier => soldier.AttachedOrder != null);
-        string attachedNote = attachedCount == 0
+            .Count(soldier => soldier.CurrentOrder != null);
+        string assignedNote = assignedCount == 0
             ? ""
-            : $" {attachedCount} attached to operations elsewhere.";
+            : $" {assignedCount} assigned to operations elsewhere.";
 
         List<ChapterBrowserDetailCard> cards =
         [
-            new ChapterBrowserDetailCard(GetSquadIconKey(squad), "Squad Composition", squad.SquadTemplate.Name, $"{squad.Members.Count} battle brothers assigned.{attachedNote}"),
+            new ChapterBrowserDetailCard(GetSquadIconKey(squad), "Squad Composition", squad.SquadTemplate.Name, $"{squad.Members.Count} battle brothers assigned.{assignedNote}"),
             new ChapterBrowserDetailCard("medical", "Casualties", "Current condition", $"{woundedCount} soldiers are wounded or impaired."),
             new ChapterBrowserDetailCard("archive", "Squad Record", "Chronicle", "Squad history, honors, and mission record can expand here.")
         ];

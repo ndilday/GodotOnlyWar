@@ -519,11 +519,23 @@ namespace OnlyWar.Helpers.Command
             Planet promisedWorld)
         {
             bool hasPositionedForce = sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
-                .Any(squad => squad.CurrentRegion?.Planet?.Id == scenario.PromisedPlanetId
-                    || squad.BoardedLocation?.Fleet?.Planet?.Id == scenario.PromisedPlanetId) == true;
-            bool hasRelevantOrder = sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
-                .Any(squad => squad.CurrentOrders?.Mission?.RegionFaction?.Region?.Planet?.Id
-                    == scenario.PromisedPlanetId) == true;
+                .Where(squad => squad?.CanMoveAsFormation == true)
+                .Any(squad => CampaignLocationService.ForSquad(squad)?.Region?.Planet?.Id
+                    == scenario.PromisedPlanetId
+                    || CampaignLocationService.ForSquad(squad)?.Ship?.Fleet?.Planet?.Id
+                    == scenario.PromisedPlanetId) == true
+                || sector.PlayerForce?.Army?.PlayerSoldierMap?.Values
+                    .Where(soldier => soldier?.CurrentOrder != null
+                        || soldier?.AssignedSquad?.PermitsIndividualDeployment == true)
+                    .Any(soldier => CampaignLocationService.ForSoldier(soldier)?.Region?.Planet?.Id
+                        == scenario.PromisedPlanetId
+                        || CampaignLocationService.ForSoldier(soldier)?.Ship?.Fleet?.Planet?.Id
+                        == scenario.PromisedPlanetId) == true;
+            bool hasRelevantOrder = sector.Orders.Values
+                .Any(order => order?.Mission?.RegionFaction?.Region?.Planet?.Id
+                    == scenario.PromisedPlanetId
+                    && (order.OwnerFaction?.IsPlayerFaction == true
+                        || order.Force.AllPlayerSoldiers.Any()));
             CampaignEvent foundingEvent = sector.PlayerForce?.CampaignEventLedger
                 ?.GetByDedupeKey("chapter/founded");
             bool hasResolvedTurn = foundingEvent != null

@@ -222,10 +222,11 @@ size_flags_vertical = 4
 text = "Muster"
 
 [node name="TransferButton" type="MenuButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ActionHeader"]
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+theme_type_variation = &"Button"
 visible = false
 flat = false
 text = "Transfer"

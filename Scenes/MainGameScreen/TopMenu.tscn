@@ -62,8 +62,10 @@ color = Color(0.545098, 0.431373, 0.25098, 0.72)
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ScreenLabel" type="Label" parent="Panel/MarginContainer/CommandRow/CenterSection"]
+[node name="ScreenLabel" type="Button" parent="Panel/MarginContainer/CommandRow/CenterSection"]
 layout_mode = 2
+flat = true
+focus_mode = 0
 theme_override_colors/font_color = Color(0.956863, 0.839216, 0.521569, 1)
 theme_override_font_sizes/font_size = 24
 text = "Sector Map"

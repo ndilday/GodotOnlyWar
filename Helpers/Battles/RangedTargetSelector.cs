@@ -399,7 +399,7 @@ namespace OnlyWar.Helpers.Battles
             float perpX = -axisY / axisLength;
             float perpY = axisX / axisLength;
 
-            float discipline = squad.Squad?.Faction?.FireDiscipline ?? DefaultFireDiscipline;
+            float discipline = squad.Faction?.FireDiscipline ?? DefaultFireDiscipline;
             return new SquadEngagementGeometry(
                 centroidX,
                 centroidY,

@@ -17,8 +17,10 @@ namespace OnlyWar.Helpers.Missions.Recon
             MissionContext context = execution.State;
             // decide whether to fight or flee
             // compare size of each force
-            float opForSize = context.OpposingSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);
-            float attackerSize = context.MissionSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);
+            float opForSize = context.OpposingSquads.Sum(s => s.AbleSoldiers
+                .Sum(member => member.Soldier.Template.BattleValue));
+            float attackerSize = context.MissionSquads.Sum(s => s.AbleSoldiers
+                .Sum(member => member.Soldier.Template.BattleValue));
             if(context.Order.LevelOfAggression == Aggression.Attritional)
             {
                 attackerSize *= 2;

@@ -50,6 +50,7 @@ public partial class ChapterFilterDialog : AcceptDialog
         MinSize = DialogMinimumSize;
         Size = DialogMinimumSize;
         Unresizable = false;
+        KeepBorderStableWhenUnfocused();
         ApplyDialogSurface();
 
         MarginContainer margin = new();
@@ -118,6 +119,19 @@ public partial class ChapterFilterDialog : AcceptDialog
         dialogFrame.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         AddChild(dialogFrame);
         MoveChild(dialogFrame, 0);
+    }
+
+    // Opening one of the condition dropdowns hands focus to the popup, which makes the
+    // embedded window swap to its "unfocused" border stylebox and visibly change color.
+    // Nothing about the dialog has actually changed, so draw the focused border in both
+    // states. Reusing the theme's own stylebox keeps the title-bar metrics identical.
+    private void KeepBorderStableWhenUnfocused()
+    {
+        StyleBox focused = GetThemeStylebox("embedded_border", "Window");
+        if (focused != null)
+        {
+            AddThemeStyleboxOverride("embedded_unfocused_border", focused);
+        }
     }
 
     private void ApplyDialogSurface()

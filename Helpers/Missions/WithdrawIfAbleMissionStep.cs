@@ -1,4 +1,5 @@
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Planets;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions
@@ -29,8 +30,11 @@ namespace OnlyWar.Helpers.Missions
             {
                 return MissionStepResult.Complete;
             }
-            if (context.Order.Mission.RegionFaction.Region
-                == context.MissionSquads.First().Squad.CurrentRegion)
+            Region currentRegion = context.MissionSquads
+                .Select(squad => squad.CampaignCharacter?.EffectiveRegion
+                    ?? squad.CampaignSquad?.CurrentRegion)
+                .FirstOrDefault(region => region != null);
+            if (context.Order.Mission.RegionFaction.Region == currentRegion)
             {
                 return MissionStepResult.Complete;
             }

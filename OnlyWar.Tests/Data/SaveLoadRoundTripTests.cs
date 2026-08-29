@@ -184,7 +184,8 @@ public class SaveLoadRoundTripTests
         intelFaction.AddRegionAwareness(intelRegionA, 2.25f);
         intelFaction.AddRegionAwareness(intelRegionB, 0.5f);
 
-        Squad orderedSquad = armyRoot.GetAllSquads().First(s => s.Members.Count > 0);
+        Squad orderedSquad = armyRoot.GetAllSquads()
+            .First(s => s.CanAcceptSquadOrder && s.Members.Count > 0);
         Region orderRegion = sector.Planets.Values
             .SelectMany(p => p.Regions)
             .First(r => r.RegionFactionMap.Count > 0);
@@ -195,7 +196,9 @@ public class SaveLoadRoundTripTests
         sector.AddNewOrder(order);
 
         Squad landedSquad = armyRoot.GetAllSquads()
-            .First(s => s.Members.Count > 0 && s.Id != orderedSquad.Id);
+            .First(s => s.CanMoveAsFormation
+                && s.Members.Count > 0
+                && s.Id != orderedSquad.Id);
         Region landedRegion = sector.Planets.Values
             .SelectMany(p => p.Regions)
             .First(r => r != null);
@@ -215,18 +218,23 @@ public class SaveLoadRoundTripTests
         playerRegionFaction.LandedSquads.Add(landedSquad);
 
         Squad administrativeSquad = armyRoot.GetAllSquads()
-            .First(s => s.Id != orderedSquad.Id && s.Id != landedSquad.Id);
-        administrativeSquad.IsAdministrative = true;
+            .First(s => s.PermitsIndividualDeployment
+                && s.Members.Count > 0
+                && s.Id != orderedSquad.Id
+                && s.Id != landedSquad.Id);
+        AdministrativeStationResult stationResult = new AdministrativeStationService()
+            .SeatFormation(administrativeSquad, CampaignLocation.Landed(landedRegion));
+        Assert.True(stationResult.Succeeded);
 
-        // Order-level specialist attachment (Design/Reference/SpecialistAttachment.md). The man
-        // stays on his home squad's roll -- his only persisted marker of being forward is the
-        // OrderSoldier row -- so the round trip has to restore BOTH halves of the pointer pair
+        // Order-level character assignment. The man stays on his home squad's roll -- his
+        // persisted marker is the OrderCharacter row -- so the round trip has to restore BOTH
+        // halves of the pointer pair
         // AND land on the same object the squad holds. See the reference-equality assertions
         // below: PlayerSoldier's constructor swaps the wrapper into the squad in place of the
         // base Soldier during load, so an id-only assertion would pass while the game held two
         // divergent objects.
         Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
-            s.SquadTemplate.PermitsIndividualDetachment
+            s.PermitsIndividualDeployment
             && s.Members.Count > 0
             && s.Id != administrativeSquad.Id);
         PlayerSoldier attachedSpecialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
@@ -468,7 +476,7 @@ public class SaveLoadRoundTripTests
 
             // 1. The attachment survived.
             Order loadedOrder = loadedSquad.CurrentOrders;
-            PlayerSoldier loadedSpecialist = Assert.Single(loadedOrder.AttachedSoldiers);
+            PlayerSoldier loadedSpecialist = Assert.Single(loadedOrder.AssignedCharacters);
             Assert.Equal(attachedSpecialistId, loadedSpecialist.Id);
             // 2. And it points at the SAME instance the home squad holds -- the assertion that
             //    catches the PlayerSoldier-wrapper trap. He is still on his squad's roll, so he
@@ -481,7 +489,7 @@ public class SaveLoadRoundTripTests
             Assert.Same(rosterInstance, loadedSpecialist);
             Assert.DoesNotContain(loaded.FallenBrothers, f => f.Id == attachedSpecialistId);
             // 3. The soldier-side backpointer resolves to the same order object.
-            Assert.Same(loadedOrder, loadedSpecialist.AttachedOrder);
+            Assert.Same(loadedOrder, loadedSpecialist.CurrentOrder);
 
             Squad loadedLandedSquad = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
@@ -497,8 +505,8 @@ public class SaveLoadRoundTripTests
             Squad loadedAdministrativeSquad = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
                 .Single(s => s.Id == administrativeSquad.Id);
-            Assert.True(loadedAdministrativeSquad.IsAdministrative);
-            Assert.False(loadedAdministrativeSquad.IsOperational);
+            Assert.True(loadedAdministrativeSquad.SquadTemplate.IsAdministrative);
+            Assert.False(loadedAdministrativeSquad.CanMoveAsFormation);
             Assert.Null(loadedAdministrativeSquad.BoardedLocation);
             Assert.Null(loadedAdministrativeSquad.CurrentRegion);
             Assert.Null(loadedAdministrativeSquad.CurrentOrders);
@@ -659,11 +667,11 @@ public class SaveLoadRoundTripTests
         orderedSquad.CurrentOrders = order;
         sector.AddNewOrder(order);
 
-        // An attached specialist must ride through the full StartMenu load path too:
-        // SavedGameLoader re-registers the same Order instances, so the attachment restored by
-        // PopulateOrderAttachments has to still be on them after the sector rebuild.
+        // An assigned character must ride through the full StartMenu load path too:
+        // SavedGameLoader re-registers the same Order instances, so the character restored by
+        // PopulateOrderCharacters has to still be on them after the sector rebuild.
         Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
-            s.SquadTemplate.PermitsIndividualDetachment && s.Members.Count > 0);
+            s.PermitsIndividualDeployment && s.Members.Count > 0);
         PlayerSoldier specialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
         OrderAttachment.Attach(specialist, order);
         int specialistId = specialist.Id;
@@ -687,9 +695,9 @@ public class SaveLoadRoundTripTests
             Assert.Contains(rebuiltSquad.CurrentOrders, rebuilt.Orders.Values);
 
             PlayerSoldier rebuiltSpecialist =
-                Assert.Single(rebuiltSquad.CurrentOrders.AttachedSoldiers);
+                Assert.Single(rebuiltSquad.CurrentOrders.AssignedCharacters);
             Assert.Equal(specialistId, rebuiltSpecialist.Id);
-            Assert.Same(rebuiltSquad.CurrentOrders, rebuiltSpecialist.AttachedOrder);
+            Assert.Same(rebuiltSquad.CurrentOrders, rebuiltSpecialist.CurrentOrder);
             // Reference equality against the live roster: the rebuilt sector must hold one
             // object for this man, not an order-side copy that diverges from his squad entry.
             Assert.Same(

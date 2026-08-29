@@ -5,6 +5,10 @@ using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
+using OnlyWar.Helpers.Orders;
+using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Helpers.Recruitment
 {
@@ -16,13 +20,14 @@ namespace OnlyWar.Helpers.Recruitment
     /// </summary>
     internal sealed class RecruitmentStaffService
     {
-        internal Squad GetAdministrativeSquad(PlayerForce force)
+        internal Squad GetAdministrativeSquad(PlayerForce force, GameRulesData rules)
         {
             return force?.Army?.OrderOfBattle?.GetAllSquads()
-                .SingleOrDefault(squad => squad.IsAdministrative);
+                .SingleOrDefault(squad => squad.SquadTemplate
+                    == rules?.ChapterTemplates?.ScoutCompanyHeadquarters);
         }
 
-        internal void Synchronize(PlayerForce force, GameRulesData rules)
+        internal void Synchronize(PlayerForce force, GameRulesData rules, Sector sector = null)
         {
             RecruitmentProgram program = force?.RecruitmentProgram;
             if (program == null)
@@ -30,8 +35,10 @@ namespace OnlyWar.Helpers.Recruitment
                 return;
             }
 
+            sector ??= GameDataSingleton.Instance?.Sector;
+            Order taskOrder = EnsureTaskOrder(force, program, sector);
             program.StaffAssignments.Clear();
-            Squad administrative = GetAdministrativeSquad(force);
+            Squad administrative = GetAdministrativeSquad(force, rules);
             if (administrative == null)
             {
                 return;
@@ -40,12 +47,28 @@ namespace OnlyWar.Helpers.Recruitment
             foreach (PlayerSoldier soldier in administrative.Members.OfType<PlayerSoldier>())
             {
                 RecruitmentStaffRole? role = ResolveRole(soldier, rules);
-                if (!role.HasValue)
+                bool eligible = role.HasValue
+                    && soldier.IsCombatEffective
+                    && CampaignLocationService.AreCoLocated(soldier, administrative)
+                    && (soldier.CurrentOrder == null
+                        || ReferenceEquals(soldier.CurrentOrder, taskOrder));
+                if (ReferenceEquals(soldier.CurrentOrder, taskOrder) && !eligible)
                 {
-                    // The Captain is the Master of Recruitment, but is not one of the
-                    // throughput-producing staff posts charged by the weekly program.
+                    OrderForceService.RemoveCharacter(taskOrder, soldier);
+                }
+                if (!eligible)
+                {
                     continue;
                 }
+                if (taskOrder != null && soldier.CurrentOrder == null
+                    && !OrderForceService.AssignCharacter(taskOrder, soldier))
+                {
+                    continue;
+                }
+                if (!ReferenceEquals(soldier.CurrentOrder, taskOrder)) continue;
+
+                // The Captain is the Master of Recruitment, but is not one of the
+                // throughput-producing staff posts charged by the weekly program.
 
                 SoldierEvaluation evaluation = soldier.SoldierEvaluationHistory.LastOrDefault();
                 program.StaffAssignments.Add(new RecruitmentStaffAssignment(
@@ -55,6 +78,47 @@ namespace OnlyWar.Helpers.Recruitment
                     evaluation?[RatingKeys.Medical] ?? 0,
                     evaluation?[RatingKeys.Piety] ?? 0));
             }
+        }
+
+        internal static Order EnsureTaskOrder(
+            PlayerForce force,
+            RecruitmentProgram program,
+            Sector sector)
+        {
+            if (force == null || program == null || sector == null)
+            {
+                return program?.TaskOrder;
+            }
+            if (program.TaskOrder != null)
+            {
+                sector.AddNewOrder(program.TaskOrder);
+                return program.TaskOrder;
+            }
+
+            Planet homeWorld = sector.GetPlanet(program.HomeWorldPlanetId);
+            Region capital = homeWorld?.Regions.FirstOrDefault(region =>
+                region.Id == homeWorld.CapitalRegionId) ?? homeWorld?.Regions.FirstOrDefault();
+            if (capital == null) return null;
+
+            Order existing = sector.Orders.Values.FirstOrDefault(order =>
+                order.Mission?.MissionType == MissionType.Recruitment
+                && order.OwnerFaction == force.Faction
+                && order.Mission.Region == capital);
+            if (existing != null)
+            {
+                program.TaskOrder = existing;
+                return existing;
+            }
+
+            program.TaskOrder = new Order(
+                [],
+                isQuiet: true,
+                isActivelyEngaging: false,
+                Aggression.Avoid,
+                new Mission(MissionType.Recruitment, capital, force.Faction, 0),
+                force.Faction);
+            sector.AddNewOrder(program.TaskOrder);
+            return program.TaskOrder;
         }
 
         private static RecruitmentStaffRole? ResolveRole(

@@ -338,7 +338,7 @@ public class FactionStrategyController
 
             long committed = state.SpareTroops;
             FeedMission mission = new FeedMission(committed, state.RegionFaction);
-            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Cautious, mission));
+            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Cautious, mission, faction));
             state.SpareTroops = 0;
 
             GameLog.Debug(() =>
@@ -553,7 +553,7 @@ public class FactionStrategyController
 
         Mission mission = new Mission(MissionType.Recon, target.TargetFaction, 0);
         Aggression reconAggression = ChooseReconAggression(faction, target.TargetRegion);
-        Order order = new Order(scouts, true, false, reconAggression, mission);
+        Order order = new Order(scouts, true, false, reconAggression, mission, faction);
         allOrders.Add(order);
         GameLog.Debug(() =>
             $"AI recon {faction.Name}: target={DescribeOffensive(target)}, staging={stagingRegion.Name}, "
@@ -674,7 +674,7 @@ public class FactionStrategyController
                 aggression,
                 faction.HasBehavior(FactionBehavior.InvadesOnVictory),
                 missionType);
-            allOrders.Add(new Order(new List<Squad>(), false, true, aggression, strategicMission));
+            allOrders.Add(new Order(new List<Squad>(), false, true, aggression, strategicMission, faction));
             return true;
         }
 
@@ -712,7 +712,7 @@ public class FactionStrategyController
         }
 
         Mission newMission = new Mission(missionType, chosenOffensive.TargetFaction, 0);
-        Order newOrder = new Order(generatedSquads, missionType == MissionType.LightningRaid, true, aggression, newMission);
+        Order newOrder = new Order(generatedSquads, missionType == MissionType.LightningRaid, true, aggression, newMission, faction);
         allOrders.Add(newOrder);
         GameLog.Debug(() =>
             $"AI {missionType} {faction.Name}: tactical order created target={DescribeOffensive(chosenOffensive)}, "
@@ -977,7 +977,7 @@ public class FactionStrategyController
                 }
             }
 
-            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Avoid, mission));
+            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Avoid, mission, faction));
             best.State.SpareTroops = Math.Max(0, best.State.SpareTroops - spend);
             projected[best.State] = (org, det, ent, aa);
 
@@ -1107,7 +1107,7 @@ public class FactionStrategyController
             long spend = (long)Math.Ceiling(amount * costPerLevel);
 
             allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Avoid,
-                new ConstructionMission(DefenseType.ListeningPost, amount, state.RegionFaction)));
+                new ConstructionMission(DefenseType.ListeningPost, amount, state.RegionFaction), faction));
             state.SpareTroops = Math.Max(0, state.SpareTroops - spend);
             GameLog.Trace(() =>
                 $"AI border listening post {faction.Name}/{state.RegionFaction.Region.Planet.Name}/"
@@ -1313,7 +1313,7 @@ public class FactionStrategyController
             // the squads but launches no mission of its own (TurnController skips Patrol orders).
             // These squads are transient AI forces, cleared at the start of the next planning pass.
             Mission mission = new Mission(MissionType.Patrol, state.RegionFaction, 0);
-            Order order = new Order(patrolSquads, true, false, Aggression.Cautious, mission);
+            Order order = new Order(patrolSquads, true, false, Aggression.Cautious, mission, faction);
             foreach (Squad squad in patrolSquads)
             {
                 squad.CurrentRegion = state.RegionFaction.Region;

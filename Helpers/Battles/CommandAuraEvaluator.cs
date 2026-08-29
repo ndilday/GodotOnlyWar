@@ -68,7 +68,7 @@ namespace OnlyWar.Helpers.Battles
                 return 0f;
             }
 
-            int? factionId = squad.Squad?.Faction?.Id;
+            int? factionId = squad.Faction?.Id;
             bool sawHq = false;
             bool anySurvivingHq = false;
 
@@ -82,7 +82,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     continue;
                 }
-                if (provider.Squad?.Faction?.Id != factionId)
+                if (provider.Faction?.Id != factionId)
                 {
                     continue;
                 }

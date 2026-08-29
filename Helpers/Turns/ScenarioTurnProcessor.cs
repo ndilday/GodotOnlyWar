@@ -66,7 +66,7 @@ namespace OnlyWar.Helpers.Turns
                 SectorBuilder.ReplaceChapterPlanetFaction(promised, player);
                 sector.PlayerForce.HomeWorldPlanetId = promised.Id;
                 sector.PlayerForce.RecruitmentProgram = CreateFoundingRecruitmentProgram(promised);
-                SetTenthCompanyHeadquartersAdministrative(sector, promised);
+                RelocateAdministrativeStationsToHomeWorld(sector, promised);
                 Character lord = sector.GetSectorLord();
                 if (lord != null)
                 {
@@ -128,33 +128,24 @@ namespace OnlyWar.Helpers.Turns
                 Count = 1,
                 Detail = $"The Chapter established its first recruitment program on {homeWorld.Name}."
             });
+            RecruitmentStaffService.EnsureTaskOrder(
+                _session.Sector.PlayerForce,
+                program,
+                _session.Sector);
             return program;
         }
 
-        private void SetTenthCompanyHeadquartersAdministrative(Sector sector, Planet homeWorld)
+        private void RelocateAdministrativeStationsToHomeWorld(Sector sector, Planet homeWorld)
         {
-            var scoutCompany = sector.PlayerForce.Army.OrderOfBattle.ChildUnits
-                .FirstOrDefault(unit =>
-                    unit.UnitTemplate == _session.Rules.ChapterTemplates.ScoutCompany);
-            if (scoutCompany?.HQSquad != null)
+            Region capital = homeWorld.Regions.FirstOrDefault(
+                region => region.Id == homeWorld.CapitalRegionId)
+                ?? homeWorld.Regions.First();
+            AdministrativeStationResult result = new AdministrativeStationService()
+                .MoveAllToRegion(sector.PlayerForce.Army.OrderOfBattle, capital);
+            if (!result.Succeeded)
             {
-                var headquarters = scoutCompany.HQSquad;
-                var previousOrder = headquarters.CurrentOrders;
-                headquarters.IsAdministrative = true;
-                if (previousOrder?.AssignedSquads.Count == 0)
-                {
-                    sector.RemoveOrder(previousOrder);
-                }
-                Region capital = homeWorld.Regions.FirstOrDefault(
-                    region => region.Id == homeWorld.CapitalRegionId)
-                    ?? homeWorld.Regions.First();
-                headquarters.CurrentRegion = capital;
-                if (capital.RegionFactionMap.TryGetValue(
-                    sector.PlayerForce.Faction.Id, out RegionFaction chapterPresence)
-                    && !chapterPresence.LandedSquads.Contains(headquarters))
-                {
-                    chapterPresence.LandedSquads.Add(headquarters);
-                }
+                throw new InvalidOperationException(
+                    $"Unable to relocate Chapter administrative stations: {result.Message}");
             }
         }
 

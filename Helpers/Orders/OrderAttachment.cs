@@ -34,11 +34,11 @@ namespace OnlyWar.Helpers.Orders
             {
                 return;
             }
-            if (ReferenceEquals(soldier.AttachedOrder, order))
+            if (ReferenceEquals(soldier.CurrentOrder, order))
             {
-                if (!order.AttachedSoldiers.Contains(soldier))
+                if (!order.AssignedCharacters.Contains(soldier))
                 {
-                    order.AttachedSoldiers.Add(soldier);
+                    order.AssignedCharacters.Add(soldier);
                 }
                 return;
             }
@@ -49,8 +49,19 @@ namespace OnlyWar.Helpers.Orders
             if (soldier.AssignedSquad == null)
             {
                 Detach(soldier);
-                soldier.AttachedOrder = order;
-                order.AttachedSoldiers.Add(soldier);
+                soldier.CurrentOrder = order;
+                order.AssignedCharacters.Add(soldier);
+                return;
+            }
+
+            if (soldier.CurrentOrder != null && !ReferenceEquals(soldier.CurrentOrder, order))
+            {
+                Detach(soldier);
+            }
+
+            if (soldier.AssignedSquad.PermitsIndividualDeployment)
+            {
+                OrderForceService.AssignCharacter(order, soldier);
                 return;
             }
 
@@ -66,14 +77,14 @@ namespace OnlyWar.Helpers.Orders
         // Releases one individual from whatever operation he is on. Safe on an unattached man.
         public static void Detach(PlayerSoldier soldier)
         {
-            if (soldier?.AttachedOrder == null)
+            if (soldier?.CurrentOrder == null)
             {
                 return;
             }
             if (soldier.IndividualPosting?.Location == null)
             {
-                soldier.AttachedOrder.AttachedSoldiers.Remove(soldier);
-                soldier.AttachedOrder = null;
+                soldier.CurrentOrder.AssignedCharacters.Remove(soldier);
+                soldier.CurrentOrder = null;
             }
             else
             {
@@ -90,9 +101,16 @@ namespace OnlyWar.Helpers.Orders
             {
                 return;
             }
-            foreach (PlayerSoldier soldier in order.AttachedSoldiers.ToList())
+            foreach (PlayerSoldier soldier in order.AssignedCharacters.ToList())
             {
-                PostingService.ReleaseFromOrder(soldier);
+                if (soldier.IndividualPosting == null)
+                {
+                    OrderForceService.RemoveCharacter(order, soldier);
+                }
+                else
+                {
+                    PostingService.ReleaseFromOrder(soldier);
+                }
             }
         }
 
@@ -102,8 +120,8 @@ namespace OnlyWar.Helpers.Orders
         public static bool HasAttachedMembers(Squad squad, Order excludingOrder = null)
         {
             return squad?.Members.OfType<PlayerSoldier>().Any(member =>
-                member.AttachedOrder != null
-                && !ReferenceEquals(member.AttachedOrder, excludingOrder)) == true;
+                member.CurrentOrder != null
+                && !ReferenceEquals(member.CurrentOrder, excludingOrder)) == true;
         }
 
         // The reverse guard: is any member of this squad committed to an order other than the
@@ -147,21 +165,22 @@ namespace OnlyWar.Helpers.Orders
                 reason = "No soldier selected.";
                 return false;
             }
-            if (order != null && ReferenceEquals(soldier.AttachedOrder, order))
+            if (order != null && ReferenceEquals(soldier.CurrentOrder, order))
             {
                 return true;
             }
 
             // 1. Only formations whose function is to supply specialists may give a man up.
             Squad squad = soldier.AssignedSquad;
-            if (squad?.SquadTemplate?.PermitsIndividualDetachment != true)
+            if (squad?.PermitsIndividualDeployment != true
+                && squad?.SquadTemplate?.PermitsIndividualDetachment != true)
             {
                 reason = $"{soldier.Name} belongs to a formation that deploys as a unit.";
                 return false;
             }
 
             // 2. One man, one operation.
-            if (soldier.AttachedOrder != null && !ReferenceEquals(soldier.AttachedOrder, order))
+            if (soldier.CurrentOrder != null && !ReferenceEquals(soldier.CurrentOrder, order))
             {
                 reason = $"{soldier.Name} is already attached to another operation.";
                 return false;
@@ -186,7 +205,9 @@ namespace OnlyWar.Helpers.Orders
             }
 
             // 6. Not reserved for a procedure this week.
-            if (IsReservedForProcedure(soldier))
+            if (RecruitmentPromotionService.IsReservedForProcedure(
+                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram,
+                    soldier.Id))
             {
                 reason = $"{soldier.Name} is committed to a Chapter procedure this week.";
                 return false;
@@ -228,22 +249,5 @@ namespace OnlyWar.Helpers.Orders
             return false;
         }
 
-        // A neophyte mid-Black-Carapace, or a staff Apothecary assigned to perform an
-        // implantation, is spoken for and cannot also be lent to an operation.
-        internal static bool IsReservedForProcedure(PlayerSoldier soldier)
-        {
-            RecruitmentProgram program =
-                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram;
-            if (program == null)
-            {
-                return false;
-            }
-            if (RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(program, soldier.Id))
-            {
-                return true;
-            }
-            return program.Procedures.Any(
-                procedure => procedure.AssignedApothecarySoldierId == soldier.Id);
-        }
     }
 }

@@ -349,8 +349,8 @@ namespace OnlyWar.Helpers
             List<SoldierTemplate> openings = [];
             foreach (SquadTemplateElement element in squadTemplate.Elements)
             {
-                if ((squadTemplate.SquadType & SquadTypes.Administrative) == 0
-                    && element.SoldierTemplate.IsSquadLeader == hasSquadLeader)
+                if (!IsSlotOpenForLeadership(
+                    squadTemplate, element.SoldierTemplate, hasSquadLeader))
                 {
                     continue;
                 }
@@ -410,7 +410,12 @@ namespace OnlyWar.Helpers
             // reposting him mid-operation is not a decision the Chapter screen may make. The
             // UI hides the options, but this is the enforcement point
             // (Design/Reference/SpecialistAttachment.md §3.4).
-            if (soldier.AttachedOrder != null)
+            if (soldier.CurrentOrder != null)
+            {
+                return false;
+            }
+            if (!new CharacterAvailabilityService()
+                .EvaluateOrganizationalTransfer(soldier).IsAllowed)
             {
                 return false;
             }
@@ -452,7 +457,7 @@ namespace OnlyWar.Helpers
             currentSquad.RemoveSquadMember(soldier);
 
             newSquad.AddSquadMember(soldier);
-            UpdateSquadLocations(currentSquad, newSquad);
+            UpdateSquadLocations(currentSquad, newSquad, soldier);
 
             if (soldier.Template != option.SoldierTemplate)
             {
@@ -487,7 +492,10 @@ namespace OnlyWar.Helpers
                 && option.SoldierTemplate != soldier.Template;
         }
 
-        private static void UpdateSquadLocations(Squad oldSquad, Squad newSquad)
+        private static void UpdateSquadLocations(
+            Squad oldSquad,
+            Squad newSquad,
+            PlayerSoldier transferredSoldier)
         {
             if (oldSquad == newSquad)
             {
@@ -500,13 +508,19 @@ namespace OnlyWar.Helpers
                 // An empty squad may still retain stale registration from an earlier posting,
                 // so detach it before inheriting the source squad's active deployment.
                 SquadLifecycleService.DetachDeployment(newSquad);
-                if (newSquad.IsOperational)
+                // A posted character keeps his physical posting while changing homes; a new
+                // whole-formation squad must not inherit a phantom deployment from that one
+                // posted member. An unposted transfer from an administrative station, however,
+                // carries the effective station location into the new operational squad.
+                if (newSquad.CanAcceptSquadOrder
+                    && transferredSoldier?.IndividualPosting == null)
                 {
-                    newSquad.CurrentRegion = oldSquad.CurrentRegion;
-                    newSquad.BoardedLocation = oldSquad.BoardedLocation;
+                    CampaignLocation oldLocation = CampaignLocationService.ForSquad(oldSquad);
+                    newSquad.CurrentRegion = oldLocation?.Region;
+                    newSquad.BoardedLocation = oldLocation?.Ship;
                     newSquad.BoardedLocation?.LoadSquad(newSquad);
 
-                    RegionFaction regionFaction = FindRegionFaction(oldSquad);
+                    RegionFaction regionFaction = FindRegionFaction(oldSquad, oldLocation);
                     if (regionFaction != null && !regionFaction.LandedSquads.Contains(newSquad))
                     {
                         regionFaction.LandedSquads.Add(newSquad);
@@ -526,21 +540,24 @@ namespace OnlyWar.Helpers
             }
         }
 
-        private static RegionFaction FindRegionFaction(Squad squad)
+        private static RegionFaction FindRegionFaction(
+            Squad squad,
+            CampaignLocation location = null)
         {
-            if (squad?.CurrentRegion == null)
+            Region region = location?.Region ?? squad?.CurrentRegion;
+            if (region == null)
             {
                 return null;
             }
 
             if (squad.Faction != null
-                && squad.CurrentRegion.RegionFactionMap.TryGetValue(
+                && region.RegionFactionMap.TryGetValue(
                     squad.Faction.Id, out RegionFaction factionPresence))
             {
                 return factionPresence;
             }
 
-            return squad.CurrentRegion.RegionFactionMap.Values
+            return region.RegionFactionMap.Values
                 .FirstOrDefault(regionFaction => regionFaction.LandedSquads.Contains(squad));
         }
 
@@ -624,6 +641,26 @@ namespace OnlyWar.Helpers
         private static bool CanCreateSquadInUnit(Unit unit) =>
             unit?.HQSquad == null || unit.HQSquad.SquadLeader != null;
 
+        // A squad has exactly one command seat, so a leader element is open only while the
+        // squad is leaderless -- except in an administrative formation, where leader
+        // templates double as staff qualifications rather than command seats (a Scout HQ
+        // pools Scout Sergeants under its Captain, and the Apothecarion/Reclusium pools are
+        // nothing but such slots).
+        private static bool IsLeaderSlotOpen(SquadTemplate template, bool hasSquadLeader) =>
+            !hasSquadLeader || template?.IsAdministrative == true;
+
+        // Rank-and-file slots wait for the leader in every formation, administrative ones
+        // included. An empty HQ squad is founded by its Captain; the Ancient, Champion,
+        // Chaplain and Apothecary seats are his staff and open only once he is seated.
+        // Offering them all at once listed the same empty HQ squad once per open slot in
+        // the muster's EMPTY FORMATIONS group. This mirrors CanCreateSquadInUnit above,
+        // which already withholds a company's line formations until its HQ has a leader.
+        private static bool IsSlotOpenForLeadership(
+            SquadTemplate template, SoldierTemplate element, bool hasSquadLeader) =>
+            element.IsSquadLeader
+                ? IsLeaderSlotOpen(template, hasSquadLeader)
+                : hasSquadLeader;
+
         // A soldier may fill a slot at their current rank (a lateral transfer) or any
         // rank above it (a promotion of any number of levels). Slots below the soldier's
         // current rank are not offered, since transfers never demote.
@@ -657,32 +694,35 @@ namespace OnlyWar.Helpers
             {
                 return true;
             }
-            bool sourceHasLocation = source.CurrentRegion != null || source.BoardedLocation != null;
+            CampaignLocation sourceLocation = CampaignLocationService.ForSquad(source);
+            CampaignLocation destinationLocation = CampaignLocationService.ForSquad(destination);
+            bool sourceHasLocation = sourceLocation != null;
             if (!sourceHasLocation)
             {
                 return true;
             }
-            bool destinationHasLocation = destination.CurrentRegion != null || destination.BoardedLocation != null;
+            bool destinationHasLocation = destinationLocation != null;
             if (!destinationHasLocation)
             {
                 return true;
             }
 
-            bool sourceSafe = IsSquadLocationSafe(source);
-            bool destinationSafe = IsSquadLocationSafe(destination);
+            bool sourceSafe = IsLocationSafe(sourceLocation);
+            bool destinationSafe = IsLocationSafe(destinationLocation);
             if (!sourceSafe || !destinationSafe)
             {
-                return source.CurrentRegion != null && source.CurrentRegion == destination.CurrentRegion;
+                return sourceLocation.Region != null
+                    && sourceLocation.Region == destinationLocation.Region;
             }
 
-            return GetSquadPlanet(source) == GetSquadPlanet(destination);
+            return GetLocationPlanet(sourceLocation) == GetLocationPlanet(destinationLocation);
         }
 
-        private static bool IsSquadLocationSafe(Squad squad)
+        private static bool IsLocationSafe(CampaignLocation location)
         {
             // Boarded on a ship is always safe: the ship isn't sitting in anyone's
             // contested territory.
-            return squad.BoardedLocation != null || IsRegionSafe(squad.CurrentRegion);
+            return location?.Ship != null || IsRegionSafe(location?.Region);
         }
 
         private static bool IsRegionSafe(Region region)
@@ -696,13 +736,9 @@ namespace OnlyWar.Helpers
                    && FactionRelationshipService.IsImperial(controller.PlanetFaction.Faction);
         }
 
-        private static Planet GetSquadPlanet(Squad squad)
+        private static Planet GetLocationPlanet(CampaignLocation location)
         {
-            if (squad.CurrentRegion != null)
-            {
-                return squad.CurrentRegion.Planet;
-            }
-            return squad.BoardedLocation?.Fleet?.Planet;
+            return location?.Region?.Planet ?? location?.Ship?.Fleet?.Planet;
         }
 
         private IEnumerable<SoldierTemplate> GetOpeningsInEmptySquad(
@@ -803,12 +839,10 @@ namespace OnlyWar.Helpers
             SquadTemplateElement element,
             bool promotionOnly)
         {
-            // A squad has exactly one leader: offer a leader slot only while the
-            // squad is leaderless, and offer rank-and-file slots only once a leader
-            // is in place. Administrative squads are the exception because their
-            // leader elements are staff qualifications rather than command seats.
-            if (!squadContext.Squad.IsAdministrative
-                && element.SoldierTemplate.IsSquadLeader == squadContext.HasSquadLeader)
+            if (!IsSlotOpenForLeadership(
+                squadContext.Squad.SquadTemplate,
+                element.SoldierTemplate,
+                squadContext.HasSquadLeader))
             {
                 return false;
             }

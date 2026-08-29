@@ -15,7 +15,6 @@ using System.Linq;
 
 public partial class PlanetaryOperationsScreenView : Control
 {
-    private Button _worldName;
     private Label _aggregateStrip;
     private HBoxContainer _verbBar;
     private VBoxContainer _leftContent;
@@ -34,7 +33,6 @@ public partial class PlanetaryOperationsScreenView : Control
 
     public event EventHandler<Region> RegionSelected;
     public event EventHandler<Region> RegionActivated;
-    public event EventHandler WorldDossierRequested;
     public event EventHandler<PlanetaryOperationsVerb> VerbSelected;
     public event EventHandler<string> ForceNodePressed;
     public event EventHandler<string> ForceNodeActivated;
@@ -59,8 +57,6 @@ public partial class PlanetaryOperationsScreenView : Control
 
     public void SetHeader(PlanetaryOperationsHeaderViewModel model)
     {
-        _worldName.Text = $"PLANETARY OPERATIONS  /  {model.PlanetName?.ToUpperInvariant()}";
-        _worldName.TooltipText = "Open the world dossier without leaving regional operations.";
         _aggregateStrip.Text = $"REGIONS {model.ImperialRegions}/{model.TotalRegions}  ·  "
             + $"LANDED {model.Landed}  ·  ORBIT {model.InOrbit}  ·  {model.RequestClock.ToUpperInvariant()}";
     }
@@ -152,7 +148,7 @@ public partial class PlanetaryOperationsScreenView : Control
             AddCaption(_rightContent, "ORDER REPORTING");
             AddHint(_rightContent, selectedMissionKey == null
                 ? "Select an active order or an available mission."
-                : "Click an eligible squad or company in the force tree. The first squad creates the order immediately.");
+                : "Click an eligible participant or company in the force tree. The first participant creates the order immediately.");
         }
         DisplayReportingBar(selectedOrder, undoDescription);
     }
@@ -188,7 +184,7 @@ public partial class PlanetaryOperationsScreenView : Control
             && (verb == PlanetaryOperationsVerb.Land
                 || selectedShipId.HasValue && ships.Any(choice => choice.Ship.Id == selectedShipId && choice.Fits));
         DisplayMovementBar(selectedCount, canCommit,
-            selectedCount == 0 ? "Select at least one squad."
+            selectedCount == 0 ? "Select at least one participant."
             : verb == PlanetaryOperationsVerb.Embark && !selectedShipId.HasValue
                 ? "Choose a ship with enough capacity." : "Confirm the selected squads.");
     }
@@ -268,39 +264,21 @@ public partial class PlanetaryOperationsScreenView : Control
         root.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         margin.AddChild(root);
 
-        HBoxContainer header = new() { CustomMinimumSize = new Vector2(0, 42) };
+        HBoxContainer header = new()
+        {
+            CustomMinimumSize = new Vector2(0, 42),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         header.AnchorRight = 1f;
         header.OffsetRight = -52;
         header.OffsetBottom = 42;
-        _worldName = new Button
-        {
-            Text = "PLANETARY OPERATIONS",
-            Flat = true,
-            Alignment = HorizontalAlignment.Left,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        _worldName.AddThemeFontSizeOverride("font_size", 19);
-        _worldName.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
-        _worldName.Pressed += () => WorldDossierRequested?.Invoke(this, EventArgs.Empty);
-        header.AddChild(_worldName);
-        _aggregateStrip = new Label
-        {
-            HorizontalAlignment = HorizontalAlignment.Right,
-            SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
-            CustomMinimumSize = new Vector2(500, 24),
-            AutowrapMode = TextServer.AutowrapMode.Off,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
-        };
-        _aggregateStrip.AddThemeFontSizeOverride("font_size", 12);
-        _aggregateStrip.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-        header.AddChild(_aggregateStrip);
-        root.AddChild(header);
 
-        _verbBar = new HBoxContainer();
-        _verbBar.AnchorRight = 1f;
-        _verbBar.OffsetTop = 50;
-        _verbBar.OffsetBottom = 86;
+        _verbBar = new HBoxContainer
+        {
+            CustomMinimumSize = new Vector2(500, 42),
+            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
         _verbBar.AddThemeConstantOverride("separation", 6);
         foreach (PlanetaryOperationsVerb verb in Enum.GetValues<PlanetaryOperationsVerb>())
         {
@@ -308,7 +286,8 @@ public partial class PlanetaryOperationsScreenView : Control
             {
                 Text = verb.ToString().ToUpperInvariant(),
                 ToggleMode = true,
-                CustomMinimumSize = new Vector2(120, 36)
+                CustomMinimumSize = new Vector2(120, 36),
+                SizeFlagsVertical = SizeFlags.ShrinkCenter
             };
             button.SetMeta("verb", (int)verb);
             string icon = verb switch
@@ -322,14 +301,29 @@ public partial class PlanetaryOperationsScreenView : Control
             button.Pressed += () => VerbSelected?.Invoke(this, verb);
             _verbBar.AddChild(button);
         }
-        root.AddChild(_verbBar);
+        header.AddChild(_verbBar);
+
+        _aggregateStrip = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Right,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            CustomMinimumSize = new Vector2(500, 24),
+            AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        _aggregateStrip.AddThemeFontSizeOverride("font_size", 12);
+        _aggregateStrip.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        header.AddChild(_aggregateStrip);
+        root.AddChild(header);
 
         HBoxContainer body = new()
         {
             AnchorRight = 1f,
             AnchorBottom = 1f
         };
-        body.OffsetTop = 94;
+        body.OffsetTop = 50;
         body.OffsetBottom = 0;
         body.AddThemeConstantOverride("separation", 8);
         root.AddChild(body);
@@ -469,7 +463,7 @@ public partial class PlanetaryOperationsScreenView : Control
             tree.SetVerticalScrollOffset(_forceTreeScrollVertical);
         }
         _forceTree = tree;
-        if (entries.Count == 0) AddHint(parent, "No matching formations.");
+        if (entries.Count == 0) AddHint(parent, "No matching formations or characters.");
     }
 
     private void CaptureForceTreeState()
@@ -498,7 +492,7 @@ public partial class PlanetaryOperationsScreenView : Control
         stack.AddChild(new Label
         {
             Text = $"{MissionAvailability.GetOrderLabel(order.Mission).ToUpperInvariant()}\n"
-                + $"{order.AssignedSquads.Count} squads · {order.AttachedSoldiers.Count} specialists"
+                + $"{order.AssignedSquads.Count} squads · {order.AssignedCharacters.Count} characters"
         });
         AddHint(stack, "Edits take effect immediately and are free before turn resolution.");
         AddCaption(stack, "AGGRESSION");
@@ -547,12 +541,12 @@ public partial class PlanetaryOperationsScreenView : Control
             row.AddChild(remove);
             stack.AddChild(row);
         }
-        AddCaption(stack, "ATTACHED SPECIALISTS");
+        AddCaption(stack, "ASSIGNED CHARACTERS");
         List<SpecialistOption> attachedSpecialists = specialists
-            .Where(option => ReferenceEquals(option.Soldier.AttachedOrder, order))
+            .Where(option => ReferenceEquals(option.Soldier.CurrentOrder, order))
             .ToList();
         if (attachedSpecialists.Count == 0)
-            AddHint(stack, "No specialists attached.");
+            AddHint(stack, "No characters assigned.");
         foreach (SpecialistOption option in attachedSpecialists)
         {
             HBoxContainer row = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -563,7 +557,7 @@ public partial class PlanetaryOperationsScreenView : Control
                 VerticalAlignment = VerticalAlignment.Center,
                 ClipText = true,
                 TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-                TooltipText = $"{option.Label}\nAttached to this order."
+                TooltipText = $"{option.Label}\nAssigned to this order."
             };
             row.AddChild(label);
             Button detach = ActionButton("DETACH", "close");
@@ -576,7 +570,7 @@ public partial class PlanetaryOperationsScreenView : Control
         AddCaption(stack, "AVAILABLE SPECIALISTS");
         List<SpecialistOption> availableSpecialists = specialists
             .Where(option => option.IsAvailable
-                && !ReferenceEquals(option.Soldier.AttachedOrder, order))
+                && !ReferenceEquals(option.Soldier.CurrentOrder, order))
             .ToList();
         if (availableSpecialists.Count == 0)
         {
@@ -590,7 +584,7 @@ public partial class PlanetaryOperationsScreenView : Control
             {
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 CustomMinimumSize = new Vector2(0, 36),
-                TooltipText = "Select a specialist to attach immediately."
+                TooltipText = "Select a character to assign immediately."
             };
             picker.AddItem("SELECT SPECIALIST TO ATTACH…");
             foreach (SpecialistOption option in availableSpecialists)
@@ -617,7 +611,8 @@ public partial class PlanetaryOperationsScreenView : Control
         Button button = new()
         {
             Text = $"{MissionAvailability.GetOrderLabel(order.Mission).ToUpperInvariant()} · "
-                + $"{order.AssignedSquads.Count} SQUADS · {order.LevelOfAggression.ToString().ToUpperInvariant()}",
+                + $"{order.AssignedSquads.Count} SQUADS · {order.AssignedCharacters.Count} CHARACTERS · "
+                + $"{order.LevelOfAggression.ToString().ToUpperInvariant()}",
             Alignment = HorizontalAlignment.Left,
             CustomMinimumSize = new Vector2(0, 34),
             AutowrapMode = TextServer.AutowrapMode.Off,
@@ -642,6 +637,7 @@ public partial class PlanetaryOperationsScreenView : Control
         button.AddThemeFontSizeOverride("font_size", 11);
         button.TooltipText = BuildMissionTooltip(mission);
         IconAtlas.Apply(button, MissionIconKey(mission), 112);
+        button.AddThemeConstantOverride("icon_max_width", 40);
         string key = mission.IdentityKey;
         button.Pressed += () => MissionSelected?.Invoke(this, key);
         return button;
@@ -746,9 +742,9 @@ public partial class PlanetaryOperationsScreenView : Control
         };
         Label status = new()
         {
-            Text = order == null
-                ? "Select a mission, then add squads"
-                : $"LIVE · {order.AssignedSquads.Count} squads · {order.LevelOfAggression}",
+                Text = order == null
+                ? "Select a mission, then add participants"
+                : $"LIVE · {order.AssignedSquads.Count} squads · {order.AssignedCharacters.Count} characters · {order.LevelOfAggression}",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             VerticalAlignment = VerticalAlignment.Center,
@@ -802,10 +798,10 @@ public partial class PlanetaryOperationsScreenView : Control
             PlanetaryOperationsVerb.Detach => "DETACHING",
             _ => $"{_verb.ToString().ToUpperInvariant()}ING"
         };
-        string noun = _verb == PlanetaryOperationsVerb.Detach ? "CASUALTY" : "SQUAD";
+        string noun = _verb == PlanetaryOperationsVerb.Detach ? "CASUALTY" : "PARTICIPANT";
         string plural = selectedCount == 1
             ? noun
-            : noun == "CASUALTY" ? "CASUALTIES" : "SQUADS";
+            : noun == "CASUALTY" ? "CASUALTIES" : "PARTICIPANTS";
         return $"CONFIRM {verb} {selectedCount} {plural}";
     }
 

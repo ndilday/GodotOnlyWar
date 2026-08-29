@@ -255,6 +255,14 @@ namespace OnlyWar.Helpers.Recruitment
                 procedure.Type == RecruitmentProcedureType.BlackCarapace
                 && procedure.SubjectId == soldierId) == true;
 
+        internal static bool IsReservedForProcedure(
+            RecruitmentProgram program,
+            int soldierId) =>
+            program?.Procedures.Any(procedure =>
+                procedure.AssignedApothecarySoldierId == soldierId
+                || (procedure.Type == RecruitmentProcedureType.BlackCarapace
+                    && procedure.SubjectId == soldierId)) == true;
+
         private static int CountReservedSeats(
             RecruitmentProgram program,
             int squadId) =>
@@ -315,7 +323,7 @@ namespace OnlyWar.Helpers.Recruitment
             int reservedSeats = 0)
         {
             if (squad == null
-                || !squad.IsOperational
+                || !squad.CanAcceptSquadOrder
                 || squad.SquadTemplate != requiredSquadTemplate)
             {
                 error = $"Select an operational {requiredSquadTemplate.Name}.";

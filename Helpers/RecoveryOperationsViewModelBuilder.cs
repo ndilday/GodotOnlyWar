@@ -152,9 +152,12 @@ namespace OnlyWar.Helpers
             else if (movement == RecoveryMovementChoice.MoveWholeSquad)
             {
                 actions.Add(new("move-squad", $"MOVE {patient.AssignedSquad?.Name?.ToUpperInvariant()}",
-                    "The whole formation moves through ordinary deployment rules.", RecoveryActionState.Pending));
+                    "The whole formation moves through ordinary deployment rules.",
+                    patient.AssignedSquad?.CanMoveAsFormation == true
+                        ? RecoveryActionState.Pending
+                        : RecoveryActionState.Blocked));
             }
-            if (patient.AttachedOrder != null || patient.AssignedSquad?.CurrentOrders != null)
+            if (patient.CurrentOrder != null || patient.AssignedSquad?.CurrentOrders != null)
             {
                 actions.Add(new("release", "RELEASE FROM ORDER", "The remainder of the squad continues when detached.", RecoveryActionState.Pending));
             }

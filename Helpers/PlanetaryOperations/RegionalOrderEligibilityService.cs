@@ -162,7 +162,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             {
                 return SquadEligibilityExclusion.OutOfArea;
             }
-            if (!squad.IsOperational)
+            if (!squad.CanAcceptSquadOrder)
             {
                 return SquadEligibilityExclusion.NonOperational;
             }

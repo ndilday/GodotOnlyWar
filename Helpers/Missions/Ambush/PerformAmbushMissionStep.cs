@@ -50,7 +50,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // every degree of magnitude of troops adds one to the difficulty
             difficulty += (float)Math.Log(missionSquads.Sum(s => s.AbleSoldiers.Count), 10);
             // the attacker's own knowledge of the region makes it easier to find a stealthy route
-            Faction attacker = missionSquads.FirstOrDefault()?.Squad.Faction;
+            Faction attacker = missionSquads.FirstOrDefault()?.Faction;
             if (attacker != null) difficulty -= enemyFaction.Region.GetFactionRegionAwareness(attacker);
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
@@ -95,7 +95,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
                 // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else.
                 string opposingFaction =
-                    opposingSquads.First().Squad?.Faction?.Name ?? "an unidentified force";
+                    opposingSquads.First().Faction?.Name ?? "an unidentified force";
                 string log = $"Day {context.DaysElapsed}: Force ambushed {oppForSize} {opposingFaction}\n";
                 context.AddLog(log);
                 long opposingBattleValueBefore = AbleBattleValue(opposingSquads);

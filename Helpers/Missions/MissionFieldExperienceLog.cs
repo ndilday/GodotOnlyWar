@@ -33,7 +33,8 @@ namespace OnlyWar.Helpers.Missions
             string missionType = context.Order?.Mission?.MissionType.ToString() ?? "Mission";
             string region = context.Order?.Mission?.RegionFaction?.Region?.Name ?? "unknown region";
             string squads = string.Join("/", context.MissionSquads
-                .Select(battleSquad => battleSquad.Squad?.Name)
+                .Select(battleSquad => battleSquad.Squad?.Name
+                    ?? battleSquad.CampaignCharacter?.Name)
                 .Where(name => !string.IsNullOrEmpty(name)));
             if (string.IsNullOrEmpty(squads))
             {

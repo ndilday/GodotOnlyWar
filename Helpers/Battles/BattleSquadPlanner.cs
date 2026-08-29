@@ -212,7 +212,7 @@ namespace OnlyWar.Helpers.Battles
             // Player soldiers earn learn-by-doing credit for the aiming that notionally happened
             // while the ambush was being set; enemy factions accrue the counter but no aftermath
             // policy converts it (PlayerChapterBattleAftermathPolicy is the only consumer).
-            bool creditAimingXp = squad.Squad?.Faction?.IsPlayerFaction == true;
+            bool creditAimingXp = squad.Faction?.IsPlayerFaction == true;
             foreach (BattleSoldier soldier in squad.AbleSoldiers)
             {
                 if (soldier.EquippedRangedWeapons.Count == 0 || !IsPlaced(soldier))

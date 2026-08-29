@@ -1,4 +1,5 @@
 using OnlyWar.Models;
+using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -127,11 +128,13 @@ namespace OnlyWar.Helpers
             PlayerSoldier soldier,
             System.Func<ISoldier, bool> role) => soldier?.IsCombatEffective == true
                 && role(soldier)
-                && !Orders.OrderAttachment.IsReservedForProcedure(soldier);
+                && !RecruitmentPromotionService.IsReservedForProcedure(
+                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram,
+                    soldier.Id);
 
         private static bool CanMoveStaff(
             PlayerSoldier soldier,
             System.Func<ISoldier, bool> role) => IsAvailableStaff(soldier, role)
-                && soldier.AssignedSquad?.SquadTemplate?.PermitsIndividualDetachment == true;
+                && soldier.AssignedSquad?.PermitsIndividualDeployment == true;
     }
 }

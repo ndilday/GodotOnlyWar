@@ -87,7 +87,8 @@ namespace OnlyWar.Helpers.Battles.Placers
         }
 
         private static bool IsHqSquad(BattleSquad squad) =>
-            squad.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) == true;
+            squad?.Traits.IsHeadquarters == true
+            || squad?.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) == true;
 
         // A marching column keeps its command element mid-column, not at the head where the
         // ambush's short leg fires first: line squads front and rear, HQs between them.

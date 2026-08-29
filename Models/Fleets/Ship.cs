@@ -37,13 +37,22 @@ namespace OnlyWar.Models.Fleets
     {
         private readonly List<Squad> _loadedSquads;
         private readonly List<Soldiers.PlayerSoldier> _individuallyBoardedSoldiers;
+        private readonly List<Squad> _administrativeStations;
 
         public int Id { get; }
         public string Name { get; }
         public TaskForce Fleet { get; set; }
         public ShipTemplate Template { get; }
+        /// <summary>Whether this is the unique player Chapter flagship.</summary>
+        public bool IsFlagship { get; internal set; }
         public IReadOnlyCollection<Squad> LoadedSquads { get => _loadedSquads; }
         public IReadOnlyCollection<Soldiers.PlayerSoldier> IndividuallyBoardedSoldiers => _individuallyBoardedSoldiers;
+        /// <summary>
+        /// Administrative formations seated aboard this ship. These are intentionally not in
+        /// LoadedSquads: they consume berths but never contribute a nominal combat squad to a
+        /// fleet, regional control, or battle roster.
+        /// </summary>
+        public IReadOnlyCollection<Squad> AdministrativeStations => _administrativeStations;
         public List<Boat> Boats { get; }
         public int LoadedSoldierCount => Helpers.ShipCapacityService.LoadedSoldierCount(this);
         public int AvailableCapacity { get => Template.SoldierCapacity - LoadedSoldierCount; }
@@ -56,6 +65,7 @@ namespace OnlyWar.Models.Fleets
             Boats = [];
             _loadedSquads = [];
             _individuallyBoardedSoldiers = [];
+            _administrativeStations = [];
         }
 
         public Ship(int id, string name, ShipTemplate template, BoatTemplate boatTemplate) 
@@ -72,6 +82,12 @@ namespace OnlyWar.Models.Fleets
             if (_loadedSquads.Contains(squad))
             {
                 return;
+            }
+
+            if (squad?.PermitsIndividualDeployment == true)
+            {
+                throw new InvalidOperationException(
+                    "A MembersOnly administrative formation must use the administrative station manifest.");
             }
 
             int count = Helpers.SoldierPresenceService.PresentCount(squad);
@@ -91,6 +107,26 @@ namespace OnlyWar.Models.Fleets
         {
             _loadedSquads.Clear();
         }
+
+        internal void StationAdministrativeFormation(Squad squad)
+        {
+            if (squad?.PermitsIndividualDeployment != true)
+            {
+                throw new InvalidOperationException(
+                    "Only MembersOnly administrative formations may occupy an administrative station.");
+            }
+            if (_administrativeStations.Contains(squad)) return;
+            if (Helpers.ShipCapacityService.AvailableCapacity(this)
+                < Helpers.SoldierPresenceService.PresentCount(squad))
+            {
+                throw new InvalidOperationException(
+                    $"{Name} has insufficient capacity for administrative stationing.");
+            }
+            _administrativeStations.Add(squad);
+        }
+
+        internal void RemoveAdministrativeFormation(Squad squad) =>
+            _administrativeStations.Remove(squad);
 
         internal void BoardIndividual(Soldiers.PlayerSoldier soldier)
         {

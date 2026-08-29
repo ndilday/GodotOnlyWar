@@ -64,6 +64,9 @@ namespace OnlyWar.Models
         public SquadTemplate DevastatorSquad { get; }
         public SquadTemplate ScoutSquad { get; }
         public SquadTemplate ScoutCompanyHeadquarters { get; }
+        public SquadTemplate ChapterHeadquarters { get; }
+        public SquadTemplate VeteranCompanyHeadquarters { get; }
+        public SquadTemplate BattleCompanyHeadquarters { get; }
 
         // Chapter-level specialist squad templates (used to locate the generated
         // chapter HQ squads by template identity rather than display name).
@@ -71,6 +74,7 @@ namespace OnlyWar.Models
         public SquadTemplate Armory { get; }
         public SquadTemplate Apothecarion { get; }
         public SquadTemplate Reclusium { get; }
+        public IReadOnlyList<SquadTemplate> AdministrativeFormations { get; }
 
         // Company unit templates with a distinct identity in the order of battle
         // (the veteran "First Company" and the scout "Tenth Company"), used to locate
@@ -115,11 +119,37 @@ namespace OnlyWar.Models
             DevastatorSquad = ResolveSquad(faction, "Devastator Squad");
             ScoutSquad = ResolveSquad(faction, "Scout Squad");
             ScoutCompanyHeadquarters = ResolveSquad(faction, "Scout HQ Squad");
+            ChapterHeadquarters = ResolveSquad(faction, "Chapter HQ Squad");
+            VeteranCompanyHeadquarters = ResolveSquad(faction, "Veteran HQ Squad");
+            BattleCompanyHeadquarters = ResolveSquad(faction, "HQ Squad");
 
             Librarius = ResolveSquad(faction, "Librarius");
             Armory = ResolveSquad(faction, "Armory");
             Apothecarion = ResolveSquad(faction, "Apothecarion");
             Reclusium = ResolveSquad(faction, "Reclusium");
+
+            AdministrativeFormations = new[]
+            {
+                ChapterHeadquarters,
+                VeteranCompanyHeadquarters,
+                BattleCompanyHeadquarters,
+                ScoutCompanyHeadquarters,
+                Librarius,
+                Armory,
+                Apothecarion,
+                Reclusium
+            }.Distinct().ToList().AsReadOnly();
+            List<SquadTemplate> invalidAdministrativeTemplates = AdministrativeFormations
+                .Where(template => !template.IsAdministrative
+                    || template.MobilityPolicy != FormationMobilityPolicy.MembersOnly)
+                .ToList();
+            if (invalidAdministrativeTemplates.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "Rules database must mark all Chapter HQ and office templates "
+                    + "Administrative + MembersOnly: "
+                    + string.Join(", ", invalidAdministrativeTemplates.Select(t => t.Name)));
+            }
 
             VeteranCompany = ResolveUnit(faction, "Veteran Company");
             ScoutCompany = ResolveUnit(faction, "Scout Company");

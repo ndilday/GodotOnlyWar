@@ -7,6 +7,7 @@ using OnlyWar.Helpers.Missions.Raid;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Planets;
 using System.Linq;
 
 namespace OnlyWar.Builders
@@ -22,7 +23,11 @@ namespace OnlyWar.Builders
             {
                 return GetMainInitialStep(execution);
             }
-            if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
+            Region currentRegion = context.MissionSquads
+                .Select(squad => squad.CampaignCharacter?.EffectiveRegion
+                    ?? squad.CampaignSquad?.CurrentRegion)
+                .FirstOrDefault(region => region != null);
+            if (context.Order.Mission.RegionFaction.Region != currentRegion)
             {
                 return new InfiltrateMissionStep();
             }

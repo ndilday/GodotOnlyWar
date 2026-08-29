@@ -56,7 +56,7 @@ namespace OnlyWar.Models
         // never attacked. Squad templates are fixed at load, so this is computed once.
         public long MinimumForceRequest =>
             _minimumForceRequest ??= SquadTemplates?.Values
-                .Where(st => st.IsOperational
+                .Where(st => st.IsPresentOperationalForce
                     && st.BattleValue > 0
                     && (st.SquadType & SquadTypes.HQ) == 0)
                 .Select(st => (long)st.BattleValue)

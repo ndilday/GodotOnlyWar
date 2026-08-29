@@ -27,7 +27,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            Faction attacker = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            Faction attacker = context.MissionSquads.FirstOrDefault()?.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Setting an ambush without being seen first is contested by everyone watching the
             // ground, not just the faction being ambushed, so this uses the same aggregated

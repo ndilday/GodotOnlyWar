@@ -261,7 +261,7 @@ public partial class LoadoutDoctrineDialog : Control
     private void PopulateCharacterRoles()
     {
         List<SquadTemplateElement> elements = _force?.Army?.OrderOfBattle?.GetAllSquads()
-            .Where(squad => squad.IsOperational)
+            .Where(squad => squad.IsPresentOperationalForce)
             .SelectMany(squad => squad.SquadTemplate.Elements)
             .Where(element => element.PersonalEquipmentRole != null)
             .GroupBy(element => element.PersonalEquipmentRole.Id)
@@ -431,7 +431,7 @@ public partial class LoadoutDoctrineDialog : Control
             // A squad type belongs here if it has any pooled group to spend, which is every group
             // other than Command Weapon — not every group with a maximum above 1. Tactical Squad's
             // two groups are both (0,1) and it is still very much a squad type worth a doctrine.
-            .Where(squad => squad.IsOperational
+            .Where(squad => squad.IsPresentOperationalForce
                 && squad.SquadTemplate.Elements.Any(
                     element => element.PersonalEquipmentRole == null
                         && element.Quotas.Count > 0))

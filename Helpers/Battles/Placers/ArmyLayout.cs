@@ -51,20 +51,22 @@ namespace OnlyWar.Helpers.Battles.Placers
 
             foreach(BattleSquad squad in squads)
             {
-                if ((squad.Squad.SquadTemplate.SquadType & Models.Squads.SquadTypes.HQ)
+                Models.Squads.SquadTemplate template = squad.Squad?.SquadTemplate;
+                if (squad.Traits.IsHeadquarters
+                    || (template?.SquadType & Models.Squads.SquadTypes.HQ)
                             == Models.Squads.SquadTypes.HQ)
                 {
                     hqSquads.Add(squad);
                 }
                 // later, scouts will get to deploy closer to the enemy
-                else if ((squad.Squad.SquadTemplate.SquadType & Models.Squads.SquadTypes.Fast)
+                else if ((template?.SquadType & Models.Squads.SquadTypes.Fast)
                             == Models.Squads.SquadTypes.Fast ||
-                        (squad.Squad.SquadTemplate.SquadType & Models.Squads.SquadTypes.Scout)
+                        (template?.SquadType & Models.Squads.SquadTypes.Scout)
                             == Models.Squads.SquadTypes.Scout)
                 {
                     fastSquads.Add(squad);
                 }
-                else if ((squad.Squad.SquadTemplate.SquadType & Models.Squads.SquadTypes.Heavy)
+                else if ((template?.SquadType & Models.Squads.SquadTypes.Heavy)
                             == Models.Squads.SquadTypes.Heavy)
                 {
                     heavySquads.Add(squad);
@@ -74,7 +76,9 @@ namespace OnlyWar.Helpers.Battles.Placers
                     defaultSquads.Add(squad);
                 }
 
-                defaultSquads = defaultSquads.OrderByDescending(s => s.AbleSoldiers[0].GetMoveSpeed()).ToList();
+                defaultSquads = defaultSquads
+                    .OrderByDescending(s => s.AbleSoldiers.FirstOrDefault()?.GetMoveSpeed() ?? 0f)
+                    .ToList();
                 while (fastSquads.Count + defaultSquads.Count > (heavySquads.Count + hqSquads.Count) * 4 &&
                     defaultSquads.Count > 0)
                 {

@@ -25,7 +25,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
-            Faction infiltrator = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            Faction infiltrator = context.MissionSquads.FirstOrDefault()?.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Slipping in is contested by everyone watching the ground, not just the faction the
             // mission is aimed at, so this uses the same aggregated model as ReconStealthMissionStep.
@@ -47,7 +47,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             RegionFaction infTarget = context.Order.Mission.RegionFaction;
             GameLog.Trace(() =>
-                $"Infiltrate {context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "?"} -> "
+                $"Infiltrate {context.MissionSquads.FirstOrDefault()?.Faction?.Name ?? "?"} -> "
                 + $"{infTarget.Region.Planet.Name}/{infTarget.Region.Name}/{infTarget.PlanetFaction.Faction.Name} "
                 + $"day {context.DaysElapsed}: difficulty={difficulty:F2} (detection={terms.Detection:F2} "
                 + $"over {terms.EnemyCount} enemy faction(s), +patrol={terms.PatrolMod:F2}, "

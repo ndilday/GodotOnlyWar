@@ -46,7 +46,7 @@ namespace OnlyWar.Helpers.Battles
                 return false;
             }
 
-            int? factionId = squad.Squad?.Faction?.Id;
+            int? factionId = squad.Faction?.Id;
 
             foreach (BattleSquad provider in friendlySquads)
             {
@@ -58,7 +58,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     continue;
                 }
-                if (provider.Squad?.Faction?.Id != factionId)
+                if (provider.Faction?.Id != factionId)
                 {
                     continue;
                 }

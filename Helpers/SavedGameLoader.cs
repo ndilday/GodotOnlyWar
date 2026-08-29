@@ -102,20 +102,20 @@ namespace OnlyWar.Helpers
             sector.Scenario = gameState.Scenario;
             EnsureCompatibilityFoundingEvent(playerForce, sector, gameRulesData, gameState.CurrentDate);
 
-            // The data-access layer restores each Order onto its squads (Squad.CurrentOrders) but
-            // never re-registers it with the Sector, whose Orders collection is authoritative for
-            // turn processing (TurnController reads sector.Orders.Values) and the region/planet
-            // "inbound orders" views. Rebuild it here from the loaded player squads - the exact
-            // inverse of SaveData, which persists the distinct CurrentOrders of the player's squads.
-            // Without this a reloaded game processes no standing orders and shows none as inbound.
-            foreach (Order order in gameState.Units
-                         .Where(u => u.UnitTemplate.Faction.Id == gameRulesData.PlayerFaction.Id)
-                         .SelectMany(u => u.GetAllSquads())
-                         .Select(squad => squad.CurrentOrders)
+            // Orders are independent of whether their force currently contains a squad. Rebuild
+            // the sector index from the loaded Assignment rows so character-only and empty
+            // continuous-task orders survive a round trip too.
+            foreach (Order order in (gameState.Orders ?? [])
                          .Where(o => o != null && o.Mission != null)
                          .Distinct())
             {
                 sector.AddNewOrder(order);
+            }
+            if (playerForce.RecruitmentProgram != null)
+            {
+                playerForce.RecruitmentProgram.TaskOrder = sector.Orders.Values.FirstOrDefault(order =>
+                    order.Mission?.MissionType == Models.Missions.MissionType.Recruitment
+                    && order.OwnerFaction == playerForce.Faction);
             }
             return sector;
         }

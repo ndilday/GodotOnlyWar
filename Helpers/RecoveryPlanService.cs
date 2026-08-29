@@ -3,6 +3,7 @@ using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.Recruitment;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,6 +33,11 @@ namespace OnlyWar.Helpers
             if (movement == RecoveryMovementChoice.None)
             {
                 return new(false, "Select patient or whole-squad movement.");
+            }
+            if (movement == RecoveryMovementChoice.MoveWholeSquad
+                && patient.AssignedSquad?.CanMoveAsFormation != true)
+            {
+                return new(false, "This administrative formation can only move its members individually.");
             }
 
             CareDestinationCandidate live = _destinations.Evaluate(force, patient, option, destination);
@@ -104,12 +110,19 @@ namespace OnlyWar.Helpers
             Func<ISoldier, bool> role) => force.Army.PlayerSoldierMap.Values.FirstOrDefault(staff =>
                 staff.IsCombatEffective
                 && role(staff)
-                && staff.AssignedSquad?.SquadTemplate?.PermitsIndividualDetachment == true
-                && !Orders.OrderAttachment.IsReservedForProcedure(staff));
+                && staff.AssignedSquad?.PermitsIndividualDeployment == true
+                && !RecruitmentPromotionService.IsReservedForProcedure(
+                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram,
+                    staff.Id));
 
         private static void MoveWholeSquad(Squad squad, CampaignLocation destination)
         {
             if (squad == null) throw new InvalidOperationException("Patient has no home squad.");
+            if (!squad.CanMoveAsFormation)
+            {
+                throw new InvalidOperationException(
+                    "This formation cannot move as a squad; move the character individually.");
+            }
             if (squad.CurrentOrders != null) Orders.OrderAssignment.UnassignSquads([squad]);
             squad.BoardedLocation?.RemoveSquad(squad);
             if (squad.Faction != null

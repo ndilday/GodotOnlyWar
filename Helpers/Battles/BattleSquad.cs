@@ -44,7 +44,11 @@ namespace OnlyWar.Helpers.Battles
         // Presentation-side affiliation for battle reports. The Chapter and the Imperial PDF
         // fight on the same side, but IsPlayerSquad must remain Chapter-only because battle rules
         // use it to distinguish player-controlled missions from NPC missions.
-        public bool IsPlayerAligned => IsPlayerSquad || Squad?.Faction?.IsDefaultFaction == true;
+        public bool IsPlayerAligned => IsPlayerSquad || Faction?.IsDefaultFaction == true;
+        public Faction Faction { get; private set; }
+        public PlayerSoldier CampaignCharacter { get; private set; }
+        public BattleElementTraits Traits { get; private set; } = new();
+        public Squad CampaignSquad => Squad;
         public bool IsInMelee { get; set; }
         public SquadMovementTier MovementTier { get; set; }
         public BattleSquadStatus Status { get; set; }
@@ -111,7 +115,8 @@ namespace OnlyWar.Helpers.Battles
         {
             get
             {
-                return Soldiers.Any(s => s.Soldier.Template.Species.Abilities.HasFlag(SpeciesAbilities.Synapse));
+                return Traits.ProvidesSynapse
+                    || Soldiers.Any(s => s.Soldier.Template.Species.Abilities.HasFlag(SpeciesAbilities.Synapse));
             }
         }
 
@@ -121,7 +126,8 @@ namespace OnlyWar.Helpers.Battles
         // (Captain, Warboss, Hive Tyrant) provides command. Radius and strength are
         // morale-owned code constants (MoraleConstants), never DB data.
         public bool SquadProvidesCommandAura =>
-            Squad?.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true;
+            Traits.ProvidesCommandAura
+            || Squad?.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true;
 
         // The aura radius this squad projects if it provides command, else 0. Command reach
         // is personal: the best able soldier's (Ego + Tactics skill total) scaled by
@@ -171,10 +177,15 @@ namespace OnlyWar.Helpers.Battles
             Id = squad.Id;
             Name = squad.Name;
             Squad = squad;
+            Faction = squad.Faction;
             Soldiers = SoldierPresenceService.PresentMembers(squad)
                 .Select(s => new BattleSoldier(s, this)).ToList();
             _missionStartingAbleSoldierCount = AbleSoldiers.Count;
             IsPlayerSquad = isPlayerSquad;
+            Traits = new BattleElementTraits(
+                ProvidesCommandAura: squad.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true,
+                ProvidesSynapse: squad.SquadTemplate?.ProvidesSynapse == true,
+                IsHeadquarters: squad.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true);
             IsInMelee = false;
             MovementTier = SquadMovementTier.Stationary;
             Status = BattleSquadStatus.Active;
@@ -187,12 +198,38 @@ namespace OnlyWar.Helpers.Battles
             AllocateEquipment();
         }
 
+        public BattleSquad(BattleElementSpec spec)
+        {
+            if (spec == null) throw new ArgumentNullException(nameof(spec));
+            Id = spec.TacticalId;
+            Name = spec.Name;
+            Squad = spec.CampaignSquad;
+            CampaignCharacter = spec.CampaignCharacter;
+            Faction = spec.Faction ?? CampaignCharacter?.AssignedSquad?.Faction ?? Squad?.Faction;
+            Traits = spec.Traits ?? new BattleElementTraits();
+            Soldiers = (spec.Members ?? [])
+                .Where(member => member != null)
+                .Select(member => new BattleSoldier(member, this))
+                .ToList();
+            _missionStartingAbleSoldierCount = AbleSoldiers.Count;
+            IsPlayerSquad = Faction?.IsPlayerFaction == true;
+            IsInMelee = false;
+            MovementTier = SquadMovementTier.Stationary;
+            Status = BattleSquadStatus.Active;
+            WithdrawalRole = WithdrawalRole.None;
+            MoraleState = MoraleState.Steady;
+            AllocateEquipment();
+        }
+
         private BattleSquad(BattleSquad original)
         {
             Id = original.Id;
             Name = original.Name;
             // we shouldn't need to clone the squad
             Squad = original.Squad;
+            CampaignCharacter = original.CampaignCharacter;
+            Faction = original.Faction;
+            Traits = original.Traits;
             IsPlayerSquad = original.IsPlayerSquad;
             IsInMelee = original.IsInMelee;
             MovementTier = original.MovementTier;
@@ -350,7 +387,9 @@ namespace OnlyWar.Helpers.Battles
             {
                 return false;
             }
-            if (Squad.CurrentOrders.LevelOfAggression == Aggression.Aggressive)
+            Aggression aggression = (CampaignCharacter?.CurrentOrder ?? Squad?.CurrentOrders)
+                ?.LevelOfAggression ?? Aggression.Normal;
+            if (aggression == Aggression.Aggressive)
             {
                 return true;
             }
@@ -362,7 +401,7 @@ namespace OnlyWar.Helpers.Battles
                 // BattleSquad was created rather than the template's theoretical maximum.
                 // TODO: adjust based on whether the squad leader is still around?
                 float ratio = (float)ableSoldierCount / _missionStartingAbleSoldierCount;
-                switch (Squad.CurrentOrders.LevelOfAggression)
+                switch (aggression)
                 {
                     case Aggression.Avoid:
                         return ratio >= 0.9f;
@@ -380,7 +419,7 @@ namespace OnlyWar.Helpers.Battles
 
         public override string ToString()
         {
-            return Squad.Name;
+            return Name;
         }
 
         /// <summary>
@@ -459,6 +498,15 @@ namespace OnlyWar.Helpers.Battles
             // there is no separate IsSquadLeader pass here any more.
             AllocateCharacterEquipment(tempSquad);
             if (tempSquad.Count == 0) return;
+            if (Squad == null)
+            {
+                foreach (BattleSoldier soldier in tempSquad)
+                {
+                    soldier.Armor = new Armor(CampaignCharacter?.AssignedSquad?.SquadTemplate?.Armor);
+                    MarkEquipmentValueSource(soldier);
+                }
+                return;
+            }
             // order the weapon sets by the strength of the primary weapon
             List<WeaponSet> wsList = LoadoutDoctrineService.GetEffectiveLoadout(Squad)
                 .OrderByDescending(ws => ws.PrimaryRangedWeapon?.DamageMultiplier ?? ws.PrimaryMeleeWeapon.StrengthMultiplier)
@@ -520,6 +568,11 @@ namespace OnlyWar.Helpers.Battles
         // already resolves to the same WeaponSet the squad default would have given).
         private WeaponSet ResolveElementDefaultWeapons(ISoldier soldier)
         {
+            if (Squad == null)
+            {
+                return CharacterLoadoutService.GetEffectiveWeaponSet(soldier)
+                    ?? CampaignCharacter?.AssignedSquad?.SquadTemplate?.DefaultWeapons;
+            }
             SquadTemplateElement element = Squad.SquadTemplate.Elements
                 .FirstOrDefault(e => e.SoldierTemplate == soldier.Template);
             return element?.DefaultWeapons ?? Squad.SquadTemplate.DefaultWeapons;
@@ -554,7 +607,9 @@ namespace OnlyWar.Helpers.Battles
                 }
                 (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(weaponSet);
                 battleSoldier.AddWeapons(ranged, melee);
-                battleSoldier.Armor = new Armor(Squad.SquadTemplate.Armor);
+                battleSoldier.Armor = new Armor(
+                    Squad?.SquadTemplate?.Armor
+                    ?? CampaignCharacter?.AssignedSquad?.SquadTemplate?.Armor);
                 tempSquad.RemoveAt(i);
             }
         }
@@ -568,6 +623,10 @@ namespace OnlyWar.Helpers.Battles
             rangedWeapons = [];
             meleeWeapons = [];
             armor = null;
+            if (Squad == null)
+            {
+                return false;
+            }
             GameDataSingleton game = GameDataSingleton.Instance;
             EquipmentRulesCatalog catalog = game.IsInitialized
                 ? game.GameRulesData?.EquipmentCatalog

@@ -33,6 +33,9 @@ namespace OnlyWar.Models.Missions
         // (Design/Reference/ConsumptionFeedingAsMission.md). Squad-less: the committed battle value
         // lives on FeedMission and resolves instantly in the mission phase. Appended for the same
         // save-ordinal reason as ShowOfForce above.
-        Feed
+        Feed,
+        // The 10th Company's standing recruitment task. It is an order for character
+        // participants, but resolves through RecruitmentTurnProcessor rather than combat.
+        Recruitment
     }
 }

@@ -149,7 +149,7 @@ CREATE TABLE Request (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, CharacterId INTEGE
 CREATE TABLE Pledge (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SourcePlanetId INTEGER REFERENCES Planet (Id) NOT NULL, GrantingAuthorityId INTEGER NOT NULL, PayloadKind INTEGER NOT NULL, PayloadAmount INTEGER NOT NULL, ScheduleKind INTEGER NOT NULL, CadenceWeeks INTEGER NOT NULL, Status INTEGER NOT NULL, NextDeliveryDate INTEGER NOT NULL);
 
 -- Table: Ship
-CREATE TABLE Ship (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ShipTemplateId INTEGER NOT NULL, FleetId INTEGER REFERENCES Fleet (Id) NOT NULL, Name STRING NOT NULL);
+CREATE TABLE Ship (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ShipTemplateId INTEGER NOT NULL, FleetId INTEGER REFERENCES Fleet (Id) NOT NULL, Name STRING NOT NULL, IsFlagship BOOLEAN NOT NULL DEFAULT 0);
 
 -- Table: Soldier
 CREATE TABLE Soldier (Id INTEGER PRIMARY KEY NOT NULL UNIQUE, SoldierTemplateId INTEGER NOT NULL, SquadId INTEGER REFERENCES Squad (Id), Name STRING NOT NULL, Strength REAL NOT NULL, Dexterity REAL NOT NULL, Constitution REAL NOT NULL, Intelligence REAL NOT NULL, Perception REAL NOT NULL, Ego REAL NOT NULL, Charisma REAL NOT NULL, PsychicPower REAL NOT NULL, AttackSpeed REAL NOT NULL, Size REAL NOT NULL, MoveSpeed REAL NOT NULL);
@@ -160,7 +160,7 @@ CREATE TABLE SoldierSkill (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), B
 -- Table: Squad
 -- Doctrine-following is the default. Only an explicitly customized squad uses its persisted
 -- SquadWeaponSet rows directly.
-CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, IsAdministrative BOOLEAN NOT NULL DEFAULT 0, UsesLoadoutDoctrine BOOLEAN NOT NULL DEFAULT 1, FormationOrdinal INTEGER, HasBattleHistory BOOLEAN NOT NULL DEFAULT 0);
+CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, UsesLoadoutDoctrine BOOLEAN NOT NULL DEFAULT 1, FormationOrdinal INTEGER, HasBattleHistory BOOLEAN NOT NULL DEFAULT 0, DutyStationShipId INTEGER REFERENCES Ship (Id), DutyStationRegionId INTEGER REFERENCES Region(Id), CHECK ((DutyStationShipId IS NOT NULL) <> (DutyStationRegionId IS NOT NULL) OR (DutyStationShipId IS NULL AND DutyStationRegionId IS NULL)), CHECK (LoadedShipId IS NULL AND LandedRegionId IS NULL OR (DutyStationShipId IS NULL AND DutyStationRegionId IS NULL)));
 
 -- Table: SquadWeaponSet
 CREATE TABLE SquadWeaponSet (SquadId INTEGER NOT NULL REFERENCES Squad (Id), WeaponSetId INTEGER NOT NULL);
@@ -192,7 +192,7 @@ CREATE TABLE SoldierEquipmentLoadoutItem (SoldierId INTEGER NOT NULL REFERENCES 
 -- Table: Unit
 CREATE TABLE Unit (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, UnitTemplateId INTEGER NOT NULL, ParentUnitId INTEGER REFERENCES Unit (Id), Name STRING NOT NULL);
 
--- Canonical campaign-event ledger (introduced in format 8; current schema format 13).
+-- Canonical campaign-event ledger (introduced in format 8; current schema format 14).
 -- PayloadJson is typed by the (EventType,
 -- PayloadVersion) registry in code; CLR type names are never persisted.
 CREATE TABLE CampaignEvent (Id INTEGER PRIMARY KEY, EventType INTEGER NOT NULL, OccurredWeek INTEGER NOT NULL, RecordedWeek INTEGER NOT NULL, CorrelationKey TEXT, DedupeKey TEXT NOT NULL UNIQUE, PayloadVersion INTEGER NOT NULL, PayloadJson TEXT NOT NULL);
@@ -217,14 +217,19 @@ CREATE INDEX IX_ChapterChronicleEntry_Date ON ChapterChronicleEntry (OccurredWee
 CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL REFERENCES Region (Id), FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL, TargetBattleValue BIGINT);
 
 -- Table: Order
-CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);
+CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL, OwnerFactionId INTEGER NOT NULL);
 
 -- Table: SquadOrder
 CREATE TABLE OrderSquad (OrderId INTEGER NOT NULL REFERENCES Assignment (Id), SquadId INTEGER NOT NULL REFERENCES Squad (Id));
 
+-- Character participants are persisted separately from physical postings. A character may be
+-- assigned to an order while remaining physically at the location produced by movement/exfiltration.
+CREATE TABLE OrderCharacter (OrderId INTEGER NOT NULL REFERENCES Assignment (Id), SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), PRIMARY KEY (OrderId, SoldierId));
+
 -- Table: IndividualPosting
--- Save-owned physical location and commitment for a soldier away from his home formation.
-CREATE TABLE IndividualPosting (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id), PostingKind INTEGER NOT NULL, OrderId INTEGER REFERENCES Assignment (Id), LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region (Id), StartedDate INTEGER NOT NULL, CHECK ((LoadedShipId IS NOT NULL) <> (LandedRegionId IS NOT NULL)));
+-- Save-owned physical location for a soldier away from his home formation. Order membership lives
+-- in OrderCharacter; this table intentionally contains no order lifetime/commitment column.
+CREATE TABLE IndividualPosting (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id), Purpose INTEGER NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region (Id), StartedDate INTEGER NOT NULL, CHECK ((LoadedShipId IS NOT NULL) <> (LandedRegionId IS NOT NULL)));
 
 
 COMMIT TRANSACTION;

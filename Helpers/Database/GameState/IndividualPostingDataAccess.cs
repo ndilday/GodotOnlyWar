@@ -1,9 +1,9 @@
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
@@ -20,11 +20,10 @@ namespace OnlyWar.Helpers.Database.GameState
             using IDbCommand command = transaction.Connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = @"INSERT INTO IndividualPosting
-                (SoldierId, PostingKind, OrderId, LoadedShipId, LandedRegionId, StartedDate)
-                VALUES (@soldierId, @kind, @orderId, @shipId, @regionId, @startedDate);";
+                (SoldierId, Purpose, LoadedShipId, LandedRegionId, StartedDate)
+                VALUES (@soldierId, @purpose, @shipId, @regionId, @startedDate);";
             command.AddParam("@soldierId", soldier.Id);
-            command.AddParam("@kind", (int)posting.Kind);
-            command.AddParam("@orderId", posting.Order?.Id);
+            command.AddParam("@purpose", (int)posting.Purpose);
             command.AddParam("@shipId", posting.Location?.Ship?.Id);
             command.AddParam("@regionId", posting.Location?.Region?.Id);
             command.AddParam("@startedDate", posting.StartedDate.GetTotalWeeks());
@@ -38,14 +37,9 @@ namespace OnlyWar.Helpers.Database.GameState
             IReadOnlyDictionary<int, Ship> ships,
             IReadOnlyDictionary<int, Region> regions)
         {
-            Dictionary<int, Order> orders = squads.Values
-                .Select(squad => squad.CurrentOrders)
-                .Where(order => order != null)
-                .Distinct()
-                .ToDictionary(order => order.Id);
             IndividualPostingService service = new();
             using IDbCommand command = connection.CreateCommand();
-            command.CommandText = @"SELECT SoldierId, PostingKind, OrderId, LoadedShipId,
+            command.CommandText = @"SELECT SoldierId, Purpose, LoadedShipId,
                 LandedRegionId, StartedDate FROM IndividualPosting ORDER BY SoldierId";
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
@@ -55,24 +49,23 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     throw new InvalidDataException($"Posting references missing soldier {soldierId}.");
                 }
-                IndividualPostingKind kind = (IndividualPostingKind)reader.GetInt32(1);
-                Order order = reader.IsDBNull(2) ? null : orders.GetValueOrDefault(reader.GetInt32(2));
-                Ship ship = reader.IsDBNull(3) ? null : ships.GetValueOrDefault(reader.GetInt32(3));
-                Region region = reader.IsDBNull(4) ? null : regions.GetValueOrDefault(reader.GetInt32(4));
+                int purposeValue = reader.GetInt32(1);
+                if (!Enum.IsDefined(typeof(IndividualPostingPurpose), purposeValue))
+                {
+                    throw new InvalidDataException($"Posting for soldier {soldierId} has an invalid purpose.");
+                }
+                IndividualPostingPurpose purpose = (IndividualPostingPurpose)purposeValue;
+                Ship ship = reader.IsDBNull(2) ? null : ships.GetValueOrDefault(reader.GetInt32(2));
+                Region region = reader.IsDBNull(3) ? null : regions.GetValueOrDefault(reader.GetInt32(3));
                 if ((ship == null) == (region == null))
                 {
                     throw new InvalidDataException($"Posting for soldier {soldierId} has an invalid location.");
                 }
-                if (kind == IndividualPostingKind.OperationalAttachment && order == null)
-                {
-                    throw new InvalidDataException($"Operational posting for soldier {soldierId} has no order.");
-                }
-                service.Restore(
+                service.RestorePhysical(
                     soldier,
-                    kind,
+                    purpose,
                     ship != null ? CampaignLocation.Aboard(ship) : CampaignLocation.Landed(region),
-                    Date.FromTotalWeeks(reader.GetInt32(5)),
-                    order);
+                    Date.FromTotalWeeks(reader.GetInt32(4)));
             }
         }
     }

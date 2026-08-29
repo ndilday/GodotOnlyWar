@@ -39,6 +39,7 @@ namespace OnlyWar.Helpers.Database.GameState
         // persistence representation. Domain reconstruction happens in SavedGameLoader.
         public int? HomeWorldPlanetId { get; set; }
         public RecruitmentSaveData Recruitment { get; set; }
+        public List<Order> Orders { get; set; }
         // Medical procedures in progress (PRD 4.8 / 5.3), restored onto the loaded Army.
         public List<MedicalProcedure> MedicalProcedures { get; set; }
         public Dictionary<Date, List<EventHistory>> History { get; set; }
@@ -155,9 +156,17 @@ namespace OnlyWar.Helpers.Database.GameState
             var ships = _fleetDataAccess.GetShipsByFleetId(dbCon, shipTemplateMap);
             var shipMap = ships.Values.SelectMany(s => s).ToDictionary(ship => ship.Id);
             var fleets = _fleetDataAccess.GetFleetsByFactionId(dbCon, ships, factionMap, planets);
+            FlagshipService flagships = new();
+            List<Ship> playerShips = fleets
+                .Where(fleet => fleet.Faction == factionMap.Values.FirstOrDefault(faction => faction.IsPlayerFaction))
+                .SelectMany(fleet => fleet.Ships)
+                .ToList();
+            Faction playerFaction = factionMap.Values.FirstOrDefault(
+                faction => faction.IsPlayerFaction);
+            flagships.ValidateSinglePlayerFlagship(playerFaction, playerShips);
             var loadouts = _unitDataAccess.GetSquadWeaponSets(dbCon, weaponSets);
             var squads = _unitDataAccess.GetSquadsByUnitId(dbCon, squadTemplates, loadouts,
-                                                           shipMap, regions, missionMap);
+                                                           shipMap, regions, missionMap, factionMap);
             var units = _unitDataAccess.GetUnits(dbCon, unitTemplateMap, squads);
             var squadMap = squads.Values.SelectMany(s => s).ToDictionary(s => s.Id);
             var soldiers = _soldierDataAccess.GetData(dbCon, hitLocationTemplates, baseSkillMap,
@@ -169,6 +178,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 .Max();
             SoldierFactory.Instance.SetCurrentHighestSoldierId(highestIdentity);
             var playerSoldiers = _playerSoldierDataAccess.GetData(dbCon, soldiers);
+            _unitDataAccess.PopulateOrderCharacters(dbCon, playerSoldiers);
             // Postings hydrate only after soldiers, squads, ships, regions, and orders exist.
             // The service rebuilds both order and individual-ship projections from these rows.
             _individualPostingDataAccess.Populate(
@@ -211,6 +221,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 GeneseedPurity = global?.GeneseedPurity ?? 1.0f,
                 HomeWorldPlanetId = global?.HomeWorldPlanetId,
                 Recruitment = recruitment,
+                Orders = _unitDataAccess.LoadedOrders.Values.ToList(),
                 MedicalProcedures = medicalProcedures,
                 History = history,
                 FallenBrothers = fallenBrothers,
@@ -254,7 +265,8 @@ namespace OnlyWar.Helpers.Database.GameState
                              CampaignIdentity campaignIdentity = null,
                              FactionRelationshipLedger relationshipLedger = null,
                              EquipmentLoadoutDoctrine equipmentLoadoutDoctrine = null,
-                             IEnumerable<WorldControlEpisodeState> worldControlEpisodes = null)
+                             IEnumerable<WorldControlEpisodeState> worldControlEpisodes = null,
+                             IEnumerable<Order> additionalOrders = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -287,7 +299,8 @@ namespace OnlyWar.Helpers.Database.GameState
                               ships, units, chapterLoadoutDoctrine, characterLoadoutDoctrine,
                               homeWorldPlanetId, recruitment, lastTurnReportSnapshot,
                               campaignEventLedger, chapterChronicle, campaignIdentity,
-                              relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes);
+                              relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
+                              additionalOrders);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -338,7 +351,8 @@ namespace OnlyWar.Helpers.Database.GameState
                                    CampaignIdentity campaignIdentity,
                                    FactionRelationshipLedger relationshipLedger,
                                    EquipmentLoadoutDoctrine equipmentLoadoutDoctrine,
-                                   IEnumerable<WorldControlEpisodeState> worldControlEpisodes)
+                                   IEnumerable<WorldControlEpisodeState> worldControlEpisodes,
+                                   IEnumerable<Order> additionalOrders)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -421,12 +435,11 @@ namespace OnlyWar.Helpers.Database.GameState
                         .SelectMany(r => r.SpecialMissions)
                         .Select(m => m.Id)
                         .ToHashSet();
-                    // Under the >=1-assigned-squad invariant the squad walk alone is
-                    // sufficient, but an order is now also reachable through an attached
-                    // specialist. Concatenating that side makes the coverage explicit rather
-                    // than accidental (Design/Reference/SpecialistAttachment.md §6.2).
+                    // Orders are reachable through either participant collection. Character-only
+                    // orders must be persisted even when no squad points back to them.
                     var orders = squads.Select(s => s.CurrentOrders)
-                                       .Concat(playerSoldiers.Select(s => s.AttachedOrder))
+                                       .Concat(playerSoldiers.Select(s => s.CurrentOrder))
+                                       .Concat(additionalOrders ?? Enumerable.Empty<Order>())
                                        .Where(o => o != null && o.Mission != null)
                                        .Distinct();
                     foreach(Order order in orders)

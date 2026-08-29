@@ -1,9 +1,11 @@
 using Godot;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +26,115 @@ namespace OnlyWar.Helpers.PlanetaryOperations
 
     public static class PlanetaryForceTreeBuilder
     {
+        private const string CharacterSquadGroupPrefix = "group:characters:squad:";
+
+        public static IReadOnlyList<HierarchyTreeItem> BuildCharacterGroup(
+            IEnumerable<SpecialistOption> options,
+            IReadOnlySet<int> selectedIds = null)
+        {
+            List<SpecialistOption> characters = (options ?? Enumerable.Empty<SpecialistOption>())
+                .Where(option => option?.Soldier != null)
+                .GroupBy(option => option.Soldier.Id)
+                .Select(group => group.First())
+                .OrderBy(option => option.HomeSquad?.Name)
+                .ThenBy(option => option.Soldier.Name)
+                .ToList();
+            if (characters.Count == 0) return [];
+
+            IReadOnlySet<int> selected = selectedIds ?? new HashSet<int>();
+            int available = characters.Count(option => option.IsAvailable);
+            List<HierarchyTreeItem> children = characters
+                .GroupBy(option => option.HomeSquad?.Id ?? -1)
+                .OrderBy(group => group.First().HomeSquad?.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(group => group.Key)
+                .Select(group => BuildCharacterSquadGroup(group.ToList(), selected))
+                .ToList();
+            return [new HierarchyTreeItem(
+                "group:characters",
+                "CHARACTERS",
+                children,
+                iconKey: "chapter",
+                badge: $"{available}/{characters.Count} available",
+                tooltip: "Select individual administrative characters as order or movement participants.",
+                selectable: available > 0,
+                badgeColor: OnlyWarStyle.MutedText,
+                rowHeight: 32)];
+        }
+
+        public static IReadOnlyList<PlayerSoldier> ResolveCharacterSelection(
+            IEnumerable<SpecialistOption> options,
+            string key)
+        {
+            List<SpecialistOption> characters = (options ?? Enumerable.Empty<SpecialistOption>())
+                .Where(option => option?.Soldier != null && option.IsAvailable)
+                .ToList();
+            if (key == "group:characters")
+            {
+                return characters.Select(option => option.Soldier)
+                    .DistinctBy(soldier => soldier.Id).ToList();
+            }
+            if (key?.StartsWith(CharacterSquadGroupPrefix, StringComparison.Ordinal) == true
+                && int.TryParse(key[CharacterSquadGroupPrefix.Length..], out int squadId))
+            {
+                return characters
+                    .Where(option => (option.HomeSquad?.Id ?? -1) == squadId)
+                    .Select(option => option.Soldier)
+                    .DistinctBy(soldier => soldier.Id)
+                    .ToList();
+            }
+            if (key?.StartsWith("character:", StringComparison.Ordinal) == true
+                && int.TryParse(key[10..], out int soldierId))
+            {
+                return characters.Where(option => option.Soldier.Id == soldierId)
+                    .Select(option => option.Soldier).ToList();
+            }
+            return [];
+        }
+
+        private static HierarchyTreeItem BuildCharacterSquadGroup(
+            IReadOnlyList<SpecialistOption> options,
+            IReadOnlySet<int> selected)
+        {
+            SpecialistOption first = options.First();
+            string squadName = first.HomeSquad?.Name ?? "UNASSIGNED ADMINISTRATIVE SQUAD";
+            int available = options.Count(option => option.IsAvailable);
+            List<HierarchyTreeItem> characters = options
+                .OrderBy(option => option.Soldier.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(option => option.Soldier.Id)
+                .Select(option => BuildCharacterRow(option, selected))
+                .ToList();
+            return new HierarchyTreeItem(
+                $"{CharacterSquadGroupPrefix}{first.HomeSquad?.Id ?? -1}",
+                squadName.ToUpperInvariant(),
+                characters,
+                iconKey: IconAtlas.GetSquadIconKey(first.HomeSquad?.SquadTemplate),
+                badge: $"{available}/{options.Count} available",
+                tooltip: $"Select individual characters from {squadName}.",
+                selectable: available > 0,
+                badgeColor: OnlyWarStyle.MutedText,
+                rowHeight: 32);
+        }
+
+        private static HierarchyTreeItem BuildCharacterRow(
+            SpecialistOption option,
+            IReadOnlySet<int> selected)
+        {
+            string location = option.StatusLabel ?? "No operational location";
+            return new HierarchyTreeItem(
+                $"character:{option.Soldier.Id}",
+                option.Soldier.Name,
+                iconKey: "chapter",
+                badge: option.IsAvailable ? location : $"UNAVAILABLE · {location}",
+                tooltip: option.IsAvailable
+                    ? $"{option.Label}\nLocation: {location}"
+                    : $"{option.Label}\nLocation: {location}\nReason: {option.Reason ?? "Unavailable"}",
+                selectable: option.IsSelectable && option.IsAvailable,
+                isSelected: selected.Contains(option.Soldier.Id),
+                badgeColor: option.IsAvailable
+                    ? OnlyWarStyle.BodyText : OnlyWarStyle.MutedText,
+                rowHeight: 34);
+        }
+
         public static IReadOnlyList<HierarchyTreeItem> Build(
             IReadOnlyList<ForceTreeSquad> roster,
             ForceTreeGrouping grouping,

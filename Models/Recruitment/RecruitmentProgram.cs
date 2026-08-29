@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Models.Orders;
 
 namespace OnlyWar.Models.Recruitment
 {
@@ -63,6 +64,11 @@ namespace OnlyWar.Models.Recruitment
         public RecruitmentWorldType WorldType { get; set; } = RecruitmentWorldType.Standard;
         public RecruitmentAttributeFilters AttributeFilters { get; set; } = new();
         public float MinimumGeneticCompatibility { get; set; } = 0.9f;
+        /// <summary>
+        /// The persistent character-order that represents the 10th Company's standing recruitment
+        /// task. It is rebuilt from the saved Assignment row when a campaign is loaded.
+        /// </summary>
+        public Order TaskOrder { get; internal set; }
         public List<RecruitmentStaffAssignment> StaffAssignments { get; } = [];
         public List<RecruitmentCohort> UnscreenedCohorts { get; } = [];
         public List<RecruitmentCandidate> QualifiedCandidates { get; } = [];

@@ -8,21 +8,28 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Models;
+using OnlyWar.Helpers;
+using OnlyWar.Helpers.Orders;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
     public class UnitDataAccess
     {
+        public IReadOnlyDictionary<int, Order> LoadedOrders { get; private set; } =
+            new Dictionary<int, Order>();
+
         public Dictionary<int, List<Squad>> GetSquadsByUnitId(IDbConnection connection,
                                                                IReadOnlyDictionary<int, SquadTemplate> squadTemplateMap,
                                                                IReadOnlyDictionary<int, List<WeaponSet>> squadWeaponSetMap,
                                                                IReadOnlyDictionary<int, Ship> shipMap,
                                                                IReadOnlyDictionary<int, Region> regionMap,
-                                                               IReadOnlyDictionary<int, Mission> missionMap)
+                                                               IReadOnlyDictionary<int, Mission> missionMap,
+                                                               IReadOnlyDictionary<int, Faction> factionMap = null)
         {
             Dictionary<int, List<Squad>> squadMap = [];
             Dictionary<int, Squad> squadByIdMap = [];
@@ -43,15 +50,12 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         squad.TrainingFocus = (TrainingFocuses)reader.GetInt32(6);
                     }
-                    // Set this before restoring ship/region state. Administrative squads
-                    // are non-operational and their setter intentionally clears deployments.
-                    squad.IsAdministrative = reader.GetBoolean(7);
-                    squad.UsesLoadoutDoctrine = reader.GetBoolean(8);
-                    if (reader[9].GetType() != typeof(DBNull))
+                    squad.UsesLoadoutDoctrine = reader.GetBoolean(7);
+                    if (reader[8].GetType() != typeof(DBNull))
                     {
-                        squad.FormationOrdinal = reader.GetInt32(9);
+                        squad.FormationOrdinal = reader.GetInt32(8);
                     }
-                    squad.HasBattleHistory = reader.GetBoolean(10);
+                    squad.HasBattleHistory = reader.GetBoolean(9);
                     squadByIdMap[id] = squad;
 
 
@@ -71,6 +75,41 @@ namespace OnlyWar.Helpers.Database.GameState
                         }
                     }
 
+                    if (reader.FieldCount > 10)
+                    {
+                        Ship dutyShip = reader[10].GetType() == typeof(DBNull)
+                            ? null : shipMap.GetValueOrDefault(reader.GetInt32(10));
+                        Region dutyRegion = reader[11].GetType() == typeof(DBNull)
+                            ? null : regionMap.GetValueOrDefault(reader.GetInt32(11));
+                        if ((dutyShip == null) == (dutyRegion == null)
+                            && (dutyShip != null || dutyRegion != null))
+                        {
+                            throw new InvalidDataException(
+                                $"Administrative squad {id} has an invalid duty station.");
+                        }
+                        if (dutyShip != null || dutyRegion != null)
+                        {
+                            if (!squad.PermitsIndividualDeployment || squad.CurrentRegion != null
+                                || squad.BoardedLocation != null)
+                            {
+                                throw new InvalidDataException(
+                                    $"Squad {id} has a duty station but is not a seated administrative formation.");
+                            }
+                            squad.DutyStation = dutyShip != null
+                                ? CampaignLocation.Aboard(dutyShip)
+                                : CampaignLocation.Landed(dutyRegion);
+                            if (dutyShip != null)
+                            {
+                                dutyShip.StationAdministrativeFormation(squad);
+                            }
+                        }
+                        else if (squad.PermitsIndividualDeployment)
+                        {
+                            throw new InvalidDataException(
+                                $"Administrative squad {id} has no duty station.");
+                        }
+                    }
+
                     if (squadWeaponSetMap.ContainsKey(id))
                     {
                         squad.Loadout = squadWeaponSetMap[id];
@@ -85,7 +124,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
             var orderSquadMap = GetOrderSquadMapping(connection, squadByIdMap);
-            PopulateOrdersBySquadId(connection, regionMap, squadByIdMap, orderSquadMap, missionMap);
+            PopulateOrdersBySquadId(connection, regionMap, squadByIdMap, orderSquadMap, missionMap, factionMap);
 
             return squadMap;
         }
@@ -118,7 +157,8 @@ namespace OnlyWar.Helpers.Database.GameState
                                             IReadOnlyDictionary<int, Region> regionMap,
                                             IReadOnlyDictionary<int, Squad> squadMap,
                                             IReadOnlyDictionary<int, List<Squad>> orderSquadMap,
-                                            IReadOnlyDictionary<int, Mission> missionMap)
+                                            IReadOnlyDictionary<int, Mission> missionMap,
+                                            IReadOnlyDictionary<int, Faction> factionMap)
         {
             using (var command = connection.CreateCommand())
             {
@@ -135,13 +175,52 @@ namespace OnlyWar.Helpers.Database.GameState
                     Aggression agg = (Aggression)aggression;
                     // The Order constructor reattaches the order to each of its squads via
                     // Squad.CurrentOrders, so the loaded order is restored onto its squads here.
-                    Order order = new Order(orderId, orderSquadMap[orderId], isQuiet, isActivelyEngaging, agg, missionMap[missionId]);
+                    Faction ownerFaction = reader.FieldCount > 5 && !reader.IsDBNull(5)
+                        ? factionMap?.GetValueOrDefault(reader.GetInt32(5))
+                        : null;
+                    if (reader.FieldCount > 5 && ownerFaction == null)
+                    {
+                        throw new InvalidDataException(
+                            $"Order {orderId} references a missing owner faction.");
+                    }
+                    Order order = new Order(orderId,
+                        orderSquadMap.GetValueOrDefault(orderId) ?? [],
+                        isQuiet, isActivelyEngaging, agg, missionMap[missionId], ownerFaction);
+                    LoadedOrders = LoadedOrders
+                        .Append(new KeyValuePair<int, Order>(orderId, order))
+                        .ToDictionary(pair => pair.Key, pair => pair.Value);
                     if(orderId > maxOrderId)
                     {
                         maxOrderId = orderId;
                     }
                 }
                 IdGenerator.SetNextOrderId(maxOrderId + 1);
+            }
+        }
+
+        public void PopulateOrderCharacters(
+            IDbConnection connection,
+            IReadOnlyDictionary<int, PlayerSoldier> soldiers)
+        {
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = "SELECT OrderId, SoldierId FROM OrderCharacter";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int orderId = reader.GetInt32(0);
+                int soldierId = reader.GetInt32(1);
+                if (!LoadedOrders.TryGetValue(orderId, out Order order)
+                    || !soldiers.TryGetValue(soldierId, out PlayerSoldier soldier))
+                {
+                    throw new InvalidDataException(
+                        $"OrderCharacter ({orderId}, {soldierId}) references a missing order or player soldier.");
+                }
+                if (soldier.CurrentOrder != null && !ReferenceEquals(soldier.CurrentOrder, order))
+                {
+                    throw new InvalidDataException(
+                        $"Player soldier {soldierId} is assigned to multiple orders.");
+                }
+                OrderForceService.BindLoadedCharacter(order, soldier);
             }
         }
 
@@ -260,11 +339,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Squad
                     (Id, SquadTemplateId, ParentUnitId, Name, LoadedShipId, LandedRegionId,
-                     TrainingFocus, IsAdministrative, UsesLoadoutDoctrine, FormationOrdinal,
-                     HasBattleHistory) VALUES
+                     TrainingFocus, UsesLoadoutDoctrine, FormationOrdinal, HasBattleHistory,
+                     DutyStationShipId, DutyStationRegionId) VALUES
                     (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingFocus,
-                     @isAdministrative, @usesLoadoutDoctrine, @formationOrdinal,
-                     @hasBattleHistory);";
+                     @usesLoadoutDoctrine, @formationOrdinal, @hasBattleHistory,
+                     @dutyStationShip, @dutyStationRegion);";
                 command.AddParam("@id", squad.Id);
                 command.AddParam("@templateId", squad.SquadTemplate.Id);
                 command.AddParam("@parentUnitId", squad.ParentUnit.Id);
@@ -272,12 +351,13 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@ship", ship);
                 command.AddParam("@region", region);
                 command.AddParam("@trainingFocus", (int)squad.TrainingFocus);
-                command.AddParam("@isAdministrative", squad.IsAdministrative ? 1 : 0);
                 command.AddParam("@usesLoadoutDoctrine", squad.UsesLoadoutDoctrine ? 1 : 0);
                 command.AddParam("@formationOrdinal", squad.FormationOrdinal.HasValue
                     ? squad.FormationOrdinal.Value
                     : null);
                 command.AddParam("@hasBattleHistory", squad.HasBattleHistory ? 1 : 0);
+                command.AddParam("@dutyStationShip", squad.DutyStation?.Ship?.Id);
+                command.AddParam("@dutyStationRegion", squad.DutyStation?.Region?.Id);
                 command.ExecuteNonQuery();
             }
 
@@ -305,17 +385,23 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveOrder(IDbTransaction transaction, Order order)
         {
-            // CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);
+            if (order?.Mission == null || order.OwnerFaction == null)
+            {
+                throw new InvalidDataException(
+                    $"Order {order?.Id.ToString() ?? "<null>"} has no mission or owner faction.");
+            }
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                command.CommandText = @"INSERT INTO Assignment VALUES
-                    (@id, @missionId, @isQuiet, @isActivelyEngaging, @aggression);";
+                command.CommandText = @"INSERT INTO Assignment
+                    (Id, MissionId, IsQuiet, IsActivelyEngaging, Aggression, OwnerFactionId) VALUES
+                    (@id, @missionId, @isQuiet, @isActivelyEngaging, @aggression, @ownerFactionId);";
                 command.AddParam("@id", order.Id);
                 command.AddParam("@missionId", order.Mission.Id);
                 command.AddParam("@isQuiet", order.IsQuiet ? 1 : 0);
                 command.AddParam("@isActivelyEngaging", order.IsActivelyEngaging ? 1 : 0);
                 command.AddParam("@aggression", (int)order.LevelOfAggression);
+                command.AddParam("@ownerFactionId", order.OwnerFaction?.Id);
                 command.ExecuteNonQuery();
             }
             foreach(Squad squad in order.AssignedSquads)
@@ -329,6 +415,16 @@ namespace OnlyWar.Helpers.Database.GameState
                     command.AddParam("@squadId", squad.Id);
                     command.ExecuteNonQuery();
                 }
+            }
+            foreach (PlayerSoldier character in order.AssignedCharacters)
+            {
+                using var command = transaction.Connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO OrderCharacter
+                    (OrderId, SoldierId) VALUES (@orderId, @soldierId);";
+                command.AddParam("@orderId", order.Id);
+                command.AddParam("@soldierId", character.Id);
+                command.ExecuteNonQuery();
             }
         }
 

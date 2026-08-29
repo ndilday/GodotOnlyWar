@@ -10,7 +10,12 @@ using System.Linq;
 namespace OnlyWar.Helpers
 {
     public enum MusterPopulationMode { PromotionEligible, AnyLegalMove }
-    public enum FormationVacancyGroup { NeedsLeaders, Understrength, EmptyFormations, AvailableNewFormations }
+    // AtStrength sorts last: once the staged plan fills a formation it is no longer a vacancy,
+    // but it stays on the list so the player can see what their own staging did to it.
+    public enum FormationVacancyGroup
+    {
+        NeedsLeaders, Understrength, EmptyFormations, AvailableNewFormations, AtStrength
+    }
 
     public sealed record HonorBadgeModel(string Name, string Type, ushort Level);
 
@@ -151,9 +156,13 @@ namespace OnlyWar.Helpers
                 }
                 string rosterText = $"0 +{formationActions.Count}";
                 int capacity = Capacity(creation.ProvisionalSquadTemplate);
+                bool provisionalIsFull = formationActions.Count >= capacity;
+                FormationVacancyGroup provisionalGroup = provisionalIsFull
+                    ? FormationVacancyGroup.AtStrength
+                    : FormationVacancyGroup.Understrength;
                 rows.Add(new(
-                    FormationVacancyGroup.Understrength, "UNDERSTRENGTH",
-                    proposedName, "UNDERSTRENGTH", creation.ProvisionalSquadTemplate.Name,
+                    provisionalGroup, GroupLabel(provisionalGroup),
+                    proposedName, GroupLabel(provisionalGroup), creation.ProvisionalSquadTemplate.Name,
                     IconKey(creation.ProvisionalSquadTemplate),
                     $"{rosterText} / {capacity}",
                     incomingNames,
@@ -164,7 +173,7 @@ namespace OnlyWar.Helpers
                     unitOrder.GetValueOrDefault(creation.ProvisionalUnit.Id, int.MaxValue), proposed,
                     IsPlanProjection: true,
                     SelectionKey: $"staged:{formationId}",
-                    IsFull: formationActions.Count >= capacity));
+                    IsFull: provisionalIsFull));
             }
 
             foreach (SoldierTransferOption option in _transfers.GetTransferOptions(context, candidate))
@@ -198,10 +207,14 @@ namespace OnlyWar.Helpers
                 bool needsLeader = squad.SquadLeader == null;
                 bool isFull = squad.Members.Count - outgoing + incoming
                     >= Capacity(squad.SquadTemplate);
-                FormationVacancyGroup group = empty
-                    ? FormationVacancyGroup.EmptyFormations
-                    : needsLeader ? FormationVacancyGroup.NeedsLeaders : FormationVacancyGroup.Understrength;
-                string state = empty ? "EMPTY LINEAGE" : needsLeader ? "NEEDS LEADER" : "UNDERSTRENGTH";
+                FormationVacancyGroup group = isFull
+                    ? FormationVacancyGroup.AtStrength
+                    : empty
+                        ? FormationVacancyGroup.EmptyFormations
+                        : needsLeader ? FormationVacancyGroup.NeedsLeaders : FormationVacancyGroup.Understrength;
+                string state = isFull
+                    ? "AT STRENGTH"
+                    : empty ? "EMPTY LINEAGE" : needsLeader ? "NEEDS LEADER" : "UNDERSTRENGTH";
                 rows.Add(new(
                     group, GroupLabel(group), squad.Name, state, squad.SquadTemplate.Name,
                     empty ? "squad_lineage" : IconKey(squad), FormatStrength(squad.Members.Count, outgoing, incoming,
@@ -269,6 +282,7 @@ namespace OnlyWar.Helpers
             FormationVacancyGroup.NeedsLeaders => "NEEDS LEADERS",
             FormationVacancyGroup.Understrength => "UNDERSTRENGTH",
             FormationVacancyGroup.EmptyFormations => "EMPTY FORMATIONS",
+            FormationVacancyGroup.AtStrength => "AT STRENGTH",
             _ => "AVAILABLE NEW FORMATIONS"
         };
 

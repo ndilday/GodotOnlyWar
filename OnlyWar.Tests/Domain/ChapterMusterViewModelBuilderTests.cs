@@ -247,6 +247,87 @@ public sealed class ChapterMusterViewModelBuilderTests
         Assert.True(full.IsFull);
         Assert.Null(full.Option);
         Assert.Equal("0 +2 / 2", full.RosterText);
+        Assert.Equal(FormationVacancyGroup.AtStrength, full.Group);
+        Assert.Equal("AT STRENGTH", full.StateLabel);
+    }
+
+    [Fact]
+    public void BuildFormations_StopsCallingALiveSquadUnderstrengthOnceStagingFillsIt()
+    {
+        SquadTemplate headquartersTemplate = CreateSquadTemplate(
+            "Company HQ",
+            SquadTypes.HQ,
+            (TestModelFactory.CaptainTemplate, 1, 1));
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Tactical Squad",
+            SquadTypes.None,
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 3));
+        Unit company = new(
+            "2nd Company",
+            new UnitTemplate(
+                2,
+                "Company Template",
+                true,
+                headquartersTemplate,
+                [new SquadTemplateSlot(lineTemplate, 0, 6)]));
+        company.HQSquad.AddSquadMember(
+            TestModelFactory.CreateSoldier(TestModelFactory.CaptainTemplate, "Captain Aurelius"));
+
+        // The destination is one short of capacity, so a single staged transfer fills it.
+        Squad destination = new("Destination", company, lineTemplate);
+        company.AddSquad(destination);
+        List<PlayerSoldier> roster = [];
+        PlayerSoldier sergeant = new(
+            TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Sergeant Kaeso"),
+            "Sergeant Kaeso");
+        destination.AddSquadMember(sergeant);
+        roster.Add(sergeant);
+        for (int index = 0; index < 2; index++)
+        {
+            PlayerSoldier held = new(
+                TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate, $"Held {index + 1}"),
+                $"Held {index + 1}");
+            destination.AddSquadMember(held);
+            roster.Add(held);
+        }
+
+        List<PlayerSoldier> candidates = [];
+        for (int index = 0; index < 2; index++)
+        {
+            Squad source = new($"Source {index + 1}", company, lineTemplate);
+            company.AddSquad(source);
+            PlayerSoldier soldier = new(
+                TestModelFactory.CreateSoldier(
+                    TestModelFactory.MarineTemplate, $"Brother {index + 1}"),
+                $"Brother {index + 1}");
+            source.AddSquadMember(soldier);
+            candidates.Add(soldier);
+            roster.Add(soldier);
+        }
+
+        PlayerForce force = new(
+            null, new Army("Test Army", null, "Test Chapter", company, roster), null);
+        ChapterMusterViewModelBuilder builder = new();
+        SoldierTransferContext context = SoldierTransferContext.Build(company);
+        MusterPlanService plan = new();
+
+        FormationVacancyViewModel before = Assert.Single(
+            builder.BuildFormations(force, candidates[0], plan, context),
+            row => row.FormationName == destination.Name);
+        Assert.Equal(FormationVacancyGroup.Understrength, before.Group);
+        Assert.False(before.IsFull);
+
+        plan.Stage(candidates[0], before.Option);
+
+        FormationVacancyViewModel after = Assert.Single(
+            builder.BuildFormations(force, candidates[1], plan, context),
+            row => row.FormationName == destination.Name);
+        Assert.True(after.IsFull);
+        Assert.Equal(FormationVacancyGroup.AtStrength, after.Group);
+        Assert.Equal("AT STRENGTH", after.StateLabel);
+        Assert.Equal("AT STRENGTH", after.GroupLabel);
+        Assert.Equal("3 +1 / 4", after.RosterText);
     }
 
     private static SquadTemplate CreateSquadTemplate(

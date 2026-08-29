@@ -608,7 +608,17 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                                     null,
                                                                     defaultArmor,
                                                                     elementMap[id],
-                                                                    (SquadTypes)squadType);
+                                                                    (SquadTypes)squadType,
+                                                                    reader.FieldCount > 8
+                                                                        && reader[8].GetType() != typeof(DBNull)
+                                                                        ? (FormationMobilityPolicy)reader.GetInt32(8)
+                                                                        : null);
+                    if (reader.FieldCount > 8 && reader[8].GetType() != typeof(DBNull)
+                        && !Enum.IsDefined(typeof(FormationMobilityPolicy), reader.GetInt32(8)))
+                    {
+                        throw new InvalidOperationException(
+                            $"Squad template {id} has an invalid formation mobility policy.");
+                    }
                     if (reader.FieldCount > 7 && reader[7].GetType() != typeof(DBNull))
                     {
                         squadTemplate.LeaderWorkExperienceProfile = trainingProfileMap[reader.GetInt32(7)];

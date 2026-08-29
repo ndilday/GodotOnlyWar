@@ -27,7 +27,7 @@ namespace OnlyWar.Helpers.Missions
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
-            Faction force = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            Faction force = context.MissionSquads.FirstOrDefault()?.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Slipping back out is contested by every enemy watching the region, the same aggregated
             // model as the way in (ReconStealthMissionStep / InfiltrateMissionStep).
@@ -85,6 +85,7 @@ namespace OnlyWar.Helpers.Missions
             Region region,
             bool registerAsLanded)
         {
+            IndividualPostingService postingService = new();
             foreach (BattleSquad missionSquad in context.MissionSquads)
             {
                 if (missionSquad?.Squad != null)
@@ -125,6 +126,17 @@ namespace OnlyWar.Helpers.Missions
                     {
                         regionalPresence.LandedSquads.Add(squad);
                     }
+                }
+                else if (missionSquad?.CampaignCharacter != null)
+                {
+                    PlayerSoldier character = missionSquad.CampaignCharacter;
+                    IndividualPostingPurpose purpose = character.IndividualPosting?.Purpose
+                        ?? IndividualPostingPurpose.Independent;
+                    postingService.RestorePhysical(
+                        character,
+                        purpose,
+                        CampaignLocation.Landed(region),
+                        GameDataSingleton.Instance?.Date ?? new Date(1));
                 }
             }
         }

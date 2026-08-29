@@ -99,7 +99,12 @@ namespace OnlyWar.Models.Missions
         // reach; under one shared mission shape it would have marched a victorious assault back home.
         public bool MustExfiltrate =>
             MissionReturnPolicies.GetPolicy(Order.Mission.MissionType) == MissionReturnPolicy.Return
-            && Order.Mission.RegionFaction.Region != MissionSquads.First().Squad.CurrentRegion;
+            && Order.Mission.RegionFaction.Region != CurrentForceRegion;
+
+        private Region CurrentForceRegion => MissionSquads
+            .Select(squad => squad.CampaignCharacter?.EffectiveRegion
+                ?? squad.CampaignSquad?.CurrentRegion)
+            .FirstOrDefault(region => region != null);
 
         // True once the force has spent its operating days and should break off. A force that has to
         // exfiltrate stops a day early so the trip home still lands inside the week; one with no trip
@@ -319,7 +324,7 @@ namespace OnlyWar.Models.Missions
         }
 
         private string GetElementSquadName() =>
-            IsIndependentReconElement() ? MissionSquads[0].Squad?.Name : null;
+            IsIndependentReconElement() ? MissionSquads[0].Name : null;
 
         private ushort? GetElementDay() =>
             IsIndependentReconElement() ? DaysElapsed : null;
@@ -401,7 +406,7 @@ namespace OnlyWar.Models.Missions
             BattleRole role)
         {
             List<Aggression> aggressions = (opposingSquads ?? Enumerable.Empty<BattleSquad>())
-                .Select(squad => squad.Squad?.CurrentOrders)
+                .Select(squad => squad.CampaignCharacter?.CurrentOrder ?? squad.Squad?.CurrentOrders)
                 .Where(order => order != null)
                 .Select(order => order.LevelOfAggression)
                 .Distinct()

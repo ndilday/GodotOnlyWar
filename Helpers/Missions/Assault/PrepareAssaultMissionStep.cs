@@ -5,6 +5,7 @@ using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -87,7 +88,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             BaseSkill tactics = execution.Rules.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
             string attacker = context.MissionSquads
-                .Select(squad => squad?.Squad?.Faction?.Name)
+                .Select(squad => squad?.Faction?.Name)
                 .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? "Unknown force";
             string defender = context.Order.Mission.RegionFaction.PlanetFaction.Faction.Name;
             string region = context.Order.Mission.RegionFaction.Region.Name;
@@ -183,7 +184,8 @@ namespace OnlyWar.Helpers.Missions.Assault
             // exposed diversion force, a show of force - is standing on the ground by intent and is
             // caught up in the fighting regardless.
             landedDefenders = landedDefenders
-                .Where(bs => bs.Squad?.CurrentOrders?.Mission.MissionType != MissionType.Patrol
+                .Where(bs => (bs.CampaignCharacter?.CurrentOrder ?? bs.Squad?.CurrentOrders)
+                        ?.Mission?.MissionType != MissionType.Patrol
                     || PatrolDetectedAttack(bs, attackerBattleValue, defenderTactics, random))
                 .ToList();
             defendingForce.AddRange(landedDefenders);
@@ -347,13 +349,14 @@ namespace OnlyWar.Helpers.Missions.Assault
                 // A bold patrol ranges wider and is likelier to be astride the approach: aggression's
                 // EFFECT axis, matching PatrolSweepMissionStep.
                 + MissionAggressionModifiers.EffectDifficulty(
-                    patrol.Squad.CurrentOrders.LevelOfAggression);
+                    (patrol.CampaignCharacter?.CurrentOrder ?? patrol.Squad?.CurrentOrders)
+                        ?.LevelOfAggression ?? Aggression.Normal);
 
             float margin = new LeaderMissionTest(defenderTactics, difficulty)
                 .RunMissionCheck(new List<BattleSquad> { patrol }, random);
             bool detected = margin > 0f;
-            GameLog.Debug(() =>
-                $"Patrol detection {patrol.Squad?.Name}: difficulty={difficulty:F2} "
+                GameLog.Debug(() =>
+                    $"Patrol detection {patrol.Name}: difficulty={difficulty:F2} "
                 + $"(attackerBV={attackerBattleValue}, committedAttention={committed:F2}), "
                 + $"margin={margin:F2} -> {(detected ? "IN POSITION" : "looking the wrong way")}");
             return detected;
@@ -363,10 +366,11 @@ namespace OnlyWar.Helpers.Missions.Assault
         // lives. Falls back to null rather than guessing when the squad has no resolvable presence.
         private static RegionFaction ResolvePatrolledFaction(BattleSquad patrol)
         {
-            RegionFaction anchored = patrol.Squad?.CurrentOrders?.Mission?.RegionFaction;
+            Order order = patrol.CampaignCharacter?.CurrentOrder ?? patrol.Squad?.CurrentOrders;
+            RegionFaction anchored = order?.Mission?.RegionFaction;
             if (anchored != null) return anchored;
-            Region region = patrol.Squad?.CurrentRegion;
-            int? factionId = patrol.Squad?.Faction?.Id;
+            Region region = patrol.CampaignCharacter?.EffectiveRegion ?? patrol.Squad?.CurrentRegion;
+            int? factionId = patrol.Faction?.Id;
             if (region == null || factionId == null) return null;
             return region.RegionFactionMap.TryGetValue(factionId.Value, out RegionFaction rf) ? rf : null;
         }
@@ -407,7 +411,8 @@ namespace OnlyWar.Helpers.Missions.Assault
             if (defenderTactics == null || random == null) return attackerMarginOfSuccess;
 
             List<BattleSquad> prepared = landedDefenders
-                .Where(bs => bs.Squad?.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth)
+                .Where(bs => (bs.CampaignCharacter?.CurrentOrder ?? bs.Squad?.CurrentOrders)
+                    ?.Mission?.MissionType == MissionType.DefenseInDepth)
                 .ToList();
             if (prepared.Count == 0) return attackerMarginOfSuccess;
 

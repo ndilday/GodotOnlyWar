@@ -349,8 +349,7 @@ public partial class TrainingUnitScreenController : MainScreenController
     internal static bool IsTrainingSquad(Squad squad)
     {
         SquadTypes type = squad?.SquadTemplate?.SquadType ?? SquadTypes.None;
-        return squad?.IsOperational == true
-            && !squad.IsAdministrative
+        return squad?.CanAcceptSquadOrder == true
             && (type & SquadTypes.Scout) != 0
             && (type & SquadTypes.HQ) == 0;
     }

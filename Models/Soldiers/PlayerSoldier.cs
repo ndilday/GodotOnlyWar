@@ -147,24 +147,34 @@ namespace OnlyWar.Models.Soldiers
         /// also implemented by plain Soldier and by test doubles.
         ///
         /// Set only through Helpers/Orders/OrderAttachment, which owns both halves of the
-        /// pointer pair (Order.AttachedSoldiers is the other).
+        /// pointer pair (Order.AssignedCharacters is the other).
         /// </summary>
         public IndividualPosting IndividualPosting { get; internal set; }
 
+        /// <summary>
+        /// The operational order this character is assigned to. This is deliberately independent
+        /// from IndividualPosting: an order assignment does not teleport a character or encode a
+        /// commitment in his physical-location record.
+        /// </summary>
+        public Orders.Order CurrentOrder { get; internal set; }
+
         // Compatibility projection for consumers still phrased in terms of an order attachment.
-        // IndividualPosting is the source of truth and this property is intentionally read-only.
+        [Obsolete("Use CurrentOrder.")]
         public Orders.Order AttachedOrder
         {
-            get => IndividualPosting?.Order;
+            get => CurrentOrder;
             set
             {
                 // Compatibility setter for older tests and migration-only callers. New feature
-                // code must use IndividualPostingService so projections and capacity stay paired.
+                // code uses OrderForceService so both sides of the participant relationship stay
+                // paired.
                 if (value == null)
                 {
+                    CurrentOrder = null;
                     IndividualPosting = null;
                     return;
                 }
+                CurrentOrder = value;
                 IndividualPosting = new IndividualPosting(
                     IndividualPostingKind.OperationalAttachment,
                     CampaignLocation.Landed(value.Mission?.RegionFaction?.Region)

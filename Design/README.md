@@ -79,12 +79,14 @@ and why expansion shares the budget but deliberately not the offensive code path
 
 Two plans moved to `Reference/` on 2026-08-07 once implemented: `CasualtyRealism.md` (graded motive
 impairment, persistent incapacitation, Astartes daily healing, Apothecary field care) and
-`SpecialistAttachment.md` (order-level attachment of individual specialists). Both are retained
+`SpecialistAttachment.md` (the historical format-13 detachment decisions). Both are retained
 rather than deleted because their decision tables remain useful — the wound-band healing cadence and
 motive-speed curve in the first, and the resolved detachment sub-questions plus the save load-ordering
-  trap in the second. Their residual items did **not** move with them: stance/prone combat plus
-  characters-as-units-of-one are in PRD §5.7, and the active ranged backlog remains in
-  `RangedCombatFollowUps.md`.
+trap in the second. The administrative-formation and character-as-battle-element architecture that
+superseded the organizational half of the second is now distilled into `OnlyWar_TDD.md`; its open
+join/leave governance question remains in PRD §5.7. Their other residual items did **not** move with
+them: stance/prone combat is in PRD §5.7, and the active ranged backlog remains in
+`RangedCombatFollowUps.md`.
 
 Implemented mission scheduling, engagement range and posture, squad engagement planning, take-out-probability combat scoring,
 evasion/burrowing, morale, withdrawal/pursuit, scatter-aware targeting, civil stability, strategic NPC

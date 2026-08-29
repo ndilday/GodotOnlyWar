@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -13,13 +14,14 @@ namespace OnlyWar.Helpers
                 return "Unknown";
             }
 
-            Region region = squad.CurrentRegion;
+            CampaignLocation location = CampaignLocationService.ForSquad(squad);
+            Region region = location?.Region;
             if (region != null)
             {
                 return $"{region.Name}, {region.Planet.Name}";
             }
 
-            Ship ship = squad.BoardedLocation;
+            Ship ship = location?.Ship;
             if (ship == null)
             {
                 return "Unknown";

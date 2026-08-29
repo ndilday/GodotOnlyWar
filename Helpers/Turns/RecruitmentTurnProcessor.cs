@@ -55,7 +55,7 @@ namespace OnlyWar.Helpers.Turns
                 return null;
             }
 
-            _staffService.Synchronize(force, _session.Rules);
+            _staffService.Synchronize(force, _session.Rules, _session.Sector);
             Planet homeWorld = _session.Sector.GetPlanet(program.HomeWorldPlanetId);
             Faction chapter = force.Faction;
             long population = GetChapterPopulation(homeWorld, chapter.Id);
@@ -258,7 +258,7 @@ namespace OnlyWar.Helpers.Turns
 
         private bool HasDevastatorSeat(Squad squad)
         {
-            if (squad?.IsOperational != true
+            if (squad?.CanAcceptSquadOrder != true
                 || squad.SquadTemplate != _session.Rules.ChapterTemplates.DevastatorSquad)
             {
                 return false;

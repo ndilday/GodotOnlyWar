@@ -41,7 +41,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
-            Faction scout = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            Faction scout = context.MissionSquads.FirstOrDefault()?.Faction;
             int scoutHeadcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Detection aggregates across every enemy faction in the region (one stealth check per
             // day, not N independent rolls); the terms are broken out for the trace.
@@ -88,7 +88,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         }
 
         private static string DescribeFaction(MissionContext context) =>
-            context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "Unknown";
+            context.MissionSquads.FirstOrDefault()?.Faction?.Name ?? "Unknown";
 
         private static string DescribeTarget(MissionContext context)
         {

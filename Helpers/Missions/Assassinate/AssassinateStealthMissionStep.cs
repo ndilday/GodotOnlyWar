@@ -38,7 +38,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
-            Faction assassin = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            Faction assassin = context.MissionSquads.FirstOrDefault()?.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Getting close to the target unseen is contested by everyone watching the ground, not
             // just the faction the target belongs to, so this uses the same aggregated search-effort

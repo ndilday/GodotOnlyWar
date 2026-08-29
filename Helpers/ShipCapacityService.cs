@@ -6,9 +6,15 @@ namespace OnlyWar.Helpers
 {
     public static class ShipCapacityService
     {
+        public static int AdministrativeStationedSoldierCount(Ship ship) => ship == null
+            ? 0
+            : ship.AdministrativeStations
+                .Sum(SoldierPresenceService.PresentCount);
+
         public static int LoadedSoldierCount(Ship ship) => ship == null
             ? 0
             : ship.LoadedSquads.Sum(SoldierPresenceService.PresentCount)
+                + AdministrativeStationedSoldierCount(ship)
                 + ship.IndividuallyBoardedSoldiers.Count;
 
         public static int AvailableCapacity(Ship ship) =>

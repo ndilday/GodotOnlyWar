@@ -47,6 +47,19 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             int targetFactionId,
             Aggression aggression)
         {
+            return CreateOrAdd(sector, target, mission, selectedSquads, [],
+                targetFactionId, aggression);
+        }
+
+        public static OrderMutationResult CreateOrAdd(
+            Sector sector,
+            Region target,
+            AvailableMission mission,
+            IReadOnlyList<Squad> selectedSquads,
+            IReadOnlyList<PlayerSoldier> selectedCharacters,
+            int targetFactionId,
+            Aggression aggression)
+        {
             if (sector == null || target == null || mission == null)
             {
                 return Failure("The target or mission is no longer available.");
@@ -56,9 +69,13 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 .Where(squad => squad != null)
                 .DistinctBy(squad => squad.Id)
                 .ToList();
-            if (squads.Count == 0)
+            List<PlayerSoldier> characters = (selectedCharacters ?? [])
+                .Where(character => character != null)
+                .DistinctBy(character => character.Id)
+                .ToList();
+            if (squads.Count == 0 && characters.Count == 0)
             {
-                return Failure("Select at least one unassigned eligible squad.");
+                return Failure("Select at least one eligible squad or character.");
             }
 
             Order existing = FindEquivalentOrder(
@@ -67,24 +84,27 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             {
                 return Failure("That special mission is no longer available.");
             }
-            if (squads.Any(squad => squad.CurrentOrders != null))
+            if (squads.Any(squad => squad.CurrentOrders != null)
+                || characters.Any(character => character.CurrentOrder != null
+                    && !ReferenceEquals(character.CurrentOrder, existing)))
             {
                 return Failure("A selected squad already has another order.");
             }
 
-            RegionalEligibilityResult eligibility = RegionalOrderEligibilityService.Build(
-                sector, target, mission, existing);
-            HashSet<int> selectableIds = eligibility.Candidates
+            RegionalEligibilityResult eligibility = squads.Count == 0
+                ? null
+                : RegionalOrderEligibilityService.Build(sector, target, mission, existing);
+            HashSet<int> selectableIds = eligibility?.Candidates
                 .Where(candidate => candidate.IsSelectable)
                 .Select(candidate => candidate.Squad.Id)
-                .ToHashSet();
+                .ToHashSet() ?? [];
             if (squads.Any(squad => !selectableIds.Contains(squad.Id)))
             {
                 return Failure("The force changed and at least one selected squad is no longer eligible.");
             }
 
-            Order result = OrderAssignment.AssignSquadsToMission(
-                squads, target, mission, targetFactionId, aggression);
+            Order result = OrderAssignment.AssignParticipantsToMission(
+                squads, characters, target, mission, targetFactionId, aggression);
             if (result == null)
             {
                 return Failure("The order could not be issued; no campaign state changed.");
@@ -95,7 +115,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 existing == null ? "Order created." : "Order reinforced.",
                 existing == null ? OrderMutationKind.Created : OrderMutationKind.Reinforced,
                 result,
-                squads.Count);
+                squads.Count,
+                characters.Count);
         }
 
         public static OrderMutationResult RemoveSquad(
@@ -112,7 +133,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             }
 
             int specialists = order.AssignedSquads.Count == 1
-                ? order.AttachedSoldiers.Count
+                ? order.AssignedCharacters.Count
                 : 0;
             if (!OrderAssignment.UnassignSquads([squad]))
             {
@@ -121,7 +142,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
 
             return new OrderMutationResult(
                 true,
-                order.AssignedSquads.Count == 0 ? "Order ended." : "Squad removed.",
+                order.Force.IsEmpty ? "Order ended." : "Squad removed.",
                 OrderMutationKind.RemovedSquad,
                 order,
                 1,
@@ -137,11 +158,12 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             }
 
             List<Squad> squads = order.AssignedSquads.ToList();
-            int specialists = order.AttachedSoldiers.Count;
-            if (!OrderAssignment.UnassignSquads(squads))
+            int specialists = order.AssignedCharacters.Count;
+            if (squads.Count == 0 && specialists == 0)
             {
                 return Failure("The order could not be cancelled.");
             }
+            OrderForceService.ReleaseOrder(order);
 
             return new OrderMutationResult(
                 true,
@@ -186,12 +208,29 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             {
                 return Failure("That order is no longer active.");
             }
-            if (!OrderAttachment.CanAttach(soldier, order, null, out string reason))
+            CharacterAvailabilityEvaluation availability =
+                new OnlyWar.Helpers.CharacterAvailabilityService()
+                    .EvaluateOrderAssignment(soldier, order, null, order.AssignedSquads);
+            if (!availability.IsAllowed)
             {
-                return Failure(reason ?? "That specialist cannot join this order.");
+                // Keep the format-13 attachment façade usable for old fixtures and saves whose
+                // rules template still carries only PermitsIndividualDetachment. New campaign
+                // data always takes the explicit MembersOnly capability path above.
+                if (!OrderAttachment.CanAttach(
+                        soldier, order, order.AssignedSquads, null, out string legacyReason))
+                {
+                    return Failure(availability.Reason ?? legacyReason
+                        ?? "That character cannot join this order.");
+                }
+                OrderAttachment.Attach(soldier, order);
+                return new OrderMutationResult(true, $"{soldier.Name} assigned.",
+                    OrderMutationKind.SpecialistAttached, order, ReleasedSpecialists: 1);
             }
-            OrderAttachment.Attach(soldier, order);
-            return new OrderMutationResult(true, $"{soldier.Name} attached.",
+            if (!OrderForceService.AssignCharacter(order, soldier))
+            {
+                return Failure("That character could not join the order.");
+            }
+            return new OrderMutationResult(true, $"{soldier.Name} assigned.",
                 OrderMutationKind.SpecialistAttached, order, ReleasedSpecialists: 1);
         }
 
@@ -202,12 +241,12 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         {
             if (sector == null || !IsPlayerOrder(order)
                 || soldier == null
-                || !ReferenceEquals(soldier.AttachedOrder, order))
+                || !ReferenceEquals(soldier.CurrentOrder, order))
             {
                 return Failure("That specialist is no longer attached to this order.");
             }
-            OrderAttachment.Detach(soldier);
-            return new OrderMutationResult(true, $"{soldier.Name} detached.",
+            OrderForceService.RemoveCharacter(order, soldier);
+            return new OrderMutationResult(true, $"{soldier.Name} removed.",
                 OrderMutationKind.SpecialistDetached, order, ReleasedSpecialists: 1);
         }
 
@@ -220,7 +259,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 || squad == null || squad.CurrentOrders != null
                 || squad.Faction?.IsPlayerFaction != true
                 || squad.CurrentRegion == null
-                || !squad.IsOperational)
+                || !squad.CanAcceptSquadOrder)
             {
                 return Failure("The previous squad assignment can no longer be restored.");
             }
@@ -230,8 +269,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 return Failure("The squad is no longer in the operation's staging area.");
             }
             if (!sector.Orders.Values.Contains(order)) sector.AddNewOrder(order);
-            if (!order.AssignedSquads.Contains(squad)) order.AssignedSquads.Add(squad);
-            squad.CurrentOrders = order;
+            OrderForceService.AssignSquad(order, squad);
             return new OrderMutationResult(true, "Squad assignment restored.",
                 OrderMutationKind.Restored, order, 1);
         }
@@ -250,9 +288,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         }
 
         private static bool IsPlayerOrder(Order order) =>
-            order?.AssignedSquads?.Count > 0
-            && order.AssignedSquads.All(
-                squad => squad?.Faction?.IsPlayerFaction == true);
+            order?.OwnerFaction?.IsPlayerFaction == true
+            || (order?.OwnerFaction == null && order?.Force?.AllPlayerSoldiers?.Any() == true);
 
         private static bool IsSpecialMissionCurrent(
             Region target,

@@ -1,7 +1,10 @@
 using OnlyWar.Builders;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Models.Orders
 {
@@ -23,39 +26,78 @@ namespace OnlyWar.Models.Orders
     {
         public int Id { get; }
         public List<Squad> AssignedSquads { get; }
+        public List<PlayerSoldier> AssignedCharacters { get; } = [];
         public bool IsQuiet { get; }
         public bool IsActivelyEngaging { get; }
         public Aggression LevelOfAggression { get; private set; }
         public Mission Mission { get; }
-        // Individuals attached to this operation without their home squad
-        // (Design/Reference/SpecialistAttachment.md). Purely organizational in Phase 2a: an
-        // attached specialist is WITH the force, not IN the engagement -- he gets no
-        // BattleSquad binding and cannot become a casualty.
-        //
-        // Initialized here rather than taken as a constructor parameter so that every
-        // existing construction site (player UI, NPC strategy, save load, tests) keeps
-        // producing a non-null list, and so that mutation only ever happens through
-        // OrderAttachment, which owns both halves of the pointer pair.
-        public List<Soldiers.PlayerSoldier> AttachedSoldiers { get; } = [];
+        // Compatibility projection for the retired format-13 name. It aliases the first-class
+        // character participant collection; new code must use AssignedCharacters.
+        [System.Obsolete("Use AssignedCharacters.")]
+        public List<Soldiers.PlayerSoldier> AttachedSoldiers => AssignedCharacters;
+        public Faction OwnerFaction { get; }
+        public OrderForce Force => new(this);
 
         public Order(List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
-            : this(IdGenerator.GetNextOrderId(), orderedSquads, isQuiet, isActivelyEngaging, levelOfAggression, mission) {}
+            : this(IdGenerator.GetNextOrderId(), orderedSquads, isQuiet, isActivelyEngaging,
+                   levelOfAggression, mission, orderedSquads?.Select(s => s?.Faction).FirstOrDefault(f => f != null)) {}
+
+        public Order(
+            List<Squad> orderedSquads,
+            bool isQuiet,
+            bool isActivelyEngaging,
+            Aggression levelOfAggression,
+            Mission mission,
+            Faction ownerFaction,
+            IEnumerable<PlayerSoldier> assignedCharacters = null)
+            : this(IdGenerator.GetNextOrderId(), orderedSquads, isQuiet, isActivelyEngaging,
+                   levelOfAggression, mission, ownerFaction, assignedCharacters)
+        {
+        }
 
         public Order(int id, List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
+            : this(id, orderedSquads, isQuiet, isActivelyEngaging, levelOfAggression, mission,
+                   orderedSquads?.Select(s => s?.Faction).FirstOrDefault(f => f != null))
+        {
+        }
+
+        public Order(
+            int id,
+            List<Squad> orderedSquads,
+            bool isQuiet,
+            bool isActivelyEngaging,
+            Aggression levelOfAggression,
+            Mission mission,
+            Faction ownerFaction,
+            IEnumerable<PlayerSoldier> assignedCharacters = null)
         {
             Id = id;
-            AssignedSquads = orderedSquads;
+            AssignedSquads = orderedSquads ?? [];
             IsQuiet = isQuiet;
             IsActivelyEngaging = isActivelyEngaging;
             LevelOfAggression = levelOfAggression;
             Mission = mission;
+            OwnerFaction = ownerFaction
+                ?? AssignedSquads.Select(s => s?.Faction).FirstOrDefault(f => f != null)
+                ?? mission?.RegionFaction?.PlanetFaction?.Faction;
+            if (assignedCharacters != null)
+            {
+                foreach (PlayerSoldier character in assignedCharacters.Where(c => c != null).Distinct())
+                {
+                    if (!AssignedCharacters.Contains(character))
+                    {
+                        AssignedCharacters.Add(character);
+                    }
+                    character.CurrentOrder = this;
+                }
+            }
             // A squad in an order's AssignedSquads must point back at that order via
             // CurrentOrders; turn processing (BattleSquad.ShouldContinueMission)
             // reads CurrentOrders for every squad it runs. Establishing the invariant here means
             // no order-creation site (NPC strategy, player UI, save/load) can forget to set it.
             if (orderedSquads != null)
             {
-                foreach (Squad squad in orderedSquads)
+                foreach (Squad squad in AssignedSquads)
                 {
                     squad.CurrentOrders = this;
                 }

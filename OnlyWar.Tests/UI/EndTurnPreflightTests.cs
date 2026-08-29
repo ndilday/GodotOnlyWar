@@ -335,8 +335,7 @@ public class EndTurnPreflightTests
             $"Command Brief item '{item.StableKey}' uses unregistered icon '{item.IconKey}'."));
     }
 
-    // Design/Reference/SpecialistAttachment.md §7.3. Two ways a formation stops being "idle":
-    // it is a personnel pool that never takes orders of its own, or it has a member forward.
+    // Administrative formations are personnel pools, not idle deployable combat formations.
     [Fact]
     public void Evaluate_DoesNotFlagAFormationWhoseTemplatePermitsDetachmentAsIdle()
     {
@@ -348,7 +347,7 @@ public class EndTurnPreflightTests
             [],
             campaign.SquadTemplate.Armor,
             [.. campaign.SquadTemplate.Elements],
-            SquadTypes.PermitsIndividualDetachment)
+            SquadTypes.Administrative)
         {
             Faction = campaign.PlayerFaction
         };
@@ -370,8 +369,9 @@ public class EndTurnPreflightTests
             });
 
         Assert.DoesNotContain(report.Items, item => item.EntityId == pool.Id);
-        // ...and it stays operational, which surgery staffing and recruitment depend on.
-        Assert.True(pool.IsOperational);
+        Assert.True(pool.SquadTemplate.IsAdministrative);
+        Assert.True(pool.PermitsIndividualDeployment);
+        Assert.False(pool.CanMoveAsFormation);
     }
 
     [Fact]

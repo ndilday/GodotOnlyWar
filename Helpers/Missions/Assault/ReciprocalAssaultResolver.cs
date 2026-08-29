@@ -40,8 +40,8 @@ namespace OnlyWar.Helpers.Missions.Assault
                 squad.ReallocateEquipment();
             }
 
-            string firstName = firstForce[0].Squad?.Faction?.Name ?? "Unknown force";
-            string secondName = secondForce[0].Squad?.Faction?.Name ?? "Unknown force";
+            string firstName = firstForce[0].Faction?.Name ?? "Unknown force";
+            string secondName = secondForce[0].Faction?.Name ?? "Unknown force";
             string region = first.Order.Mission.RegionFaction.Region.Name;
             string log = $"Day {day}: {firstName} and {secondName} assault forces meet in {region}; neither side can use entrenchments.";
             first.AddLog(log);

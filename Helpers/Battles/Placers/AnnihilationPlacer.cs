@@ -48,7 +48,8 @@ namespace OnlyWar.Helpers.Battles.Placers
             List<BattleSquad> hq = [];
             foreach (BattleSquad squad in squads)
             {
-                if (squad.Squad?.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true)
+                if (squad?.Traits.IsHeadquarters == true
+                    || squad?.Squad?.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true)
                 {
                     hq.Add(squad);
                 }

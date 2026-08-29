@@ -832,6 +832,7 @@ public class SoldierTransferServiceTests
         SoldierTemplate scoutSergeant = CreateTemplate(51, "Scout Sergeant", 5, true);
         SquadTemplate administrativeTemplate = CreateSquadTemplate(
             "Scout HQ Squad",
+            SquadTypes.HQ | SquadTypes.Scout | SquadTypes.Administrative,
             (captain, 1, 1),
             (scoutSergeant, 0, 50));
         SquadTemplate sourceTemplate = CreateSquadTemplate(
@@ -842,13 +843,44 @@ public class SoldierTransferServiceTests
         PlayerSoldier sergeant = AddPlayerSoldier(source, scoutSergeant, "Sergeant Marius");
         Squad headquarters = AddSquad(chapter, "10th Company HQ", administrativeTemplate);
         headquarters.AddSquadMember(TestModelFactory.CreateSoldier(captain, "Captain Aurelius"));
-        headquarters.IsAdministrative = true;
 
         List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, sergeant);
 
         Assert.Contains(options, option =>
             option.SquadId == headquarters.Id
             && option.SoldierTemplate == scoutSergeant);
+    }
+
+    [Fact]
+    public void GetTransferOptions_EmptyHqSquadOffersOnlyItsCommandSeat()
+    {
+        SoldierTemplate captain = CreateTemplate(50, "Captain", 6, true);
+        SoldierTemplate ancient = CreateTemplate(52, "Ancient", 5, false);
+        SoldierTemplate champion = CreateTemplate(53, "Champion", 5, false);
+        SoldierTemplate veteranSergeant = CreateTemplate(54, "Veteran Sergeant", 5, true);
+        SquadTemplate hqTemplate = CreateSquadTemplate(
+            "HQ Squad",
+            SquadTypes.HQ | SquadTypes.Administrative,
+            (captain, 1, 1),
+            (ancient, 1, 1),
+            (champion, 1, 1));
+        SquadTemplate sourceTemplate = CreateSquadTemplate(
+            "Veteran Squad",
+            (veteranSergeant, 1, 1));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", sourceTemplate);
+        PlayerSoldier sergeant = AddPlayerSoldier(source, veteranSergeant, "Sergeant Marius");
+        Squad headquarters = AddSquad(chapter, "1st Company HQ", hqTemplate);
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, sergeant)
+            .Where(option => option.SquadId == headquarters.Id)
+            .ToList();
+
+        // A leaderless HQ is founded by its Captain; the staff seats stay closed until he
+        // is in place. Offering all three at once listed the same empty squad three times
+        // in the muster's EMPTY FORMATIONS group.
+        SoldierTransferOption only = Assert.Single(options);
+        Assert.Equal(captain, only.SoldierTemplate);
     }
 
     private static PlayerSoldier AddPlayerSoldier(Squad squad, SoldierTemplate template, string name)

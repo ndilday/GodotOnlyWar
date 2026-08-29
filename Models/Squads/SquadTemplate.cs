@@ -7,6 +7,18 @@ using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Models.Squads
 {
+    /// <summary>
+    /// Describes whether a squad template is a manoeuvre formation, a seated formation whose
+    /// members may deploy independently, or genuinely fixed in place.  This is rules data: a live
+    /// squad cannot become administrative as a side effect of a campaign event.
+    /// </summary>
+    public enum FormationMobilityPolicy
+    {
+        WholeFormation = 0,
+        MembersOnly = 1,
+        Fixed = 2
+    }
+
     [Flags]
     public enum SquadTypes
     {
@@ -17,17 +29,13 @@ namespace OnlyWar.Models.Squads
         Fast = 0x8,
         Heavy = 0x10,
         Bodyguard = 0x20,
-        // Administrative formations hold personnel assigned to Chapter duties rather
-        // than battlefield service. They remain ordinary squads for roster transfers
-        // and persistence, but are never deployable, orderable, or trainable.
+        // Retained as a compatibility bit for old hand-built fixtures and old rules databases.
+        // New rules data expresses administration with SquadTemplate.IsAdministrative and
+        // FormationMobilityPolicy.MembersOnly.
         Administrative = 0x40,
-        // Formations whose function is to SUPPLY specialists to other formations: the four
-        // command HQ templates and the four chapter offices. The flag is two-sided
-        // (Design/Reference/SpecialistAttachment.md §3.3): such a formation may give up an
-        // individual to an order via OrderAttachment, and in exchange it never deploys as a
-        // unit -- it is a personnel pool, not a manoeuvre element. Note this is NOT
-        // Administrative: IsOperational must stay true or surgery staffing and
-        // recruitment/implantation stop seeing these squads' members.
+        // Retained only so format-13 compatibility callers continue to compile. It is no longer
+        // consulted by new movement/order code; templates loaded from new rules data use the
+        // explicit Administrative + MembersOnly pair above.
         PermitsIndividualDetachment = 0x80
     }
 
@@ -66,18 +74,46 @@ namespace OnlyWar.Models.Squads
         public ArmorTemplate Armor { get; }
         public WeaponSet DefaultWeapons { get; }
         public SquadTypes SquadType { get; }
-        public bool IsOperational => (SquadType & SquadTypes.Administrative) == 0;
-        // See SquadTypes.PermitsIndividualDetachment. True iff this formation may lend
-        // individuals to an order -- and, as the other half of the same rule, may never be
-        // assigned to an order as a squad.
+        public bool IsAdministrative { get; }
+        public FormationMobilityPolicy MobilityPolicy { get; }
+
+        /// <summary>True when this formation's members can be deployed independently.</summary>
+        public bool PermitsIndividualDeployment =>
+            IsAdministrative && MobilityPolicy == FormationMobilityPolicy.MembersOnly;
+
+        /// <summary>
+        /// Compatibility projection for format-13 callers. New code must use
+        /// <see cref="PermitsIndividualDeployment"/>.
+        /// </summary>
+        [Obsolete("Use PermitsIndividualDeployment.")]
         public bool PermitsIndividualDetachment =>
-            (SquadType & SquadTypes.PermitsIndividualDetachment) != 0;
+            PermitsIndividualDeployment
+            || (SquadType & SquadTypes.PermitsIndividualDetachment) != 0;
+
+        /// <summary>
+        /// Compatibility name retained for older consumers. This is intentionally not used as
+        /// the administration predicate by new code because medical staffing and manoeuvre
+        /// eligibility are different questions.
+        /// </summary>
+        [Obsolete("Use CanMoveAsFormation, CanAcceptSquadOrder, or IsPresentOperationalForce.")]
+        public bool IsOperational => true;
+
+        public bool CanMoveAsFormation => MobilityPolicy == FormationMobilityPolicy.WholeFormation;
+
+        public bool CanAcceptSquadOrder => CanMoveAsFormation;
+
+        public bool IsPresentOperationalForce => CanAcceptSquadOrder;
+
+        // Local medical/repair support is a role capability, not an administration test. Any
+        // formation that can physically participate in the campaign may provide an eligible
+        // specialist at its effective location; Fixed formations cannot.
+        public bool MayProvideLocalSupport => MobilityPolicy != FormationMobilityPolicy.Fixed;
         // A squad's point value is the sum of its members' battle values (PRD §4.24). Previously a
         // stored column; now derived so it can never drift from the roster. Elements with a rolled
         // strength are priced at their average, since that is what generation actually fields over
         // many squads; for a fixed element the average IS the maximum, so every template authored
         // before variable strength existed prices exactly as it always did.
-        public int BattleValue => IsOperational
+        public int BattleValue => IsPresentOperationalForce
             ? (int)Math.Round(
                 Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.ExpectedNumber) ?? 0f,
                 MidpointRounding.AwayFromZero)
@@ -107,7 +143,8 @@ namespace OnlyWar.Models.Squads
                              List<SquadWeaponOption> weaponOptions, 
                              ArmorTemplate armor,
                              List<SquadTemplateElement> elements,
-                             SquadTypes squadType)
+                             SquadTypes squadType,
+                             FormationMobilityPolicy? mobilityPolicy = null)
         {
             Id = id;
             Name = name;
@@ -116,6 +153,13 @@ namespace OnlyWar.Models.Squads
             WeaponOptions = weaponOptions?.AsReadOnly();
             Armor = armor;
             SquadType = squadType;
+            IsAdministrative = (squadType & SquadTypes.Administrative) != 0;
+            // A legacy detachment template was already a member-only pool. Mapping it here keeps
+            // old fixtures usable while the shipped rules migrate to explicit policy data.
+            MobilityPolicy = mobilityPolicy
+                ?? (IsAdministrative
+                    ? FormationMobilityPolicy.MembersOnly
+                    : FormationMobilityPolicy.WholeFormation);
         }
     }
 }

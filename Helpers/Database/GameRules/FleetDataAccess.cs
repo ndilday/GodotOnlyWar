@@ -67,7 +67,15 @@ namespace OnlyWar.Helpers.Database.GameRules
                     ushort soldierCap = (ushort)reader.GetInt16(3);
                     ushort boatCap = (ushort)reader.GetInt16(4);
                     ushort landerCap = (ushort)reader.GetInt16(5);
-                    ShipTemplate boatTemplate = new ShipTemplate(id, name, soldierCap, boatCap, landerCap);
+                    int flagshipPrecedence = reader.FieldCount > 6 && !reader.IsDBNull(6)
+                        ? reader.GetInt32(6)
+                        : 0;
+                    int hullSize = reader.FieldCount > 7 && !reader.IsDBNull(7)
+                        ? reader.GetInt32(7)
+                        : 0;
+                    ShipTemplate boatTemplate = new ShipTemplate(
+                        id, name, soldierCap, boatCap, landerCap,
+                        flagshipPrecedence, hullSize);
                     if (!factionTemplateMap.ContainsKey(factionId))
                     {
                         factionTemplateMap[factionId] = [];

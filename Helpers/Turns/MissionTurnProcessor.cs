@@ -110,6 +110,10 @@ namespace OnlyWar.Helpers.Turns
 
             foreach (Order order in combatOrders)
             {
+                if (order?.Mission?.MissionType == MissionType.Recruitment)
+                {
+                    continue;
+                }
                 if (order?.Mission?.RegionFaction == null
                     && order?.Mission?.Region != null
                     && order.Mission.TargetFaction != null)
@@ -134,7 +138,9 @@ namespace OnlyWar.Helpers.Turns
                     continue;
                 }
 
-                bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
+                bool isPlayerOrder = order.OwnerFaction?.IsPlayerFaction == true
+                    || order.Force.AllPlayerSoldiers.Any();
+                TacticalEntityIdAllocator entityIds = new();
 
                 // Never construct a BattleSquad from a depleted squad. This also protects orders
                 // whose force was wiped out earlier in the same resolution pass.
@@ -142,13 +148,25 @@ namespace OnlyWar.Helpers.Turns
                     .Where(s => s.Members.Any(m => m.IsCombatEffective))
                     .Select(s => new BattleSquad(isPlayerOrder, s))
                     .ToList();
+                involvedBattleSquads.AddRange(order.AssignedCharacters
+                    .Where(character => character.IsCombatEffective)
+                    .Select(character => new BattleSquad(new BattleElementSpec(
+                        entityIds.GetNextId(),
+                        character.Name,
+                        character.AssignedSquad?.Faction ?? order.OwnerFaction,
+                        new ISoldier[] { character },
+                        new BattleElementTraits(
+                            IsHeadquarters: character.AssignedSquad?.SquadTemplate?.SquadType
+                                .HasFlag(SquadTypes.HQ) == true),
+                        CampaignCharacter: character)))
+                    .ToList());
                 if (involvedBattleSquads.Count == 0) continue;
 
                 // Squad.Faction resolves through SquadTemplate.Faction and can be absent; an
                 // unguarded read in a log-only path means raising the log level throws. See the
                 // matching guard in BattleTurnResolver's constructor.
                 GameLog.Debug(() =>
-                    $"Combat mission start {order.AssignedSquads.First().Faction?.Name} "
+                    $"Combat mission start {order.OwnerFaction?.Name ?? "Unknown faction"} "
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"squads={order.AssignedSquads.Count}, soldiers={order.AssignedSquads.Sum(s => s.Members.Count)}, "
                     + $"battleValue={SquadBattleValue(order.AssignedSquads)}");
@@ -235,7 +253,7 @@ namespace OnlyWar.Helpers.Turns
                     MissionFieldExperienceLog.LogGains(context, mission.XpBefore);
                 }
                 GameLog.Debug(() =>
-                    $"Combat mission result {order.AssignedSquads.First().Faction?.Name} "
+                    $"Combat mission result {order.OwnerFaction?.Name ?? "Unknown faction"} "
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"elementSquads={context.MissionSquads.Count}, impact={context.Impact:F2}, "
                     + $"enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "
@@ -251,8 +269,9 @@ namespace OnlyWar.Helpers.Turns
                 return;
             }
 
-            Faction observerFaction = order.AssignedSquads
+            Faction observerFaction = order.Force.Squads
                 .Select(squad => squad?.Faction)
+                .Concat(order.Force.Characters.Select(character => character?.AssignedSquad?.Faction))
                 .FirstOrDefault(faction => faction != null);
             if (observerFaction == null) return;
 
@@ -334,8 +353,8 @@ namespace OnlyWar.Helpers.Turns
         {
             RegionFaction firstTarget = first?.Order?.Mission?.RegionFaction;
             RegionFaction secondTarget = second?.Order?.Mission?.RegionFaction;
-            Faction firstAttacker = first?.MissionSquads.FirstOrDefault()?.Squad?.Faction;
-            Faction secondAttacker = second?.MissionSquads.FirstOrDefault()?.Squad?.Faction;
+            Faction firstAttacker = first?.MissionSquads.FirstOrDefault()?.Faction;
+            Faction secondAttacker = second?.MissionSquads.FirstOrDefault()?.Faction;
             if (firstTarget == null || secondTarget == null
                 || firstAttacker == null || secondAttacker == null)
             {
@@ -472,8 +491,7 @@ namespace OnlyWar.Helpers.Turns
             ICollection<ConstructionProgressReport> constructionReports)
         {
             BaseSkill engineering = _session.Rules.Skills.EngineeringFortification;
-            float totalSkill = order.AssignedSquads
-                .SelectMany(s => s.Members)
+            float totalSkill = order.Force.AllSoldiers
                 .Sum(soldier => soldier.GetTotalSkillValue(engineering));
             // Construction produces no MissionContext, so the levels captured here are the only
             // record the end-of-turn report can be built from (issue #5: without them a fortifying
@@ -486,8 +504,10 @@ namespace OnlyWar.Helpers.Turns
             constructionReports?.Add(new ConstructionProgressReport(
                 mission.ConstructionType,
                 mission.RegionFaction,
-                order.AssignedSquads.Select(s => s.Name).ToList(),
-                order.AssignedSquads.Any(s => s.Faction?.IsPlayerFaction == true),
+                order.Force.Squads.Select(s => s.Name)
+                    .Concat(order.Force.Characters.Select(character => character.Name))
+                    .ToList(),
+                order.OwnerFaction?.IsPlayerFaction == true,
                 before,
                 GetConstructionLevel(mission),
                 sharedBefore));

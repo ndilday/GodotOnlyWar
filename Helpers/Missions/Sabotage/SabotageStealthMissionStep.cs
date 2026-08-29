@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
-            Faction saboteur = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            Faction saboteur = context.MissionSquads.FirstOrDefault()?.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Being seen is a property of the region, not of the faction whose installations are the
             // target: the same aggregated search-effort model as ReconStealthMissionStep, so a
@@ -64,7 +64,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
         }
 
         private static string DescribeFaction(MissionContext context) =>
-            context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "Unknown";
+            context.MissionSquads.FirstOrDefault()?.Faction?.Name ?? "Unknown";
 
         private static string DescribeTarget(MissionContext context)
         {

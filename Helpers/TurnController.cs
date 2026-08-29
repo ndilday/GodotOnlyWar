@@ -5,6 +5,8 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Squads;
 using OnlyWar.Models.Events;
 using OnlyWar.Helpers.Extensions;
 using System.Collections.Generic;
@@ -126,17 +128,19 @@ namespace OnlyWar.Helpers
             var strategicCombatOrders = allOrdersThisTurn.Where(o => o.Mission is StrategicCombatMission);
             _missionTurnProcessor.ProcessStrategicCombatMissions(strategicCombatOrders, StrategicCombatResults);
 
-            var combatOrders = allOrdersThisTurn.Where(o => o.AssignedSquads.Any());
+            var combatOrders = allOrdersThisTurn.Where(o =>
+                !o.Force.IsEmpty
+                && o.Mission?.MissionType != MissionType.Recruitment);
             _missionTurnProcessor.ProcessCombatMissions(
                 combatOrders, MissionContexts, ConstructionReports);
 
-            var constructionOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is ConstructionMission);
+            var constructionOrders = allOrdersThisTurn.Where(o => o.Force.IsEmpty && o.Mission is ConstructionMission);
             MissionTurnProcessor.ProcessConstructionOrders(constructionOrders);
 
             // Feeding rides alongside construction: squad-less, resolved instantly, no mission
             // context. It runs after combat so a consumer that lost ground this week eats on what it
             // still holds (Design/Reference/ConsumptionFeedingAsMission.md).
-            var feedOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is FeedMission);
+            var feedOrders = allOrdersThisTurn.Where(o => o.Force.IsEmpty && o.Mission is FeedMission);
             MissionTurnProcessor.ProcessFeedOrders(feedOrders);
             MissionAftermathProcessor.RemoveConsumedSpecialMissions(playerOrdersThisTurn);
 
@@ -148,6 +152,7 @@ namespace OnlyWar.Helpers
             _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector, BuildMissionDaysBySquad());
             _fleetTurnProcessor.AdvanceFleetMovement(sector);
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
+            RelocateAdministrativeStationsAfterHomeWorldLoss(sector);
             RecordStrategicNarrativeEvents(sector, defaultFaction, hiddenCults);
             _lastResult.RecruitmentReport = _recruitmentTurnProcessor.Process();
             MissionAftermathProcessor.PruneInvalidSpecialMissions(sector.Planets.Values);
@@ -169,6 +174,43 @@ namespace OnlyWar.Helpers
                 _session.Sector.PlayerForce?.CurrentTurnEvents,
                 _session.Sector.PlayerForce?.CampaignIdentity);
             return _lastResult;
+        }
+
+        private static void RelocateAdministrativeStationsAfterHomeWorldLoss(Sector sector)
+        {
+            PlayerForce force = sector?.PlayerForce;
+            if (force?.HomeWorldPlanetId == null || force.Army?.OrderOfBattle == null)
+            {
+                return;
+            }
+
+            Planet homeWorld = sector.Planets.GetValueOrDefault(force.HomeWorldPlanetId.Value);
+            if (homeWorld == null || homeWorld.GetControllingFaction() == force.Faction)
+            {
+                return;
+            }
+
+            List<Squad> stationedOnHomeWorld = force.Army.OrderOfBattle.GetAllSquads()
+                .Where(squad => squad.PermitsIndividualDeployment
+                    && squad.DutyStation?.Region?.Planet == homeWorld)
+                .ToList();
+            if (stationedOnHomeWorld.Count == 0)
+            {
+                return;
+            }
+
+            List<Ship> ships = force.Fleet?.TaskForces
+                .SelectMany(taskForce => taskForce.Ships)
+                .ToList() ?? [];
+            Ship flagship = new FlagshipService().EnsureSinglePlayerFlagship(force.Faction, ships);
+            AdministrativeStationResult result = new AdministrativeStationService()
+                .MoveAllToFlagship(force.Army.OrderOfBattle, flagship);
+            if (!result.Succeeded)
+            {
+                GameLog.Warn(() =>
+                    $"Administrative stations could not leave lost Home World {homeWorld.Name}: "
+                    + result.Message);
+            }
         }
 
         private void InitializeWorldControlEpisodes(Sector sector, Faction imperialFaction)

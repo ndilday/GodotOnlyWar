@@ -75,7 +75,7 @@ namespace OnlyWar.Helpers.Missions
             }
             int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
             // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else it is read.
-            string opposingFaction = opposingSquads.First().Squad?.Faction?.Name ?? "an unidentified force";
+            string opposingFaction = opposingSquads.First().Faction?.Name ?? "an unidentified force";
             string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {opposingFaction}\n";
             context.AddLog(log);
             // Measured before and after so a multi-day assault faces a garrison depleted by the fighting

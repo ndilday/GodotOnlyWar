@@ -70,7 +70,7 @@ namespace OnlyWar.Helpers.Missions
             // Squad.Faction resolves through SquadTemplate.Faction, which is guarded rather than assumed
             // everywhere else it is read (Squad.CurrentRegion, BattleSquad.IsPlayerAligned). Guarding it
             // here too keeps a log string from being able to take down a whole turn.
-            string opposingFaction = opposingSquads.First().Squad?.Faction?.Name ?? "an unidentified force";
+            string opposingFaction = opposingSquads.First().Faction?.Name ?? "an unidentified force";
             string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {opposingFaction}\n";
             context.AddLog(log);
             long opposingBattleValueBefore = AbleBattleValue(opposingSquads);

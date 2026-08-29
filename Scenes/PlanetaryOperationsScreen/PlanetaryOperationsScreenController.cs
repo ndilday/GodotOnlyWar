@@ -1,5 +1,7 @@
 using Godot;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.PlanetaryOperations;
@@ -28,6 +30,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
     private ForceTreeGrouping _grouping = ForceTreeGrouping.Company;
     private string _filter = "";
     private readonly HashSet<int> _movementSquadIds = [];
+    private readonly HashSet<int> _movementCharacterIds = [];
     private readonly HashSet<int> _casualtyIds = [];
     private int? _selectedShipId;
     private ConfirmationDialog _confirmation;
@@ -53,7 +56,6 @@ public partial class PlanetaryOperationsScreenController : DialogController
         _view = GetNode<PlanetaryOperationsScreenView>("DialogView/PlanetaryOperationsScreenView");
         _view.RegionSelected += OnRegionSelected;
         _view.RegionActivated += OnRegionActivated;
-        _view.WorldDossierRequested += (_, _) => ShowWorldDossier();
         _view.VerbSelected += OnVerbSelected;
         _view.ForceNodePressed += OnForceNodePressed;
         _view.ForceNodeActivated += OnForceNodeActivated;
@@ -143,6 +145,8 @@ public partial class PlanetaryOperationsScreenController : DialogController
         RefreshWorkspace();
     }
 
+    public void ShowWorldDossierOverlay() => ShowWorldDossier();
+
     private Sector Sector => GameDataSingleton.Instance?.Sector;
 
     private void RefreshWorkspace()
@@ -174,8 +178,13 @@ public partial class PlanetaryOperationsScreenController : DialogController
                 .FirstOrDefault(option => option.RepresentsOrder(_selectedOrder));
 
         List<ForceTreeSquad> roster = BuildOrderTreeRoster(model.Eligibility);
+        IReadOnlyList<SpecialistOption> characterRoster = EnumerateSpecialists();
+        IReadOnlyList<HierarchyTreeItem> forceTree = PlanetaryForceTreeBuilder.Build(
+            roster, ForceTreeGrouping.Company, _filter, new HashSet<int>())
+            .Concat(PlanetaryForceTreeBuilder.BuildCharacterGroup(characterRoster))
+            .ToList();
         _view.DisplayOrders(model,
-            PlanetaryForceTreeBuilder.Build(roster, ForceTreeGrouping.Company, _filter, new HashSet<int>()),
+            forceTree,
             _filter, _selectedMission?.IdentityKey, _selectedOrder,
             EnumerateSpecialists(), _undoDescription);
     }
@@ -184,32 +193,50 @@ public partial class PlanetaryOperationsScreenController : DialogController
     {
         List<ForceTreeSquad> roster = PlanetForceMovementService
             .GetOrbitingPlayerShips(_planet, Sector.PlayerForce.Faction)
-            .SelectMany(ship => ship.LoadedSquads.Where(squad => squad?.IsOperational == true)
+            .SelectMany(ship => ship.LoadedSquads.Where(squad => squad?.IsPresentOperationalForce == true)
                 .Select(squad => new ForceTreeSquad(squad, ship.Name, ship))).ToList();
+        IReadOnlyList<SpecialistOption> characters = EnumerateMovableCharacters();
         RevalidateIds(_movementSquadIds, roster.Select(item => item.Squad.Id));
+        RevalidateIds(_movementCharacterIds, characters.Where(option => option.IsAvailable)
+            .Select(option => option.Soldier.Id));
+        IReadOnlyList<HierarchyTreeItem> forceTree = PlanetaryForceTreeBuilder.Build(
+                roster, _grouping, _filter, _movementSquadIds)
+            .Concat(PlanetaryForceTreeBuilder.BuildCharacterGroup(
+                characters, _movementCharacterIds))
+            .ToList();
         _view.DisplayMovement(_verb,
             PlanetaryOperationsViewModelBuilder.BuildRegionCards(_selectedRegion, Sector),
-            PlanetaryForceTreeBuilder.Build(roster, _grouping, _filter, _movementSquadIds),
-            _filter, _grouping, [], null, _movementSquadIds.Count);
+            forceTree,
+            _filter, _grouping, [], null,
+            _movementSquadIds.Count + _movementCharacterIds.Count);
     }
 
     private void RefreshEmbarkation()
     {
         List<Squad> squads = GetPlayerPresence(_selectedRegion)?.LandedSquads
-            .Where(squad => squad?.IsOperational == true).ToList() ?? [];
+            .Where(squad => squad?.IsPresentOperationalForce == true).ToList() ?? [];
         List<ForceTreeSquad> roster = squads.Select(squad => new ForceTreeSquad(
             squad, _selectedRegion.Name)).ToList();
+        IReadOnlyList<SpecialistOption> characters = EnumerateMovableCharacters();
         RevalidateIds(_movementSquadIds, squads.Select(squad => squad.Id));
+        RevalidateIds(_movementCharacterIds, characters.Where(option => option.IsAvailable)
+            .Select(option => option.Soldier.Id));
         List<Squad> selected = squads.Where(squad => _movementSquadIds.Contains(squad.Id)).ToList();
+        List<PlayerSoldier> selectedCharacters = characters
+            .Where(option => option.IsAvailable && _movementCharacterIds.Contains(option.Soldier.Id))
+            .Select(option => option.Soldier).ToList();
         IReadOnlyList<ShipCapacityChoice> ships = PlanetForceMovementService.BuildCapacityChoices(
-            _planet, Sector.PlayerForce.Faction, selected);
+            _planet, Sector.PlayerForce.Faction,
+            new MovementParty(selected, selectedCharacters));
         if (_selectedShipId.HasValue && !ships.Any(choice =>
                 choice.Ship.Id == _selectedShipId.Value && choice.Fits)) _selectedShipId = null;
         _view.DisplayMovement(_verb,
             PlanetaryOperationsViewModelBuilder.BuildRegionCards(_selectedRegion, Sector),
-            PlanetaryForceTreeBuilder.Build(roster, ForceTreeGrouping.Company, _filter, _movementSquadIds),
+            PlanetaryForceTreeBuilder.Build(roster, ForceTreeGrouping.Company, _filter, _movementSquadIds)
+                .Concat(PlanetaryForceTreeBuilder.BuildCharacterGroup(
+                    characters, _movementCharacterIds)).ToList(),
             _filter, ForceTreeGrouping.Company, ships, _selectedShipId,
-            _movementSquadIds.Count);
+            _movementSquadIds.Count + _movementCharacterIds.Count);
     }
 
     private void RefreshDetach()
@@ -296,6 +323,33 @@ public partial class PlanetaryOperationsScreenController : DialogController
         RegionalOperationsViewModel model = PlanetaryOperationsViewModelBuilder.BuildRegional(
             Sector, _selectedRegion, _selectedMission, _selectedOrder);
         List<ForceTreeSquad> roster = BuildOrderTreeRoster(model.Eligibility);
+        IReadOnlyList<SpecialistOption> characterRoster = EnumerateSpecialists();
+        List<PlayerSoldier> characters = PlanetaryForceTreeBuilder
+            .ResolveCharacterSelection(characterRoster, key).ToList();
+        if (characters.Count > 0)
+        {
+            bool removing = _selectedOrder != null
+                && characters.All(character => ReferenceEquals(
+                    character.CurrentOrder, _selectedOrder));
+            OrderMutationResult characterResult = removing
+                ? RemoveSpecialists(_selectedOrder, characters)
+                : OrderMutationService.CreateOrAdd(
+                    Sector, _selectedRegion, _selectedMission, [], characters,
+                    ResolveTargetFactionId(_selectedMission),
+                    _selectedOrder?.LevelOfAggression ?? Aggression.Normal);
+            if (characterResult.Succeeded)
+            {
+                _selectedOrder = characterResult.Order;
+                if (characterResult.Order != null && characterResult.Order.Force.IsEmpty)
+                {
+                    _selectedOrder = null;
+                }
+                Changed(characterResult.Message);
+            }
+            else ShowFeedback(characterResult.Message);
+            RefreshWorkspace();
+            return;
+        }
         List<Squad> squads = PlanetaryForceTreeBuilder.ResolveSelection(roster, key)
             .Where(squad => roster.Any(item => item.Squad == squad && item.Selectable)).ToList();
         if (squads.Count == 0) return;
@@ -322,6 +376,21 @@ public partial class PlanetaryOperationsScreenController : DialogController
                 .SelectMany(ship => ship.LoadedSquads.Select(squad => new ForceTreeSquad(squad, ship.Name, ship))).ToList()
             : (GetPlayerPresence(_selectedRegion)?.LandedSquads ?? [])
                 .Select(squad => new ForceTreeSquad(squad, _selectedRegion.Name)).ToList();
+        IReadOnlyList<SpecialistOption> characters = EnumerateMovableCharacters();
+        IReadOnlyList<PlayerSoldier> selectedCharacters = PlanetaryForceTreeBuilder
+            .ResolveCharacterSelection(characters, key);
+        if (selectedCharacters.Count > 0)
+        {
+            bool characterAllSelected = selectedCharacters.All(character =>
+                _movementCharacterIds.Contains(character.Id));
+            foreach (PlayerSoldier character in selectedCharacters)
+            {
+                if (characterAllSelected) _movementCharacterIds.Remove(character.Id);
+                else _movementCharacterIds.Add(character.Id);
+            }
+            RefreshWorkspace();
+            return;
+        }
         IReadOnlyList<Squad> squads = PlanetaryForceTreeBuilder.ResolveSelection(roster, key);
         bool allSelected = squads.Count > 0 && squads.All(squad => _movementSquadIds.Contains(squad.Id));
         foreach (Squad squad in squads)
@@ -347,7 +416,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
         if (result.Succeeded)
         {
             SetUndo("squad removal", () => OrderMutationService.RestoreSquad(Sector, order, squad));
-            if (order.AssignedSquads.Count == 0) _selectedOrder = null;
+            if (order.Force.IsEmpty) _selectedOrder = null;
             Changed(result.Message);
         }
         else ShowFeedback(result.Message);
@@ -359,7 +428,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
         Order order = Sector?.Orders.Values.FirstOrDefault(item => item.Id == id);
         if (order == null) return;
         List<Squad> squads = order.AssignedSquads.ToList();
-        List<PlayerSoldier> specialists = order.AttachedSoldiers.ToList();
+        List<PlayerSoldier> specialists = order.AssignedCharacters.ToList();
         Confirm($"Cancel {MissionAvailability.GetOrderLabel(order.Mission)}?\n\n"
             + $"{squads.Count} squads will be released; {specialists.Count} specialists will return.", () =>
         {
@@ -393,7 +462,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
     {
         if (_selectedOrder == null) return;
         PlayerSoldier soldier = FindPlayerSoldier(soldierId);
-        bool attached = ReferenceEquals(soldier?.AttachedOrder, _selectedOrder);
+        bool attached = ReferenceEquals(soldier?.CurrentOrder, _selectedOrder);
         OrderMutationResult result = attached
             ? OrderMutationService.DetachSpecialist(Sector, _selectedOrder, soldier)
             : OrderMutationService.AttachSpecialist(Sector, _selectedOrder, soldier);
@@ -422,8 +491,12 @@ public partial class PlanetaryOperationsScreenController : DialogController
                 _planet, Sector.PlayerForce.Faction)
             .SelectMany(ship => ship.LoadedSquads)
             .Where(squad => _movementSquadIds.Contains(squad.Id)).ToList();
+        List<PlayerSoldier> characters = EnumerateMovableCharacters()
+            .Where(option => option.IsAvailable && _movementCharacterIds.Contains(option.Soldier.Id))
+            .Select(option => option.Soldier).ToList();
         FinishMovement(PlanetForceMovementService.Land(
-            Sector, _planet, _selectedRegion, squads));
+            Sector, _planet, _selectedRegion,
+            new MovementParty(squads, characters)));
     }
 
     private void CommitEmbarkation()
@@ -431,8 +504,12 @@ public partial class PlanetaryOperationsScreenController : DialogController
         Ship ship = GetSelectedShip();
         List<Squad> squads = GetPlayerPresence(_selectedRegion)?.LandedSquads
             .Where(squad => _movementSquadIds.Contains(squad.Id)).ToList() ?? [];
+        List<PlayerSoldier> characters = EnumerateMovableCharacters()
+            .Where(option => option.IsAvailable && _movementCharacterIds.Contains(option.Soldier.Id))
+            .Select(option => option.Soldier).ToList();
         FinishMovement(PlanetForceMovementService.Embark(
-            Sector, _planet, _selectedRegion, ship, squads));
+            Sector, _planet, _selectedRegion, ship,
+            new MovementParty(squads, characters)));
     }
 
     private void CommitDetach()
@@ -464,14 +541,94 @@ public partial class PlanetaryOperationsScreenController : DialogController
 
     private IReadOnlyList<SpecialistOption> EnumerateSpecialists()
     {
-        if (_selectedOrder == null) return [];
-        return _selectedOrder.AssignedSquads.Select(squad => squad.CurrentRegion)
-            .Where(region => region != null).Distinct()
-            .SelectMany(region => region.RegionFactionMap.TryGetValue(
-                    Sector.PlayerForce.Faction.Id, out RegionFaction presence)
-                ? SpecialistAvailability.EnumerateRoster(presence, region, _selectedOrder) : [])
-            .DistinctBy(option => option.Soldier.Id)
-            .OrderBy(option => option.HomeSquad?.Name).ThenBy(option => option.Soldier.Name).ToList();
+        if (_selectedRegion == null) return [];
+
+        // SpecialistAvailability also consults the global soldier map. Build the roster from
+        // every valid origin so locally staged characters are included, then apply the same
+        // target-or-adjacent region boundary used by the squad roster. Characters outside that
+        // operational area should not appear in Order mode at all, even as unavailable rows.
+        return _selectedRegion.GetSelfAndAdjacentRegions()
+            .Select(GetPlayerPresence)
+            .Where(presence => presence != null)
+            .SelectMany(presence => SpecialistAvailability.EnumerateRoster(
+                presence, _selectedRegion, _selectedOrder))
+            .Where(option => IsInOrderArea(option?.Soldier, _selectedRegion))
+            .GroupBy(option => option.Soldier.Id)
+            .Select(group => group.First())
+            .OrderBy(option => option.HomeSquad?.Name)
+            .ThenBy(option => option.Soldier.Name)
+            .ToList();
+    }
+
+    private static bool IsInOrderArea(PlayerSoldier soldier, Region target)
+    {
+        Region location = CampaignLocationService.ForSoldier(soldier)?.Region;
+        return target != null && location != null
+            && target.GetSelfAndAdjacentRegions().Contains(location);
+    }
+
+    private IReadOnlyList<SpecialistOption> EnumerateMovableCharacters()
+    {
+        if (Sector?.PlayerForce?.Army?.PlayerSoldierMap == null) return [];
+        bool landing = _verb == PlanetaryOperationsVerb.Land;
+        Ship destinationShip = landing ? null : GetSelectedShip();
+        CampaignLocation destination = landing
+            ? CampaignLocation.Landed(_selectedRegion)
+            : destinationShip == null ? null : CampaignLocation.Aboard(destinationShip);
+        CharacterAvailabilityService availability = new();
+        return Sector.PlayerForce.Army.PlayerSoldierMap.Values
+            .Where(character => character.AssignedSquad?.PermitsIndividualDeployment == true)
+            .Where(character =>
+            {
+                CampaignLocation location = CampaignLocationService.ForSoldier(character);
+                if (landing)
+                {
+                    return location?.Ship != null
+                        && PlanetForceMovementService.GetOrbitingPlayerShips(
+                            _planet, Sector.PlayerForce.Faction).Contains(location.Ship);
+                }
+                return location?.Region == _selectedRegion;
+            })
+            .Select(character =>
+            {
+                CharacterAvailabilityEvaluation evaluation = destination == null
+                    ? new CharacterAvailabilityEvaluation(
+                        false,
+                        CharacterAvailabilityReasonCode.MissingLocation,
+                        "Choose a destination ship.")
+                    : availability.EvaluateMovement(character, destination);
+                return new SpecialistOption(
+                    character,
+                    character.AssignedSquad,
+                    evaluation.IsAllowed
+                        ? CampaignLocationService.Format(CampaignLocationService.ForSoldier(character))
+                        : evaluation.Reason,
+                    evaluation.IsAllowed);
+            })
+            .OrderBy(option => option.HomeSquad?.Name)
+            .ThenBy(option => option.Soldier.Name)
+            .ToList();
+    }
+
+    private static OrderMutationResult RemoveSpecialists(
+        Order order,
+        IReadOnlyList<PlayerSoldier> characters)
+    {
+        int removed = 0;
+        foreach (PlayerSoldier character in characters)
+        {
+            if (OrderMutationService.DetachSpecialist(
+                    GameDataSingleton.Instance.Sector, order, character).Succeeded)
+            {
+                removed++;
+            }
+        }
+        return new OrderMutationResult(
+            removed == characters.Count,
+            removed == characters.Count ? "Characters removed." : "Some characters could not be removed.",
+            OrderMutationKind.SpecialistDetached,
+            order,
+            ReleasedSpecialists: removed);
     }
 
     internal static List<ForceTreeSquad> BuildOrderTreeRoster(RegionalEligibilityResult eligibility)
@@ -610,6 +767,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
     private void ClearTransientSelection()
     {
         _movementSquadIds.Clear();
+        _movementCharacterIds.Clear();
         _casualtyIds.Clear();
         _selectedShipId = null;
     }

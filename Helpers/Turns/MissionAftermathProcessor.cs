@@ -2,6 +2,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -57,7 +58,7 @@ namespace OnlyWar.Helpers.Turns
                         break;
                     case MissionType.Recon:
                         ResolveReconResult(
-                            context.Order.AssignedSquads.FirstOrDefault()?.Faction,
+                            context.Order.OwnerFaction,
                             regionFaction,
                             context.Impact,
                             _recordIntelGain,
@@ -109,7 +110,8 @@ namespace OnlyWar.Helpers.Turns
                 regionFaction.RemoveDisorganizedMilitaryStrength(
                     context.DisorganizedDefenderBattleValueDestroyed);
                 long defenderStrengthAfter = regionFaction.MilitaryStrength;
-                Faction attackingFaction = context.Order.AssignedSquads.FirstOrDefault()?.Faction;
+                Faction attackingFaction = context.Order.OwnerFaction
+                    ?? context.MissionSquads.FirstOrDefault()?.Faction;
                 _recordScenarioPdfLost?.Invoke(
                     regionFaction,
                     Math.Max(0, defenderStrengthBefore - defenderStrengthAfter),
@@ -159,18 +161,9 @@ namespace OnlyWar.Helpers.Turns
                 if (ShouldPersistPlayerOrder(order)) continue;
 
                 sector.RemoveOrder(order);
-                // The primary release path for attached specialists: attachment lasts exactly
-                // as long as the order does, so an ordinary one-week mission returns its
-                // specialists here. A Construction / Show-of-Force order persists and keeps
-                // them, matching what it does with its squads.
-                Orders.OrderAttachment.ReleaseAll(order);
-                foreach (Squad squad in order.AssignedSquads)
-                {
-                    if (ReferenceEquals(squad.CurrentOrders, order))
-                    {
-                        squad.CurrentOrders = null;
-                    }
-                }
+                // Release the complete participant set. Characters remain at their resulting
+                // physical posting; order lifetime is not encoded in that posting anymore.
+                OrderForceService.ReleaseOrder(order);
             }
         }
 
@@ -180,8 +173,9 @@ namespace OnlyWar.Helpers.Turns
             // it answers is measured in squad-weeks, so releasing the squads every turn (and
             // consuming the posted mission with them) would make the commitment unfulfillable.
             return (order.Mission is ConstructionMission
-                    || order.Mission.MissionType == MissionType.ShowOfForce)
-                && order.AssignedSquads.Any(s => s.Faction?.IsPlayerFaction == true);
+                    || order.Mission.MissionType == MissionType.ShowOfForce
+                    || order.Mission.MissionType == MissionType.Recruitment)
+                && order.OwnerFaction?.IsPlayerFaction == true;
         }
 
         internal static void PruneInvalidSpecialMissions(IEnumerable<Planet> planets)
@@ -347,7 +341,7 @@ namespace OnlyWar.Helpers.Turns
             RegionFaction targetPresence = context.Order.Mission.RegionFaction;
             Region region = targetPresence.Region;
             Faction attackerFaction = context.MissionSquads
-                .Select(squad => squad?.Squad?.Faction)
+                .Select(squad => squad?.Faction)
                 .FirstOrDefault(faction => faction != null);
             if (region?.Planet == null || attackerFaction == null) return;
 
@@ -374,7 +368,7 @@ namespace OnlyWar.Helpers.Turns
 
             foreach (BattleSquad opposing in context.OpposingSquads ?? [])
             {
-                Faction faction = opposing?.Squad?.Faction;
+                Faction faction = opposing?.Faction;
                 if (faction == null || participants.Any(item => item.Faction.Id == faction.Id)) continue;
                 RegionFaction presence = region.RegionFactionMap.GetValueOrDefault(faction.Id);
                 AddTacticalParticipant(
@@ -464,7 +458,9 @@ namespace OnlyWar.Helpers.Turns
             long survivors = AbleBattleValue(context.MissionSquads);
             if (survivors <= 0) return;
 
-            Faction attacker = first.Squad.Faction;
+            Faction attacker = first.Faction;
+            Region returnRegion = first.CampaignCharacter?.EffectiveRegion
+                ?? first.CampaignSquad?.CurrentRegion;
             if (context.Order.Mission.MissionType == MissionType.Advance
                 && attacker.HasBehavior(FactionBehavior.InvadesOnVictory)
                 && !context.ReciprocalAssaultDefeated)
@@ -478,8 +474,8 @@ namespace OnlyWar.Helpers.Turns
                     + $"{context.Order.Mission.RegionFaction.Region.Planet.Name}/"
                     + $"{context.Order.Mission.RegionFaction.Region.Name}, survivors={survivors}");
             }
-            else if (first.Squad.CurrentRegion != null
-                     && first.Squad.CurrentRegion.RegionFactionMap.TryGetValue(
+            else if (returnRegion != null
+                     && returnRegion.RegionFactionMap.TryGetValue(
                          attacker.Id,
                          out RegionFaction home))
             {

@@ -12,10 +12,10 @@ namespace OnlyWar.Tests.Data;
 public sealed class RecruitmentPersistenceTests
 {
     [Fact]
-    public void V3Schema_RoundTripsHomeWorldAndRecruitmentAggregate()
+    public void CurrentSchema_RoundTripsHomeWorldAndRecruitmentAggregate()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        string path = GameStateRoundTripFixture.CreateTempDbPath("recruitment_v3");
+        string path = GameStateRoundTripFixture.CreateTempDbPath("recruitment_current");
         try
         {
             using SqliteConnection connection = OpenDatabase(path);
@@ -217,8 +217,8 @@ public sealed class RecruitmentPersistenceTests
                 VALUES (4, 1, 1, NULL, 'Tenth Company');
             INSERT INTO Squad
                 (Id, SquadTemplateId, ParentUnitId, Name, LoadedShipId, LandedRegionId,
-                 TrainingFocus, IsAdministrative)
-                VALUES (7, 1, 4, 'Company Headquarters', NULL, NULL, 0, 1);";
+                 TrainingFocus)
+                VALUES (7, 1, 4, 'Company Headquarters', NULL, NULL, 0);";
         command.ExecuteNonQuery();
     }
 }

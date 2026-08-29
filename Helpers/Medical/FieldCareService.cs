@@ -171,14 +171,7 @@ namespace OnlyWar.Helpers.Medical
         public static IEnumerable<PlayerSoldier> EnumerateUnderOrder(Order order)
         {
             if (order == null) return [];
-            IEnumerable<PlayerSoldier> fromSquads = (order.AssignedSquads ?? [])
-                .Where(squad => squad != null)
-                .SelectMany(SoldierPresenceService.PresentMembers)
-                .OfType<PlayerSoldier>();
-            return fromSquads
-                .Concat(order.AttachedSoldiers ?? [])
-                .Where(soldier => soldier != null)
-                .Distinct();
+            return order.Force.AllPlayerSoldiers;
         }
 
         /// <summary>
@@ -210,7 +203,7 @@ namespace OnlyWar.Helpers.Medical
         /// partition with one expression, as SpecialistAttachment.md §8 predicted it would.
         /// </summary>
         public static bool IsOnMission(PlayerSoldier soldier) =>
-            soldier?.IndividualPosting?.Kind == IndividualPostingKind.OperationalAttachment
+            soldier?.CurrentOrder != null
             || (soldier?.IndividualPosting == null && soldier?.AssignedSquad?.CurrentOrders != null);
 
         /// <summary>
@@ -255,7 +248,7 @@ namespace OnlyWar.Helpers.Medical
         {
             if (soldier == null) return [];
 
-            Order order = soldier.AttachedOrder ?? soldier.AssignedSquad?.CurrentOrders;
+            Order order = soldier.CurrentOrder ?? soldier.AssignedSquad?.CurrentOrders;
             if (order != null)
             {
                 return EnumerateUnderOrder(order).Where(IsAvailableApothecary).ToList();
