@@ -76,8 +76,8 @@ public partial class BattleReviewController : DialogController
         if (GameDataSingleton.Instance?.IsInitialized == true)
         {
             _pixelsPerGrid = new(
-                GameDataSingleton.Instance.GameRulesData.BattleCellSize.X,
-                GameDataSingleton.Instance.GameRulesData.BattleCellSize.Y);
+                PresentationMetrics.BattleGridCellWidth,
+                PresentationMetrics.BattleGridCellHeight);
         }
 
         _markerTexture = GD.Load<Texture2D>("res://Assets/UICircle.png");

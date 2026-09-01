@@ -141,11 +141,11 @@ public partial class SectorMap : Node2D
         if (!GameDataSingleton.Instance.IsInitialized) return false;
 
         GridDimensions = new(
-            GameDataSingleton.Instance.GameRulesData.SectorSize.X,
-            GameDataSingleton.Instance.GameRulesData.SectorSize.Y);
+            GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.SectorWidth,
+            GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.SectorHeight);
         CellSize = new(
-            GameDataSingleton.Instance.GameRulesData.SectorCellSize.X,
-            GameDataSingleton.Instance.GameRulesData.SectorCellSize.Y);
+            PresentationMetrics.SectorMapCellWidth,
+            PresentationMetrics.SectorMapCellHeight);
         HalfCellSize = CellSize / 2;
         return true;
     }
@@ -166,7 +166,10 @@ public partial class SectorMap : Node2D
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
 		PlacePlanets();
 		RefreshFleets();
-		_subsectors = SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
+        _subsectors = SubsectorBuilder.BuildSubsectors(
+            GameDataSingleton.Instance.Sector.Planets.Values,
+            GridDimensions,
+            GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.MaxSubsectorDiameter);
         foreach(Subsector subsector in _subsectors)
         {
             foreach (Vector2I cell in subsector.Cells)
@@ -187,7 +190,7 @@ public partial class SectorMap : Node2D
             var voronoiBorders = OnlyWar.Helpers.VoronoiSubsectorMapper.BuildSubsectorLoops(
                 subsectorPlanetMap,
                 GridDimensions,
-                GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
+                GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.MaxSubsectorDiameter);
             _voronoiSubsectorLoops = voronoiBorders.Loops;
 
             // Recolor from the Voronoi adjacency (shared border edges) so that

@@ -46,7 +46,9 @@ namespace OnlyWar.Helpers.Database.GameRules
             RequireNotEmpty(rules.ScenarioFactionOptions, "ScenarioFactionOption", errors);
             RequireNotEmpty(rules.FactionPlanetPresenceRules, "FactionPlanetPresenceRule", errors);
             RequireNotEmpty(rules.ChapterGenerationProfiles, "ChapterGenerationProfile", errors);
+            RequireNotEmpty(rules.SectorGenerationProfiles, "SectorGenerationProfile", errors);
 
+            ValidateSectorGenerationProfiles(rules.SectorGenerationProfiles, errors);
             ValidatePlanetTemplates(rules.PlanetTemplates, errors);
             ValidatePlanetTemplateEligibility(
                 rules.PlanetTemplates,
@@ -62,6 +64,64 @@ namespace OnlyWar.Helpers.Database.GameRules
             {
                 throw new InvalidOperationException(
                     "Rules database validation failed:\n - " + string.Join("\n - ", errors));
+            }
+        }
+
+        private static void ValidateSectorGenerationProfiles(
+            IReadOnlyList<SectorGenerationProfile> profiles,
+            ICollection<string> errors)
+        {
+            if (profiles == null || profiles.Count == 0) return;
+
+            HashSet<string> keys = new(StringComparer.OrdinalIgnoreCase);
+            int defaultCount = 0;
+            foreach (SectorGenerationProfile profile in profiles)
+            {
+                if (profile == null)
+                {
+                    errors.Add("SectorGenerationProfile contains a null row.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(profile.Key))
+                {
+                    errors.Add("SectorGenerationProfile requires a profile key.");
+                }
+                else if (!keys.Add(profile.Key.Trim()))
+                {
+                    errors.Add(
+                        $"SectorGenerationProfile '{profile.Key}' is defined more than once.");
+                }
+
+                if (profile.IsDefault) defaultCount++;
+                if (profile.SectorWidth <= 0 || profile.SectorHeight <= 0)
+                {
+                    errors.Add(
+                        $"SectorGenerationProfile '{profile.Key}' must have positive sector "
+                        + "dimensions.");
+                }
+                if (profile.MaxSubsectorDiameter <= 0)
+                {
+                    errors.Add(
+                        $"SectorGenerationProfile '{profile.Key}' must have a positive "
+                        + "maximum subsector diameter.");
+                }
+                if (double.IsNaN(profile.PlanetSpawnProbability)
+                    || double.IsInfinity(profile.PlanetSpawnProbability)
+                    || profile.PlanetSpawnProbability < 0
+                    || profile.PlanetSpawnProbability > 1)
+                {
+                    errors.Add(
+                        $"SectorGenerationProfile '{profile.Key}' planet spawn probability "
+                        + "must be finite and within [0, 1].");
+                }
+            }
+
+            if (defaultCount != 1)
+            {
+                errors.Add(
+                    "Rules database must define exactly one default SectorGenerationProfile; "
+                    + $"found {defaultCount}.");
             }
         }
 

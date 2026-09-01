@@ -42,7 +42,7 @@ public class SaveLoadRoundTripTests
         // These tests exercise the save/load schema, not sector generation at scale: a
         // handful of planets stresses every persisted feature just as well as the full
         // 200x200 production sector and generates far faster. The 20x20 grid stays within
-        // one subsector (MaxSubsectorCellDiameter = 20), so only one planet becomes a
+        // one subsector (MaxSubsectorDiameter = 20), so only one planet becomes a
         // governance capital and the promised-world selection always has eligible worlds.
         _data.OverrideSectorGeometryForTesting(new Coordinate(20, 20), 0.02f);
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);

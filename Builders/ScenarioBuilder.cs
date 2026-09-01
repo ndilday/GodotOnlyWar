@@ -321,8 +321,9 @@ namespace OnlyWar.Builders
         // means closer to the edge; a corner world is 0. Used to bias the opening invasion rimward.
         private static int EdgeDistance(Planet planet, GameRulesData data)
         {
-            int maxX = data.SectorSize.X - 1;
-            int maxY = data.SectorSize.Y - 1;
+            SectorGenerationProfile profile = data.SectorGenerationProfile;
+            int maxX = profile.SectorWidth - 1;
+            int maxY = profile.SectorHeight - 1;
             int x = planet.Position.X;
             int y = planet.Position.Y;
             return Math.Min(Math.Min(x, maxX - x), Math.Min(y, maxY - y));

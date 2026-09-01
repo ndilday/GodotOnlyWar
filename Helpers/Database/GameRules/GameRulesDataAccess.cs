@@ -41,6 +41,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         public IReadOnlyList<ScenarioFactionOption> ScenarioFactionOptions { get; set; }
         public IReadOnlyList<FactionPlanetPresenceRule> FactionPlanetPresenceRules { get; set; }
         public IReadOnlyList<ChapterGenerationProfileData> ChapterGenerationProfiles { get; set; }
+        public IReadOnlyList<SectorGenerationProfile> SectorGenerationProfiles { get; set; }
 
     }
 
@@ -57,6 +58,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private readonly FactionGenerationPolicyDataAccess _factionGenerationPolicyDataAccess;
         private readonly ChapterGenerationPolicyDataAccess _chapterGenerationPolicyDataAccess;
         private readonly ScoutTrainingOptionDataAccess _scoutTrainingOptionDataAccess;
+        private readonly SectorGenerationProfileDataAccess _sectorGenerationProfileDataAccess;
 
         private static GameRulesDataAccess _instance;
 
@@ -73,6 +75,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             _factionGenerationPolicyDataAccess = new FactionGenerationPolicyDataAccess();
             _chapterGenerationPolicyDataAccess = new ChapterGenerationPolicyDataAccess();
             _scoutTrainingOptionDataAccess = new ScoutTrainingOptionDataAccess();
+            _sectorGenerationProfileDataAccess = new SectorGenerationProfileDataAccess();
         }
 
         public static GameRulesDataAccess Instance
@@ -143,6 +146,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                     dbCon, scenarioFactionOptions);
             var factionPlanetPresenceRules =
                 _factionGenerationPolicyDataAccess.GetFactionPlanetPresenceRules(dbCon);
+            var sectorGenerationProfiles =
+                _sectorGenerationProfileDataAccess.GetProfiles(dbCon);
             EquipmentRulesCatalog compatibilityEquipmentCatalog = EquipmentRulesCatalog.FromLegacyRules(
                 squadDataBlob.RangedWeaponTemplateMap,
                 squadDataBlob.MeleeWeaponTemplateMap,
@@ -191,7 +196,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                 ScenarioProfiles = scenarioProfiles,
                 ScenarioFactionOptions = scenarioFactionOptions,
                 FactionPlanetPresenceRules = factionPlanetPresenceRules,
-                ChapterGenerationProfiles = chapterGenerationProfiles
+                ChapterGenerationProfiles = chapterGenerationProfiles,
+                SectorGenerationProfiles = sectorGenerationProfiles
             };
             RulesDatabaseValidator.Validate(rules);
             return rules;

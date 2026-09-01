@@ -22,12 +22,13 @@ namespace OnlyWar.Builders
             NameGenerator.Reset();
             PlanetBuilder.Instance.Reset();
 
-            for (ushort j = 0; j < data.SectorSize.Y; j++)
+            SectorGenerationProfile profile = data.SectorGenerationProfile;
+            for (ushort j = 0; j < profile.SectorHeight; j++)
             {
-                for (ushort i = 0; i < data.SectorSize.X; i++)
+                for (ushort i = 0; i < profile.SectorWidth; i++)
                 {
                     double random = RNG.GetLinearDouble();
-                    if (random <= data.PlanetChance)
+                    if (random <= profile.PlanetSpawnProbability)
                     {
                         Planet planet = GeneratePlanet(new Coordinate(i, j), data);
                         planetList.Add(planet);
@@ -79,9 +80,15 @@ namespace OnlyWar.Builders
         /// </summary>
         public static void GenerateWarpNetwork(Sector sector, GameRulesData data)
         {
-            Godot.Vector2I gridDimensions = new(data.SectorSize.X, data.SectorSize.Y);
-            List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(sector.Planets.Values, gridDimensions, data.MaxSubsectorCellDiameter);
-            List<WarpLane> warpLanes = WarpLaneBuilder.BuildWarpLanes(subsectors, data.MaxSubsectorCellDiameter * 2.5);
+            SectorGenerationProfile profile = data.SectorGenerationProfile;
+            Godot.Vector2I gridDimensions = new(profile.SectorWidth, profile.SectorHeight);
+            List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(
+                sector.Planets.Values,
+                gridDimensions,
+                profile.MaxSubsectorDiameter);
+            List<WarpLane> warpLanes = WarpLaneBuilder.BuildWarpLanes(
+                subsectors,
+                profile.MaxSubsectorDiameter * 2.5);
             sector.InitializeWarpNetwork(subsectors, warpLanes);
             AssignGovernance(sector);
         }

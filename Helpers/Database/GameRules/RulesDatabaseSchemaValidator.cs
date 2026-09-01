@@ -54,6 +54,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             "ScenarioFactionOption",
             "FactionPlanetPresenceRule",
             "ChapterGenerationProfile",
+            "SectorGenerationProfile",
             "ChapterGenerationTemplateAssignment",
             "ChapterGenerationFormationAssignment",
             "ChapterGenerationUnitOrder"

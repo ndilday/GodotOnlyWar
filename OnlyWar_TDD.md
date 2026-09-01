@@ -177,9 +177,10 @@ At runtime, `GameStorage` locates the immutable install root and supplies the or
   and `PersonalEquipmentRole` for the itemized equipment catalog
 - `TrainingProfile`, `TrainingProfileEntry` for data-driven skill and attribute training distributions
 - `PlanetTemplate` and `PlanetTemplateEligibility`
+- `SectorGenerationProfile` for data-owned sector dimensions, planet density, and subsector scale
 - `ShipTemplate`, `BoatTemplate`, `FleetTemplate`, `FleetShipTemplate`
 
-Load order matters: skills → hit locations → weapon templates → training profiles → soldier/squad templates → unit templates → planet templates → planet-template eligibility → fleet templates → factions.
+Load order matters: skills → hit locations → weapon templates → training profiles → soldier/squad templates → unit templates → planet templates → planet-template eligibility → sector-generation profiles → fleet templates → factions.
 
 #### Data Ownership and Modding Contract
 
@@ -210,6 +211,11 @@ hydration, `RulesDatabaseReferenceValidator` rejects orphan relational rows, and
 generation-faction content, training profiles, equipment availability, and player fleet
 prerequisites. Loader-side lookups now include their source relation in errors. Compatibility and
 extension tables remain absent-valid only where their loaders provide explicit fallback behavior.
+
+**Implemented (RDB-015):** `SectorGenerationProfile` supplies the data-owned sector dimensions,
+planet spawn probability, and maximum subsector diameter used by new-sector generation and derived
+topology reconstruction. The loader requires exactly one default profile and validates its ranges.
+Sector-map and battle-replay pixel metrics remain code-owned presentation settings.
 
 The rules database is loaded as an immutable rules profile for a campaign. Campaign compatibility should identify the rules/mod version used to generate the save so incompatible rules changes cannot silently alter an ongoing campaign. Current saves persist the random-algorithm version but not a rules-profile identity or content hash; adding that metadata remains a compatibility follow-up.
 
@@ -1334,9 +1340,13 @@ All role lists share the `unassignedSoldierMap` as the single consumption author
 
 ### 6.9 Sector Generation
 
-`SubsectorBuilder.BuildSubsectors(planets, gridDimensions)` clusters planets using a greedy merge. The sector grid is 200×200 light years with each grid unit representing 1×1 light year. A subsector has a maximum diameter of 20 light years (10 light year radius), typically containing 2–8 star systems.
+`SubsectorBuilder.BuildSubsectors(planets, gridDimensions)` clusters planets using a greedy merge.
+`SectorGenerationProfile` supplies the sector dimensions, planet spawn probability, and maximum
+subsector diameter; the shipped profile is 200×200 light years with a 2% spawn probability and a
+20-light-year maximum diameter. Each grid unit represents 1×1 light year. A subsector typically
+contains 2–8 star systems.
 
-Subsectors, warp lanes, and governance designations are derived runtime structures, not rules-database entities; they are reconstructed from the saved sector and rules profile. The topology algorithm remains code-owned. Dimensions, density, adjacency, and travel tuning are configuration candidates and should move to a rules-data profile only when they are intended to be modifiable.
+Subsectors, warp lanes, and governance designations are derived runtime structures, not rules-database entities; they are reconstructed from the saved sector and rules profile. The topology algorithm remains code-owned. Sector dimensions, density, and subsector scale are data-owned through `SectorGenerationProfile`; pixel metrics for the sector map and battle replay remain code-owned presentation settings. Independent adjacency and travel tuning remain future configuration candidates.
 
 Warp lane generation (0.7 addition): after subsector clustering, the highest-population planet in each subsector is designated its capital. A warp lane is established from each capital to every other planet in its subsector, and between each capital and the capitals of adjacent subsectors. The resulting lane graph is used by fleet movement routing (Dijkstra shortest path, weighted by Euclidean hop distance) to compute known multi-hop lane routes. Travel duration is determined by subsector relationship and Gaussian subjective/objective time multipliers rather than by Euclidean distance alone.
 

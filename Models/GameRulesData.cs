@@ -16,17 +16,7 @@ namespace OnlyWar.Models
     internal sealed class GameRulesData
     {
         public bool DebugMode { get; private set; }
-        // Sector Data
-        // Measured in light years
-        public Coordinate SectorSize { get; private set; }
-        // measured in pixels
-        public Coordinate SectorCellSize { get; private set; }
-        // in RAW, 20 light years is the maximum subsector diameter
-        public ushort MaxSubsectorCellDiameter { get; private set; }
-        // percent chance of a planet in a sector cell
-        public float PlanetChance { get; private set; }
-        // Battle Data
-        public Coordinate BattleCellSize { get; private set; }
+        public SectorGenerationProfile SectorGenerationProfile { get; private set; }
 
         // Mod Data
         private readonly IReadOnlyList<Faction> _factions;
@@ -79,11 +69,8 @@ namespace OnlyWar.Models
             var gameBlob = GameRulesDataAccess.Instance.GetData(databasePath);
             
             DebugMode = true;
-            SectorSize = new(200, 200);
-            SectorCellSize = new(20, 20);
-            MaxSubsectorCellDiameter = 20;
-            PlanetChance = 0.02f;
-            BattleCellSize = new(20, 20);
+            SectorGenerationProfile = ResolveDefaultSectorGenerationProfile(
+                gameBlob.SectorGenerationProfiles);
 
             _factions = gameBlob.Factions;
             _baseSkillMap = gameBlob.BaseSkills;
@@ -135,6 +122,21 @@ namespace OnlyWar.Models
                     $"Rules database must define exactly one {roleName}; found {matches.Count}.");
             }
             return matches[0];
+        }
+
+        private static SectorGenerationProfile ResolveDefaultSectorGenerationProfile(
+            IReadOnlyList<SectorGenerationProfile> profiles)
+        {
+            List<SectorGenerationProfile> defaults = (profiles ?? [])
+                .Where(profile => profile?.IsDefault == true)
+                .ToList();
+            if (defaults.Count != 1)
+            {
+                throw new InvalidOperationException(
+                    "Rules database must define exactly one default sector generation profile; "
+                    + $"found {defaults.Count}.");
+            }
+            return defaults[0];
         }
 
         private IReadOnlyDictionary<string, ChapterGenerationDoctrine> CompileChapterDoctrines(
@@ -469,12 +471,17 @@ namespace OnlyWar.Models
         // Test hook: shrinks the generated sector so tests that need a real
         // SectorBuilder.GenerateSector run (e.g. save/load round trips) don't pay for the
         // full 200x200 / ~800-planet production sector. Keep the grid large enough relative
-        // to MaxSubsectorCellDiameter that not every planet becomes a governance capital,
+        // to MaxSubsectorDiameter that not every planet becomes a governance capital,
         // or ScenarioBuilder.SelectPromisedWorld can run out of eligible worlds.
         internal void OverrideSectorGeometryForTesting(Coordinate sectorSize, float planetChance)
         {
-            SectorSize = sectorSize;
-            PlanetChance = planetChance;
+            SectorGenerationProfile = new SectorGenerationProfile(
+                SectorGenerationProfile.Key,
+                sectorSize.X,
+                sectorSize.Y,
+                planetChance,
+                SectorGenerationProfile.MaxSubsectorDiameter,
+                SectorGenerationProfile.IsDefault);
         }
 
         // Every rules skill gets a stable identity. Gameplay roles may then point at these keys,

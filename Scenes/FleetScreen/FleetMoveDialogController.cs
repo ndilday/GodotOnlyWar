@@ -47,7 +47,8 @@ public partial class FleetMoveDialogController : DialogController
         Sector sector = GameDataSingleton.Instance.Sector;
         _selectedDestination = sector.Planets[planetId];
 
-        ushort maxDiameter = GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter;
+        ushort maxDiameter = GameDataSingleton.Instance.GameRulesData
+            .SectorGenerationProfile.MaxSubsectorDiameter;
         FleetRouteScope scope = FleetRouteCalculator.DetermineScope(
             _taskForce.Planet, _selectedDestination, maxDiameter);
 

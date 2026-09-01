@@ -66,6 +66,10 @@ public class RulesDatabaseValidationTests
         Assert.NotNull(rules.SectorFactions.Infiltrator);
         Assert.NotNull(rules.SectorFactions.Invader);
         Assert.NotNull(rules.SectorFactions.Insurrectionists);
+        Assert.Equal((ushort)200, rules.SectorGenerationProfile.SectorWidth);
+        Assert.Equal((ushort)200, rules.SectorGenerationProfile.SectorHeight);
+        Assert.Equal(0.02, rules.SectorGenerationProfile.PlanetSpawnProbability);
+        Assert.Equal((ushort)20, rules.SectorGenerationProfile.MaxSubsectorDiameter);
         ScenarioProfile promisedWorld = rules.ScenarioProfiles
             .GetRequired(ScenarioKeys.PromisedWorld);
         Assert.Equal(2, promisedWorld.MinInvaderRegions);
@@ -109,6 +113,82 @@ public class RulesDatabaseValidationTests
 
         Assert.Contains("required tables", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PlanetTemplateEligibility", exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_MissingSectorGenerationProfileTable_FailsBeforeHydration()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "missing-sector-generation-profile-table",
+            "DROP TABLE SectorGenerationProfile;");
+
+        Assert.Contains("required tables", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SectorGenerationProfile", exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_SectorGenerationProfileCannotBeEmpty()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "empty-sector-generation-profile",
+            "DELETE FROM SectorGenerationProfile;");
+
+        Assert.Contains("SectorGenerationProfile", exception.Message);
+        Assert.Contains("empty", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SectorGenerationProfile_LoadsDataOwnedGenerationInputs()
+    {
+        GameRulesData rules = LoadRulesWithMutation(
+            "sector-generation-profile-values",
+            "UPDATE SectorGenerationProfile SET "
+                + "SectorWidth = 64, SectorHeight = 48, PlanetSpawnProbability = 0.125, "
+                + "MaxSubsectorDiameter = 12 "
+                + "WHERE IsDefault = 1;");
+
+        Assert.Equal((ushort)64, rules.SectorGenerationProfile.SectorWidth);
+        Assert.Equal((ushort)48, rules.SectorGenerationProfile.SectorHeight);
+        Assert.Equal(0.125, rules.SectorGenerationProfile.PlanetSpawnProbability);
+        Assert.Equal((ushort)12, rules.SectorGenerationProfile.MaxSubsectorDiameter);
+    }
+
+    [Theory]
+    [InlineData(
+        "invalid-sector-generation-probability",
+        "PRAGMA ignore_check_constraints = ON; "
+            + "UPDATE SectorGenerationProfile SET PlanetSpawnProbability = 1.01 "
+            + "WHERE IsDefault = 1;",
+        "planet spawn probability")]
+    [InlineData(
+        "invalid-sector-generation-dimensions",
+        "PRAGMA ignore_check_constraints = ON; "
+            + "UPDATE SectorGenerationProfile SET SectorWidth = 0 "
+            + "WHERE IsDefault = 1;",
+        "sectorWidth")]
+    public void RulesDatabase_InvalidSectorGenerationProfileValuesFailValidation(
+        string suffix,
+        string mutationSql,
+        string expectedMessage)
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(suffix, mutationSql);
+
+        Assert.Contains(expectedMessage, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RulesDatabase_RequiresExactlyOneDefaultSectorGenerationProfile()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "multiple-default-sector-generation-profiles",
+            "INSERT INTO SectorGenerationProfile "
+                + "(ProfileKey, SectorWidth, SectorHeight, PlanetSpawnProbability, "
+                + "MaxSubsectorDiameter, IsDefault) "
+                + "SELECT 'alternate', SectorWidth, SectorHeight, PlanetSpawnProbability, "
+                + "MaxSubsectorDiameter, 1 FROM SectorGenerationProfile "
+                + "WHERE IsDefault = 1;");
+
+        Assert.Contains("exactly one default", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
