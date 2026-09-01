@@ -294,7 +294,7 @@ namespace OnlyWar.Models
                 if (tag.Equals("Techmarine", StringComparison.OrdinalIgnoreCase)
                     && !squad.Members.Any(member =>
                         ReferenceEquals(member.Template,
-                            GameDataSingleton.Instance.GameRulesData.ChapterTemplates.Techmarine)))
+                            GameDataSingleton.Instance.GameRulesData.ChapterDoctrine.Techmarine)))
                     return false;
             }
             return true;

@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Models.Fleets;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -123,11 +124,25 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int factionId = reader.GetInt32(1);
                     string name = reader[2].ToString();
 
-                    List<ShipTemplate> baseList = factionShipMap[factionId];
+                    List<ShipTemplate> baseList = RulesDatabaseLookup.Require(
+                        factionShipMap,
+                        factionId,
+                        $"FleetTemplate {id}.FactionId");
                     List<ShipTemplate> fleetShipTemplateList = [];
-                    foreach (int shipTemplateId in fleetShipMap[id])
+                    List<int> shipTemplateIds = RulesDatabaseLookup.Require(
+                        fleetShipMap,
+                        id,
+                        $"FleetTemplate {id}.ShipTemplates");
+                    foreach (int shipTemplateId in shipTemplateIds)
                     {
-                        fleetShipTemplateList.Add(baseList.First(st => st.Id == shipTemplateId));
+                        ShipTemplate ship = baseList.FirstOrDefault(st => st.Id == shipTemplateId);
+                        if (ship == null)
+                        {
+                            throw new InvalidOperationException(
+                                $"Rules database FleetTemplate {id} references missing "
+                                + $"ShipTemplate {shipTemplateId} for faction {factionId}.");
+                        }
+                        fleetShipTemplateList.Add(ship);
                     }
 
                     FleetTemplate fleetTemplate = new FleetTemplate(id, name, fleetShipTemplateList);

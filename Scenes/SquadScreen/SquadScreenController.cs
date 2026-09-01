@@ -245,7 +245,8 @@ public partial class SquadScreenController : MainScreenController
         {
             return source;
         }
-        IReadOnlyList<string> honors = _dossierService.BuildCombatHonorNames(playerSoldier);
+        IReadOnlyList<string> honors = _dossierService.BuildCombatHonorNames(
+            playerSoldier, GameDataSingleton.Instance?.GameRulesData?.AwardCatalog);
         return honors.Count == 0 ? source : $"{source} · {string.Join(" · ", honors)}";
     }
 

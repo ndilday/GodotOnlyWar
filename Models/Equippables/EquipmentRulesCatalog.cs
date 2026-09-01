@@ -1,6 +1,7 @@
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Soldiers;
 using System.Data;
+using System.Data.Common;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -134,7 +135,8 @@ namespace OnlyWar.Models.Equippables
                     armorProfile: new ArmorProfile(
                         template.ArmorProvided,
                         template.StealthModifier,
-                        template.CapacityModifier));
+                        template.CapacityModifier,
+                        template.PreventsRunning));
             }
 
             foreach (AmmunitionType ammunitionType in ammunitionTypes.Values)
@@ -381,14 +383,15 @@ namespace OnlyWar.Models.Equippables
         {
             Dictionary<int, ArmorProfile> result = [];
             using IDataReader reader = ExecuteReader(connection,
-                "SELECT EquipmentId, ArmorProvided, StealthModifier, CapacityModifier "
-                + "FROM EquipmentArmorProfile ORDER BY EquipmentId");
+                "SELECT * FROM EquipmentArmorProfile ORDER BY EquipmentId");
             while (reader.Read())
             {
                 result[reader.GetInt32(0)] = new ArmorProfile(
                     checked((byte)reader.GetInt32(1)),
                     checked((short)reader.GetInt32(2)),
-                    Convert.ToSingle(reader.GetValue(3)));
+                    Convert.ToSingle(reader.GetValue(3)),
+                    reader.FieldCount > 4 && !reader.IsDBNull(4)
+                        && Convert.ToBoolean(reader.GetValue(4)));
             }
             return result;
         }
@@ -414,11 +417,21 @@ namespace OnlyWar.Models.Equippables
         private static Dictionary<int, GearProfile> ReadGearProfiles(IDbConnection connection)
         {
             Dictionary<int, GearProfile> result = [];
-            using IDataReader reader = ExecuteReader(connection,
-                "SELECT EquipmentId, CapacityBonus FROM EquipmentGearProfile ORDER BY EquipmentId");
-            while (reader.Read())
+            try
             {
-                result[reader.GetInt32(0)] = new GearProfile(Convert.ToSingle(reader.GetValue(1)));
+                using IDataReader reader = ExecuteReader(connection,
+                    "SELECT EquipmentId, CapacityBonus FROM EquipmentGearProfile ORDER BY EquipmentId");
+                while (reader.Read())
+                {
+                    result[reader.GetInt32(0)] = new GearProfile(Convert.ToSingle(reader.GetValue(1)));
+                }
+            }
+            catch (DbException exception) when (
+                exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            {
+                // Gear profiles are an optional extension. Missing means that no equipment row
+                // receives a gear-specific capacity bonus; an existing itemized catalog remains
+                // authoritative for every other profile.
             }
             return result;
         }
@@ -426,29 +439,38 @@ namespace OnlyWar.Models.Equippables
         private static Dictionary<int, List<EquipmentRequirement>> ReadRequirements(IDbConnection connection)
         {
             Dictionary<int, List<EquipmentRequirement>> result = [];
-            using IDataReader reader = ExecuteReader(connection,
-                "SELECT EquipmentId, RequirementKind, AllowedIds, MinimumValue, SkillName, "
-                + "EquipmentTag, MaximumDuplicates FROM EquipmentRequirement ORDER BY EquipmentId");
-            while (reader.Read())
+            try
             {
-                int equipmentId = reader.GetInt32(0);
-                EquipmentRequirementKind kind = (EquipmentRequirementKind)reader.GetInt32(1);
-                IReadOnlyList<int> allowedIds = reader.IsDBNull(2)
-                    ? Array.Empty<int>()
-                    : ParseIds(reader.GetString(2));
-                EquipmentRequirement requirement = new(
-                    kind,
-                    allowedIds,
-                    reader.IsDBNull(3) ? 0 : Convert.ToSingle(reader.GetValue(3)),
-                    reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(5) ? EquipmentTags.None : (EquipmentTags)reader.GetInt32(5),
-                    reader.IsDBNull(6) ? 0 : reader.GetInt32(6));
-                if (!result.TryGetValue(equipmentId, out List<EquipmentRequirement> requirements))
+                using IDataReader reader = ExecuteReader(connection,
+                    "SELECT EquipmentId, RequirementKind, AllowedIds, MinimumValue, SkillName, "
+                    + "EquipmentTag, MaximumDuplicates FROM EquipmentRequirement ORDER BY EquipmentId");
+                while (reader.Read())
                 {
-                    requirements = [];
-                    result[equipmentId] = requirements;
+                    int equipmentId = reader.GetInt32(0);
+                    EquipmentRequirementKind kind = (EquipmentRequirementKind)reader.GetInt32(1);
+                    IReadOnlyList<int> allowedIds = reader.IsDBNull(2)
+                        ? Array.Empty<int>()
+                        : ParseIds(reader.GetString(2));
+                    EquipmentRequirement requirement = new(
+                        kind,
+                        allowedIds,
+                        reader.IsDBNull(3) ? 0 : Convert.ToSingle(reader.GetValue(3)),
+                        reader.IsDBNull(4) ? null : reader.GetString(4),
+                        reader.IsDBNull(5) ? EquipmentTags.None : (EquipmentTags)reader.GetInt32(5),
+                        reader.IsDBNull(6) ? 0 : reader.GetInt32(6));
+                    if (!result.TryGetValue(equipmentId, out List<EquipmentRequirement> requirements))
+                    {
+                        requirements = [];
+                        result[equipmentId] = requirements;
+                    }
+                    requirements.Add(requirement);
                 }
-                requirements.Add(requirement);
+            }
+            catch (DbException exception) when (
+                exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            {
+                // Requirements are an optional extension. An absent table means that no
+                // data-authored requirement constraints are applied.
             }
             return result;
         }

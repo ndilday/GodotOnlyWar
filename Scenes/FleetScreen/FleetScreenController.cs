@@ -3,12 +3,14 @@ using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 public partial class FleetScreenController : MainScreenController
 {
+    private static readonly SquadRowViewModelBuilder SquadRowBuilder = new();
     private FleetScreenView _view;
 
     public event EventHandler CampaignChanged;
@@ -78,7 +80,20 @@ public partial class FleetScreenController : MainScreenController
             {
                 Unit unit = group.Key;
                 List<TreeNode> squadNodes = group
-                    .Select(squad => new TreeNode(squad.Id, squad.Name, [], kind: TreeNodeKind.Squad))
+                    .Select(squad => new TreeNode(
+                        squad.Id,
+                        squad.Name,
+                        [],
+                        kind: TreeNodeKind.Squad,
+                        squadRow: SquadRowBuilder.Build(
+                            squad,
+                            new SquadRowContext(
+                                SquadRowContextKind.Fleet,
+                                SquadRowAction.Inspect,
+                                isSelectable: true,
+                                isEnabled: true,
+                                contextBadge: "TRANSFER"),
+                            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram)))
                     .ToList();
                 return new TreeNode(unit?.Id ?? 0, unit?.Name ?? "Unassigned Unit", squadNodes, selectable: false, kind: TreeNodeKind.Unit);
             })

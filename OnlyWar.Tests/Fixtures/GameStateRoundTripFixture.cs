@@ -125,6 +125,7 @@ internal sealed class GameStateRoundTripFixture
             _data.BaseSkillMap,
             soldierTypeMap,
             _data.EquipmentCatalog?.EquipmentTemplates,
-            _data.EquipmentCatalog?.EquipmentKits);
+            _data.EquipmentCatalog?.EquipmentKits,
+            _data.ScoutTrainingOptions);
     }
 }

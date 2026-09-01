@@ -2,11 +2,13 @@ using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -20,6 +22,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         NonOperational,
         EmptyFormation,
         PersonnelPool,
+        Leaderless,
         ProcedureBlocked,
         AssignedElsewhere,
         MissionUnavailable
@@ -174,9 +177,18 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             {
                 return SquadEligibilityExclusion.PersonnelPool;
             }
+            if (SquadReadinessService.Evaluate(
+                    squad,
+                    program: program).PrimaryBlocker
+                == SquadReadinessBlocker.Leaderless)
+            {
+                return SquadEligibilityExclusion.Leaderless;
+            }
             if (squad.Members.Any(member =>
-                    RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
-                        program, member.Id)))
+                    member is PlayerSoldier player
+                    && (player.IsUndergoingMedicalProcedure
+                        || RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
+                            program, player.Id))))
             {
                 return SquadEligibilityExclusion.ProcedureBlocked;
             }

@@ -110,7 +110,12 @@ namespace OnlyWar.Helpers.Database.GameRules
                     float weight = Convert.ToSingle(reader[3]);
 
                     TrainingProfileEntry entry = targetType == TrainingTargetType.Skill
-                        ? new TrainingProfileEntry(baseSkillMap[targetId], weight)
+                        ? new TrainingProfileEntry(
+                            RulesDatabaseLookup.Require(
+                                baseSkillMap,
+                                targetId,
+                                $"TrainingProfileEntry {trainingProfileId}.TargetId"),
+                            weight)
                         : new TrainingProfileEntry((Models.Soldiers.Attribute)targetId, weight);
 
                     if (!entryMap.ContainsKey(trainingProfileId))
@@ -151,7 +156,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int baseSkillId = reader.GetInt32(1);
                     float points = Convert.ToSingle(reader[2]);
 
-                    BaseSkill baseSkill = baseSkillMap[baseSkillId];
+                    BaseSkill baseSkill = RulesDatabaseLookup.Require(
+                        baseSkillMap,
+                        baseSkillId,
+                        $"SoldierMosTraining {soldierTemplateId}.BaseSkillId");
 
                     ValueTuple<BaseSkill, float> training = new ValueTuple<BaseSkill, float>(baseSkill, points);
 
@@ -211,9 +219,12 @@ namespace OnlyWar.Helpers.Database.GameRules
                     float capacityModifier = reader.FieldCount > 6 && reader[6].GetType() != typeof(DBNull)
                         ? Convert.ToSingle(reader[6])
                         : 0f;
+                    bool preventsRunning = reader.FieldCount > 7 && reader[7].GetType() != typeof(DBNull)
+                        && Convert.ToBoolean(reader[7]);
                     ArmorTemplate armorTemplate = new ArmorTemplate(id, name, (byte)armorProvided, 
                                                                     (short)stealthMod,
-                                                                    capacityModifier);
+                                                                    capacityModifier,
+                                                                    preventsRunning);
                     armorTemplateMap[id] = armorTemplate;
                 }
             }
@@ -244,7 +255,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                     float parryMod = Convert.ToSingle(reader[9]);
                     float attackSpeedMultiplier = Convert.ToSingle(reader[10]);
 
-                    BaseSkill baseSkill = baseSkillMap[baseSkillId];
+                    BaseSkill baseSkill = RulesDatabaseLookup.Require(
+                        baseSkillMap,
+                        baseSkillId,
+                        $"MeleeWeaponTemplate {id}.RelatedSkillId");
 
                     MeleeWeaponTemplate weaponTemplate =
                         new MeleeWeaponTemplate(id, name, (EquipLocation)location, baseSkill,
@@ -324,7 +338,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                         ? AmmunitionConsumptionRule.PerShot
                         : AmmunitionConsumptionRule.PerAttack;
 
-                    BaseSkill baseSkill = baseSkillMap[baseSkillId];
+                    BaseSkill baseSkill = RulesDatabaseLookup.Require(
+                        baseSkillMap,
+                        baseSkillId,
+                        $"RangedWeaponTemplate {id}.RelatedSkillId");
 
                     RangedWeaponTemplate weaponTemplate =
                         new RangedWeaponTemplate(id, name, (EquipLocation)location, baseSkill,
@@ -372,7 +389,11 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (reader[3].GetType() != typeof(DBNull))
                     {
-                        primaryRanged = rangedWeaponMap[reader.GetInt32(3)];
+                        int weaponId = reader.GetInt32(3);
+                        primaryRanged = RulesDatabaseLookup.Require(
+                            rangedWeaponMap,
+                            weaponId,
+                            $"WeaponSet {id}.PrimaryRangedWeaponId");
                     }
                     else
                     {
@@ -381,7 +402,11 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (reader[4].GetType() != typeof(DBNull))
                     {
-                        secondaryRanged = rangedWeaponMap[reader.GetInt32(4)];
+                        int weaponId = reader.GetInt32(4);
+                        secondaryRanged = RulesDatabaseLookup.Require(
+                            rangedWeaponMap,
+                            weaponId,
+                            $"WeaponSet {id}.SecondaryRangedWeaponId");
                     }
                     else
                     {
@@ -390,7 +415,11 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (reader[5].GetType() != typeof(DBNull))
                     {
-                        primaryMelee = meleeWeaponMap[reader.GetInt32(5)];
+                        int weaponId = reader.GetInt32(5);
+                        primaryMelee = RulesDatabaseLookup.Require(
+                            meleeWeaponMap,
+                            weaponId,
+                            $"WeaponSet {id}.PrimaryMeleeWeaponId");
                     }
                     else
                     {
@@ -399,7 +428,11 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (reader[6].GetType() != typeof(DBNull))
                     {
-                        secondaryMelee = meleeWeaponMap[reader.GetInt32(6)];
+                        int weaponId = reader.GetInt32(6);
+                        secondaryMelee = RulesDatabaseLookup.Require(
+                            meleeWeaponMap,
+                            weaponId,
+                            $"WeaponSet {id}.SecondaryMeleeWeaponId");
                     }
                     else
                     {
@@ -408,7 +441,11 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (reader[7].GetType() != typeof(DBNull))
                     {
-                        grenade = rangedWeaponMap[reader.GetInt32(7)];
+                        int weaponId = reader.GetInt32(7);
+                        grenade = RulesDatabaseLookup.Require(
+                            rangedWeaponMap,
+                            weaponId,
+                            $"WeaponSet {id}.GrenadeWeaponId");
                     }
                     else
                     {
@@ -481,12 +518,18 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int min = reader.GetInt32(3);
                     int max = reader.GetInt32(4);
                     WeaponSet defaultWeapons = reader[5].GetType() != typeof(DBNull)
-                        ? weaponSetMap[reader.GetInt32(5)]
+                        ? RulesDatabaseLookup.Require(
+                            weaponSetMap,
+                            reader.GetInt32(5),
+                            $"SquadTemplateElement {id}.DefaultWeaponSetId")
                         : null;
                     bool rollsStrength = reader[6].GetType() != typeof(DBNull)
                         && reader.GetInt32(6) != 0;
 
-                    SoldierTemplate template = soldierTemplateMap[soldierTemplateId];
+                    SoldierTemplate template = RulesDatabaseLookup.Require(
+                        soldierTemplateMap,
+                        soldierTemplateId,
+                        $"SquadTemplateElement {id}.SoldierTemplateId");
                     IReadOnlyList<SquadTemplateElementQuota> quotas =
                         quotaMap.TryGetValue(id, out List<SquadTemplateElementQuota> list) ? list : [];
                     PersonalEquipmentRole personalRole = null;
@@ -596,7 +639,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                         bodyguardMap[id] = reader.GetInt32(6);
                     }
 
-                    ArmorTemplate defaultArmor = armorTemplateMap[defaultArmorId];
+                    ArmorTemplate defaultArmor = RulesDatabaseLookup.Require(
+                        armorTemplateMap,
+                        defaultArmorId,
+                        $"SquadTemplate {id}.DefaultArmorId");
                     // The squad-level weapon-option menu (SquadTemplateWeaponOption) is gone —
                     // it split into SoldierTemplate.WeaponOptionsByGroup (the menu) and
                     // SquadTemplateElement.Quotas (how many bodies may draw from it). SquadTemplate
@@ -604,10 +650,16 @@ namespace OnlyWar.Helpers.Database.GameRules
                     // Builders/SquadFactory.cs), but there is nothing left to populate it with.
                     SquadTemplate squadTemplate = new SquadTemplate(id,
                                                                     name,
-                                                                    weaponSetMap[defaultWeaponSetId],
+                                                                    RulesDatabaseLookup.Require(
+                                                                        weaponSetMap,
+                                                                        defaultWeaponSetId,
+                                                                        $"SquadTemplate {id}.DefaultWeaponSetId"),
                                                                     null,
                                                                     defaultArmor,
-                                                                    elementMap[id],
+                                                                    RulesDatabaseLookup.Require(
+                                                                        elementMap,
+                                                                        id,
+                                                                        $"SquadTemplate {id}.Elements"),
                                                                     (SquadTypes)squadType,
                                                                     reader.FieldCount > 8
                                                                         && reader[8].GetType() != typeof(DBNull)
@@ -621,7 +673,11 @@ namespace OnlyWar.Helpers.Database.GameRules
                     }
                     if (reader.FieldCount > 7 && reader[7].GetType() != typeof(DBNull))
                     {
-                        squadTemplate.LeaderWorkExperienceProfile = trainingProfileMap[reader.GetInt32(7)];
+                        int profileId = reader.GetInt32(7);
+                        squadTemplate.LeaderWorkExperienceProfile = RulesDatabaseLookup.Require(
+                            trainingProfileMap,
+                            profileId,
+                            $"SquadTemplate {id}.LeaderWorkExperienceProfileId");
                     }
                     squadTemplateMap[id] = squadTemplate;
                     if (!squadTemplatesByFactionId.ContainsKey(factionId))
@@ -632,7 +688,14 @@ namespace OnlyWar.Helpers.Database.GameRules
                 }
                 foreach (KeyValuePair<int, int> kvp in bodyguardMap)
                 {
-                    squadTemplateMap[kvp.Key].BodyguardSquadTemplate = squadTemplateMap[kvp.Value];
+                    SquadTemplate owner = RulesDatabaseLookup.Require(
+                        squadTemplateMap,
+                        kvp.Key,
+                        "SquadTemplate.BodyguardSquadTemplateId owner");
+                    owner.BodyguardSquadTemplate = RulesDatabaseLookup.Require(
+                        squadTemplateMap,
+                        kvp.Value,
+                        $"SquadTemplate {kvp.Key}.BodyguardSquadTemplateId");
                 }
             }
             return new ValueTuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>>(squadTemplatesByFactionId, squadTemplateMap);
@@ -716,23 +779,26 @@ namespace OnlyWar.Helpers.Database.GameRules
                     MeleeWeaponTemplate defaultUnarmedWeapon = ResolveDefaultUnarmedWeapon(
                         id, name, defaultUnarmedWeaponTemplateId, meleeWeaponTemplateMap);
                     Species species = new Species(id, name,
-                                                  attributeMap[strengthTemplateId],
-                                                  attributeMap[dexterityTemplateId],
-                                                  attributeMap[constitutionTemplateId],
-                                                  attributeMap[intelligenceTemplateId],
-                                                  attributeMap[perceptionTemplateId],
-                                                  attributeMap[egoTemplateId],
-                                                  attributeMap[charismaTemplateId],
-                                                  attributeMap[psychicTemplateId],
-                                                  attributeMap[attackSpeedTemplateId],
-                                                  attributeMap[moveSpeedTemplateId],
-                                                  attributeMap[sizeTemplateId],
+                                                  RulesDatabaseLookup.Require(attributeMap, strengthTemplateId, $"Species {id}.StrengthTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, dexterityTemplateId, $"Species {id}.DexterityTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, constitutionTemplateId, $"Species {id}.ConstitutionTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, intelligenceTemplateId, $"Species {id}.IntelligenceTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, perceptionTemplateId, $"Species {id}.PerceptionTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, egoTemplateId, $"Species {id}.EgoTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, charismaTemplateId, $"Species {id}.CharismaTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, psychicTemplateId, $"Species {id}.PsychicPowerTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, attackSpeedTemplateId, $"Species {id}.AttackSpeedTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, moveSpeedTemplateId, $"Species {id}.MoveSpeedTemplateId"),
+                                                  RulesDatabaseLookup.Require(attributeMap, sizeTemplateId, $"Species {id}.SizeTemplateId"),
                                                   width,
                                                   depth,
                                                   meleeEvasion,
                                                   rangedEvasion,
                                                   abilities,
-                                                  new BodyTemplate(hitLocationTemplateMap[bodyId]),
+                                                  new BodyTemplate(RulesDatabaseLookup.Require(
+                                                      hitLocationTemplateMap,
+                                                      bodyId,
+                                                      $"Species {id}.BodyId")),
                                                   defaultUnarmedWeapon,
                                                   synapseRadius,
                                                   baseCapacity);
@@ -785,7 +851,11 @@ namespace OnlyWar.Helpers.Database.GameRules
             {
                 int soldierTemplateId = reader.GetInt32(0);
                 string optionGroup = reader.GetString(1);
-                WeaponSet weaponSet = weaponSetMap[reader.GetInt32(2)];
+                int weaponSetId = reader.GetInt32(2);
+                WeaponSet weaponSet = RulesDatabaseLookup.Require(
+                    weaponSetMap,
+                    weaponSetId,
+                    $"SoldierTemplateWeaponOption {reader.GetInt32(0)}.WeaponSetId");
 
                 if (!optionMap.TryGetValue(soldierTemplateId, out Dictionary<string, List<WeaponSet>> groups))
                 {
@@ -829,7 +899,11 @@ namespace OnlyWar.Helpers.Database.GameRules
                     TrainingProfile workExperienceTrainingProfile = null;
                     if (reader.FieldCount > 8 && reader[8].GetType() != typeof(DBNull))
                     {
-                        workExperienceTrainingProfile = trainingProfileMap[reader.GetInt32(8)];
+                        int profileId = reader.GetInt32(8);
+                        workExperienceTrainingProfile = RulesDatabaseLookup.Require(
+                            trainingProfileMap,
+                            profileId,
+                            $"SoldierTemplate {id}.WorkExperienceTrainingProfileId");
                     }
                     // BattleValue was appended after WorkExperienceTrainingProfileId; rows without a
                     // populated value (e.g. player soldiers, pending a later pass) default to 0.
@@ -844,7 +918,17 @@ namespace OnlyWar.Helpers.Database.GameRules
                     {
                         trainingList = soldierTemplateTrainingMap[id];
                     }
-                    var species = speciesMap[factionId].First(s => s.Id == speciesId);
+                    List<Species> factionSpecies = RulesDatabaseLookup.Require(
+                        speciesMap,
+                        factionId,
+                        $"SoldierTemplate {id}.FactionId");
+                    Species species = factionSpecies.FirstOrDefault(s => s.Id == speciesId);
+                    if (species == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Rules database SoldierTemplate {id} references missing Species "
+                            + $"{speciesId} for faction {factionId}.");
+                    }
                     List<SoldierTemplateRequirement> promotionRequirements =
                         requirementMap.TryGetValue(id, out List<SoldierTemplateRequirement> requirements)
                             ? requirements

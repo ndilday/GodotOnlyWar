@@ -71,7 +71,8 @@ namespace OnlyWar.Helpers.Storage
                 gameRulesData.BaseSkillMap,
                 soldierTemplateMap,
                 gameRulesData.EquipmentTemplates,
-                gameRulesData.EquipmentKits);
+                gameRulesData.EquipmentKits,
+                gameRulesData.ScoutTrainingOptions);
         }
     }
 }

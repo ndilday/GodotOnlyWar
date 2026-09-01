@@ -1,4 +1,6 @@
 using OnlyWar.Helpers.Supply;
+using OnlyWar.Models;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Supply;
 using System;
 using Xunit;
@@ -7,6 +9,50 @@ namespace OnlyWar.Tests.Domain;
 
 public class SupplyRequestValuationTests
 {
+    [Fact]
+    public void CodeOwnedDefaults_PreserveShippedSupplyCalibration()
+    {
+        SupplyEconomyRules rules = SupplyEconomyRules.CreateDefault();
+
+        Assert.Equal(0.25m, rules.RequestValuation.RequisitionPerBattleValueTime);
+        Assert.Equal(25, rules.RequestValuation.MinimumRequestValue);
+        Assert.Equal(1000, rules.RequestValuation.MaximumRequestValue);
+        Assert.Equal(4.0m, rules.RequestValuation.MaximumCombinedPremium);
+        Assert.Equal(5, rules.RequestValuation.ThroughputBands.Count);
+        Assert.Equal(1.5m, rules.RequestValuation.ThroughputBands[3].Multiplier);
+        Assert.Equal(25, rules.GovernorOffers.MinimumOffer);
+        Assert.Equal(1500, rules.GovernorOffers.MaximumOffer);
+        Assert.Equal(0.5m, rules.GovernorOffers.MinimumWillingnessMultiplier);
+        Assert.Equal(2.0m, rules.GovernorOffers.MaximumWillingnessMultiplier);
+        Assert.Equal(4, rules.DefaultServiceWeeks);
+        Assert.Equal(8, rules.DefaultDeadlineWeeks);
+        Assert.Equal(4, rules.DefaultDeliveryWeeks);
+        Assert.Equal(52, rules.StandingCadenceWeeks);
+        Assert.Equal(0.2m, rules.StandingDeliveryFraction);
+        Assert.Equal(300, rules.StandingMinimumOffer);
+        Assert.Equal(8, rules.RequestCooldownWeeks);
+        Assert.Equal(0.006m, rules.RequestGenerationRate);
+        Assert.Equal(39, rules.SeverityDeadlineWeeks[RequestSeverity.Concerned]);
+        Assert.Equal(26, rules.SeverityDeadlineWeeks[RequestSeverity.Serious]);
+        Assert.Equal(13, rules.SeverityDeadlineWeeks[RequestSeverity.Desperate]);
+        Assert.Equal(13, rules.SeverityDeadlineWeeks[RequestSeverity.Existential]);
+        Assert.Equal(1.8m, rules.HazardMultipliers[RequestHazard.Extreme]);
+        Assert.Equal(1.25m, rules.AuthorityMultipliers[GovernanceTier.SectorCapital]);
+        Assert.Equal(2.0m, rules.DesperationMultipliers[RequestSeverity.Existential]);
+        Assert.Equal(1.2m, rules.WorldRequisitionMultipliers[SupplyWorldArchetype.Forge]);
+        Assert.Equal(0.75m, rules.RelationshipBaseMultiplier);
+        Assert.Equal(0.5m, rules.RelationshipOpinionScale);
+        Assert.Equal(1.0m, rules.GetWorldRequisitionMultiplier(
+            new OnlyWar.Models.Planets.PlanetTemplate(
+                999,
+                "Unknown",
+                1,
+                new OnlyWar.Models.LogNormalValueTemplate { Floor = 0, Scale = 1 },
+                new OnlyWar.Models.LogNormalValueTemplate { Floor = 0, Scale = 1 },
+                new OnlyWar.Models.NormalizedValueTemplate { BaseValue = 0, StandardDeviation = 1 },
+                new OnlyWar.Models.LinearValueTemplate { MinValue = 0, MaxValue = 1 })));
+    }
+
     [Fact]
     public void Calculate_DerivesEffortFromReadablePackage()
     {

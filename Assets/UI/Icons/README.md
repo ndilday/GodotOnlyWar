@@ -44,9 +44,30 @@ Recommended next atlas expansion:
   engagement, exfiltrate
 - ship class icons: escort, strike cruiser, battle barge, transport, lander
 
-Implementation note: once the SVG import looks good in Godot, create either
-named `AtlasTexture` resources for common icons or a small helper that reads the
-manifest and returns an `AtlasTexture` by icon key.
+Runtime resolution is provided by `Helpers/UI/IconAssetRegistry.cs` and
+`IconAtlas`. The registry accepts both standalone textures and atlas regions,
+so callers only depend on a logical key. Core keys may remain unqualified;
+content supplied by a mod must use its package namespace, for example
+`iron_halo:award_duelist`.
+
+Award families are rules data rather than UI code. A rules database can set an
+award family's `IconAssetKey`, and the mod package can ship the corresponding
+manifest and image/atlas beside its database:
+
+```json
+{
+  "atlas": "icons/awards.png",
+  "icons": {
+    "award_duelist": { "x": 0, "y": 0, "w": 64, "h": 64 }
+  }
+}
+```
+
+The mod loader should register that manifest with
+`IconAtlas.RegisterModIconManifest(manifestPath, "iron_halo")` before any
+award-bearing view is built, and unregister it with
+`IconAtlas.ClearModIconManifest("iron_halo")` when the package is unloaded.
+Missing or unavailable content falls back to the generic `award` icon.
 
 ## Planetary Operations
 

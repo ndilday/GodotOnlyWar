@@ -524,6 +524,60 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
+    public void MegaArmor_RemovesRunFromNormalEngagementOptions()
+    {
+        BattleSquad armored = CreateSquad("Mega Armored", 90_005);
+        BattleSquad enemy = CreateSquad("Distant Enemy", 90_006);
+        armored.Soldiers[0].Armor = new Armor(new ArmorTemplate(
+            99_005, "Mega Armor", 25, -4, preventsRunning: true));
+        BattleGridManager grid = new();
+        Place(grid, armored.Soldiers[0], true, 0, 0);
+        Place(grid, enemy.Soldiers[0], false, 20, 0);
+        BattleSquadPlanner planner = CreatePlanner(grid, armored, enemy);
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([armored], [enemy]);
+
+        SquadEngagementDecision decision = planner.ChooseEngagementOption(
+            armored,
+            paired.Frames[armored.Id],
+            paired.Profiles,
+            paired.Frames,
+            [armored],
+            [enemy]);
+
+        Assert.False(armored.CanRun);
+        Assert.DoesNotContain(
+            decision.Candidates,
+            candidate => candidate.Kind == EngagementOptionKind.RunToward);
+        Assert.DoesNotContain(
+            decision.Candidates,
+            candidate => candidate.Tier == SquadMovementTier.Run);
+    }
+
+    [Fact]
+    public void MegaArmor_DowngradesForcedBoundMovementToJog()
+    {
+        BattleSquad armored = CreateSquad("Mega Bound", 90_007);
+        BattleSquad enemy = CreateSquad("Pursuer", 90_008);
+        armored.Soldiers[0].Armor = new Armor(new ArmorTemplate(
+            99_007, "Mega Armor", 25, -4, preventsRunning: true));
+        BattleGridManager grid = new();
+        Place(grid, armored.Soldiers[0], true, 0, 0);
+        Place(grid, enemy.Soldiers[0], false, 0, 20);
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, [], moveActions, [], armored, enemy);
+
+        planner.PrepareBoundActions(armored, withdrawalHeading: 2);
+
+        Assert.Equal(SquadMovementTier.Jog, armored.MovementTier);
+        Assert.False(armored.Soldiers[0].IsRunning);
+        Assert.Equal(armored.Soldiers[0].GetMoveSpeed() * 0.5f,
+            armored.Soldiers[0].CurrentSpeed);
+        Assert.Single(moveActions);
+    }
+
+    [Fact]
     public void PrepareActions_FlamerOutOfRangeSelectsRunWithoutFiring()
     {
         BattleSquad shooters = CreateSquad("Running Flamer", 90_011);

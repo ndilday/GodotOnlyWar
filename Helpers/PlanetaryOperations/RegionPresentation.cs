@@ -38,7 +38,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             List<RegionFaction> disclosed = region.RegionFactionMap.Values
                 .Where(presence => presence?.IsPublic == true)
                 .OrderBy(presence => PresenceOrder(presence.PlanetFaction.Faction))
-                .ThenBy(presence => presence.PlanetFaction.Faction.Name)
+                .ThenBy(presence => PresenceName(presence.PlanetFaction.Faction))
                 .ThenBy(presence => presence.PlanetFaction.Faction.Id)
                 .ToList();
             RegionControlState state = region.ControllingFaction == null
@@ -55,15 +55,21 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     Faction faction = presence.PlanetFaction.Faction;
                     return new RegionPresencePresentation(
                         faction.Id,
-                        faction.Name,
+                        PresenceName(faction),
                         FactionRelationshipService.IsImperial(faction),
                         faction.IsPlayerFaction,
                         IconAtlas.GetPlanetaryOperationsFactionIconKey(faction));
                 }).ToList());
         }
 
+        // The default Imperial presence is always first. Every other disclosed faction is
+        // alphabetical via the ThenBy in Build; strength and player ownership never reorder the
+        // badges, because either would leak or distort the regional picture.
         private static int PresenceOrder(Faction faction) =>
-            faction.IsDefaultFaction ? 0 : faction.IsPlayerFaction ? 1 : 2;
+            faction.IsDefaultFaction ? 0 : 1;
+
+        private static string PresenceName(Faction faction) =>
+            faction.IsPlayerFaction ? "Chapter" : faction.Name;
     }
 
     public static class RegionTerrainPresentation

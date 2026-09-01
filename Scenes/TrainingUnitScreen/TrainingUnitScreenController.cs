@@ -1,9 +1,11 @@
 using Godot;
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -49,9 +51,10 @@ public sealed record ScoutPromotionRow(
 public sealed record ScoutSquadRow(
     int Id,
     string Label,
-    TrainingFocuses Focus,
+    string TrainingOptionKey,
     string ReadinessReport,
-    IReadOnlyList<ScoutPromotionRow> PromotionRows);
+    IReadOnlyList<ScoutPromotionRow> PromotionRows,
+    SquadRowViewModel CommonRow = null);
 
 public sealed class RecruitmentScreenSnapshot
 {
@@ -66,6 +69,7 @@ public sealed class RecruitmentScreenSnapshot
     public RecruitmentForecast Forecast { get; init; }
     public IReadOnlyList<RecruitmentCandidateRow> Candidates { get; init; } = [];
     public IReadOnlyList<RecruitmentAspirantRow> Aspirants { get; init; } = [];
+    public IReadOnlyList<ScoutTrainingOption> ScoutTrainingOptions { get; init; } = [];
     public IReadOnlyList<ScoutSquadRow> ScoutSquads { get; init; } = [];
     public IReadOnlyList<string> RecentEvents { get; init; } = [];
 }
@@ -74,6 +78,7 @@ public partial class TrainingUnitScreenController : MainScreenController
 {
     private readonly RecruitmentStaffService _staffService = new();
     private readonly RecruitmentForecastService _forecastService = new();
+    private readonly SquadRowViewModelBuilder _squadRowBuilder = new();
     private TrainingUnitScreenView _view;
     private Squad _selectedSquad;
     private RecruitmentDoctrineDraft _draft;
@@ -90,7 +95,7 @@ public partial class TrainingUnitScreenController : MainScreenController
         _view = GetNode<TrainingUnitScreenView>("TrainingUnitScreenView");
         _view.LinkClicked += OnLinkClicked;
         _view.SquadButtonPressed += OnSquadButtonPressed;
-        _view.TrainingFocusSelected += OnTrainingFocusSelected;
+        _view.TrainingOptionSelected += OnTrainingOptionSelected;
         _view.DoctrineChanged += OnDoctrineChanged;
         _view.DoctrineConfirmed += OnDoctrineConfirmed;
         _view.ManageAdministrativeStaffRequested += (sender, e) =>
@@ -183,6 +188,8 @@ public partial class TrainingUnitScreenController : MainScreenController
                     aspirant.TrainingProgress,
                     aspirant.Phase == RecruitmentPhase.Phase12))
                 .ToList(),
+            ScoutTrainingOptions = GameDataSingleton.Instance.GameRulesData
+                .ScoutTrainingOptions.Options,
             ScoutSquads = scoutSquads,
             RecentEvents = program.ProgramEvents
                 .OrderByDescending(programEvent => programEvent.Date)
@@ -306,8 +313,10 @@ public partial class TrainingUnitScreenController : MainScreenController
         return OrderScoutSquads(GetScoutSquads())
             .Select(squad => new ScoutSquadRow(
                 squad.Id,
-                GetSquadListLabel(squad),
-                squad.TrainingFocus,
+                GetSquadListLabel(
+                    squad,
+                    GameDataSingleton.Instance.GameRulesData.ScoutTrainingOptions),
+                squad.TrainingOptionKey,
                 BuildReadinessReport(squad),
                 squad.Members
                     .OfType<PlayerSoldier>()
@@ -317,7 +326,17 @@ public partial class TrainingUnitScreenController : MainScreenController
                         soldier.Id,
                         soldier.Name,
                         GetReadinessLevel(GetLatestEvaluation(soldier)) > 0))
-                    .ToList()))
+                    .ToList(),
+                _squadRowBuilder.Build(
+                    squad,
+                    new SquadRowContext(
+                        SquadRowContextKind.RecruiterTraining,
+                        SquadRowAction.Inspect,
+                        isSelected: _selectedSquad?.Id == squad.Id,
+                        isSelectable: true,
+                        isEnabled: true,
+                        contextBadge: "SCOUT TRAINING"),
+                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram)))
             .ToList();
     }
 
@@ -327,14 +346,16 @@ public partial class TrainingUnitScreenController : MainScreenController
         PopulateScoutSquadList();
     }
 
-    private void OnTrainingFocusSelected(object sender, TrainingFocuses focus)
+    private void OnTrainingOptionSelected(object sender, string optionKey)
     {
-        if (_selectedSquad == null || _selectedSquad.TrainingFocus == focus)
+        if (_selectedSquad == null || _selectedSquad.TrainingOptionKey == optionKey)
         {
             return;
         }
 
-        _selectedSquad.TrainingFocus = focus;
+        GameRulesData rules = GameDataSingleton.Instance.GameRulesData;
+        rules.ScoutTrainingOptions.GetRequired(optionKey);
+        _selectedSquad.TrainingOptionKey = optionKey;
         CampaignChanged?.Invoke(this, EventArgs.Empty);
         PopulateScoutSquadList();
     }
@@ -364,25 +385,46 @@ public partial class TrainingUnitScreenController : MainScreenController
 
     internal static string GetSquadListLabel(Squad squad)
     {
+        return GetSquadListLabel(squad, null);
+    }
+
+    internal static string GetSquadListLabel(
+        Squad squad,
+        ScoutTrainingOptionCatalog trainingOptions)
+    {
         string status = squad.CurrentOrders?.Mission != null
             ? "On Mission"
-            : GetTrainingFocusName(squad.TrainingFocus);
+            : GetTrainingOptionName(squad.TrainingOptionKey, trainingOptions);
         return $"{squad.Name} ({status})";
     }
 
-    private static string GetTrainingFocusName(TrainingFocuses focus)
+    private static string GetTrainingOptionName(
+        string optionKey,
+        ScoutTrainingOptionCatalog trainingOptions)
     {
-        return focus switch
+        if (trainingOptions?.TryGet(optionKey, out ScoutTrainingOption option) == true)
         {
-            TrainingFocuses.Physical => "Physical",
-            TrainingFocuses.Vehicles => "Vehicles",
-            TrainingFocuses.Melee => "Melee",
-            TrainingFocuses.Ranged => "Ranged",
-            _ => "Balanced"
+            return option.DisplayName;
+        }
+
+        // Compatibility fallback for small hand-built UI fixtures that do not construct a
+        // rules catalog. Production snapshots always pass the loaded catalog above.
+        return optionKey switch
+        {
+            ScoutTrainingOptionKeys.Physical => "Physical",
+            ScoutTrainingOptionKeys.Vehicles => "Vehicles",
+            ScoutTrainingOptionKeys.Melee => "Melee",
+            ScoutTrainingOptionKeys.Ranged => "Ranged",
+            ScoutTrainingOptionKeys.Balanced => "Balanced",
+            _ => optionKey ?? ScoutTrainingOptionKeys.Balanced
         };
     }
 
-    private static string BuildReadinessReport(Squad squad)
+    private RatingConsumerBindings RatingBindings =>
+        GameDataSingleton.Instance?.GameRulesData?.RatingConsumers
+        ?? RatingConsumerBindings.CreateDefault();
+
+    private string BuildReadinessReport(Squad squad)
     {
         if (squad.Members.Count == 0)
         {
@@ -405,28 +447,31 @@ public partial class TrainingUnitScreenController : MainScreenController
         return soldier.SoldierEvaluationHistory.LastOrDefault();
     }
 
-    private static int GetReadinessLevel(SoldierEvaluation evaluation)
+    private int GetReadinessLevel(SoldierEvaluation evaluation)
     {
         if (evaluation == null)
         {
             return 0;
         }
-        if (evaluation.RangedRating > 105 && evaluation.MeleeRating < 90)
+        float rangedRating = RatingBindings.Get(evaluation, RatingConsumerRole.RangedCombat);
+        float meleeRating = RatingBindings.Get(evaluation, RatingConsumerRole.MeleeCombat);
+        float leadershipRating = RatingBindings.Get(evaluation, RatingConsumerRole.CommandLeadership);
+        if (rangedRating > 105 && meleeRating < 90)
         {
             return 1;
         }
-        if (evaluation.RangedRating > 105 && evaluation.MeleeRating > 90)
+        if (rangedRating > 105 && meleeRating > 90)
         {
-            if (evaluation.RangedRating > 110 && evaluation.MeleeRating > 95)
+            if (rangedRating > 110 && meleeRating > 95)
             {
-                return evaluation.LeadershipRating > 55 ? 4 : 3;
+                return leadershipRating > 55 ? 4 : 3;
             }
             return 2;
         }
         return 0;
     }
 
-    private static string GetScoutDescription(
+    private string GetScoutDescription(
         int id,
         string name,
         SoldierEvaluation evaluation)

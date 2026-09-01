@@ -83,19 +83,19 @@ public class TurnTrainingTests
         TurnTrainingFixture fixture = TurnTrainingFixture.Create();
         Squad squad = fixture.CreatePlayerScoutSquad("Scout Squad", out ISoldier scout);
         fixture.LandSquad(squad);
-        squad.TrainingFocus = TrainingFocuses.Ranged;
+        squad.TrainingOptionKey = ScoutTrainingOptionKeys.Ranged;
 
         fixture.ProcessTurn();
 
         Assert.Contains(squad, fixture.TrainingService.ScoutTrainingSquads);
-        Assert.Equal(TrainingFocuses.Ranged, fixture.TrainingService.ScoutFocusMap[squad.Id]);
+        Assert.Equal(ScoutTrainingOptionKeys.Ranged, fixture.TrainingService.ScoutTrainingOptionMap[squad.Id]);
         Assert.DoesNotContain(scout, fixture.TrainingService.WorkExperienceSoldiers);
         Assert.True(GetSkillPoints(scout, TestSkills.Stealth) > 0);
     }
 
     // Regression: the Scout Company HQ carries SquadTypes.Scout alongside SquadTypes.HQ, so the
     // upkeep processor swept it into TrainScouts even though the training screen hides it and the
-    // player can never set its TrainingFocus. It drilled every week against an unset focus. It is a
+    // player can never set its training option. It drilled every week against an unset option. It is a
     // command element and belongs on the garrison work-experience path like every other HQ squad.
     [Fact]
     public void ProcessTurn_TrainsScoutCompanyHqAsGarrisonRatherThanScouts()
@@ -445,7 +445,7 @@ public class TurnTrainingTests
     {
         public List<ISoldier> WorkExperienceSoldiers { get; } = [];
         public List<Squad> ScoutTrainingSquads { get; } = [];
-        public Dictionary<int, TrainingFocuses> ScoutFocusMap { get; private set; } = [];
+        public Dictionary<int, string> ScoutTrainingOptionMap { get; private set; } = [];
         public IReadOnlyDictionary<int, float> ScoutPointsBySquad { get; private set; }
 
         public void UpdateRatings(Date date, PlayerSoldier soldier)
@@ -462,10 +462,10 @@ public class TurnTrainingTests
             soldier.AddSkillPoints(TestSkills.Ranged, points);
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap,
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, string> squadTrainingOptionMap,
             float points = 0.2f, IReadOnlyDictionary<int, float> pointsBySquad = null)
         {
-            ScoutFocusMap = squadFocusMap;
+            ScoutTrainingOptionMap = squadTrainingOptionMap;
             ScoutPointsBySquad = pointsBySquad;
             ScoutTrainingSquads.AddRange(scoutSquads);
             foreach (Squad squad in scoutSquads)

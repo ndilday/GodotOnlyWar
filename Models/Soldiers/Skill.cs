@@ -30,13 +30,23 @@ namespace OnlyWar.Models.Soldiers
         public int Id;
         public SkillCategory Category;
         public string Name;
+        // Stable rules-data identity. Name is presentation text and may be localized or
+        // rewritten by a mod without changing the gameplay meaning of the skill.
+        public string SkillKey;
         public Attribute BaseAttribute;
         public float Difficulty;
-        public BaseSkill(int id, SkillCategory category, string name, Attribute baseAttribute, float difficulty)
+        public BaseSkill(
+            int id,
+            SkillCategory category,
+            string name,
+            Attribute baseAttribute,
+            float difficulty,
+            string skillKey = null)
         {
             Id = id;
             Category = category;
             Name = name;
+            SkillKey = skillKey;
             BaseAttribute = baseAttribute;
             Difficulty = difficulty;
         }

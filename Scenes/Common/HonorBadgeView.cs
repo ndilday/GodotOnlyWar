@@ -39,7 +39,8 @@ public partial class HonorBadgeView : HBoxContainer
                 Modulate = tint,
                 MouseFilter = MouseFilterEnum.Pass
             };
-            string iconKey = HonorIconKey(honor.Type);
+            string iconKey = honor.IconAssetKey
+                ?? AwardFamilyCatalog.CreateDefault().Get(honor.Type).IconAssetKey;
             icon.Texture = IconAtlas.GetIcon(IconAtlas.HasIcon(iconKey) ? iconKey : "award");
             badge.AddChild(icon);
             AddChild(badge);
@@ -77,12 +78,4 @@ public partial class HonorBadgeView : HBoxContainer
             : $"{tierName} {honorName}";
     }
 
-    private static string HonorIconKey(string type) => type switch
-    {
-        AwardTypes.Gun => "honor_gun",
-        AwardTypes.Sword => "honor_sword",
-        AwardTypes.Voice => "honor_voice",
-        AwardTypes.Banner => "honor_banner",
-        _ => "award"
-    };
 }

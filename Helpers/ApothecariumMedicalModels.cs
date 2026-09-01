@@ -1,4 +1,5 @@
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Helpers.UI;
 using System.Collections.Generic;
 
 namespace OnlyWar.Helpers
@@ -30,7 +31,8 @@ namespace OnlyWar.Helpers
         string Status,
         MedicalSeverity Severity,
         bool IsSelected,
-        IReadOnlyList<ApothecariumTreeItem> Children);
+        IReadOnlyList<ApothecariumTreeItem> Children,
+        SquadRowViewModel SquadRow = null);
 
     public sealed record ApothecariumSelection(
         ApothecariumSelectionKind Kind,

@@ -12,7 +12,8 @@ namespace OnlyWar.Helpers
     {
         public IReadOnlyList<ISoldier> Apply(IEnumerable<ISoldier> soldiers,
                                              IReadOnlyList<SoldierFilterCondition> conditions,
-                                             Date currentDate)
+                                             Date currentDate,
+                                             RatingConsumerBindings ratingBindings = null)
         {
             if (soldiers == null)
             {
@@ -25,9 +26,11 @@ namespace OnlyWar.Helpers
 
             List<ISoldier> soldierList = soldiers.ToList();
             Dictionary<string, RoleRank> roleRanks = BuildRoleRankLookup(soldierList);
+            ratingBindings ??= RatingConsumerBindings.CreateDefault();
 
             return soldierList
-                .Where(soldier => conditions.All(condition => Matches(soldier, condition, currentDate, roleRanks)))
+                .Where(soldier => conditions.All(condition => Matches(
+                    soldier, condition, currentDate, roleRanks, ratingBindings)))
                 .ToList();
         }
 
@@ -52,15 +55,21 @@ namespace OnlyWar.Helpers
         // earned it. See BuildTierLabelLookup.
         public IReadOnlyList<SoldierHonorFilterOption> GetAvailableHonors(
             IEnumerable<ISoldier> soldiers,
-            IReadOnlyList<RatingAwardTier> awardTiers = null)
+            IReadOnlyList<RatingAwardTier> awardTiers = null,
+            AwardFamilyCatalog awardCatalog = null,
+            RatingConsumerBindings ratingBindings = null)
         {
-            Dictionary<(string Type, ushort Level), string> labels = BuildTierLabelLookup(awardTiers);
+            awardCatalog ??= AwardFamilyCatalog.CreateDefault();
+            ratingBindings ??= RatingConsumerBindings.CreateDefault();
+            Dictionary<(string Type, ushort Level), string> labels =
+                BuildTierLabelLookup(awardTiers, awardCatalog);
             List<PlayerSoldier> playerSoldiers = soldiers.OfType<PlayerSoldier>().ToList();
 
             List<SoldierHonorFilterOption> options = playerSoldiers
                 .SelectMany(s => s.SoldierAwards)
                 .GroupBy(a => new { a.Type, a.Level })
-                .OrderBy(g => g.Key.Type)
+                .OrderBy(g => awardCatalog.Get(g.Key.Type).SortOrder)
+                .ThenBy(g => g.Key.Type, System.StringComparer.Ordinal)
                 .ThenByDescending(g => g.Key.Level)
                 .Select(g => new SoldierHonorFilterOption(
                     g.Key.Type,
@@ -70,7 +79,7 @@ namespace OnlyWar.Helpers
                         : g.OrderByDescending(a => a.DateAwarded).FirstOrDefault()?.Name))
                 .ToList();
 
-            options.AddRange(GetAvailableFlagHonors(playerSoldiers, awardTiers));
+            options.AddRange(GetAvailableFlagHonors(playerSoldiers, awardTiers, ratingBindings));
             return options;
         }
 
@@ -80,7 +89,8 @@ namespace OnlyWar.Helpers
         // RatingCalculator wrote into the soldier's history.
         private static IEnumerable<SoldierHonorFilterOption> GetAvailableFlagHonors(
             IReadOnlyList<PlayerSoldier> soldiers,
-            IReadOnlyList<RatingAwardTier> awardTiers)
+            IReadOnlyList<RatingAwardTier> awardTiers,
+            RatingConsumerBindings ratingBindings)
         {
             if (awardTiers == null)
             {
@@ -98,25 +108,43 @@ namespace OnlyWar.Helpers
                             && flagsInScope.Contains(t.NameTemplate))
                 .OrderBy(t => t.RatingKey)
                 .Select(t => SoldierHonorFilterOption.FromFlag(
-                    t.NameTemplate, FlagLabel(t)));
+                    t.NameTemplate, FlagLabel(t, ratingBindings)));
         }
 
-        // Short player-facing names for the known flag ratings; anything new falls back
-        // to the flag text itself.
-        private static string FlagLabel(RatingAwardTier tier) => tier.RatingKey switch
+        // Short player-facing names for the known capability roles; anything new falls back
+        // to the flag text itself. The capability mapping is data-owned, so a mod can rename
+        // the underlying rating without changing this UI label.
+        private static string FlagLabel(
+            RatingAwardTier tier,
+            RatingConsumerBindings ratingBindings)
         {
-            RatingKeys.Piety => "Novice (Devout)",
-            RatingKeys.Medical => "Medical aptitude",
-            RatingKeys.Tech => "Technical aptitude",
-            _ => tier.NameTemplate
-        };
+            if (ratingBindings.TryGetRatingKey(
+                    RatingConsumerRole.SpiritualCapability, out string spiritualKey)
+                && tier.RatingKey == spiritualKey)
+            {
+                return "Novice (Devout)";
+            }
+            if (ratingBindings.TryGetRatingKey(
+                    RatingConsumerRole.MedicalCapacity, out string medicalKey)
+                && tier.RatingKey == medicalKey)
+            {
+                return "Medical aptitude";
+            }
+            if (ratingBindings.TryGetRatingKey(
+                    RatingConsumerRole.TechnicalCapability, out string technicalKey)
+                && tier.RatingKey == technicalKey)
+            {
+                return "Technical aptitude";
+            }
+            return tier.NameTemplate;
+        }
 
         // Maps each award Type+Level to a display name taken from the tier's NameTemplate with
-        // the {bestSkillInCategory} placeholder swapped for the (generic) award Type, so e.g.
-        // "Gold {bestSkillInCategory} of the Emperor" becomes "Gold Gun of the Emperor" rather
-        // than naming whichever weapon a sample soldier happened to earn it with.
+        // the {bestSkillInCategory} placeholder swapped for the award family's display name, so
+        // a mod's stable key never leaks into the player-facing filter label.
         private static Dictionary<(string, ushort), string> BuildTierLabelLookup(
-            IReadOnlyList<RatingAwardTier> awardTiers)
+            IReadOnlyList<RatingAwardTier> awardTiers,
+            AwardFamilyCatalog awardCatalog)
         {
             Dictionary<(string, ushort), string> labels = [];
             if (awardTiers == null)
@@ -132,13 +160,15 @@ namespace OnlyWar.Helpers
                     continue;
                 }
                 labels[key] = tier.NameTemplate.Replace(
-                    RatingAwardTier.BestSkillInCategoryPlaceholder, tier.AwardType);
+                    RatingAwardTier.BestSkillInCategoryPlaceholder,
+                    awardCatalog.Get(tier.AwardFamilyKey).DisplayName);
             }
             return labels;
         }
 
         private static bool Matches(ISoldier soldier, SoldierFilterCondition condition, Date currentDate,
-                                    IReadOnlyDictionary<string, RoleRank> roleRanks)
+                                    IReadOnlyDictionary<string, RoleRank> roleRanks,
+                                    RatingConsumerBindings ratingBindings)
         {
             switch (condition.Field)
             {
@@ -169,7 +199,9 @@ namespace OnlyWar.Helpers
 
                 case SoldierFilterField.SergeantRecommended:
                     bool recommended = soldier is PlayerSoldier candidate
-                        && candidate.SoldierEvaluationHistory.LastOrDefault()?.LeadershipRating > 55;
+                        && ratingBindings.Get(
+                            candidate.SoldierEvaluationHistory.LastOrDefault(),
+                            RatingConsumerRole.CommandLeadership) > 55;
                     return condition.Operator == SoldierFilterOperator.NotEquals
                         ? !recommended
                         : recommended;

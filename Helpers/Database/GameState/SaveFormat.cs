@@ -22,7 +22,9 @@ namespace OnlyWar.Helpers.Database.GameState
         // 13: IndividualPosting replaces OrderSoldier as the physical-location source of truth.
         // 14: administrative duty stations, explicit order owners/characters, and physical-only
         //     individual postings. This is a deliberate incompatible save break.
-        internal const int CurrentVersion = 14;
-        internal const int FirstMigratableVersion = 14;
+        // 15: scout training options are persisted by stable rules-data key rather than the
+        //     former fixed focus bitmask. This is a deliberate incompatible save break.
+        internal const int CurrentVersion = 15;
+        internal const int MinimumSupportedVersion = CurrentVersion;
     }
 }

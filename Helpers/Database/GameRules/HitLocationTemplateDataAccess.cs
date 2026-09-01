@@ -31,7 +31,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int? handGroupId = reader["HandGroupId"].GetType() == typeof(DBNull)
                         ? null
                         : Convert.ToInt32(reader["HandGroupId"]);
-                    int[] hitProbabilityMap = stanceProbabilityMap[id];
+                    int[] hitProbabilityMap = RulesDatabaseLookup.Require(
+                        stanceProbabilityMap,
+                        id,
+                        $"HitLocationTemplate {id}.HitLocationStanceSize");
                     HitLocationTemplate hitLocationTemplate =
                         new HitLocationTemplate
                         {

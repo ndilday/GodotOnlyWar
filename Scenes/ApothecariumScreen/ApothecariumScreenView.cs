@@ -589,7 +589,8 @@ public partial class ApothecariumScreenView : MainScreenView
             iconMaxWidth: RosterRowStyle.IconSize,
             rowHeight: RosterRowStyle.GetRowHeight(
                 item.Kind == ApothecariumSelectionKind.Soldier,
-                hasMultilineStatus));
+                hasMultilineStatus),
+            squadRow: item.SquadRow);
     }
 
     private void OnTreeItemSelected(object sender, string key)

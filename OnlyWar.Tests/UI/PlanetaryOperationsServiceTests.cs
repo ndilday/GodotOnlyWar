@@ -30,10 +30,10 @@ public class PlanetaryOperationsServiceTests
         Region adjacent = target.GetAdjacentRegions().First();
         Region distant = fixture.Planet.Regions.First(region =>
             region != target && !target.GetAdjacentRegions().Contains(region));
-        Squad targetSquad = AddPlayerSquad(fixture, target, "Target Squad");
-        Squad adjacentSquad = AddPlayerSquad(fixture, adjacent, "Adjacent Squad");
-        Squad distantSquad = AddPlayerSquad(fixture, distant, "Distant Squad");
-        Squad assigned = AddPlayerSquad(fixture, target, "Assigned Elsewhere");
+        Squad targetSquad = AddPlayerSquad(fixture, target, "Target Squad", withLeader: true);
+        Squad adjacentSquad = AddPlayerSquad(fixture, adjacent, "Adjacent Squad", withLeader: true);
+        Squad distantSquad = AddPlayerSquad(fixture, distant, "Distant Squad", withLeader: true);
+        Squad assigned = AddPlayerSquad(fixture, target, "Assigned Elsewhere", withLeader: true);
         Order otherOrder = new(
             [assigned], true, false, Aggression.Normal,
             new Mission(MissionType.Recon, fixture.DefaultRegionFaction(0), 0));
@@ -63,8 +63,8 @@ public class PlanetaryOperationsServiceTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region target = fixture.Planet.Regions[7];
         Region adjacent = target.GetAdjacentRegions().First();
-        Squad targetSquad = AddPlayerSquad(fixture, target, "Target Squad");
-        Squad adjacentSquad = AddPlayerSquad(fixture, adjacent, "Adjacent Squad");
+        Squad targetSquad = AddPlayerSquad(fixture, target, "Target Squad", withLeader: true);
+        Squad adjacentSquad = AddPlayerSquad(fixture, adjacent, "Adjacent Squad", withLeader: true);
         AvailableMission mission = MissionAvailability.GetAvailableMissions(target, target)
             .Single(option => option.Kind == kind);
 
@@ -83,7 +83,7 @@ public class PlanetaryOperationsServiceTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region target = fixture.Planet.Regions[7];
-        Squad assigned = AddPlayerSquad(fixture, target, "Assigned Squad");
+        Squad assigned = AddPlayerSquad(fixture, target, "Assigned Squad", withLeader: true);
         AvailableMission recon = MissionAvailability.GetAvailableMissions(target, target)
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
         Order order = OrderAssignment.AssignSquadsToMission(
@@ -103,14 +103,14 @@ public class PlanetaryOperationsServiceTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region target = fixture.Planet.Regions[7];
         Region adjacent = target.GetAdjacentRegions().First();
-        Squad first = AddPlayerSquad(fixture, target, "First Squad");
-        Squad second = AddPlayerSquad(fixture, adjacent, "Second Squad");
+        Squad first = AddPlayerSquad(fixture, target, "First Squad", withLeader: true);
+        Squad second = AddPlayerSquad(fixture, adjacent, "Second Squad", withLeader: true);
         AvailableMission recon = MissionAvailability.GetAvailableMissions(target, target)
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
 
         OrderMutationResult created = OrderMutationService.CreateOrAdd(
             fixture.Sector, target, recon, [first, second], -1, Aggression.Normal);
-        Squad third = AddPlayerSquad(fixture, adjacent, "Third Squad");
+        Squad third = AddPlayerSquad(fixture, adjacent, "Third Squad", withLeader: true);
         OrderMutationResult reinforced = OrderMutationService.CreateOrAdd(
             fixture.Sector, target, recon, [third], -1, Aggression.Cautious);
 
@@ -130,7 +130,8 @@ public class PlanetaryOperationsServiceTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region source = fixture.Planet.Regions[0];
-        Squad squad = AddPlayerSquad(fixture, source, "Surface Squad", members: 2);
+        Squad squad = AddPlayerSquad(
+            fixture, source, "Surface Squad", members: 2, withLeader: true);
         AvailableMission defend = MissionAvailability.GetAvailableMissions(source, source)
             .Single(option => option.Kind == MissionAvailabilityKind.Defend);
         Order order = OrderAssignment.AssignSquadsToMission(
@@ -153,7 +154,8 @@ public class PlanetaryOperationsServiceTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region source = fixture.Planet.Regions[0];
-        Squad squad = AddPlayerSquad(fixture, source, "Surface Squad", members: 2);
+        Squad squad = AddPlayerSquad(
+            fixture, source, "Surface Squad", members: 2, withLeader: true);
         AvailableMission defend = MissionAvailability.GetAvailableMissions(source, source)
             .Single(option => option.Kind == MissionAvailabilityKind.Defend);
         Order order = OrderAssignment.AssignSquadsToMission(
@@ -178,7 +180,7 @@ public class PlanetaryOperationsServiceTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region destination = fixture.Planet.Regions[3];
         Ship ship = AddOrbitingShip(fixture, capacity: 10);
-        Squad squad = CreatePlayerSquad(fixture, "Orbiting Squad", 2);
+        Squad squad = CreatePlayerSquad(fixture, "Orbiting Squad", 2, withLeader: true);
         ship.LoadSquad(squad);
         squad.BoardedLocation = ship;
 
@@ -259,6 +261,7 @@ public class PlanetaryOperationsServiceTests
         Assert.Equal(enemy.PlanetFaction.Faction.Name, card.ControlFactionName);
         Assert.Equal(enemy.PlanetFaction.Faction.Color.ToGodotColor(), card.ControlBorderColor);
         Assert.NotEqual(OnlyWarStyle.OpposingAccent, card.ControlBorderColor);
+        Assert.Null(card.Presences.Single(item => item.FactionName == "Red Corsairs").IconKey);
         Assert.Contains("Control: Red Corsairs", RegionMapCardView.BuildTooltip(card));
     }
 
@@ -309,12 +312,19 @@ public class PlanetaryOperationsServiceTests
 
         Assert.Equal(1, card.UnassignedSquads);
         Assert.Equal(1, card.MissionOpportunities);
+        Assert.Equal(2, card.PlayerSquads);
+        Assert.Equal(2, card.PlayerEffectiveStrength);
+        Assert.Equal(10, card.PlayerFullStrength);
+        Assert.Equal(1, card.ActiveOrders);
         RegionEnemyForceEstimate estimate = Assert.Single(card.PublicEnemyForces);
         Assert.Equal("Genestealer Cult", estimate.FactionName);
         Assert.Equal("Thousands", estimate.ForceEstimate);
         Assert.Equal(
             "Region 0\n"
             + "Control: Contested\n"
+            + "Surface Squads: 2\n"
+            + "Combat-Effective Strength: 2/10\n"
+            + "Active Orders: 1\n"
             + "Unassigned Squads: 1\n"
             + "Mission Opportunities: 1\n"
             + "Genestealer Cult: Thousands",
@@ -334,6 +344,25 @@ public class PlanetaryOperationsServiceTests
         Assert.Equal(RegionControlState.Imperial, presentation.State);
         Assert.Single(presentation.Presences);
         Assert.Equal(fixture.Default.Id, presentation.Presences[0].FactionId);
+    }
+
+    [Fact]
+    public void ControlPresentation_OrdersImperiumFirstThenOtherDisclosedFactionsAlphabetically()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        AddPlayerSquad(fixture, region, "Chapter Squad");
+        fixture.AddConsumptionFaction(0, population: 100, organization: 100);
+        fixture.AddPublicCult(0, population: 100, organization: 100);
+
+        RegionControlPresentationModel presentation = RegionControlPresentation.Build(region);
+
+        Assert.True(presentation.Presences[0].IsImperial);
+        Assert.Contains(presentation.Presences, item => item.FactionName == "Chapter");
+        Assert.Equal(
+            presentation.Presences.Skip(1).Select(item => item.FactionName)
+                .OrderBy(name => name),
+            presentation.Presences.Skip(1).Select(item => item.FactionName));
     }
 
     [Fact]
@@ -564,7 +593,7 @@ public class PlanetaryOperationsServiceTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region region = fixture.Planet.Regions[0];
-        Squad line = AddPlayerSquad(fixture, region, "Line Squad");
+        Squad line = AddPlayerSquad(fixture, region, "Line Squad", withLeader: true);
         AvailableMission recon = MissionAvailability.GetAvailableMissions(region, region)
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
         Order order = OrderMutationService.CreateOrAdd(
@@ -759,9 +788,10 @@ public class PlanetaryOperationsServiceTests
         Region region,
         string name,
         int members = 1,
-        SquadTypes squadTypes = SquadTypes.None)
+        SquadTypes squadTypes = SquadTypes.None,
+        bool withLeader = false)
     {
-        Squad squad = CreatePlayerSquad(fixture, name, members, squadTypes);
+        Squad squad = CreatePlayerSquad(fixture, name, members, squadTypes, withLeader);
         PlanetFaction planetPresence = EnsurePlayerPlanetPresence(fixture);
         if (!region.RegionFactionMap.TryGetValue(
                 fixture.Sector.PlayerForce.Faction.Id, out RegionFaction presence))
@@ -778,7 +808,8 @@ public class PlanetaryOperationsServiceTests
         SectorSimulationFixture fixture,
         string name,
         int members,
-        SquadTypes squadTypes = SquadTypes.None)
+        SquadTypes squadTypes = SquadTypes.None,
+        bool withLeader = false)
     {
         SquadTemplate template = new(
             id: 900,
@@ -792,7 +823,13 @@ public class PlanetaryOperationsServiceTests
             Faction = fixture.Sector.PlayerForce.Faction
         };
         Squad squad = new(name, null, template);
-        for (int index = 0; index < members; index++)
+        if (withLeader && members > 0)
+        {
+            squad.AddSquadMember(TestModelFactory.CreateSoldier(
+                template: TestModelFactory.SergeantTemplate,
+                name: $"{name} Sergeant"));
+        }
+        for (int index = withLeader ? 1 : 0; index < members; index++)
         {
             squad.AddSquadMember(TestModelFactory.CreateSoldier(
                 name: $"{name} Marine {index + 1}"));

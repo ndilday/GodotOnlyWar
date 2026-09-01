@@ -96,6 +96,7 @@ public class ChapterMusterPerformanceTests
         return new SoldierTrainingCalculator(
             _data.BaseSkillMap.Values,
             _data.TrainingProfiles.Values,
-            ratingCalculator);
+            ratingCalculator,
+            scoutTrainingOptions: _data.ScoutTrainingOptions.Options);
     }
 }

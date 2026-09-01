@@ -140,7 +140,7 @@ public class SaveLoadRoundTripTests
             1,
             4,
             6,
-            _data.ChapterTemplates.ScoutSquad.BattleValue,
+            _data.ChapterDoctrine.ScoutSquad.BattleValue,
             ["Scout", "Covert"]);
         PresenceRequest savedRequest = new(
             requestId,
@@ -330,6 +330,7 @@ public class SaveLoadRoundTripTests
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_roundtrip");
         try
         {
+            orderedSquad.TrainingOptionKey = ScoutTrainingOptionKeys.Ranged;
             _roundTrip.Save(sector, dbPath, originalUnits);
             GameStateDataBlob loaded = _roundTrip.Load(dbPath);
 
@@ -466,6 +467,8 @@ public class SaveLoadRoundTripTests
             Squad loadedSquad = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
                 .Single(s => s.Id == orderedSquad.Id);
+            Assert.Equal(ScoutTrainingOptionKeys.Ranged, loadedSquad.TrainingOptionKey);
+            Assert.False(loaded.UpgradePending);
             Assert.NotNull(loadedSquad.CurrentOrders);
             Assert.False(loadedSquad.UsesLoadoutDoctrine);
             Assert.Equal(doctrineWeaponSet.Id, Assert.Single(loadedSquad.Loadout).Id);

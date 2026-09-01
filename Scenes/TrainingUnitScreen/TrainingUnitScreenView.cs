@@ -52,10 +52,11 @@ public partial class TrainingUnitScreenView : MainScreenView
     private VBoxContainer _promotionRows;
     private ButtonGroup _squadButtonGroup;
     private IReadOnlyList<ScoutSquadRow> _scoutRows = [];
+    private IReadOnlyList<ScoutTrainingOption> _scoutTrainingOptions = [];
     private int? _selectedSquadId;
 
     public event EventHandler<int> SquadButtonPressed;
-    public event EventHandler<TrainingFocuses> TrainingFocusSelected;
+    public event EventHandler<string> TrainingOptionSelected;
     public event EventHandler<Variant> LinkClicked;
     public event EventHandler<RecruitmentDoctrineDraft> DoctrineChanged;
     public event EventHandler DoctrineConfirmed;
@@ -94,6 +95,7 @@ public partial class TrainingUnitScreenView : MainScreenView
     {
         _navigationButtons[RecruitmentPage.Recruitment].Disabled = false;
         _navigationButtons[RecruitmentPage.Aspirants].Disabled = false;
+        SetScoutTrainingOptions(snapshot.ScoutTrainingOptions);
         SetSetupMode(!snapshot.IsSetupComplete);
         PopulateOverview(snapshot);
         PopulateDoctrine(snapshot);
@@ -162,11 +164,26 @@ public partial class TrainingUnitScreenView : MainScreenView
         }
 
         _focusOption.Disabled = false;
-        _focusOption.Select(_focusOption.GetItemIndex((int)selected.Focus));
+        int selectedOptionIndex = -1;
+        for (int i = 0; i < _focusOption.GetItemCount(); i++)
+        {
+            if (_focusOption.GetItemMetadata(i).AsString() == selected.TrainingOptionKey)
+            {
+                selectedOptionIndex = i;
+                break;
+            }
+        }
+        _focusOption.Select(selectedOptionIndex);
         _squadReadinessRichText.Text = string.IsNullOrWhiteSpace(selected.ReadinessReport)
             ? "This squad has no neophytes or Scouts to evaluate."
             : selected.ReadinessReport;
         PopulatePromotionRows(selected.PromotionRows);
+    }
+
+    public void SetScoutTrainingOptions(IReadOnlyList<ScoutTrainingOption> options)
+    {
+        _scoutTrainingOptions = options ?? [];
+        PopulateFocusOptions();
     }
 
     private void BuildNavigation()
@@ -637,6 +654,16 @@ public partial class TrainingUnitScreenView : MainScreenView
 
     private void AddSquad(ScoutSquadRow squad, bool selected)
     {
+        if (squad.CommonRow != null)
+        {
+            SquadRowView row = new();
+            row.Configure(squad.CommonRow);
+            row.SetSelected(selected);
+            row.RowSelected += (_, _) => SquadButtonPressed?.Invoke(this, squad.Id);
+            _squadVBox.AddChild(row);
+            return;
+        }
+
         Button squadButton = new()
         {
             Text = squad.Label,
@@ -660,18 +687,19 @@ public partial class TrainingUnitScreenView : MainScreenView
     private void PopulateFocusOptions()
     {
         _focusOption.Clear();
-        _focusOption.AddItem("Balanced", (int)TrainingFocuses.None);
-        _focusOption.AddItem("Physical", (int)TrainingFocuses.Physical);
-        _focusOption.AddItem("Vehicles", (int)TrainingFocuses.Vehicles);
-        _focusOption.AddItem("Melee", (int)TrainingFocuses.Melee);
-        _focusOption.AddItem("Ranged", (int)TrainingFocuses.Ranged);
+        foreach (ScoutTrainingOption option in _scoutTrainingOptions)
+        {
+            int index = _focusOption.GetItemCount();
+            _focusOption.AddItem(option.DisplayName);
+            _focusOption.SetItemMetadata(index, option.Key);
+        }
     }
 
     private void OnFocusOptionSelected(long index)
     {
-        TrainingFocusSelected?.Invoke(
+        TrainingOptionSelected?.Invoke(
             this,
-            (TrainingFocuses)_focusOption.GetItemId((int)index));
+            _focusOption.GetItemMetadata((int)index).AsString());
     }
 
     private static HBoxContainer CreateDataRow(string title, string detail)

@@ -7,6 +7,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Helpers.Recruitment
@@ -55,8 +56,8 @@ namespace OnlyWar.Helpers.Recruitment
             Squad target = FindSquad(force, scoutSquadId);
             if (!IsEligibleTarget(
                     target,
-                    _session.Rules.ChapterTemplates.ScoutSquad,
-                    _session.Rules.ChapterTemplates.ScoutMarine,
+                    _session.Rules.ChapterDoctrine.ScoutSquad,
+                    _session.Rules.ChapterDoctrine.ScoutMarine,
                     program.HomeWorldPlanetId,
                     out string targetError))
             {
@@ -64,9 +65,9 @@ namespace OnlyWar.Helpers.Recruitment
             }
 
             Soldier generated = SoldierFactory.Instance.GenerateNewSoldier(
-                _session.Rules.ChapterTemplates.ScoutMarine,
+                _session.Rules.ChapterDoctrine.ScoutMarine,
                 _session.Random);
-            generated.Template = _session.Rules.ChapterTemplates.ScoutMarine;
+            generated.Template = _session.Rules.ChapterDoctrine.ScoutMarine;
             generated.Strength = aspirant.Attributes.Strength;
             generated.Constitution = aspirant.Attributes.Constitution;
             generated.Intelligence = aspirant.Attributes.Intelligence;
@@ -166,7 +167,7 @@ namespace OnlyWar.Helpers.Recruitment
             new RecruitmentStaffService().Synchronize(force, _session.Rules);
             if (!force.Army.PlayerSoldierMap.TryGetValue(
                     soldierId, out PlayerSoldier neophyte)
-                || neophyte.Template != _session.Rules.ChapterTemplates.ScoutMarine)
+                || neophyte.Template != _session.Rules.ChapterDoctrine.ScoutMarine)
             {
                 return PlanFailure("Only a Scout Marine can receive the Black Carapace.");
             }
@@ -207,7 +208,8 @@ namespace OnlyWar.Helpers.Recruitment
             }
             SoldierEvaluation latest = neophyte.SoldierEvaluationHistory.LastOrDefault();
             if (latest == null
-                || latest.RangedRating <= BlackCarapaceReadinessRangedRating)
+                || _session.Rules.RatingConsumers.Get(
+                    latest, RatingConsumerRole.RangedCombat) <= BlackCarapaceReadinessRangedRating)
             {
                 return PlanFailure("That neophyte is not yet ready for the Black Carapace.");
             }
@@ -215,8 +217,8 @@ namespace OnlyWar.Helpers.Recruitment
             Squad target = FindSquad(force, devastatorSquadId);
             if (!IsEligibleTarget(
                     target,
-                    _session.Rules.ChapterTemplates.DevastatorSquad,
-                    _session.Rules.ChapterTemplates.DevastatorMarine,
+                    _session.Rules.ChapterDoctrine.DevastatorSquad,
+                    _session.Rules.ChapterDoctrine.DevastatorMarine,
                     program.HomeWorldPlanetId,
                     out string targetError,
                     CountReservedSeats(program, devastatorSquadId)))

@@ -114,6 +114,7 @@ public sealed record BattleSquadCapabilityProfile(
     // from a real standoff. 0 whenever EffectiveEngagementRange is 0.</para>
     float PeakRangedRemovalFraction,
     float MoveSpeed,
+    bool CanRun,
     int ContactCapacity,
     IReadOnlyDictionary<int, float> CapabilityGroups)
 {

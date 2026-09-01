@@ -471,7 +471,9 @@ namespace OnlyWar.Helpers.Battles
             EngagementOptionKind policy)
         {
             if (policy == EngagementOptionKind.Hold) return 0;
-            float speed = profile.MoveSpeed * (policy == EngagementOptionKind.JogToward
+            bool jogs = policy == EngagementOptionKind.JogToward
+                || policy == EngagementOptionKind.RunToward && !profile.CanRun;
+            float speed = profile.MoveSpeed * (jogs
                 ? SoldierMovementPlanner.JogSpeedMultiplier
                 : 1f);
             float desired = profile.IsContactSeeking
@@ -495,7 +497,9 @@ namespace OnlyWar.Helpers.Battles
         {
             if (opposingRole is EngagementSquadRole.Bound or EngagementSquadRole.Routing)
             {
-                return profile.MoveSpeed;
+                return profile.MoveSpeed * (profile.CanRun
+                    ? 1f
+                    : SoldierMovementPlanner.JogSpeedMultiplier);
             }
             if (profile.IsContactSeeking) return range > 1
                 ? -Math.Min(profile.MoveSpeed, range - 1)

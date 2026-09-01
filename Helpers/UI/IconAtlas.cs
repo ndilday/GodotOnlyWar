@@ -153,15 +153,17 @@ namespace OnlyWar.Helpers.UI
 
 		public static string GetPlanetaryOperationsFactionIconKey(Faction faction)
 		{
-			if (faction == null) return "map_orks";
+			if (faction == null) return null;
 			if (faction.IsPlayerFaction) return "map_player";
 			if (faction.IsDefaultFaction) return "map_imperial";
 
 			string name = faction.Name?.ToLowerInvariant() ?? "";
 			if (name.Contains("tyranid")) return "map_tyranids";
 			if (name.Contains("genestealer")) return "map_genestealer_cult";
-			// The map sheet has no separate generic/Chaos slot; Orks are its generic hostile mark.
-			return "map_orks";
+			if (name.Contains("ork")) return "map_orks";
+			// Faction art is required content. Returning no key makes the missing-art path loud in
+			// RegionMapCardView instead of falsely representing a new faction as Orks.
+			return null;
 		}
 
 		public static string GetSquadIconKey(SquadTemplate template)
@@ -185,14 +187,23 @@ namespace OnlyWar.Helpers.UI
 		private static readonly Dictionary<string, AtlasTexture> IconTextures = [];
 		private static readonly Dictionary<string, AtlasTexture> PlanetaryOperationsFactionTextures = [];
 
-		public static AtlasTexture GetIcon(string key)
+		public static Texture2D GetIcon(string key)
 		{
+			Texture2D registered = IconAssetRegistry.Resolve(key);
+			if (registered != null)
+			{
+				return registered;
+			}
+
 			if (key != null && IconTextures.TryGetValue(key, out AtlasTexture cached))
 			{
 				return cached;
 			}
 
-			if (!IconCells.TryGetValue(key, out Vector2I cell))
+			string builtInKey = key?.StartsWith("core:", System.StringComparison.OrdinalIgnoreCase) == true
+				? key[5..]
+				: key;
+			if (!IconCells.TryGetValue(builtInKey, out Vector2I cell))
 			{
 				GD.PushWarning($"Unknown icon atlas key: {key}");
 				return null;
@@ -210,11 +221,22 @@ namespace OnlyWar.Helpers.UI
 				Atlas = _atlasTexture,
 				Region = new Rect2(cell.X * CellSize, cell.Y * CellSize, CellSize, CellSize)
 			};
-			IconTextures[key] = texture;
+			IconTextures[builtInKey] = texture;
 			return texture;
 		}
 
-		public static bool HasIcon(string key) => IconCells.ContainsKey(key);
+		public static bool HasIcon(string key) => IconAssetRegistry.HasIcon(key)
+			|| IconCells.ContainsKey(key?.StartsWith("core:", System.StringComparison.OrdinalIgnoreCase) == true
+				? key[5..]
+				: key);
+
+		public static void RegisterModIconManifest(string manifestPath, string modId) =>
+			IconAssetRegistry.RegisterManifest(manifestPath, modId);
+
+		public static void ClearRegisteredModIcons() => IconAssetRegistry.ClearRegisteredMods();
+
+		public static void ClearModIconManifest(string modId) =>
+			IconAssetRegistry.ClearPackage(modId);
 
 		public static bool HasPlanetaryOperationsFactionIcon(string key) =>
 			PlanetaryOperationsFactionRegions.ContainsKey(key);

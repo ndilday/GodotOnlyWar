@@ -22,6 +22,7 @@ namespace OnlyWar.Helpers.UI
         public int IconMaxWidth { get; }
         public int RowHeight { get; }
         public bool CollapsedByDefault { get; }
+        public SquadRowViewModel SquadRow { get; }
 
         public HierarchyTreeItem(
             string key,
@@ -35,7 +36,8 @@ namespace OnlyWar.Helpers.UI
             Color? badgeColor = null,
             int iconMaxWidth = 0,
             int rowHeight = 0,
-            bool collapsedByDefault = false)
+            bool collapsedByDefault = false,
+            SquadRowViewModel squadRow = null)
         {
             Key = key ?? throw new ArgumentNullException(nameof(key));
             Text = text ?? "";
@@ -49,6 +51,7 @@ namespace OnlyWar.Helpers.UI
             IconMaxWidth = iconMaxWidth;
             RowHeight = rowHeight;
             CollapsedByDefault = collapsedByDefault;
+            SquadRow = squadRow;
         }
     }
 }

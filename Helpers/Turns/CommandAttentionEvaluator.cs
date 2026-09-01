@@ -2,6 +2,7 @@ using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Command;
 using OnlyWar.Models.Fleets;
@@ -10,6 +11,7 @@ using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,19 +77,20 @@ namespace OnlyWar.Helpers.Turns
 
             List<CommandAttentionFact> facts = [];
             List<Squad> playerSquads = GetPlayerSquads(sector).ToList();
+            RecruitmentProgram program = sector.PlayerForce?.RecruitmentProgram;
 
             facts.AddRange(playerSquads
-                .Where(IsIdleDeployableSquad)
+                .Where(squad => IsIdleDeployableSquad(squad, program))
                 .OrderBy(squad => squad.CurrentRegion?.Planet?.Name
                     ?? squad.BoardedLocation?.Fleet?.Planet?.Name)
                 .ThenBy(squad => squad.CurrentRegion?.Name
                     ?? squad.BoardedLocation?.Name)
                 .ThenBy(squad => squad.Name)
                 .ThenBy(squad => squad.Id)
-                .Select(BuildSquadFact));
+                .Select(squad => BuildSquadFact(squad, program)));
 
             facts.AddRange(playerSquads
-                .Where(IsLeaderlessSquad)
+                .Where(squad => IsLeaderlessSquad(squad, program))
                 .OrderBy(squad => squad.ParentUnit?.Name)
                 .ThenBy(squad => squad.Name)
                 .ThenBy(squad => squad.Id)
@@ -210,9 +213,11 @@ namespace OnlyWar.Helpers.Turns
             if (rules != null)
             {
                 int readyScouts = force.Army.PlayerSoldierMap.Values.Count(soldier =>
-                    soldier.Template == rules.ChapterTemplates.ScoutMarine
+                    soldier.Template == rules.ChapterDoctrine.ScoutMarine
                     && soldier.GeneticCompatibility.HasValue
-                    && soldier.SoldierEvaluationHistory.LastOrDefault()?.RangedRating > 105
+                    && rules.RatingConsumers.Get(
+                        soldier.SoldierEvaluationHistory.LastOrDefault(),
+                        RatingConsumerRole.RangedCombat) > 105
                     && !RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
                         program, soldier.Id));
                 if (readyScouts > 0)
@@ -235,7 +240,9 @@ namespace OnlyWar.Helpers.Turns
             sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
                 ?? Enumerable.Empty<Squad>();
 
-        private static bool IsIdleDeployableSquad(Squad squad)
+        private static bool IsIdleDeployableSquad(
+            Squad squad,
+            RecruitmentProgram program)
         {
             bool canDeployFromCurrentLocation = squad?.CurrentRegion != null
                 || squad?.BoardedLocation?.Fleet is
@@ -250,15 +257,18 @@ namespace OnlyWar.Helpers.Turns
                 && !squad.PermitsIndividualDeployment
                 && !OrderAttachment.HasAttachedMembers(squad)
                 && canDeployFromCurrentLocation
-                && squad.Members.Any(member => member.IsCombatEffective);
+                && SquadReadinessService.Evaluate(squad, program: program).StructuralState
+                    == SquadReadinessState.Ready;
         }
 
-        private static bool IsLeaderlessSquad(Squad squad) =>
+        private static bool IsLeaderlessSquad(
+            Squad squad,
+            RecruitmentProgram program) =>
             squad?.Faction?.IsPlayerFaction == true
                 && squad.CanAcceptSquadOrder
                 && squad.Members.Count > 0
-                && squad.SquadLeader == null
-                && squad.SquadTemplate.Elements.Any(element => element.SoldierTemplate.IsSquadLeader);
+                && SquadReadinessService.Evaluate(squad, program: program).LeaderStatus
+                    == SquadLeaderStatus.Vacant;
 
         private static bool IsActionableTaskForceWithoutOrders(Sector sector, TaskForce fleet) =>
             fleet != null
@@ -268,12 +278,14 @@ namespace OnlyWar.Helpers.Turns
                 && fleet.Destination == null
                 && fleet.Ships.Count > 0;
 
-        private static CommandAttentionFact BuildSquadFact(Squad squad)
+        private static CommandAttentionFact BuildSquadFact(
+            Squad squad,
+            RecruitmentProgram program)
         {
             string unit = string.IsNullOrWhiteSpace(squad.ParentUnit?.Name)
                 ? string.Empty
                 : $" - {squad.ParentUnit.Name}";
-            int combatReady = squad.Members.Count(member => member.IsCombatEffective);
+            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(squad, program);
             string location = SquadLocationFormatter.Format(squad);
             return new CommandAttentionFact(
                 $"squad/{squad.Id}/idle",
@@ -281,7 +293,8 @@ namespace OnlyWar.Helpers.Turns
                 EndTurnWarningCategory.IdleDeployableSquads,
                 squad.Id,
                 $"{squad.Name}{unit}",
-                $"{combatReady}/{squad.Members.Count} combat-ready in {location}; no orders are assigned.",
+                $"{strength.Effective}/{strength.Full} combat-effective in {location}; "
+                    + "no orders are assigned.",
                 new CampaignNavigationTarget(
                     CampaignNavigationTargetKind.Squad,
                     squad.Id,

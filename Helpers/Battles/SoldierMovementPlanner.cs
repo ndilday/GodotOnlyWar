@@ -45,6 +45,13 @@ namespace OnlyWar.Helpers.Battles
 
         internal static float GetTierSpeed(BattleSoldier soldier, SquadMovementTier tier)
         {
+            // A caller may still hold a precomputed Run intent from before armor was resolved.
+            // Treat it as the fastest legal movement tier for this soldier rather than allowing
+            // restrictive armor to receive full Run speed through a stale decision.
+            if (tier == SquadMovementTier.Run && !soldier.CanRun)
+            {
+                tier = SquadMovementTier.Jog;
+            }
             return tier switch
             {
                 SquadMovementTier.Walk => soldier.GetMoveSpeed() * WalkSpeedMultiplier,
@@ -68,7 +75,11 @@ namespace OnlyWar.Helpers.Battles
             ValueTuple<int, int> desiredMove = CalculateMovementAlongLine(line, moveSpeed);
             ValueTuple<int, int> newLocation = new ValueTuple<int, int>(soldier.TopLeft.Value.Item1 + desiredMove.Item1, soldier.TopLeft.Value.Item2 + desiredMove.Item2);
             SquadMovementTier movementTier = tier ?? soldier.BattleSquad.MovementTier;
-            ushort orientation = CalculateOrientationFromVector(line, soldier, movementTier);
+            SquadMovementTier effectiveTier = movementTier == SquadMovementTier.Run
+                && !soldier.CanRun
+                    ? SquadMovementTier.Jog
+                    : movementTier;
+            ushort orientation = CalculateOrientationFromVector(line, soldier, effectiveTier);
             newLocation = FindBestLocation(
                 soldier,
                 soldier.TopLeft.Value,
@@ -95,7 +106,11 @@ namespace OnlyWar.Helpers.Battles
             {
                 soldier.IsRunning = false;
             }
-            LogMove(soldier, movementTier, moveSpeed, desiredMove, actualDirection);
+            if (effectiveTier != SquadMovementTier.Run)
+            {
+                soldier.IsRunning = false;
+            }
+            LogMove(soldier, effectiveTier, moveSpeed, desiredMove, actualDirection);
             return actualDirection.Item1 == 0 && actualDirection.Item2 == 0
                 ? line
                 : actualDirection;

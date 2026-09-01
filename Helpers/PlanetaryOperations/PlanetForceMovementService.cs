@@ -1,5 +1,6 @@
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Orders;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
@@ -123,8 +124,15 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     || !validShips.Contains(CampaignLocationService.ForSoldier(character)?.Ship)
                     || !new CharacterAvailabilityService().EvaluateMovement(
                         character, CampaignLocation.Landed(destination)).IsAllowed))
-            {
+                {
                 return Failure("The force changed and at least one selected participant can no longer land.");
+            }
+            if (squads.Any(squad => squad.CurrentOrders == null
+                && SquadReadinessService.Evaluate(
+                    squad, SquadRowContext.ForLanding(destination)).PrimaryBlocker
+                    == SquadReadinessBlocker.Leaderless))
+            {
+                return Failure("A formation that requires a leader cannot land for deployment.");
             }
 
             RegionFaction destinationPresence = GetOrCreatePlayerPresence(

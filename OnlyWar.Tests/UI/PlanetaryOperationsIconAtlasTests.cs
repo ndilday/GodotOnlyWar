@@ -34,7 +34,6 @@ public class PlanetaryOperationsIconAtlasTests
     [InlineData("Tyranids", false, false, "map_tyranids")]
     [InlineData("Genestealer Cult", false, false, "map_genestealer_cult")]
     [InlineData("Orks", false, false, "map_orks")]
-    [InlineData("Red Corsairs", false, false, "map_orks")]
     public void PlanetaryOperationsFactionIcons_UseMapAtlasSlots(
         string name,
         bool isPlayer,
@@ -46,5 +45,14 @@ public class PlanetaryOperationsIconAtlasTests
 
         Assert.Equal(expectedKey, IconAtlas.GetPlanetaryOperationsFactionIconKey(faction));
         Assert.True(IconAtlas.HasPlanetaryOperationsFactionIcon(expectedKey));
+    }
+
+    [Fact]
+    public void PlanetaryOperationsFactionIcons_DoNotMisrepresentUnknownFactionAsOrks()
+    {
+        Faction faction = SectorSimulationFixture.BuildTestFaction(
+            1, "Red Corsairs", isPlayer: false, isDefault: false);
+
+        Assert.Null(IconAtlas.GetPlanetaryOperationsFactionIconKey(faction));
     }
 }

@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -16,6 +17,7 @@ public partial class ChapterController : MainScreenController
     private readonly SoldierTransferService _transferService = new();
     private readonly SoldierDetailBuilder _soldierDetailBuilder = new();
     private readonly SoldierFilterService _filterService = new();
+    private readonly SquadRowViewModelBuilder _squadRowBuilder = new();
     private List<SoldierTransferOption> _transferOptions = [];
     private List<SoldierFilterCondition> _activeFilter = [];
     private SoldierTransferOption _pendingTransferOption;
@@ -260,10 +262,12 @@ public partial class ChapterController : MainScreenController
         }
 
         List<ISoldier> scope = GetCurrentScopeMembers().ToList();
-        _filterDialog.Populate(
+            _filterDialog.Populate(
             _filterService.GetAvailableRoles(scope),
             _filterService.GetAvailableHonors(scope,
-                GameDataSingleton.Instance.GameRulesData.RatingAwardTiers),
+                GameDataSingleton.Instance.GameRulesData.RatingAwardTiers,
+                GameDataSingleton.Instance.GameRulesData.AwardCatalog,
+                GameDataSingleton.Instance.GameRulesData.RatingConsumers),
             _activeFilter);
         _filterDialog.PopupCentered();
     }
@@ -313,7 +317,7 @@ public partial class ChapterController : MainScreenController
         {
             GameRulesData rules = GameDataSingleton.Instance.GameRulesData;
             if (option.IsNewSquad
-                || option.SoldierTemplate != rules.ChapterTemplates.DevastatorMarine)
+                || option.SoldierTemplate != rules.ChapterDoctrine.DevastatorMarine)
             {
                 _transferBlockedDialog.Title = "Promotion Blocked";
                 _transferBlockedDialog.DialogText =
@@ -583,7 +587,8 @@ public partial class ChapterController : MainScreenController
                 true,
                 selectedSquad?.Id == squad.Id,
                 ">",
-                CanNavigate: SquadLocationNavigation.Resolve(squad) is not null))
+                CanNavigate: SquadLocationNavigation.Resolve(squad) is not null,
+                SquadRow: BuildChapterSquadRow(squad, selectedSquad?.Id == squad.Id)))
             .ToList();
 
         chapterItems.AddRange(chapter.ChildUnits
@@ -618,7 +623,8 @@ public partial class ChapterController : MainScreenController
                 true,
                 selectedSquad?.Id == squad.Id,
                 Location: SquadLocationFormatter.Format(squad),
-                CanNavigate: SquadLocationNavigation.Resolve(squad) is not null))
+                CanNavigate: SquadLocationNavigation.Resolve(squad) is not null,
+                SquadRow: BuildChapterSquadRow(squad, selectedSquad?.Id == squad.Id)))
             .ToList();
 
         ChapterView.SetLeftMenu($"{company.Name} Squads", squads);
@@ -632,6 +638,19 @@ public partial class ChapterController : MainScreenController
             .OrderBy(FleetScreenController.GetSquadTypeOrder)
             .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(squad => squad.Id);
+    }
+
+    private SquadRowViewModel BuildChapterSquadRow(Squad squad, bool selected)
+    {
+        return _squadRowBuilder.Build(
+            squad,
+            new SquadRowContext(
+                SquadRowContextKind.Chapter,
+                SquadRowAction.Inspect,
+                isSelected: selected,
+                isSelectable: true,
+                isEnabled: true),
+            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
     }
 
     private void RenderSquadLevel(Squad squad)
@@ -775,7 +794,11 @@ public partial class ChapterController : MainScreenController
     private void RenderFilterResults()
     {
         List<ISoldier> results = OrderFilteredSoldiers(_filterService
-                .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date))
+                .Apply(
+                    GetCurrentScopeMembers(),
+                    _activeFilter,
+                    GameDataSingleton.Instance.Date,
+                    GameDataSingleton.Instance.GameRulesData.RatingConsumers))
             .ToList();
 
         int? selectedId = _navigator.SelectedItem?.Level == ChapterBrowserLevel.Soldier
@@ -869,7 +892,11 @@ public partial class ChapterController : MainScreenController
         if (_activeFilter.Count > 0)
         {
             return OrderFilteredSoldiers(_filterService
-                    .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date))
+                    .Apply(
+                        GetCurrentScopeMembers(),
+                        _activeFilter,
+                        GameDataSingleton.Instance.Date,
+                        GameDataSingleton.Instance.GameRulesData.RatingConsumers))
                 .Select(soldier => soldier.Id)
                 .ToList();
         }

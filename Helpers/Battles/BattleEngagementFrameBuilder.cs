@@ -70,7 +70,8 @@ internal static class BattleEngagementFrameBuilder
         if (able.Count == 0)
         {
             return new BattleSquadCapabilityProfile(
-                squad?.Id ?? 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new Dictionary<int, float>());
+                squad?.Id ?? 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, 0,
+                new Dictionary<int, float>());
         }
 
         float total = 0;
@@ -133,6 +134,7 @@ internal static class BattleEngagementFrameBuilder
             band,
             peakRemovalFraction,
             squad.GetSquadMove(),
+            squad.CanRun,
             perimeter,
             groups);
     }
@@ -827,7 +829,10 @@ internal static class BattleEngagementFrameBuilder
                     ? primaryRole switch
                     {
                         EngagementSquadRole.Bound or EngagementSquadRole.Routing =>
-                            profiles[primary.Value].MoveSpeed,
+                            profiles[primary.Value].CanRun
+                                ? profiles[primary.Value].MoveSpeed
+                                : profiles[primary.Value].MoveSpeed
+                                    * SoldierMovementPlanner.JogSpeedMultiplier,
                         EngagementSquadRole.Cover or EngagementSquadRole.RearGuard => 0,
                         _ => constraint.QuarryRunSpeed
                     }

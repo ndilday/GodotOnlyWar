@@ -785,8 +785,8 @@ public partial class MainGameScene : Control
 			return;
 		}
 
-		ChapterGenerationTemplates templates =
-			GameDataSingleton.Instance.GameRulesData.ChapterTemplates;
+		ChapterGenerationDoctrine templates =
+			GameDataSingleton.Instance.GameRulesData.ChapterDoctrine;
 		SquadTemplate targetTemplate = templates.ScoutSquad;
 		List<Squad> targets = force.Army.OrderOfBattle.GetAllSquads()
 			.Where(squad => squad.IsPresentOperationalForce)

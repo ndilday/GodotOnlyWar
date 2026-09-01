@@ -2,6 +2,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +13,7 @@ namespace OnlyWar.Helpers
     {
         private const int FirstProgenoidMaturesWeeks = 5 * 52;
         private const int SecondProgenoidMaturesWeeks = 10 * 52;
+        private readonly SquadRowViewModelBuilder _squadRowBuilder = new();
 
         public IReadOnlyList<ApothecariumTreeItem> BuildTree(
             Unit chapter,
@@ -238,7 +240,18 @@ namespace OnlyWar.Helpers
                 "",
                 SeverityForSoldiers(members),
                 selectedKind == ApothecariumSelectionKind.Squad && selectedId == squad.Id,
-                children);
+                children,
+                _squadRowBuilder.Build(
+                    squad,
+                    new SquadRowContext(
+                        SquadRowContextKind.Apothecarium,
+                        SquadRowAction.Inspect,
+                        isSelected: selectedKind == ApothecariumSelectionKind.Squad
+                            && selectedId == squad.Id,
+                        isSelectable: true,
+                        isEnabled: true,
+                        contextBadge: "MEDICAL"),
+                    force?.RecruitmentProgram));
         }
 
         private ApothecariumTreeItem BuildSoldierTreeItem(

@@ -2,6 +2,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -78,6 +79,16 @@ namespace OnlyWar.Helpers.Orders
                     order.AssignedSquads.Add(squad);
                 }
                 return true;
+            }
+
+            // A leaderless required-leader formation may remain on an existing order, be
+            // recalled, transferred between ships, or be repaired through Muster. It may not be
+            // newly committed to an order. Keeping this check at the participant mutation
+            // boundary prevents callers from bypassing the UI's disabled row.
+            if (squad.CurrentOrders == null
+                && !SquadReadinessService.CanBeginNewDeployment(squad))
+            {
+                return false;
             }
 
             if (squad.CurrentOrders != null)

@@ -2,6 +2,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -127,12 +128,12 @@ namespace OnlyWar.Helpers
         private static RecoverySquadStatus BuildSquadStatus(PlayerSoldier patient)
         {
             Squad squad = patient.AssignedSquad;
-            int nominal = SoldierPresenceService.NominalCount(squad);
-            int detached = nominal - SoldierPresenceService.PresentCount(squad);
+            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(squad);
             return new RecoverySquadStatus(
                 squad?.Name ?? "Unassigned",
                 squad?.ParentUnit?.Name ?? "No company",
-                $"{nominal}{(detached > 0 ? $" -{detached} detached" : string.Empty)} / {nominal}",
+                $"{strength.Effective}/{strength.Full} effective"
+                    + (strength.Unavailable > 0 ? $" · {strength.Unavailable} unavailable" : string.Empty),
                 CampaignLocationService.Format(CampaignLocationService.ForSquad(squad)),
                 squad?.CurrentOrders?.Mission?.MissionType.ToString() ?? "No order");
         }

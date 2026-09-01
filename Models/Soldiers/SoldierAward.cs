@@ -11,6 +11,9 @@ namespace OnlyWar.Models.Soldiers
         public Date DateAwarded { get; }
         public string Name { get; }
         public string Type { get; }
+        // Type remains for save-format compatibility; new content treats it as
+        // the stable award-family key rather than a closed enum.
+        public string AwardFamilyKey => Type;
         public ushort Level { get; }
 
         public SoldierAward(Date dateAwarded, string name, string type, ushort level)

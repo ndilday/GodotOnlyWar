@@ -15,25 +15,17 @@ namespace OnlyWar.Helpers
         public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points);
         public void TrainScouts(
             IEnumerable<Squad> scoutSquads,
-            Dictionary<int, TrainingFocuses> squadFocusMap,
+            Dictionary<int, string> squadTrainingOptionMap,
             float points = 0.2f,
             IReadOnlyDictionary<int, float> pointsBySquad = null);
     }
 
     public class SoldierTrainingCalculator : ISoldierTrainingService
     {
-        private readonly IReadOnlyDictionary<string, BaseSkill> _skillsByName;
-        private readonly IReadOnlyDictionary<string, TrainingProfile> _trainingProfilesByName;
+        private readonly IReadOnlyDictionary<string, BaseSkill> _skillsByKey;
+        private readonly IReadOnlyDictionary<string, ScoutTrainingOption> _scoutTrainingOptionsByKey;
         private readonly RatingCalculator _ratingCalculator;
-
-        // Base skills this calculator still references by name directly (work-experience
-        // and scout training). Rating-formula skills are now validated through the
-        // data-driven rating definitions instead (see OnlyWar_TDD.md §4.1.1).
-        // Exposed so the rules-DB load step can fail fast if any is missing (TDD §8.3).
-        public static readonly string[] RequiredSkillNames =
-        [
-            "Power Armor", "Teaching"
-        ];
+        private readonly NamedSkillRegistry _namedSkills;
 
         // Instruction-quality tiers for scout drills. A capable sergeant is worth a bonus over
         // the baseline; a sub-par one still runs drills at the ordinary rate; a squad that has
@@ -47,12 +39,27 @@ namespace OnlyWar.Helpers
 
         public SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
                                          IEnumerable<TrainingProfile> trainingProfiles = null,
-                                         RatingCalculator ratingCalculator = null)
+                                         RatingCalculator ratingCalculator = null,
+                                         IEnumerable<ScoutTrainingOption> scoutTrainingOptions = null)
+            : this(baseSkills, trainingProfiles, ratingCalculator, null, scoutTrainingOptions)
         {
-            _skillsByName = baseSkills.ToDictionary(bs => bs.Name);
-            _trainingProfilesByName = trainingProfiles?.ToDictionary(tp => tp.Name)
-                ?? new Dictionary<string, TrainingProfile>();
+        }
+
+        internal SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
+                                           IEnumerable<TrainingProfile> trainingProfiles,
+                                           RatingCalculator ratingCalculator,
+                                           NamedSkillRegistry namedSkills,
+                                           IEnumerable<ScoutTrainingOption> scoutTrainingOptions = null)
+        {
+            _skillsByKey = (baseSkills ?? throw new ArgumentNullException(nameof(baseSkills)))
+                .Where(bs => !string.IsNullOrWhiteSpace(bs.SkillKey))
+                .ToDictionary(bs => bs.SkillKey, StringComparer.Ordinal);
+            _scoutTrainingOptionsByKey = scoutTrainingOptions?.ToDictionary(
+                option => option.Key,
+                StringComparer.Ordinal)
+                ?? new Dictionary<string, ScoutTrainingOption>(StringComparer.Ordinal);
             _ratingCalculator = ratingCalculator;
+            _namedSkills = namedSkills;
         }
 
         public void UpdateRatings(Date date, PlayerSoldier soldier)
@@ -82,7 +89,8 @@ namespace OnlyWar.Helpers
 
         public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points)
         {
-            float powerArmorSkill = soldier.GetTotalSkillValue(_skillsByName["Power Armor"]);
+            BaseSkill powerArmor = RequiredSkill(SkillRole.PowerArmor);
+            float powerArmorSkill = soldier.GetTotalSkillValue(powerArmor);
             // if any gunnery, ranged, melee, or vehicle skill is below the PA skill, focus on improving PA
             float gunnerySkill = soldier.GetTotalSkillValue(soldier.GetBestSkillInCategory(SkillCategory.Gunnery).BaseSkill);
             float meleeSkill = soldier.GetTotalSkillValue(soldier.GetBestSkillInCategory(SkillCategory.Melee).BaseSkill);
@@ -92,7 +100,7 @@ namespace OnlyWar.Helpers
             float totalMax = floatArray.Max();
             if (totalMax > powerArmorSkill)
             {
-                soldier.AddSkillPoints(_skillsByName["Power Armor"], points);
+                soldier.AddSkillPoints(powerArmor, points);
             }
             else
             {
@@ -120,10 +128,15 @@ namespace OnlyWar.Helpers
 
         public void TrainScouts(
             IEnumerable<Squad> scoutSquads,
-            Dictionary<int, TrainingFocuses> squadFocusMap,
+            Dictionary<int, string> squadTrainingOptionMap,
             float points = 0.2f,
             IReadOnlyDictionary<int, float> pointsBySquad = null)
         {
+            if (squadTrainingOptionMap == null)
+            {
+                throw new ArgumentNullException(nameof(squadTrainingOptionMap));
+            }
+
             foreach (Squad squad in scoutSquads)
             {
                 if (squad.Members.Count == 0) continue;
@@ -146,82 +159,35 @@ namespace OnlyWar.Helpers
                     continue;
                 }
 
+                if (!squadTrainingOptionMap.TryGetValue(squad.Id, out string optionKey))
                 {
-                    TrainingFocuses focuses = squadFocusMap[squad.Id];
-                    int numberOfAreas = 0;
-                    if ((focuses & TrainingFocuses.Melee) != TrainingFocuses.None) numberOfAreas++;
-                    if ((focuses & TrainingFocuses.Physical) != TrainingFocuses.None) numberOfAreas++;
-                    if ((focuses & TrainingFocuses.Ranged) != TrainingFocuses.None) numberOfAreas++;
-                    if ((focuses & TrainingFocuses.Vehicles) != TrainingFocuses.None) numberOfAreas++;
-                    if (numberOfAreas == 0)
-                    {
-                        numberOfAreas = 4;
-                        focuses = TrainingFocuses.Melee | TrainingFocuses.Physical | TrainingFocuses.Ranged | TrainingFocuses.Vehicles;
-                    }
-                    float baseLearning = squadPoints;
-                    ISoldier instructor = squad.SquadLeader;
-                    if (instructor == null)
-                    {
-                        // The sergeant is dead or transferred out and no replacement has been
-                        // assigned. The scouts still drill, but with nobody running the training
-                        // they lose part of its value.
-                        baseLearning *= NoInstructorLearningRate;
-                    }
-                    else
-                    {
-                        instructor.AddSkillPoints(_skillsByName["Teaching"], squadPoints * InstructorTeachingXpShare);
-                        baseLearning *=
-                            instructor.GetTotalSkillValue(_skillsByName["Teaching"]) < GoodTeacherSkillThreshold
-                                ? SubParInstructorLearningRate
-                                : GoodInstructorLearningRate;
-                    }
-                    foreach (ISoldier soldier in squad.Members)
-                    {
-                        if ((focuses & TrainingFocuses.Melee) != TrainingFocuses.None)
-                        {
-                            ApplyNamedTrainingProfile(soldier, "scout_focus_melee", baseLearning / numberOfAreas);
-                        }
-                        if ((focuses & TrainingFocuses.Physical) != TrainingFocuses.None)
-                        {
-                            ApplyNamedTrainingProfile(soldier, "scout_focus_physical", baseLearning / numberOfAreas);
-                        }
-                        if ((focuses & TrainingFocuses.Ranged) != TrainingFocuses.None)
-                        {
-                            ApplyNamedTrainingProfile(soldier, "scout_focus_ranged", baseLearning / numberOfAreas);
-                        }
-                        if ((focuses & TrainingFocuses.Vehicles) != TrainingFocuses.None)
-                        {
-                            ApplyNamedTrainingProfile(soldier, "scout_focus_vehicles", baseLearning / numberOfAreas);
-                        }
-                    }
+                    throw new InvalidOperationException(
+                        $"Scout squad {squad.Id} has no training option selection.");
+                }
+                ScoutTrainingOption option = RequiredScoutTrainingOption(optionKey);
+                float baseLearning = squadPoints;
+                ISoldier instructor = squad.SquadLeader;
+                if (instructor == null)
+                {
+                    // The sergeant is dead or transferred out and no replacement has been
+                    // assigned. The scouts still drill, but with nobody running the training
+                    // they lose part of its value.
+                    baseLearning *= NoInstructorLearningRate;
+                }
+                else
+                {
+                    BaseSkill teaching = RequiredSkill(SkillRole.Teaching);
+                    instructor.AddSkillPoints(teaching, squadPoints * InstructorTeachingXpShare);
+                    baseLearning *=
+                        instructor.GetTotalSkillValue(teaching) < GoodTeacherSkillThreshold
+                            ? SubParInstructorLearningRate
+                            : GoodInstructorLearningRate;
+                }
+                foreach (ISoldier soldier in squad.Members)
+                {
+                    ApplyTrainingProfile(soldier, option.Profile, baseLearning);
                 }
             }
-        }
-
-        private void TrainMelee(ISoldier soldier, float points)
-        {
-            ApplyNamedTrainingProfile(soldier, "scout_focus_melee", points);
-        }
-
-        private void TrainPhysical(ISoldier soldier, float points)
-        {
-            ApplyNamedTrainingProfile(soldier, "scout_focus_physical", points);
-        }
-
-        private void TrainRanged(ISoldier soldier, float points)
-        {
-            ApplyNamedTrainingProfile(soldier, "scout_focus_ranged", points);
-        }
-
-        private void TrainVehicles(ISoldier soldier, float points)
-        {
-            ApplyNamedTrainingProfile(soldier, "scout_focus_vehicles", points);
-        }
-
-        private void ApplyNamedTrainingProfile(ISoldier soldier, string profileName, float points)
-        {
-            if (!_trainingProfilesByName.ContainsKey(profileName)) return;
-            ApplyTrainingProfile(soldier, _trainingProfilesByName[profileName], points);
         }
 
         private void ApplyTrainingProfile(ISoldier soldier, TrainingProfile trainingProfile, float points)
@@ -243,6 +209,36 @@ namespace OnlyWar.Helpers
                     soldier.AddAttributePoints(entry.Attribute.Value, awardedPoints);
                 }
             }
+        }
+
+        private ScoutTrainingOption RequiredScoutTrainingOption(string optionKey)
+        {
+            if (!string.IsNullOrWhiteSpace(optionKey)
+                && _scoutTrainingOptionsByKey.TryGetValue(optionKey, out ScoutTrainingOption option))
+            {
+                return option;
+            }
+
+            throw new InvalidOperationException(
+                $"Scout training option '{optionKey}' is not available to the training calculator.");
+        }
+
+        private BaseSkill RequiredSkill(SkillRole role)
+        {
+            if (_namedSkills != null)
+            {
+                return _namedSkills[role];
+            }
+
+            string key = SkillRoleKeys.For(role);
+            if (_skillsByKey.TryGetValue(key, out BaseSkill skill))
+            {
+                return skill;
+            }
+
+            throw new InvalidOperationException(
+                $"Required skill role '{key}' ({SkillRoleKeys.DisplayName(role)}) "
+                + "is not available to the training calculator.");
         }
     }
 }

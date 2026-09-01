@@ -29,9 +29,18 @@ namespace OnlyWar.Helpers.Database.GameRules
         public IReadOnlyDictionary<int, WeaponSet> WeaponSets { get; set; }
         public EquipmentRulesCatalog EquipmentCatalog { get; set; }
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; set; }
+        public IReadOnlyList<PlanetTemplateEligibilityAssignment> PlanetTemplateEligibilityAssignments { get; set; }
+        public ScoutTrainingOptionCatalog ScoutTrainingOptions { get; set; }
         public IReadOnlyList<Models.Soldiers.Ratings.RatingDefinition> RatingDefinitions { get; set; }
         public IReadOnlyList<Models.Soldiers.Ratings.RatingAwardTier> RatingAwardTiers { get; set; }
-        public Models.Supply.SupplyEconomyRules SupplyEconomyRules { get; set; }
+        public IReadOnlyList<Models.Soldiers.Ratings.RatingConsumerAssignment> RatingConsumerAssignments { get; set; }
+        public IReadOnlyList<Models.Soldiers.Ratings.AwardFamilyDefinition> AwardFamilies { get; set; }
+        public IReadOnlyList<SkillRoleAssignment> SkillRoleAssignments { get; set; }
+        public IReadOnlyList<FactionRoleAssignment> FactionRoleAssignments { get; set; }
+        public IReadOnlyList<ScenarioProfile> ScenarioProfiles { get; set; }
+        public IReadOnlyList<ScenarioFactionOption> ScenarioFactionOptions { get; set; }
+        public IReadOnlyList<FactionPlanetPresenceRule> FactionPlanetPresenceRules { get; set; }
+        public IReadOnlyList<ChapterGenerationProfileData> ChapterGenerationProfiles { get; set; }
 
     }
 
@@ -43,7 +52,11 @@ namespace OnlyWar.Helpers.Database.GameRules
         private readonly PlanetTemplateDataAccess _planetDataAccess;
         private readonly SquadTemplateDataAccess _squadDataAccess;
         private readonly RatingDataAccess _ratingDataAccess;
-        private readonly SupplyRulesDataAccess _supplyRulesDataAccess;
+        private readonly PlanetTemplateEligibilityDataAccess _planetTemplateEligibilityDataAccess;
+        private readonly SkillRoleDataAccess _skillRoleDataAccess;
+        private readonly FactionGenerationPolicyDataAccess _factionGenerationPolicyDataAccess;
+        private readonly ChapterGenerationPolicyDataAccess _chapterGenerationPolicyDataAccess;
+        private readonly ScoutTrainingOptionDataAccess _scoutTrainingOptionDataAccess;
 
         private static GameRulesDataAccess _instance;
 
@@ -55,7 +68,11 @@ namespace OnlyWar.Helpers.Database.GameRules
             _planetDataAccess = new PlanetTemplateDataAccess();
             _squadDataAccess = new SquadTemplateDataAccess();
             _ratingDataAccess = new RatingDataAccess();
-            _supplyRulesDataAccess = new SupplyRulesDataAccess();
+            _planetTemplateEligibilityDataAccess = new PlanetTemplateEligibilityDataAccess();
+            _skillRoleDataAccess = new SkillRoleDataAccess();
+            _factionGenerationPolicyDataAccess = new FactionGenerationPolicyDataAccess();
+            _chapterGenerationPolicyDataAccess = new ChapterGenerationPolicyDataAccess();
+            _scoutTrainingOptionDataAccess = new ScoutTrainingOptionDataAccess();
         }
 
         public static GameRulesDataAccess Instance
@@ -84,10 +101,19 @@ namespace OnlyWar.Helpers.Database.GameRules
             }.ToString();
             using IDbConnection dbCon = new SqliteConnection(connectionString);
             dbCon.Open();
+            // Validate the schema before any loader can turn a missing table into a provider
+            // exception or a later null/dictionary failure. Optional extension tables are not
+            // listed by RulesDatabaseSchemaValidator and retain their explicit fallbacks below.
+            RulesDatabaseSchemaValidator.Validate(dbCon);
+            RulesDatabaseReferenceValidator.Validate(dbCon);
             var baseSkills = _baseSkillDataAccess.GetBaseSkills(dbCon);
+            var skillRoleAssignments = _skillRoleDataAccess.GetSkillRoleAssignments(dbCon);
             var skillTemplates = GetSkillTemplates(dbCon, baseSkills);
             var hitLocations = _hitLocationDataAccess.GetHitLocationsByBodyId(dbCon);
             var squadDataBlob = _squadDataAccess.GetSquadDataBlob(dbCon, baseSkills, hitLocations);
+            var scoutTrainingOptions = _scoutTrainingOptionDataAccess.GetCatalog(
+                dbCon,
+                squadDataBlob.TrainingProfilesById);
             var unitSquadTemplates = GetSquadTemplatesByUnitTemplateId(
                 dbCon, squadDataBlob.SquadTemplatesById);
             var unitHierarchy = GetUnitTemplateHierarchy(dbCon);
@@ -95,6 +121,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                 GetUnitTemplatesByFactionId(dbCon, unitHierarchy, unitSquadTemplates, 
                                             squadDataBlob.SquadTemplatesById);
             var planetTemplates = _planetDataAccess.GetData(dbCon);
+            var planetTemplateEligibilityAssignments =
+                _planetTemplateEligibilityDataAccess.GetData(dbCon);
 
             var fleetDataBlob = _fleetDataAccess.GetFleetData(dbCon);
             var factions = GetFactionTemplates(dbCon, squadDataBlob.SpeciesByFactionId,  
@@ -104,6 +132,17 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                fleetDataBlob.BoatTemplates, 
                                                fleetDataBlob.ShipTemplates, 
                                                fleetDataBlob.FleetTemplates);
+            var chapterGenerationProfiles =
+                _chapterGenerationPolicyDataAccess.GetProfiles(dbCon);
+            var factionRoleAssignments =
+                _factionGenerationPolicyDataAccess.GetFactionRoleAssignments(dbCon);
+            var scenarioFactionOptions =
+                _factionGenerationPolicyDataAccess.GetScenarioFactionOptions(dbCon);
+            var scenarioProfiles =
+                _factionGenerationPolicyDataAccess.GetScenarioProfiles(
+                    dbCon, scenarioFactionOptions);
+            var factionPlanetPresenceRules =
+                _factionGenerationPolicyDataAccess.GetFactionPlanetPresenceRules(dbCon);
             EquipmentRulesCatalog compatibilityEquipmentCatalog = EquipmentRulesCatalog.FromLegacyRules(
                 squadDataBlob.RangedWeaponTemplateMap,
                 squadDataBlob.MeleeWeaponTemplateMap,
@@ -127,8 +166,9 @@ namespace OnlyWar.Helpers.Database.GameRules
             }
             var ratingDefinitions = _ratingDataAccess.GetRatingDefinitions(dbCon);
             var ratingAwardTiers = _ratingDataAccess.GetRatingAwardTiers(dbCon);
-            var supplyEconomyRules = _supplyRulesDataAccess.GetData(dbCon);
-            return new GameRulesBlob
+            var ratingConsumerAssignments = _ratingDataAccess.GetRatingConsumerAssignments(dbCon);
+            var awardFamilies = _ratingDataAccess.GetAwardFamilies(dbCon);
+            GameRulesBlob rules = new GameRulesBlob
             {
                 Factions = factions,
                 BaseSkills = baseSkills,
@@ -140,10 +180,21 @@ namespace OnlyWar.Helpers.Database.GameRules
                 WeaponSets = squadDataBlob.WeaponSetMap,
                 EquipmentCatalog = equipmentCatalog,
                 TrainingProfiles = squadDataBlob.TrainingProfilesById,
+                PlanetTemplateEligibilityAssignments = planetTemplateEligibilityAssignments,
+                ScoutTrainingOptions = scoutTrainingOptions,
                 RatingDefinitions = ratingDefinitions,
                 RatingAwardTiers = ratingAwardTiers,
-                SupplyEconomyRules = supplyEconomyRules
+                RatingConsumerAssignments = ratingConsumerAssignments,
+                AwardFamilies = awardFamilies,
+                SkillRoleAssignments = skillRoleAssignments,
+                FactionRoleAssignments = factionRoleAssignments,
+                ScenarioProfiles = scenarioProfiles,
+                ScenarioFactionOptions = scenarioFactionOptions,
+                FactionPlanetPresenceRules = factionPlanetPresenceRules,
+                ChapterGenerationProfiles = chapterGenerationProfiles
             };
+            RulesDatabaseValidator.Validate(rules);
+            return rules;
         }
 
         private List<Faction> GetFactionTemplates(IDbConnection connection,
@@ -183,11 +234,17 @@ namespace OnlyWar.Helpers.Database.GameRules
                     Dictionary<int, BoatTemplate> boatMap = null;
                     Dictionary<int, ShipTemplate> shipMap = null;
                     Dictionary<int, FleetTemplate> fleetMap = null;
-                    if (factionShipMap.ContainsKey(id))
+                    if (factionBoatMap.TryGetValue(id, out List<BoatTemplate> boats))
                     {
-                        boatMap = factionBoatMap[id].ToDictionary(bt => bt.Id);
-                        shipMap = factionShipMap[id].ToDictionary(st => st.Id);
-                        fleetMap = factionFleetMap[id].ToDictionary(ft => ft.Id);
+                        boatMap = boats.ToDictionary(bt => bt.Id);
+                    }
+                    if (factionShipMap.TryGetValue(id, out List<ShipTemplate> ships))
+                    {
+                        shipMap = ships.ToDictionary(st => st.Id);
+                    }
+                    if (factionFleetMap.TryGetValue(id, out List<FleetTemplate> fleets))
+                    {
+                        fleetMap = fleets.ToDictionary(ft => ft.Id);
                     }
 
                     Faction factionTemplate = new Faction(id, name, color, isPlayer, isDefault,
@@ -247,7 +304,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                     float stdDev = Convert.ToSingle(reader[3]);
                     SkillTemplate skillTemplate = new SkillTemplate
                     {
-                        BaseSkill = baseSkillMap[baseSkillId],
+                        BaseSkill = RulesDatabaseLookup.Require(
+                            baseSkillMap,
+                            baseSkillId,
+                            $"SkillTemplate {id}.BaseSkillId"),
                         BaseValue = baseValue,
                         StandardDeviation = stdDev
                     };
@@ -300,7 +360,11 @@ namespace OnlyWar.Helpers.Database.GameRules
                     SquadTemplate hqSquad;
                     if (reader[4].GetType() != typeof(DBNull))
                     {
-                        hqSquad = squadTemplateMap[reader.GetInt32(4)];
+                        int hqSquadId = reader.GetInt32(4);
+                        hqSquad = RulesDatabaseLookup.Require(
+                            squadTemplateMap,
+                            hqSquadId,
+                            $"UnitTemplate {id}.HQSquadTemplateId");
                     }
                     else
                     {
@@ -322,7 +386,16 @@ namespace OnlyWar.Helpers.Database.GameRules
                 // hydrate unit children
                 foreach (KeyValuePair<int, List<int>> kvp in unitTemplateTree)
                 {
-                    unitTemplateMap[kvp.Key].SetChildUnits(kvp.Value.Select(i => unitTemplateMap[i]).ToList());
+                    UnitTemplate parent = RulesDatabaseLookup.Require(
+                        unitTemplateMap,
+                        kvp.Key,
+                        "UnitTemplateTree.ParentUnitTemplateId");
+                    parent.SetChildUnits(kvp.Value
+                        .Select(childId => RulesDatabaseLookup.Require(
+                            unitTemplateMap,
+                            childId,
+                            $"UnitTemplateTree child of {kvp.Key}"))
+                        .ToList());
                 }
             }
             return factionUnitTemplateMap;
@@ -351,7 +424,13 @@ namespace OnlyWar.Helpers.Database.GameRules
                         unitSquadTemplateMap[unitTemplateId] = [];
                     }
                     unitSquadTemplateMap[unitTemplateId].Add(
-                        new SquadTemplateSlot(squadTemplateMap[squadTemplateId], minCount, maxCount));
+                        new SquadTemplateSlot(
+                            RulesDatabaseLookup.Require(
+                                squadTemplateMap,
+                                squadTemplateId,
+                                $"UnitTemplateSquadTemplate {unitTemplateId}.SquadTemplateId"),
+                            minCount,
+                            maxCount));
                 }
             }
             return unitSquadTemplateMap;

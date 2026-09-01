@@ -19,13 +19,15 @@ namespace OnlyWar.Helpers
     public class SoldierDossierService
     {
         public SoldierDossier BuildDossier(PlayerSoldier soldier, IReadOnlyList<string> history = null,
-                                           bool richTextInjury = true, Date currentDate = null, Sector sector = null)
+                                           bool richTextInjury = true, Date currentDate = null,
+                                           Sector sector = null,
+                                           RatingConsumerBindings ratingBindings = null)
         {
             return new SoldierDossier(
                 BuildSoldierData(soldier, currentDate, sector),
                 history ?? soldier.SoldierEvents.Select(e => e.Render()).ToList(),
                 BuildAwardLines(soldier),
-                BuildSergeantReport(soldier),
+                BuildSergeantReport(soldier, ratingBindings),
                 GenerateSoldierInjurySummary(soldier, richTextInjury),
                 BuildCombatRecord(soldier));
         }
@@ -170,12 +172,15 @@ namespace OnlyWar.Helpers
         /// where a loadout decision needs context: the player is never shown raw skill values,
         /// so an honor is the readable stand-in for one. Empty for a brother with neither.
         /// </summary>
-        public IReadOnlyList<string> BuildCombatHonorNames(PlayerSoldier soldier)
+        public IReadOnlyList<string> BuildCombatHonorNames(
+            PlayerSoldier soldier,
+            AwardFamilyCatalog awardCatalog = null)
         {
+            awardCatalog ??= AwardFamilyCatalog.CreateDefault();
             return HighestPerType(soldier)
-                .Where(award => award.Type == AwardTypes.Gun || award.Type == AwardTypes.Sword)
-                // Gun before Sword, so a row's honors don't reorder as awards are earned.
-                .OrderBy(award => award.Type, StringComparer.Ordinal)
+                .Where(award => awardCatalog.Get(award.AwardFamilyKey).SummaryGroup == "combat")
+                .OrderBy(award => awardCatalog.Get(award.AwardFamilyKey).SortOrder)
+                .ThenBy(award => award.AwardFamilyKey, StringComparer.Ordinal)
                 .Select(award => award.Name)
                 .ToList();
         }
@@ -190,7 +195,9 @@ namespace OnlyWar.Helpers
                     .First());
         }
 
-        public string BuildSergeantReport(PlayerSoldier soldier)
+        public string BuildSergeantReport(
+            PlayerSoldier soldier,
+            RatingConsumerBindings ratingBindings = null)
         {
             SoldierEvaluation evaluation = soldier.SoldierEvaluationHistory.LastOrDefault();
             if (evaluation == null)
@@ -202,7 +209,8 @@ namespace OnlyWar.Helpers
                 soldier.Name,
                 evaluation,
                 soldier.AssignedSquad?.SquadTemplate?.Name ?? "",
-                soldier.Template.IsSquadLeader);
+                soldier.Template.IsSquadLeader,
+                ratingBindings ?? RatingConsumerBindings.CreateDefault());
         }
 
         public string GenerateSoldierInjurySummary(ISoldier selectedSoldier, bool richText = true)
@@ -245,11 +253,22 @@ namespace OnlyWar.Helpers
             return richText ? summary : StripRichTextTags(summary);
         }
 
-        private static string GetSergeantDescription(string name, SoldierEvaluation evaluation, string squadType, bool isSquadLeader)
+        private static string GetSergeantDescription(
+            string name,
+            SoldierEvaluation evaluation,
+            string squadType,
+            bool isSquadLeader,
+            RatingConsumerBindings ratingBindings)
         {
+            float leadershipRating = ratingBindings.Get(
+                evaluation, RatingConsumerRole.CommandLeadership);
+            float rangedRating = ratingBindings.Get(
+                evaluation, RatingConsumerRole.RangedCombat);
+            float meleeRating = ratingBindings.Get(
+                evaluation, RatingConsumerRole.MeleeCombat);
             if (isSquadLeader)
             {
-                if (evaluation.LeadershipRating > 55)
+                if (leadershipRating > 55)
                 {
                     return name + " leads his squad with distinction, and should be considered for greater command responsibilities.";
                 }
@@ -260,15 +279,15 @@ namespace OnlyWar.Helpers
             }
 
             int maxLevel = 0;
-            if (evaluation.RangedRating > 105 && evaluation.MeleeRating < 90)
+            if (rangedRating > 105 && meleeRating < 90)
             {
                 maxLevel = 1;
             }
-            else if (evaluation.RangedRating > 105 && evaluation.MeleeRating > 90)
+            else if (rangedRating > 105 && meleeRating > 90)
             {
-                if (evaluation.RangedRating > 110 && evaluation.MeleeRating > 95)
+                if (rangedRating > 110 && meleeRating > 95)
                 {
-                    if (evaluation.LeadershipRating > 55)
+                    if (leadershipRating > 55)
                     {
                         maxLevel = 4;
                     }

@@ -74,7 +74,9 @@ namespace OnlyWar.Helpers.Turns
             FieldCareService.ApplyGarrisonFieldCare(
                 members?.OfType<PlayerSoldier>(),
                 FieldCareService.ResolveMedicalSkills(
-                    _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap));
+                    _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap,
+                    _session.Rules?.RatingConsumers),
+                _session.Rules?.RatingConsumers);
             MedicalTurnProcessor.ApplyWeeklyHealing(members);
             IReadOnlyList<CompletedMedicalProcedure> completedProcedures =
                 MedicalTurnProcessor.ResolveProcedures(army.MedicalProcedures, army.PlayerSoldierMap);
@@ -183,11 +185,17 @@ namespace OnlyWar.Helpers.Turns
                 ?? Enumerable.Empty<Squad>()).ToList();
 
             List<Squad> scoutSquads = squads.Where(s => IsScoutSquad(s) && CanTrainThisCampaignWeek(s)).ToList();
-            Dictionary<int, TrainingFocuses> scoutFocusMap = scoutSquads.ToDictionary(s => s.Id, s => s.TrainingFocus);
+            Dictionary<int, string> scoutTrainingOptionMap = scoutSquads.ToDictionary(
+                s => s.Id,
+                s => s.TrainingOptionKey);
             Dictionary<int, SoldierProgressLog.ProgressSnapshot> scoutSnapshots =
                 scoutSquads.ToDictionary(s => s.Id, s => SoldierProgressLog.Capture(s.Members));
             Dictionary<int, float> scoutPoints = BuildLeftoverPoints(scoutSquads, missionDaysBySquad);
-            trainingService.TrainScouts(scoutSquads, scoutFocusMap, WeeklyTrainingPoints, scoutPoints);
+            trainingService.TrainScouts(
+                scoutSquads,
+                scoutTrainingOptionMap,
+                WeeklyTrainingPoints,
+                scoutPoints);
             foreach (Squad squad in scoutSquads)
             {
                 SoldierProgressLog.LogDelta(
@@ -252,10 +260,12 @@ namespace OnlyWar.Helpers.Turns
             float points = (float)(WeeklyTrainingPoints * subjectiveWeeks);
 
             List<Squad> scoutSquads = embarkedSquads.Where(IsScoutSquad).ToList();
-            Dictionary<int, TrainingFocuses> scoutFocusMap = scoutSquads.ToDictionary(s => s.Id, s => s.TrainingFocus);
+            Dictionary<int, string> scoutTrainingOptionMap = scoutSquads.ToDictionary(
+                s => s.Id,
+                s => s.TrainingOptionKey);
             Dictionary<int, SoldierProgressLog.ProgressSnapshot> scoutSnapshots =
                 scoutSquads.ToDictionary(s => s.Id, s => SoldierProgressLog.Capture(s.Members));
-            trainingService.TrainScouts(scoutSquads, scoutFocusMap, points);
+            trainingService.TrainScouts(scoutSquads, scoutTrainingOptionMap, points);
             foreach (Squad squad in scoutSquads)
             {
                 SoldierProgressLog.LogDelta(
@@ -283,10 +293,10 @@ namespace OnlyWar.Helpers.Turns
 
         // The Scout HQ (SquadTypes.HQ | SquadTypes.Scout) carries the Scout flag but is a command
         // element, not a training squad: TrainingUnitScreenController.IsTrainingSquad excludes it, so
-        // the player can neither see it on the training screen nor set its TrainingFocus. Matching that
+        // the player can neither see it on the training screen nor set its training option. Matching that
         // exclusion here keeps the two from disagreeing - previously the Scout HQ was silently drilled
         // as scouts every week against an unset focus (which TrainScouts expands to all four areas),
-        // and its scout sergeants developed against focus profiles the player never chose. Excluded
+        // and its scout sergeants developed against scout profiles the player never chose. Excluded
         // here, it falls into the garrison work-experience path with every other HQ squad.
         internal static bool IsScoutSquad(Squad squad)
         {
@@ -300,8 +310,12 @@ namespace OnlyWar.Helpers.Turns
             GameRulesData rules = _session.Rules;
             RatingCalculator ratingCalculator = new(rules.RatingDefinitions, rules.RatingAwardTiers,
                                                     rules.BaseSkillMap, _session.Random);
-            return new SoldierTrainingCalculator(rules.BaseSkillMap.Values, rules.TrainingProfiles.Values,
-                                                 ratingCalculator);
+            return new SoldierTrainingCalculator(
+                rules.BaseSkillMap.Values,
+                rules.TrainingProfiles.Values,
+                ratingCalculator,
+                rules.Skills,
+                rules.ScoutTrainingOptions.Options);
         }
     }
 }

@@ -132,6 +132,9 @@ CREATE TABLE SoldierEvaluation (SoldierId INTEGER NOT NULL REFERENCES Soldier (I
 CREATE TABLE SoldierEvaluationRating (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, RatingKey STRING NOT NULL, Value REAL NOT NULL);
 
 -- Table: SoldierAward
+-- Type is the stable award-family key (not a closed enum). Name is the historical
+-- display-name snapshot, so a save remains readable even if a later mod changes
+-- its current family display name or icon.
 CREATE TABLE SoldierAward (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, Name STRING NOT NULL, Type STRING NOT NULL, Level INTEGER NOT NULL);
 
 -- Table: PlayerSoldierFactionCasualtyCount
@@ -160,7 +163,7 @@ CREATE TABLE SoldierSkill (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), B
 -- Table: Squad
 -- Doctrine-following is the default. Only an explicitly customized squad uses its persisted
 -- SquadWeaponSet rows directly.
-CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, UsesLoadoutDoctrine BOOLEAN NOT NULL DEFAULT 1, FormationOrdinal INTEGER, HasBattleHistory BOOLEAN NOT NULL DEFAULT 0, DutyStationShipId INTEGER REFERENCES Ship (Id), DutyStationRegionId INTEGER REFERENCES Region(Id), CHECK ((DutyStationShipId IS NOT NULL) <> (DutyStationRegionId IS NOT NULL) OR (DutyStationShipId IS NULL AND DutyStationRegionId IS NULL)), CHECK (LoadedShipId IS NULL AND LandedRegionId IS NULL OR (DutyStationShipId IS NULL AND DutyStationRegionId IS NULL)));
+CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), ScoutTrainingOptionKey STRING NOT NULL DEFAULT 'scout.balanced', UsesLoadoutDoctrine BOOLEAN NOT NULL DEFAULT 1, FormationOrdinal INTEGER, HasBattleHistory BOOLEAN NOT NULL DEFAULT 0, DutyStationShipId INTEGER REFERENCES Ship (Id), DutyStationRegionId INTEGER REFERENCES Region(Id), CHECK ((DutyStationShipId IS NOT NULL) <> (DutyStationRegionId IS NOT NULL) OR (DutyStationShipId IS NULL AND DutyStationRegionId IS NULL)), CHECK (LoadedShipId IS NULL AND LandedRegionId IS NULL OR (DutyStationShipId IS NULL AND DutyStationRegionId IS NULL)));
 
 -- Table: SquadWeaponSet
 CREATE TABLE SquadWeaponSet (SquadId INTEGER NOT NULL REFERENCES Squad (Id), WeaponSetId INTEGER NOT NULL);

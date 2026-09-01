@@ -29,16 +29,19 @@ namespace OnlyWar.Models.Equippables
         public byte ArmorProvided { get; }
         public short StealthModifier { get; }
         public float CapacityModifier { get; }
+        public bool PreventsRunning { get; }
         public ArmorTemplate(
             int id,
             string name,
             byte armorProvided,
             short stealthModifier,
-            float capacityModifier = 0) : base(id, name, EquipLocation.Body)
+            float capacityModifier = 0,
+            bool preventsRunning = false) : base(id, name, EquipLocation.Body)
         {
             ArmorProvided = armorProvided;
             StealthModifier = stealthModifier;
             CapacityModifier = capacityModifier;
+            PreventsRunning = preventsRunning;
         }
     }
 

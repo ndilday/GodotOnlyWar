@@ -5,44 +5,100 @@ using System.Linq;
 namespace OnlyWar.Models.Soldiers
 {
     /// <summary>
-    /// Resolves the small set of base skills that game logic references by name
-    /// (rather than by player choice) into stable, typed accessors. Resolution
-    /// happens once at rules-database load and fails fast with a clear error if a
-    /// required skill is missing or ambiguous, instead of producing a null
-    /// reference at runtime deep inside a mission or battle step.
-    ///
-    /// This is the first validated registry described in TDD §8.3 / §4.1: code that
-    /// needs a specific named rules entry should resolve it through a registry like
-    /// this one at load time, not via scattered <c>First(s =&gt; s.Name == "...")</c>
-    /// lookups.
+    /// Resolves the small set of code-owned skill roles into stable, typed accessors.
+    /// Resolution happens once at rules-database load and fails fast with a targeted
+    /// error if a role is missing, duplicated, or points at an unknown skill key.
     /// </summary>
     internal sealed class NamedSkillRegistry
     {
-        public BaseSkill Stealth { get; }
-        public BaseSkill Tactics { get; }
-        public BaseSkill EngineeringFortification { get; }
+        private static readonly SkillRole[] RequiredRoles =
+            Enum.GetValues<SkillRole>();
 
+        private readonly IReadOnlyDictionary<SkillRole, BaseSkill> _skills;
+
+        public BaseSkill Stealth => this[SkillRole.Stealth];
+        public BaseSkill Tactics => this[SkillRole.Tactics];
+        public BaseSkill EngineeringFortification => this[SkillRole.EngineeringFortification];
+        public BaseSkill PowerArmor => this[SkillRole.PowerArmor];
+        public BaseSkill Teaching => this[SkillRole.Teaching];
+
+        // Compatibility overload for callers that do not have a separate assignment table.
+        // It still resolves by SkillKey; it never falls back to display names.
         public NamedSkillRegistry(IReadOnlyDictionary<int, BaseSkill> baseSkillMap)
+            : this(baseSkillMap, null)
         {
-            Stealth = Resolve(baseSkillMap, "Stealth");
-            Tactics = Resolve(baseSkillMap, "Tactics");
-            EngineeringFortification = Resolve(baseSkillMap, "Engineering (Fortification)");
         }
 
-        private static BaseSkill Resolve(IReadOnlyDictionary<int, BaseSkill> baseSkillMap, string name)
+        public NamedSkillRegistry(
+            IReadOnlyDictionary<int, BaseSkill> baseSkillMap,
+            IEnumerable<SkillRoleAssignment> assignments)
         {
-            List<BaseSkill> matches = baseSkillMap.Values.Where(s => s.Name == name).ToList();
-            if (matches.Count == 0)
+            if (baseSkillMap == null) throw new ArgumentNullException(nameof(baseSkillMap));
+
+            Dictionary<string, BaseSkill> skillsByKey = [];
+            foreach (BaseSkill skill in baseSkillMap.Values)
             {
-                throw new InvalidOperationException(
-                    $"Required base skill '{name}' was not found in the rules database.");
+                if (string.IsNullOrWhiteSpace(skill.SkillKey)) continue;
+                if (!skillsByKey.TryAdd(skill.SkillKey, skill))
+                {
+                    throw new InvalidOperationException(
+                        $"Rules database contains duplicate base skill key '{skill.SkillKey}'.");
+                }
             }
-            if (matches.Count > 1)
+
+            IReadOnlyList<SkillRoleAssignment> effectiveAssignments = assignments?.ToList()
+                ?? CreateDefaultAssignments();
+            Dictionary<SkillRole, string> skillKeysByRole = [];
+            foreach (SkillRoleAssignment assignment in effectiveAssignments)
             {
-                throw new InvalidOperationException(
-                    $"Required base skill '{name}' is ambiguous; {matches.Count} entries share that name.");
+                if (!SkillRoleKeys.TryParse(assignment.RoleKey, out SkillRole role))
+                {
+                    throw new InvalidOperationException(
+                        $"Unknown skill role '{assignment.RoleKey}'.");
+                }
+                if (string.IsNullOrWhiteSpace(assignment.SkillKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Skill role '{assignment.RoleKey}' has no skill key.");
+                }
+                if (!skillKeysByRole.TryAdd(role, assignment.SkillKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Skill role '{assignment.RoleKey}' is assigned more than once.");
+                }
             }
-            return matches[0];
+
+            Dictionary<SkillRole, BaseSkill> resolved = [];
+            foreach (SkillRole role in RequiredRoles)
+            {
+                if (!skillKeysByRole.TryGetValue(role, out string skillKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Required skill role '{SkillRoleKeys.For(role)}' "
+                        + $"({SkillRoleKeys.DisplayName(role)}) is not assigned.");
+                }
+                if (!skillsByKey.TryGetValue(skillKey, out BaseSkill skill))
+                {
+                    throw new InvalidOperationException(
+                        $"Required skill role '{SkillRoleKeys.For(role)}' "
+                        + $"({SkillRoleKeys.DisplayName(role)}) references missing "
+                        + $"skill key '{skillKey}'.");
+                }
+                resolved[role] = skill;
+            }
+            _skills = resolved;
         }
+
+        public BaseSkill this[SkillRole role] =>
+            _skills.TryGetValue(role, out BaseSkill skill)
+                ? skill
+                : throw new InvalidOperationException(
+                    $"Skill role '{SkillRoleKeys.For(role)}' is not assigned.");
+
+        public static IReadOnlyList<SkillRoleAssignment> CreateDefaultAssignments() =>
+            RequiredRoles
+                .Select(role => new SkillRoleAssignment(
+                    SkillRoleKeys.For(role), SkillRoleKeys.For(role)))
+                .ToList();
     }
 }

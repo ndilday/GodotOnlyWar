@@ -274,12 +274,18 @@ namespace OnlyWar.Models.Equippables
         public byte ArmorProvided { get; }
         public short StealthModifier { get; }
         public float CapacityModifier { get; }
+        public bool PreventsRunning { get; }
 
-        public ArmorProfile(byte armorProvided, short stealthModifier = 0, float capacityModifier = 0)
+        public ArmorProfile(
+            byte armorProvided,
+            short stealthModifier = 0,
+            float capacityModifier = 0,
+            bool preventsRunning = false)
         {
             ArmorProvided = armorProvided;
             StealthModifier = stealthModifier;
             CapacityModifier = capacityModifier;
+            PreventsRunning = preventsRunning;
         }
     }
 

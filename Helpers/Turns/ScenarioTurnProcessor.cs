@@ -32,11 +32,13 @@ namespace OnlyWar.Helpers.Turns
 
             Planet promised = sector.GetPlanet(scenario.PromisedPlanetId);
             Faction player = sector.PlayerForce.Faction;
+            ScenarioProfile profile = _session.Rules.ScenarioProfiles.GetRequired(
+                ScenarioKeys.PromisedWorld);
 
             // Both outcomes are measured by who holds ground OPENLY, not by headcount. An earlier
             // rule required every non-Imperial faction on the world to reach zero population and
-            // garrison, which no campaign could ever reach: the stamp seeds a Genestealer Cult in
-            // all sixteen regions (ScenarioRules.PromisedWorldInfiltratorStrengthFraction), an infiltrator driven
+            // garrison, which no campaign could ever reach: the stamp seeds the scenario infiltrator in
+            // all sixteen regions using the scenario profile's infiltrator strength share, an infiltrator driven
             // below the suppression threshold goes to ground with its population intact and can no
             // longer be targeted at all, and organic growth replaces it between turns. The mirror
             // defect sat on the lapse side: the displaced Imperial remnant left by the stamp
@@ -50,7 +52,7 @@ namespace OnlyWar.Helpers.Turns
                 Character sectorLord = sector.GetSectorLord();
                 if (sectorLord != null)
                 {
-                    sectorLord.OpinionOfPlayerForce -= ScenarioRules.SectorLordOpinionPenalty;
+                    sectorLord.OpinionOfPlayerForce -= profile.SectorLordOpinionPenalty;
                 }
 
                 notification =
@@ -70,10 +72,10 @@ namespace OnlyWar.Helpers.Turns
                 Character lord = sector.GetSectorLord();
                 if (lord != null)
                 {
-                    lord.OpinionOfPlayerForce += ScenarioRules.SectorLordOpinionReward;
+                    lord.OpinionOfPlayerForce += profile.SectorLordOpinionReward;
                 }
 
-                // Deliberately not "cleansed": a cult that has gone to ground survives the grant,
+                // Deliberately not "cleansed": an infiltrator that has gone to ground survives the grant,
                 // and is now the player's problem on their own Chapter World.
                 notification =
                     $"[b]The Promised World is liberated.[/b]\n\nNo enemy holds ground on "

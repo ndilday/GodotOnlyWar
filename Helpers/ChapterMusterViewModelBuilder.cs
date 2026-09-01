@@ -3,6 +3,7 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +18,12 @@ namespace OnlyWar.Helpers
         NeedsLeaders, Understrength, EmptyFormations, AvailableNewFormations, AtStrength
     }
 
-    public sealed record HonorBadgeModel(string Name, string Type, ushort Level);
+    public sealed record HonorBadgeModel(
+        string Name,
+        string Type,
+        ushort Level,
+        string IconAssetKey = null,
+        int SortOrder = int.MaxValue);
 
     public sealed record MusterCandidateViewModel(
         int SoldierId, string Name, string Role, string Formation, string Company,
@@ -28,11 +34,19 @@ namespace OnlyWar.Helpers
         string StateLabel, string TypeLabel, string SquadIconKey, string RosterText,
         string RosterTooltip, string Location, string ResultingRole,
         SoldierTransferOption Option, int OrganizationOrder, int FormationOrdinal,
-        bool IsPlanProjection = false, string SelectionKey = null, bool IsFull = false);
+        bool IsPlanProjection = false, string SelectionKey = null, bool IsFull = false,
+        ProjectedSquadRowViewModel CommonRow = null);
 
     public sealed class ChapterMusterViewModelBuilder
     {
         private readonly SoldierTransferService _transfers = new();
+        private readonly SquadRowViewModelBuilder _squadRowBuilder = new();
+        private readonly AwardFamilyCatalog _awardCatalog;
+
+        public ChapterMusterViewModelBuilder(AwardFamilyCatalog awardCatalog = null)
+        {
+            _awardCatalog = awardCatalog ?? AwardFamilyCatalog.CreateDefault();
+        }
 
         public IReadOnlyList<MusterCandidateViewModel> BuildCandidates(
             PlayerForce force,
@@ -70,23 +84,18 @@ namespace OnlyWar.Helpers
                         // Keep badge positions stable across soldiers. Sorting by tier here made
                         // the row layout depend on which honors happened to be earned first or
                         // which one had the highest grade.
-                        .OrderBy(award => HonorTypeOrder(award.Type))
-                        .ThenBy(award => award.Type, StringComparer.Ordinal)
-                        .Select(award => new HonorBadgeModel(
-                            award.Name ?? award.Type, award.Type, award.Level))
-                        .Take(6).ToList(),
+                         .OrderBy(award => _awardCatalog.Get(award.AwardFamilyKey).SortOrder)
+                         .ThenBy(award => award.Type, StringComparer.Ordinal)
+                         .Select(award => new HonorBadgeModel(
+                             award.Name ?? award.Type,
+                             award.AwardFamilyKey,
+                             award.Level,
+                             _awardCatalog.Get(award.AwardFamilyKey).IconAssetKey,
+                             _awardCatalog.Get(award.AwardFamilyKey).SortOrder))
+                         .Take(6).ToList(),
                     plan?.IsStaged(soldier.Id) == true))
                 .ToList();
         }
-
-        private static int HonorTypeOrder(string type) => type switch
-        {
-            AwardTypes.Gun => 0,
-            AwardTypes.Sword => 1,
-            AwardTypes.Voice => 2,
-            AwardTypes.Banner => 3,
-            _ => 4
-        };
 
         public IReadOnlyList<FormationVacancyViewModel> BuildFormations(
             PlayerForce force,
@@ -224,7 +233,22 @@ namespace OnlyWar.Helpers
                     option.SoldierTemplate.Name, option,
                     unitOrder.GetValueOrDefault(squad.ParentUnit?.Id ?? -1, int.MaxValue),
                     squad.FormationOrdinal ?? int.MaxValue,
-                    IsFull: isFull));
+                    IsFull: isFull,
+                    CommonRow: _squadRowBuilder.BuildProjected(
+                        _squadRowBuilder.Build(
+                            squad,
+                            new SquadRowContext(
+                                SquadRowContextKind.Muster,
+                                SquadRowAction.Inspect,
+                                isSelected: false,
+                                isSelectable: true,
+                                isEnabled: true,
+                                contextBadge: "MUSTER"),
+                            force.RecruitmentProgram),
+                        outgoing,
+                        incoming,
+                        Math.Max(0, squad.Members.Count - outgoing + incoming),
+                        $"squad:{squad.Id}")));
             }
             return rows.OrderBy(row => row.Group).ThenBy(row => row.OrganizationOrder)
                 .ThenBy(row => row.FormationOrdinal).ThenBy(row => row.FormationName).ToList();

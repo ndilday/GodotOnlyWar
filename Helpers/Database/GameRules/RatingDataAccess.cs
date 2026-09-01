@@ -2,6 +2,7 @@ using OnlyWar.Models.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameRules
@@ -57,12 +58,83 @@ namespace OnlyWar.Helpers.Database.GameRules
                     string awardType = reader[5] is DBNull ? null : reader.GetString(5);
                     string nameTemplate = reader.GetString(6);
 
-                    tiers.Add(new RatingAwardTier(id, keyByDefinitionId[definitionId], level, threshold,
+                    tiers.Add(new RatingAwardTier(
+                                                  id,
+                                                  RulesDatabaseLookup.Require(
+                                                      keyByDefinitionId,
+                                                      definitionId,
+                                                      $"RatingAwardTier {id}.RatingDefinitionId"),
+                                                  level,
+                                                  threshold,
                                                   effect, awardType, nameTemplate));
                 }
             }
             return tiers;
         }
+
+        /// <summary>
+        /// Loads the data-owned mapping from gameplay capabilities to open-ended
+        /// rating keys. Older rules databases predate this table and receive the
+        /// shipped default mapping in <see cref="Models.GameRulesData"/>.
+        /// </summary>
+        public IReadOnlyList<RatingConsumerAssignment> GetRatingConsumerAssignments(
+            IDbConnection connection)
+        {
+            List<RatingConsumerAssignment> assignments = [];
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText =
+                    "SELECT RoleKey, RatingKey FROM RatingConsumerAssignment";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    assignments.Add(new RatingConsumerAssignment(
+                        reader.GetString(0), reader.GetString(1)));
+                }
+                return assignments;
+            }
+            catch (DbException exception) when (IsMissingTable(exception, "RatingConsumerAssignment"))
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Loads optional award presentation metadata. A null result means the
+        /// database is an older stock database; an empty result is an intentional
+        /// catalogue with no declared families.
+        /// </summary>
+        public IReadOnlyList<AwardFamilyDefinition> GetAwardFamilies(IDbConnection connection)
+        {
+            List<AwardFamilyDefinition> families = [];
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = @"SELECT AwardFamilyKey, DisplayName, IconAssetKey,
+                    SortOrder, SummaryGroup, StackingGroup FROM AwardFamily";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    families.Add(new AwardFamilyDefinition(
+                        reader.GetString(0),
+                        reader.GetString(1),
+                        reader.GetString(2),
+                        reader.GetInt32(3),
+                        reader[4] is DBNull ? null : reader.GetString(4),
+                        reader[5] is DBNull ? null : reader.GetString(5)));
+                }
+                return families;
+            }
+            catch (DbException exception) when (IsMissingTable(exception, "AwardFamily"))
+            {
+                return null;
+            }
+        }
+
+        private static bool IsMissingTable(DbException exception, string tableName) =>
+            exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase)
+            && exception.Message.Contains(tableName, StringComparison.OrdinalIgnoreCase);
 
         private Dictionary<int, string> GetRatingKeysById(IDbConnection connection)
         {

@@ -91,7 +91,8 @@ namespace OnlyWar.Helpers.Medical
             Order order,
             FieldCareReport report,
             IReadOnlyList<BaseSkill> medicalSkills = null,
-            int day = 0)
+            int day = 0,
+            RatingConsumerBindings ratingBindings = null)
         {
             if (order == null || report == null) return;
 
@@ -106,7 +107,8 @@ namespace OnlyWar.Helpers.Medical
                 report.ApothecaryNames.Add(apothecary.Name);
             }
 
-            RunOneDay(apothecaries, underOrder, report, medicalSkills, day, order.Id);
+            RunOneDay(apothecaries, underOrder, report, medicalSkills, day, order.Id,
+                ratingBindings ?? RatingConsumerBindings.CreateDefault());
         }
 
         /// <summary>
@@ -128,7 +130,8 @@ namespace OnlyWar.Helpers.Medical
         /// </summary>
         public static IReadOnlyList<FieldCareReport> ApplyGarrisonFieldCare(
             IEnumerable<PlayerSoldier> chapterMembers,
-            IReadOnlyList<BaseSkill> medicalSkills = null)
+            IReadOnlyList<BaseSkill> medicalSkills = null,
+            RatingConsumerBindings ratingBindings = null)
         {
             List<FieldCareReport> reports = [];
             if (chapterMembers == null) return reports;
@@ -155,7 +158,8 @@ namespace OnlyWar.Helpers.Medical
 
                 for (int day = 1; day <= FieldCareConstants.GarrisonDaysPerTurn; day++)
                 {
-                    RunOneDay(apothecaries, present, report, medicalSkills, day, null);
+                    RunOneDay(apothecaries, present, report, medicalSkills, day, null,
+                        ratingBindings ?? RatingConsumerBindings.CreateDefault());
                 }
                 reports.Add(report);
             }
@@ -182,11 +186,14 @@ namespace OnlyWar.Helpers.Medical
         /// </summary>
         public static IReadOnlyList<BaseSkill> ResolveMedicalSkills(
             IEnumerable<RatingDefinition> ratingDefinitions,
-            IReadOnlyDictionary<int, BaseSkill> baseSkillMap)
+            IReadOnlyDictionary<int, BaseSkill> baseSkillMap,
+            RatingConsumerBindings ratingBindings = null)
         {
             if (ratingDefinitions == null || baseSkillMap == null) return [];
+            ratingBindings ??= RatingConsumerBindings.CreateDefault();
             RatingDefinition medical = ratingDefinitions
-                .FirstOrDefault(definition => definition.Key == RatingKeys.Medical);
+                .FirstOrDefault(definition => definition.Key == ratingBindings[
+                    RatingConsumerRole.MedicalCapacity]);
             if (medical == null) return [];
             return medical.Components
                 .Where(component => component.ComponentType == RatingComponentType.SkillTotal)
@@ -265,11 +272,17 @@ namespace OnlyWar.Helpers.Medical
                 .ToList();
         }
 
-        public static float GetCapacity(PlayerSoldier apothecary) =>
-            FieldCareConstants.GetDailyCapacity(GetMedicalRating(apothecary));
+        public static float GetCapacity(
+            PlayerSoldier apothecary,
+            RatingConsumerBindings ratingBindings = null) =>
+            FieldCareConstants.GetDailyCapacity(GetMedicalRating(apothecary, ratingBindings));
 
-        public static float GetMedicalRating(PlayerSoldier apothecary) =>
-            apothecary?.SoldierEvaluationHistory?.LastOrDefault()?.MedicalRating ?? 0f;
+        public static float GetMedicalRating(
+            PlayerSoldier apothecary,
+            RatingConsumerBindings ratingBindings = null) =>
+            (ratingBindings ?? RatingConsumerBindings.CreateDefault()).Get(
+                apothecary?.SoldierEvaluationHistory?.LastOrDefault(),
+                RatingConsumerRole.MedicalCapacity);
 
         // ---- The daily pass -------------------------------------------------------------------
 
@@ -291,9 +304,11 @@ namespace OnlyWar.Helpers.Medical
             FieldCareReport report,
             IReadOnlyList<BaseSkill> medicalSkills,
             int day,
-            int? orderId)
+            int? orderId,
+            RatingConsumerBindings ratingBindings)
         {
-            float capacity = apothecaries.Sum(GetCapacity);
+            float capacity = apothecaries.Sum(apothecary =>
+                GetCapacity(apothecary, ratingBindings));
             if (capacity <= 0f) return;
 
             float spent = 0f;
@@ -335,7 +350,7 @@ namespace OnlyWar.Helpers.Medical
                 if (!treated) break;
             }
 
-            GrantMedicalExperience(apothecaries, medicalSkills, spent);
+            GrantMedicalExperience(apothecaries, medicalSkills, spent, ratingBindings);
         }
 
         /// <summary>
@@ -438,11 +453,13 @@ namespace OnlyWar.Helpers.Medical
         private static void GrantMedicalExperience(
             IReadOnlyList<PlayerSoldier> apothecaries,
             IReadOnlyList<BaseSkill> medicalSkills,
-            float capacitySpent)
+            float capacitySpent,
+            RatingConsumerBindings ratingBindings)
         {
             if (capacitySpent <= 0f || medicalSkills == null || medicalSkills.Count == 0) return;
 
-            float totalCapacity = apothecaries.Sum(GetCapacity);
+            float totalCapacity = apothecaries.Sum(apothecary =>
+                GetCapacity(apothecary, ratingBindings));
             if (totalCapacity <= 0f) return;
 
             foreach (PlayerSoldier apothecary in apothecaries)
@@ -450,7 +467,7 @@ namespace OnlyWar.Helpers.Medical
                 // Split by contribution, so the Master of the Apothecarion working alongside a
                 // junior brother takes the larger share of the practice as well as the larger share
                 // of the load.
-                float share = GetCapacity(apothecary) / totalCapacity;
+                float share = GetCapacity(apothecary, ratingBindings) / totalCapacity;
                 float points = capacitySpent * share
                     * FieldCareConstants.MedicalExperiencePerCapacitySpent;
                 if (points <= 0f) continue;

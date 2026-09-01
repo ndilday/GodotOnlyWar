@@ -217,7 +217,7 @@ public sealed class RecruitmentPersistenceTests
                 VALUES (4, 1, 1, NULL, 'Tenth Company');
             INSERT INTO Squad
                 (Id, SquadTemplateId, ParentUnitId, Name, LoadedShipId, LandedRegionId,
-                 TrainingFocus)
+                 ScoutTrainingOptionKey)
                 VALUES (7, 1, 4, 'Company Headquarters', NULL, NULL, 0);";
         command.ExecuteNonQuery();
     }

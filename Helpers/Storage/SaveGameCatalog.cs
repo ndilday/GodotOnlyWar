@@ -124,13 +124,13 @@ namespace OnlyWar.Helpers.Storage
                 campaignDate = TryReadCampaignDate(connection);
                 campaignName = TryReadCampaignName(connection) ?? campaignName;
 
-                if (version.Value < SaveFormat.FirstMigratableVersion
+                if (version.Value < SaveFormat.MinimumSupportedVersion
                     || version.Value > SaveFormat.CurrentVersion)
                 {
                     return Invalid(filePath, displayName, campaignName, campaignDate,
                         lastWriteTimeUtc, kind, version, SaveGameCompatibility.Incompatible,
                         $"Save version {version} is not supported by this build "
-                        + $"(supported {SaveFormat.FirstMigratableVersion}-{SaveFormat.CurrentVersion}).");
+                        + $"(supported {SaveFormat.MinimumSupportedVersion}-{SaveFormat.CurrentVersion}).");
                 }
 
                 if (campaignDate == null)

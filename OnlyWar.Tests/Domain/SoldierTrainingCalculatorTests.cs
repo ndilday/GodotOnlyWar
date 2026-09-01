@@ -79,16 +79,33 @@ public class SoldierTrainingCalculatorTests
         TrainingProfile rangedFocus = new(2, "scout_focus_ranged", [new TrainingProfileEntry(TestSkills.Ranged, 1)]);
         TrainingProfile physicalFocus = new(3, "scout_focus_physical", [new TrainingProfileEntry(Attribute.Strength, 1)]);
         TrainingProfile vehicleFocus = new(4, "scout_focus_vehicles", [new TrainingProfileEntry(TestSkills.Stealth, 1)]);
+        TrainingProfile balanced = new(
+            5,
+            "scout_focus_balanced",
+            [
+                new TrainingProfileEntry(TestSkills.Melee, 1),
+                new TrainingProfileEntry(TestSkills.Ranged, 1)
+            ]);
         Soldier leader = TestModelFactory.CreateSoldier(
             TestModelFactory.SergeantTemplate,
             skills: new Skill(TestSkills.Leadership, 4));
         Soldier scout = TestModelFactory.CreateSoldier();
         var squad = TestModelFactory.CreateSquad("Scout Squad", leader, scout);
         SoldierTrainingCalculator calculator = new(
-            [TestSkills.Ranged, TestSkills.Melee, TestSkills.Stealth, TestSkills.Leadership, new BaseSkill(6, SkillCategory.Professional, "Teaching", Attribute.Intelligence, 0)],
-            [meleeFocus, rangedFocus, physicalFocus, vehicleFocus]);
+            [TestSkills.Ranged, TestSkills.Melee, TestSkills.Stealth, TestSkills.Leadership, new BaseSkill(6, SkillCategory.Professional, "Teaching", Attribute.Intelligence, 0, SkillRoleKeys.Teaching)],
+            [meleeFocus, rangedFocus, physicalFocus, vehicleFocus, balanced],
+            scoutTrainingOptions:
+            [
+                new ScoutTrainingOption(ScoutTrainingOptionKeys.Melee, "Melee", meleeFocus),
+                new ScoutTrainingOption(ScoutTrainingOptionKeys.Ranged, "Ranged", rangedFocus),
+                new ScoutTrainingOption(ScoutTrainingOptionKeys.Physical, "Physical", physicalFocus),
+                new ScoutTrainingOption(ScoutTrainingOptionKeys.Vehicles, "Vehicles", vehicleFocus),
+                new ScoutTrainingOption(ScoutTrainingOptionKeys.Balanced, "Balanced", balanced)
+            ]);
 
-        calculator.TrainScouts([squad], new Dictionary<int, TrainingFocuses> { [squad.Id] = TrainingFocuses.Melee | TrainingFocuses.Ranged });
+        calculator.TrainScouts(
+            [squad],
+            new Dictionary<int, string> { [squad.Id] = ScoutTrainingOptionKeys.Balanced });
 
         Assert.True(scout.Skills.Single(s => s.BaseSkill == TestSkills.Melee).PointsInvested > 0);
         Assert.True(scout.Skills.Single(s => s.BaseSkill == TestSkills.Ranged).PointsInvested > 0);
@@ -118,7 +135,7 @@ public class SoldierTrainingCalculatorTests
     // directly. A null sergeantTeachingPoints means the squad has no sergeant at all.
     private static float TrainScoutsAndGetMeleePoints(float? sergeantTeachingPoints, float points)
     {
-        BaseSkill teaching = new(6, SkillCategory.Professional, "Teaching", Attribute.Intelligence, 0);
+        BaseSkill teaching = new(6, SkillCategory.Professional, "Teaching", Attribute.Intelligence, 0, SkillRoleKeys.Teaching);
         TrainingProfile meleeFocus = new(
             1, "scout_focus_melee", [new TrainingProfileEntry(TestSkills.Melee, 1)]);
         Soldier scout = TestModelFactory.CreateSoldier(name: "Scout");
@@ -131,11 +148,15 @@ public class SoldierTrainingCalculatorTests
                     skills: new Skill(teaching, sergeantTeachingPoints.Value)),
                 scout)
             : TestModelFactory.CreateSquad("Scout Squad", scout);
-        SoldierTrainingCalculator calculator = new([TestSkills.Melee, teaching], [meleeFocus]);
+        SoldierTrainingCalculator calculator = new(
+            [TestSkills.Melee, teaching],
+            [meleeFocus],
+            scoutTrainingOptions:
+            [new ScoutTrainingOption(ScoutTrainingOptionKeys.Melee, "Melee", meleeFocus)]);
 
         calculator.TrainScouts(
             [squad],
-            new Dictionary<int, TrainingFocuses> { [squad.Id] = TrainingFocuses.Melee },
+            new Dictionary<int, string> { [squad.Id] = ScoutTrainingOptionKeys.Melee },
             points);
 
         return scout.Skills.Single(s => s.BaseSkill == TestSkills.Melee).PointsInvested;

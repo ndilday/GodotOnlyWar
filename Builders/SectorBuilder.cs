@@ -46,7 +46,11 @@ namespace OnlyWar.Builders
             RatingCalculator ratingCalculator = new(data.RatingDefinitions, data.RatingAwardTiers,
                                                     data.BaseSkillMap, StaticRNG.Instance);
             ISoldierTrainingService trainingService = new SoldierTrainingCalculator(
-                data.BaseSkillMap.Values, data.TrainingProfiles.Values, ratingCalculator);
+                data.BaseSkillMap.Values,
+                data.TrainingProfiles.Values,
+                ratingCalculator,
+                data.Skills,
+                data.ScoutTrainingOptions.Options);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate, chapterName);
             playerForce.CampaignIdentity = CampaignIdentity.CreateNew(seed);
 
@@ -136,19 +140,22 @@ namespace OnlyWar.Builders
 
         private static Planet GeneratePlanet(Coordinate position, GameRulesData data)
         {
-            // Every generated world starts under Imperial (default-faction) control: no enemy
-            // faction openly holds a planet at game start, so the newly founded Chapter isn't
-            // dropped into a sector already speckled with Tyranid/cult holdings. The only overt
-            // incursion is the Tyranid invasion the opening scenario stamps onto the promised
-            // world (Design/Reference/OpeningScenario.md). Hidden Genestealer-cult infiltration is still
-            // seeded on a minority of worlds — it's covert, not "in control," and gives the sector
-            // latent threats to surface later.
-            // TODO: reintroduce overt faction-owned worlds via game-start config + hot spots.
-            double random = RNG.GetLinearDouble();
-            // ~2% of worlds harbour a hidden Genestealer Cult at game start. Kept low so the sector
-            // does not erupt in simultaneous revolts once cults rise on population strength (PRD §4.24).
-            Faction infiltratingFaction = random <= 0.02 ? data.SectorFactions.Infiltrator : null;
-            return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, data.DefaultFaction, infiltratingFaction);
+            // Every generated world starts under the configured default-faction control unless a
+            // data-authored public presence rule takes it over. Hidden and public faction starts are
+            // applied by the same declarative policy surface, so adding a new faction does not
+            // require another faction-specific branch here.
+            Planet planet = PlanetBuilder.Instance.GenerateNewPlanet(
+                data.PlanetTemplateMap, position, data.DefaultFaction);
+            foreach (FactionPlanetPresenceRule rule in data.FactionPlanetPresence
+                         .GetApplicableRules(SectorGenerationProfileKeys.Standard, planet.Template.Id))
+            {
+                if (RNG.GetLinearDouble() < rule.SpawnChance)
+                {
+                    Faction faction = data.Factions.First(faction => faction.Id == rule.FactionId);
+                    PlanetBuilder.ApplyFactionPresence(faction, planet, rule);
+                }
+            }
+            return planet;
         }
 
         // Reward path (Design/Reference/OpeningScenario.md): install the player as the planet-wide

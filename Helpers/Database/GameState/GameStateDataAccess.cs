@@ -122,7 +122,8 @@ namespace OnlyWar.Helpers.Database.GameState
                             IReadOnlyDictionary<int, BaseSkill> baseSkillMap, 
                             IReadOnlyDictionary<int, SoldierTemplate> soldierTemplateMap,
                             IReadOnlyDictionary<int, EquipmentTemplate> equipmentTemplates = null,
-                            IReadOnlyDictionary<int, EquipmentKitTemplate> equipmentKits = null)
+                            IReadOnlyDictionary<int, EquipmentKitTemplate> equipmentKits = null,
+                            ScoutTrainingOptionCatalog scoutTrainingOptions = null)
         {
             string fullPath = Path.GetFullPath(filePath);
             if (!File.Exists(fullPath))
@@ -133,7 +134,7 @@ namespace OnlyWar.Helpers.Database.GameState
             string connection = BuildConnectionString(fullPath, SqliteOpenMode.ReadOnly);
             using IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
-            int saveVersion = _globalDataAccess.EnsureCompatibleSaveVersion(dbCon);
+            _globalDataAccess.EnsureCompatibleSaveVersion(dbCon);
             FactionRelationshipLedger relationshipLedger = LoadFactionRelationships(
                 dbCon,
                 factionMap);
@@ -166,7 +167,8 @@ namespace OnlyWar.Helpers.Database.GameState
             flagships.ValidateSinglePlayerFlagship(playerFaction, playerShips);
             var loadouts = _unitDataAccess.GetSquadWeaponSets(dbCon, weaponSets);
             var squads = _unitDataAccess.GetSquadsByUnitId(dbCon, squadTemplates, loadouts,
-                                                           shipMap, regions, missionMap, factionMap);
+                                                           shipMap, regions, missionMap, factionMap,
+                                                           scoutTrainingOptions);
             var units = _unitDataAccess.GetUnits(dbCon, unitTemplateMap, squads);
             var squadMap = squads.Values.SelectMany(s => s).ToDictionary(s => s.Id);
             var soldiers = _soldierDataAccess.GetData(dbCon, hitLocationTemplates, baseSkillMap,

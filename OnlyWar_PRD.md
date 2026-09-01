@@ -40,6 +40,7 @@
    - 4.25 [Chapter Mandates & Legacy Objectives](#425-chapter-mandates--legacy-objectives)
    - 4.26 [Force Legibility — Planet Tactical Map & Squad Rows](#426-force-legibility--planet-tactical-map--squad-rows)
    - 4.27 [System Menu, Accessibility & Release UX](#427-system-menu-accessibility--release-ux)
+   - 4.28 [Techmarines & the Mars Pipeline](#428-techmarines--the-mars-pipeline)
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
@@ -63,6 +64,9 @@
    - 6.12 [Region-Level Going-Public Generalization (raised by Tyranids, §4.24)](#612-region-level-going-public-generalization-raised-by-tyranids-424)
    - 6.13 [Soldier Attribute Growth & Hero Representation (raised by Field Experience, §4.12)](#613-soldier-attribute-growth--hero-representation-raised-by-field-experience-412)
    - 6.14 [Graduated Healing Setback on New Wounds (raised by Recovery, §4.12)](#614-graduated-healing-setback-on-new-wounds-raised-by-recovery-412)
+   - 6.15 [Techmarine Cohort Shape & Roster Visibility (raised by the Mars Pipeline, §4.28)](#615-techmarine-cohort-shape--roster-visibility-raised-by-the-mars-pipeline-428)
+   - 6.16 [Techmarine Maintenance Scope & Local Fabrication (raised by the Mars Pipeline, §4.28)](#616-techmarine-maintenance-scope--local-fabrication-raised-by-the-mars-pipeline-428)
+   - 6.17 [Cybernetic Replacement of Crippled Vital Locations (raised by the Mars Pipeline, §4.28)](#617-cybernetic-replacement-of-crippled-vital-locations-raised-by-the-mars-pipeline-428)
 7. [Glossary](#7-glossary)
 
 ---
@@ -311,7 +315,7 @@ Each feature is described as a behavioral specification: what the system does, a
 
 **Acceptance Criteria (Planned — Post-0.7):**
 - **Sergeant training cap.** A Sergeant's own skill level in a category is a hard cap on how far he can train a scout in that category — a scout cannot be trained beyond his instructor's level. Soldier ratings are updated every four turns; each time ratings update and a scout remains at his Sergeant's instructional limit in one or more skills, the Recruiter surfaces a notification. The player then has three options: leave the scout in the squad and accept no further improvement in the capped skill; transfer him to a Scout squad whose Sergeant has a higher level in that area; or promote him to a line squad, where development continues through deployment and combat experience rather than structured training.
-- The Armory allows the designation of potential Techmarines to be sent to Mars for training.
+- The Armory allows the designation of potential Techmarines to be sent to Mars for training. The pipeline they enter — cohort timing, return delay, and what a returned Techmarine does — is specified in §4.28.
 
 **Acceptance Criteria (Implemented — 0.7.3 Recruitment v1):**
 
@@ -1217,17 +1221,17 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 
 ### 4.26 Force Legibility — Planet Tactical Map & Squad Rows
 
-**Description.** The current tactical-region hexes attempt to communicate ownership, several force types, orders, intelligence, fortifications, and multiple hostile factions through icons too small to read reliably. Alpha 0.8 receives a legibility-first redesign of the map's information hierarchy rather than another incremental icon addition. The same redesign covers the **squad rows** in the Chapter, Recruiter, Region, and Fleet screens, which are the list-shaped view of the same question the map answers spatially: what state is this force in, and can I use it? Both surfaces are specified together so they share one vocabulary for strength, casualties, and readiness instead of each inventing its own.
+**Description.** The current tactical-region hexes attempt to communicate ownership, several force types, orders, intelligence, fortifications, and multiple hostile factions through icons too small to read reliably. Alpha 0.8 receives a legibility-first redesign of the map's information hierarchy rather than another incremental icon addition. The same redesign covers the **squad rows** in the Chapter, Recruiter, Region, and Fleet screens, which are the list-shaped view of the same question the map answers spatially: what state is this force in, and can I use it? Both surfaces are specified together so they share one vocabulary for strength, casualties, and readiness instead of each inventing its own. The rows' current state is uneven: the Chapter screen's browser row received the 0.7 theming pass (`OnlyWarStyle.ApplyListRow`, an `IconAtlas` type icon, title, muted `"{template} - {N} soldiers"` subtitle, and a location column, with selection and double-click drill), but it reports headcount and nothing about fitness — no casualty or wounded count, no readiness or deployment state beyond raw location, no loadout summary, no leaderless flag. The Recruiter's Scout rows (`TrainingUnitScreenView.AddSquad`) never received that pass at all and remain bare single-line toggle buttons carrying a label and one icon.
 
-**Acceptance Criteria (Planned — 0.8):**
-- Produce and approve a visual baseline before implementation. The redesign may change icon placement, tile bands, labels, color hierarchy, and zoom behavior; compatibility with the current single-icon slots is not a constraint.
+**Acceptance Criteria (Implemented — 0.8):**
+- The approved Planetary Operations composition baseline is retained in `Design/VisualBaselines/PlanetaryOperations/`; runtime spacing and theme resources remain authoritative.
 - At the normal decision-making zoom, a player can distinguish controlling faction, player presence, public hostile presence, active orders, and selected state without relying on tooltips or memorizing tiny glyphs.
-- Information is layered and zoom-adaptive: the normal view shows the most important state, while closer zoom or the selected-region presentation may reveal faction names, intel-gated magnitude, fortifications, and secondary forces.
+- Information is layered in one normal decision-making view; the selected-region presentation may reveal faction names, intel-gated magnitude, fortifications, and secondary forces without making zoom a prerequisite for core force state.
 - A region containing multiple public enemy factions visibly reads as contested and preserves each disclosed faction's identity. Hidden factions remain absent, and ordering/color must not leak undisclosed raw strength.
 - The map and the selected-region dossier use the same intel-gated presence model and terminology. The roomy Region detail header continues to show one pill per public hostile faction.
 - Icon size, contrast, label scaling, and color choices remain readable at the supported minimum UI scale and common color-vision deficiencies.
 
-**Acceptance Criteria (Planned — 0.8, squad rows):**
+**Acceptance Criteria (Implemented — 0.8, squad rows):**
 - A single shared squad-row component serves the Chapter, Recruiter, Region, and Fleet screens. Per-screen row implementations are replaced, not supplemented; the Recruiter's Scout rows are brought up from bare text buttons in the same pass.
 - The row answers "can this squad be sent somewhere right now?" without a drill-down. Beyond the current name, type, and headcount, it must show effective versus full strength, wounded or otherwise unavailable members, whether the squad has a leader, and its current commitment (in transit, deployed on an order, training, or free).
 - Strength, casualty, and readiness are expressed with the same vocabulary, color hierarchy, and iconography the tactical-map redesign establishes. Approve the map's visual baseline first and derive the row from it.
@@ -1246,8 +1250,23 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 - The System menu can export a diagnostic bundle containing the game/build version, global settings, and recent logs, with a fresh current-campaign snapshot included only through an explicit player choice.
 - Headless scene-wiring smoke tests instantiate the release-control surfaces and verify that required top-level actions have subscribers and can open their intended surfaces. A visible but inert button is a release-blocking failure.
 
-**Acceptance Criteria (Planned — 0.8):**
+**Acceptance Criteria (Implemented — 0.8):**
 - Add fullscreen/windowed display mode and UI/text scaling, with an implementation and visual-QA pass across all supported screens.
+
+---
+
+### 4.28 Techmarines & the Mars Pipeline
+
+**Description.** Techmarines are trained by the Adeptus Mechanicus on Mars, not by the chapter, and the round trip is measured in decades. Today this is a placeholder: identified aspirants leave for roughly two years and return immediately. Replacing it with a genuine deferred-cohort pipeline gives the young chapter a long capability arc — its first two decades are spent as a relationship-building infantry force — and supplies the gate on machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (§5.7): armor cannot be fielded until the chapter has Techmarines to wake and maintain its machine spirits.
+
+**Acceptance Criteria (Planned — 0.8):**
+- **The chapter starts with none.** At founding, a cohort of marines and aspirants is identified for the Adeptus Mechanicus and sent to Mars. The chapter begins its Techmarine era empty, and the first cohort returns only after a long delay — canonically ~18 in-game years, long enough to be felt rather than to be a formality. Equipment promises maturing around the cohort's return is a deliberate convergence to tune toward.
+- **The pipeline is player-driven and continuous.** Beyond the founding cohort the player can send further neophytes and marines to Mars on an ongoing basis — a trickle rather than a one-time draft. The designation surface is the Armory (§4.9).
+- **Techmarines have a defined role between missions.** Vehicle repair and maintenance is the anchor role, and it is what makes the Vehicles dependency real rather than nominal.
+- **Cybernetic repair is Techmarine work.** A cybernetic hit location damaged in battle does not heal naturally and is not eligible for Apothecary treatment. Techmarines gain a **Cybernetic Repair** procedure structurally analogous to the Apothecary's wound-healing procedures (§4.8) — staffed, sited, and costed — so a brother carrying damaged augmetics needs a Techmarine to return to duty.
+- **Interaction with replacement surgery must be deliberate.** §4.8 already requires an Apothecary **and** a Techmarine co-located to *begin* a significant body-part replacement. Starting with no Techmarines therefore removes replacement surgery from the chapter for the whole of the first cohort's absence. Either accept that as part of the early-chapter arc or supply a founding-era exception, but resolve it before implementation rather than discovering it in play.
+
+Open questions raised by this section: cohort shape and roster visibility (§6.15), maintenance scope and local fabrication (§6.16), and cybernetic replacement of crippled vital locations (§6.17).
 
 ---
 
@@ -1259,24 +1278,26 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 - A completed item is reduced to one line: what was committed, plus a pointer to where it is now specified. If reducing an item would lose information, that information was in the wrong place — move it to §4 or the TDD first, then reduce.
 - Two things legitimately stay here: **known limitations and deferred remainders** of shipped work, and **cross-release dependencies**. Both are live scope state rather than history.
 
+**Status marks.** Throughout this section: ✅ shipped · ⬜ not started · ↷ deferred out of the release it was scoped into.
+
 ### 5.1 Released (Alpha 0.6 and prior)
 
 The baseline the 0.7 line was built on. Every item below is specified in §4 and its architecture in the TDD; this list exists only to mark where the release history starts.
 
-- Galaxy generation with faction-controlled planets
-- Full battle simulation: movement, ranged combat, melee, wounds, experience gain
-- Battle Review Screen
-- Chapter Screen: squad composition management and loadout selection
-- Planet Detail Screen: fleet/troop management, planetary data, governor and reputation
-- Region Screen: order assignment with copy/paste
-- Apothecary Screen: injury display and geneseed inventory
-- Recruiter Screen: training readiness reporting
-- Squad Screen and Soldier Screen
-- Living galaxy: Genestealer Cult growth and outbreak; faction construction and offensive planning; patrol generation
-- Governor personality, detection, and request generation
-- Full save/load
-- Tyranid faction: Warriors, Carnifex, Ripper Swarms, Genestealer Cult troops, expanded species
-- Space Marine faction: Tactical, Assault, Devastator, Scout, Veteran squads and full weapon set
+- ✅ Galaxy generation with faction-controlled planets
+- ✅ Full battle simulation: movement, ranged combat, melee, wounds, experience gain
+- ✅ Battle Review Screen
+- ✅ Chapter Screen: squad composition management and loadout selection
+- ✅ Planet Detail Screen: fleet/troop management, planetary data, governor and reputation
+- ✅ Region Screen: order assignment with copy/paste
+- ✅ Apothecary Screen: injury display and geneseed inventory
+- ✅ Recruiter Screen: training readiness reporting
+- ✅ Squad Screen and Soldier Screen
+- ✅ Living galaxy: Genestealer Cult growth and outbreak; faction construction and offensive planning; patrol generation
+- ✅ Governor personality, detection, and request generation
+- ✅ Full save/load
+- ✅ Tyranid faction: Warriors, Carnifex, Ripper Swarms, Genestealer Cult troops, expanded species
+- ✅ Space Marine faction: Tactical, Assault, Devastator, Scout, Veteran squads and full weapon set
 
 ### 5.2 Alpha 0.7 — Released
 
@@ -1327,62 +1348,34 @@ As with the earlier release records, this section marks scope only. Behavioral d
 
 ### 5.5 Alpha 0.8 — Command, Narrative & Cross-Faction Simulation
 
-The connective pass that turns 0.7's broad simulation into a legible, felt, sustainable sandbox campaign. The first half makes existing state understandable and memorable; the second supplies a medium-term horizon. (Closing the Chapter's recovery loop was the other half of this pass, and has moved earlier: Recruitment v1 now ships in 0.7.3 — §5.4.) 0.8 also carries the cross-faction substrate and the Ork faction, pulled forward from 0.8+ — see "Cross-faction simulation in 0.8" below. See §§4.19, 4.21–4.22, and 4.25–4.27 for the governing specifications.
+The connective pass that turns 0.7's broad simulation into a legible, felt, sustainable sandbox campaign: narration and command surfaces that make existing state understandable and memorable, a cross-faction substrate and the first faction that exploits it (both pulled forward from 0.8+), and the equipment and ammunition foundation. Recruitment v1, originally the other half of this pass, shipped early in 0.7.3 (§5.4). Governing specifications: §§4.19, 4.21–4.22, 4.25–4.27.
 
-**Implementation prerequisite — structured soldier event log.** Soldier history was an unstructured `List<string>` of free-text lines, written from only a handful of sites (founding, promotion/transfer, ratings/awards, a per-battle summary, and a thin death line); non-combat missions (recon, sabotage, assassination, infiltration, fortification) recorded nothing. Before any narration work, this is being replaced with a **structured, queryable event log** — typed events carrying date, location, faction, weapon, magnitude, and related-soldier references — that serves as both the substrate the notability classifier queries and the source the narrator renders to text. Audit findings driving this:
+**Shipped.**
 
-- Continuity callbacks (4.19 Principle 3) and the notability classifier require *querying* the past ("first kill?", "who was his mentor?", "crossed 50 kills?", "survived the battle that killed his sergeant?"), which free-text strings cannot reliably support.
-- Events that are never emitted today and must be added: first blood, kill milestones, last-survivor / survival-against-odds, mentor/instructor relationships for campaign-recruited Marines, near-death recoveries, significant body-part replacements, and **all non-combat mission outcomes**.
-- The fallen brother's dossier must be *preserved* on death (see 4.12) rather than discarded.
+- ✅ **Structured soldier event log + death preservation** — the free-text `List<string>` history is replaced by typed, queryable `SoldierEvent` records carrying date, faction, weapon, magnitude, location, and related-soldier ids; persistence moved to a structured table (save compatibility intentionally broken); fallen brothers are preserved and round-trip through save/load. Prerequisite for everything below it: continuity callbacks (§4.19 Principle 3) and the notability classifier must *query* the past — "first kill?", "who was his mentor?", "survived the battle that killed his sergeant?" — which free text cannot reliably support. §4.12; TDD §4.3, §5.3.
+- ✅ **Event vocabulary** — first blood, kill milestones, typed battle participation/incapacitation/death and gene-seed outcomes, last-brother-standing and held-against-odds records, mentor relationships for campaign-recruited Marines, near-death recoveries, and significant cybernetic or vat-grown body-part replacements. TDD §§4.3, 6.6, 6.6.1. *(Non-combat mission-outcome events shipped early in 0.7 — §5.2. The reserved `Oath` enum value is unused; oath emission was dropped as untied to any player decision or planned system.)*
+- ✅ **Notability classifier** — versioned, frozen publication decisions across the full event vocabulary, senior-casualty rank/subrank boundaries, service-only 10/50 and notable 100/500/1,000 kill milestones, actual squad-leader unavailability, per-world cult revelations, and persisted saved/lost world episodes. TDD §4.3. *(Terminator Honours remains an explicit dormant snapshot trigger until honours exist.)*
+- ✅ **Narrator / voice pass** — distinct factual Service Record, operational Turn Report/Command Brief, restrained Chapter annal, settled eulogy, voiced governor petition, and named Battle Review paths replace enum fallbacks. Chronicle prose, variants, callback contributors, and linked archival corrections are frozen records. TDD §§4.3, 6.6. *(Inquisition, Battlefleet, and Astartes-authority sources have reserved narrator keys but produce no placeholder content.)*
+- ✅ **Command Brief & Chapter Chronicle** — the persistent two-lens Command workspace replaces Archive: a live, non-persisted Brief with deep links and shared End Turn attention facts; a curated, frozen, paged Chronicle; retained Last Turn Report access; and the first-turn Founding Directive/checklist. Implemented in `Scenes/CommandScreen` with passive Chronicle persistence, typed navigation targets, and ChapterFounded compatibility projection. §4.19.
+- ✅ **Faction Relationships & Inter-Faction Intelligence** — the cross-faction substrate, sequenced first because Orks cannot be built without it and because Revolt (§4.20) and future Chaos content benefit independently: the binary enemy rule is replaced by a persisted symmetric stance ledger (default Hostile; player↔Imperial seeded Allied), `Faction` behavior is authored through `[Flags] FactionBehavior`, regional awareness is target-agnostic, and sparse observer/target/region beliefs provide graded intelligence, estimates, false positives, Allied sharing, belief-backed planning, governor evidence, and no-contact searches. §4.21; TDD §§5.2.1, 6.1–6.3.
+- ✅ **Equipment & Ammunition Foundation / bespoke character loadouts** — itemized rules catalog, globally identified kits, explicit personal-equipment roles, complete armor/item/ready-order loadouts, capacity and restriction validation, shared chapter-role/live-soldier editor, format-10 doctrine persistence, mission-lifetime equipment instances, and casualty reallocation. Delivered within it: **live ammunition tracking and reloads** (bursts spend the full commitment, finite authored mission reserves, weapon-owned loaded/reserve state and reload progress, no reload creating ammunition, scarcity-aware planner behavior) and **equipment-aware tactical Battle Value** (signature-cached effective value after allocation drives target selection, expected friendly-value loss, and threat math, while strategic force generation, mission sizing, and casualty accounting retain intrinsic value). §§4.5, 4.14; TDD §§4.1.2, 4.2–4.3, 6.6. *(The pooled standard-issue/specialist-count menu survives behind a narrow `WeaponSet` compatibility surface pending migration; it is not the authoritative model. Armory inventory and strategic ammunition remain deferred — §5.7.)*
+- ✅ **Force Legibility — planet tactical map and squad rows** — canonical effective/full strength, typed unavailable reasons, leadership/readiness/commitment facts, mutation-level leaderless deployment gates, shared live/projected/historical squad-row presentation, cross-screen consumer migration, and map aggregation from the same snapshots. §4.26; TDD §7.6.
 
-0.8 sequencing — status reflects the current codebase (✅ done · ⬜ not started):
+**Remaining in 0.8.**
 
-- ✅ **(1) Structured event log substrate + death preservation.** The free-text `List<string>` history is replaced by typed, queryable `SoldierEvent` records carrying date, faction, weapon, magnitude, location, and related-soldier ids, rendering back to the legacy display lines so the history surface is unchanged. All existing write sites emit typed events, persistence moved to a structured table (save compatibility intentionally broken), and fallen brothers are preserved and round-trip through save/load. §4.12; TDD §4.3, §5.3.
- - ✅ **(2) Emit the missing events** — the canonical event spine now emits first blood, kill milestones, typed battle participation/incapacitation/death and gene-seed outcomes, last-brother-standing and held-against-odds records, mentor relationships for campaign-recruited Marines, near-death recoveries, and significant cybernetic or vat-grown body-part replacements. The reserved `Oath` enum value remains unused; oath emission was removed from scope because it is not tied to a meaningful player decision or planned system. *Non-combat mission-outcome events are pulled forward to 0.7 — see §5.2 "Mission Field Experience & Records" — so field service is recorded ahead of the rest of this event pass.* Details of the bounded emitters and current format-11 persistence are in TDD §§4.3, 6.6, and 6.6.1.
-- ✅ **(3) Notability classifier** — versioned, frozen publication decisions now cover the complete current event vocabulary, senior-casualty rank/subrank boundaries, service-only 10/50 and notable 100/500/1,000 kill milestones, actual squad-leader unavailability, per-world cult revelations, and persisted saved/lost world episodes. Terminator Honours remains an explicit dormant snapshot trigger until honours exist. TDD §4.3.
-- ✅ **(4) Narrator / voice pass** — distinct factual Service Record, operational Turn Report/Command Brief, restrained Chapter annal, settled eulogy, voiced governor petition, and named Battle Review paths replace enum fallbacks. Chronicle prose, variants, callback contributors, and linked archival corrections are frozen records. Future Inquisition, Battlefleet, and Astartes-authority sources have reserved narrator keys but do not produce placeholder content. TDD §§4.3, 6.6.
-- ✅ **(5) Command Brief & Chapter Chronicle** — replace Archive with the persistent two-lens Command workspace in §4.19: a live, non-persisted Brief with deep links and shared End Turn attention facts; a curated, frozen, paged Chronicle; retained Last Turn Report access; and the first-turn Founding Directive/checklist. Implemented in `Scenes/CommandScreen`, with passive Chronicle persistence, typed navigation targets, and ChapterFounded compatibility projection.
-- ⬜ **(6) Force legibility redesign — planet tactical map and squad rows** — approve a visual baseline and replace the current tiny-glyph information hierarchy, including honest multi-faction presentation (§4.26). *(Absorbs the "squad row redesign" formerly listed under UX Improvement Phase 1 in §5.4. That item entered the PRD in the original draft and was never elaborated, and folding it in here is a scope decision, not a deferral: it is the same problem the map redesign already has to solve — the player cannot read force state at a glance — and solving it twice, once per surface, is how the two drift apart.)* The squad-row half:
-  - Today's rows are styled but thin. The Chapter screen's browser row got the 0.7 theming pass (`OnlyWarStyle.ApplyListRow`, an `IconAtlas` type icon, title, muted `"{template} - {N} soldiers"` subtitle, location column, selection and double-click drill), but it reports headcount and nothing about fitness: no casualty or wounded count, no readiness or deployment state beyond raw location, no loadout summary, no leaderless flag. The Recruiter's Scout squad rows (`TrainingUnitScreenView.AddSquad`) never got that pass at all and are still bare single-line toggle buttons carrying a label and one icon.
-  - The target is a **shared squad-row component** used by the Chapter, Recruiter, Region, and Fleet screens, answering "can this squad be sent somewhere right now?" without a drill-down — the list-level counterpart of the same question the tactical map answers spatially. Consistency across surfaces is the point; a per-screen row is what exists now.
-  - Sequence it **after** the map's visual baseline is approved, so the row inherits that baseline's vocabulary for strength, casualties, and readiness rather than inventing a second one.
-- ↷ **Chapter Mandates — deferred out of the active 0.8 sequence.** The §4.25 design remains valid, but Command Brief-backed mandates are independent follow-through after the equipment/ammunition foundation that now ships in this sequence.
-- ↷ **Display mode and UI/text scaling — deferred out of the active 0.8 sequence.** The §4.27 requirement remains in backlog; no UI Scale plumbing is part of the equipment work.
+- ⬜ **Orks & Indelible Infestation** — the first faction built on the relationship substrate above, and dependent on it: an indelible, never-eradicable Ork presence with feral-to-WAAAGH! escalation, a faction-owned tactical roster, Waaagh! battlefield morale, beacon-driven sector expansion, and the Promised-World Ork opening variant with its new-game invader choice (§4.1). §4.22. Open question: terminal Ork-controlled world state (§6.8).
+- ⬜ **Founding myth** — a short generated chapter history at new-game start. §4.19.
+- ⬜ **Wider-Imperium dispatches (initial)** — voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing. §4.19.
+- ⬜ **Chapter Doctrine — Unfit For Duty Injury Level** — a Chapter Doctrine control on the loadout screens, initially carrying only this setting: default **Major**, adjustable across the injury-severity range from **None** through **Critical**. §4.5.
+- ⬜ **Techmarines & the Mars pipeline** — replace the placeholder (aspirants leave for ~2 years and return immediately) with a deferred-cohort pipeline: the chapter starts with no Techmarines, the founding cohort returns after ~18 in-game years, and the player sends further drafts on an ongoing basis. Adds between-mission vehicle maintenance and a Techmarine **Cybernetic Repair** procedure. **Prerequisite for Vehicles** (§5.7). §4.28; open questions §§6.15–6.17.
+- ⬜ **Engineering follow-through** — split the remaining large `PlanetTurnProcessor` by domain and retire transitional `TurnController` compatibility shims and unused prototypes as callers migrate. Enabling work, not a separate player-facing feature. TDD §8.
 
-*Recruitment v1 was pulled forward from this sequence to 0.7.3 (§5.4) and has shipped, so the Promised World win now unlocks something concrete. Chapter Mandates and display/UI scaling are deliberately deferred follow-through, not prerequisites for the equipment foundation that has now landed.*
+**Deferred out of the active 0.8 sequence.**
 
-- **Narrative Voice baseline:** Apply the 4.19 authoring principles and notability classifier across the Turn Report, Soldier history log, and death/apothecary records — named individuals, specificity, continuity callbacks, and outcomes framed against the player's orders.
-- **Eulogy-style death records:** Where, how, final tally, years served, and geneseed recovered or lost (with lost geneseed narrated as a compounding loss).
-- **Enriched soldier history vocabulary:** First blood, survival against odds, campaign-recruit mentor relationships, kill milestones, near-death recoveries, and cybernetic or vat-grown body-part replacements.
-- **Voiced requests:** Governor request text is driven by personality, authority, severity, hazard, relationship, deadline, and commitment while retaining a separate mechanical summary. The Inquisition voice key is reserved for its future source system.
-- **Founding myth:** Generate a short chapter history at new-game start.
-- **Battle Review log humanization:** Named actors and flavor on criticals, kills, and last stands.
-- **Wider-Imperium dispatches (initial):** Voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing.
-- **Command Brief & Chapter Chronicle:** Implement the committed persistent operations/saga surface defined in §4.19. The Chronicle records what mattered; the Brief shows what now requires command attention.
+- ↷ **Chapter Mandates** — the §4.25 design remains valid, but Command Brief-backed mandates are independent follow-through after the equipment foundation, not a prerequisite for it.
+- ↷ **Display mode and UI/text scaling** — the §4.27 requirement remains in backlog; no UI Scale plumbing is part of the equipment work.
 
-**Cross-faction simulation in 0.8.** Alongside the narrative pass, 0.8 lifts the sector beyond the binary Imperial-vs-everyone model and lands the first faction that exploits it. These two items are sequenced **substrate first** — Orks cannot be built without it, and the substrate independently benefits Revolt (§4.20) and future Chaos content:
-
- - ✅ **(A) Faction Relationships & Inter-Faction Intelligence (substrate, first)** — the binary enemy rule is replaced by a persisted symmetric stance ledger (default Hostile; player↔Imperial seeded Allied); `Faction` behavior is authored through `[Flags] FactionBehavior`; regional awareness is target-agnostic; and sparse observer/target/region beliefs provide graded intelligence, estimates, false positives, Allied sharing, belief-backed planning, governor evidence, and no-contact searches. Spec: §4.21; implementation details: TDD §§5.2.1, 6.1–6.3. The active implementation plan has been integrated and removed.
-- **(B) Orks & Indelible Infestation** (depends on A) — `UniversallyHostile | Indelible` Ork faction; indelible `RegionFaction` with pop-0 → non-public → regrow-to-1; logistic growth with an Ork multiplier and a feral efficiency penalty; two-dimensional state (awareness × expansion) yielding unnoticed-feral / noticed-feral / WAAAGH!; feral amassing migration and internal-scale WAAAGH! emergence; imperfect Imperial cull of noticed-feral Orks (gated on `Confirmed` intel and spare capacity); a viable Ork species/weapon/squad roster; tactical Waaagh! morale pressure; and derived escalation from feral through local, subsector, and sector threats. WAAAGH!-as-beacon spawning unmapped Ork worlds in empty tiles plus reinforcing fleets remains the sector-scale expression. Includes the **Ork Promised-World opening variant** (§4.22 opening subsection) as a sibling of the Tyranid opening (§4.24), reusing `ScenarioBuilder.StampPromisedWorld`'s headless pre-sim with a feral-eruption sequence and a Navy-interdicted, locally-scoped WAAAGH! in place of the stranded hive fleet, plus the **new-game invader choice** (Tyranids / Orks / Random, seed-deterministic) added to the setup screen (§4.1) and recorded on `CampaignScenario`. Spec: §4.22. Open question: terminal Ork-controlled world state (§6.8).
-- ✅ **(C) Equipment & Ammunition Foundation / Bespoke Character Loadouts** — the itemized rules catalog, globally identified kits, explicit personal-equipment roles, complete armor/item/ready-order loadouts, capacity and restriction validation, shared chapter-role/live-soldier editor, format-10 doctrine persistence, mission-lifetime equipment instances, casualty reallocation, live ammunition/reload/recovery behavior, and effective tactical Battle Value are shipped. The pooled standard-issue/specialist-count interaction remains available through a narrow `WeaponSet` compatibility surface while that older pooled menu is migrated; it is not the authoritative model for personal roles. Armory inventory and strategic ammunition remain deferred. Spec: §§4.5, 4.14; implementation details: `OnlyWar_TDD.md` §§4.1.2, 4.2–4.3, and 6.6.
-- **(D) Chapter Doctrine — Unfit For Duty Injury Level** — add a Chapter Doctrine control to the loadout screens. The initial doctrine contains only **Unfit For Duty Injury Level**, which defaults to **Major** and can be adjusted across the injury-severity range from **None** through **Critical**.
-- ✅ **(E) Equipment-aware tactical Battle Value (delivered within C)** — the runtime separates stable intrinsic/template Battle Value from effective value after equipment allocation. Signature-cached effective value includes resolved armor, weapons, and gear; tactical target selection, expected friendly-value loss, and remaining-force/threat calculations use it, while strategic force generation, mission sizing, and persistent casualty accounting retain intrinsic value. Carrier reassignment refreshes the tactical attribution, and the deterministic battle/domain coverage exercises cache stability and mutable-equipment transfer.
-
-Residual follow-through for the Tyranid line and Large-Scale NPC Combat stays in §5.6; the
-completed behavior is specified in §4.24 and the TDD rather than repeated in release scope.
-
-**Techmarines & the Mars pipeline.** Flesh Techmarines out from the current placeholder (identified aspirants leave for ~2 years and return immediately) into a deferred-cohort pipeline that gives the young chapter a long capability arc and gates the machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (currently Post-0.8 backlog, §5.7): armor and vehicles cannot be fielded until the chapter has Techmarines to wake and maintain their machine spirits, so the Mars pipeline must land first. Scope for 0.8:
-
-- **Start with none.** At founding, some number of marines/aspirants are identified for the Adeptus Mechanicus and sent to Mars; the chapter begins its Techmarine era empty, and the first cohort returns after a long delay (canonically ~18 in-game years — long enough to feel, not just a formality). This dovetails with the early-focus arc: the chapter spends its first two decades as a relationship-building infantry force, and equipment promises maturing around the cohort's return is a deliberate convergence to tune toward.
-- **Player-driven pipeline.** Add the ability for the player to send further neophytes and marines to Mars for Techmarine training on an ongoing basis, rather than only the founding cohort — an ongoing trickle rather than a one-time draft.
-- **Techmarine activity between missions.** Design what a Techmarine does when not assigned to a mission. **Vehicle repair/maintenance is the anchor role.** Open questions: do they maintain small arms / power armor (and is that a hard gate or a degraded-without-them service), and can they convert requisition into small arms (local fabrication as a requisition sink)?
-- **Cybernetic repair.** Cybernetic hit locations damaged in battle should not naturally heal and should be ineligible for Apothecary treatment. Give Techmarines a **Cybernetic Repair** procedure, analogous to an Apothecary's wound-healing procedure, so affected soldiers require Techmarine treatment.
-- **Open question:** Should crippled vital hit locations require partial cybernetic/vat replacement? (i.e. an organ)
-- **Open questions.** Whether Mars-bound marines still appear in the Chapter roster (present-but-unavailable vs. removed-until-return); cohort return cadence (all at once as a dramatic beat vs. staggered/individually-varied return dates for a smoother capability curve and campaign-to-campaign variety); and how many are sent at founding and per later draft.
-
-**Live ammunition tracking & reloads (delivered as part of C).** Ordinary fire spends the full committed burst; recoil determines how many rounds hit rather than refunding misses. Equipment kits author finite mission reserve packages, weapon instances retain loaded/reserve state across every battle in the mission, reload progress belongs to the weapon, and no reload may create ammunition. Magazine-fed weapons reload from compatible reserve packages; shotguns load incrementally and may fire partially loaded; grenades are finite carried consumables; Tyranid bio-weapons recover charges automatically without spending a soldier action. The planner compares legal burst sizes under scarcity, uses alternatives before reloading, and limits discretionary simultaneous reloads. Exact combat loads and timings remain rules-data balance values. The rules, persistence, and battle seams are recorded in TDD §6.6.
-
-**Engineering follow-through supporting 0.8:** Finish the simulation seams documented in TDD §8: split the remaining large `PlanetTurnProcessor` by domain, and retire transitional `TurnController` compatibility shims and unused prototypes as callers migrate. These are enabling changes, not separate player-facing features.
+Residual follow-through for the Tyranid line and Large-Scale NPC Combat stays in §5.6; the completed behavior is specified in §4.24 and the TDD rather than repeated in release scope.
 
 ### 5.6 Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat
 
@@ -1454,7 +1447,7 @@ tracked here rather than kept as an active design document.
 
 **Battlefield recovery missions.** A follow-up mission type that returns to a field the chapter did not hold, to recover what was left there. Motivated by the incapacitation rules (§4.12): a brother whose wounds took him out of a fight the chapter then lost is currently presumed dead with his gene-seed lost, and there is no way to contest that outcome. A recovery mission should be able to retrieve some subset of — in descending order of luck — the brother himself (his armor's biostasis having kept him alive), his body and gene-seed, or merely his power armor and wargear. Deliberately deferred rather than scheduled: recovering *materiel* only means something once the Armory tracks wargear as inventory (§4.23 / §6.9), and a recovery operation into hostile territory wants transport, which lands with Vehicles. Design questions left open: how the chapter learns a recovery is possible and how long the window stays open; whether the enemy faction degrades or removes the prize over time; and whether this is a distinct mission type or an objective variant of the existing raid/recon types.
 
-**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Orks are now scheduled — see §5.5. **Vehicles depend on the 0.8 Techmarine pipeline (§5.5)** — armor cannot be fielded until the chapter has Techmarines to maintain and wake its machine spirits, so that pipeline must land first. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
+**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Orks are now scheduled — see §5.5. **Vehicles depend on the 0.8 Techmarine pipeline (§4.28, scheduled in §5.5)** — armor cannot be fielded until the chapter has Techmarines to maintain and wake its machine spirits, so that pipeline must land first. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
 
 **Enemy-generated diversions.** *(Now scheduled as part of "Next-level NPC mission planning" — see §5.6. The scoping analysis below is retained because it is the governing design note for the NPC-vs-player half, which is the genuinely hard part.)* Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
 
@@ -1609,6 +1602,24 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 **The refinement on the table.** Replace "reset to zero" with "set back by an amount scaled to the new wound's severity" — a graze costs a week, a Massive wound costs everything. This keeps every property that makes the current rule defensible: it stays location-level so no wound identity is needed and the promotion question never arises; it stays systemic; it requires no additional stored state; and it is monotone in severity. It adds one tuning curve.
 
 **Status:** deliberately not scheduled. The current location-level healing reset remains the rule; revisit this refinement only if future balance evidence shows that fresh minor wounds make severe injuries disproportionately difficult to recover from.
+
+### 6.15 Techmarine Cohort Shape & Roster Visibility (raised by the Mars Pipeline, §4.28)
+
+**Question:** How many marines are sent to Mars at founding and per later draft; do they return all at once or on staggered, individually-varied dates; and do Mars-bound marines remain in the chapter roster as present-but-unavailable, or are they removed until they return?
+
+**Why it comes up.** These are one design knob seen from three sides: together they decide whether the cohort's return reads as a single dramatic beat or as a smooth capability curve, and whether the player feels the absence continuously (visible but unusable) or only at the moment of return. A simultaneous return is the stronger narrative event; staggered dates give a smoother ramp and more campaign-to-campaign variety. Roster visibility is the cheapest of the three to change later and is likely to be settled by UI legibility rather than by design.
+
+### 6.16 Techmarine Maintenance Scope & Local Fabrication (raised by the Mars Pipeline, §4.28)
+
+**Question:** Beyond vehicles, do Techmarines maintain small arms and power armor — and if so, is that a hard gate (no Techmarine, no serviceable wargear) or a degraded-without-them service? Separately, should they be able to convert Requisition into small arms as a local-fabrication sink?
+
+**Why it comes up.** A hard gate makes the pipeline's absence bite immediately and everywhere, which may be too punishing for a chapter deliberately designed to spend its first two decades as an infantry force; a degraded service keeps the pressure legible without stalling the campaign. Local fabrication is attractive as a Requisition sink (§4.23), but it overlaps the unresolved Armory inventory question (§6.9) — whether wargear is tracked as items at all — and should not be settled ahead of it.
+
+### 6.17 Cybernetic Replacement of Crippled Vital Locations (raised by the Mars Pipeline, §4.28)
+
+**Question:** Should a crippled *vital* hit location require partial cybernetic or vat-grown replacement — an organ rather than a limb?
+
+**Why it comes up.** §4.28 makes damaged cybernetics Techmarine work and §4.8 already models significant body-part replacement, so the machinery exists; the open part is whether vital locations should be routed into it rather than recovering conventionally. It bears directly on how survivable a torso or head wound is across a long career and on how much Techmarine capacity a battered chapter needs, which couples it to §6.16's scope question rather than leaving it independent.
 
 ---
 

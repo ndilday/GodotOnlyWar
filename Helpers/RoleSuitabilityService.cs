@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 
 namespace OnlyWar.Helpers
 {
@@ -44,17 +45,21 @@ namespace OnlyWar.Helpers
     public sealed class RoleSuitabilityService
     {
         private readonly Dictionary<FoundingRole, List<PlayerSoldier>> _candidates;
+        private readonly RatingConsumerBindings _ratings;
 
-        public RoleSuitabilityService(IEnumerable<PlayerSoldier> soldiers)
+        public RoleSuitabilityService(
+            IEnumerable<PlayerSoldier> soldiers,
+            RatingConsumerBindings ratings = null)
         {
+            _ratings = ratings ?? RatingConsumerBindings.CreateDefault();
             // Psykers belong to the Librarius and nothing else.
             List<PlayerSoldier> pool = soldiers.Where(s => s.PsychicPower <= 0).ToList();
             _candidates = new Dictionary<FoundingRole, List<PlayerSoldier>>();
             foreach (FoundingRole role in Enum.GetValues<FoundingRole>())
             {
                 _candidates[role] = pool
-                    .Where(s => IsEligible(role, Evaluation(s)))
-                    .OrderByDescending(s => SortKey(role, Evaluation(s)))
+                    .Where(s => IsEligible(role, Evaluation(s), _ratings))
+                    .OrderByDescending(s => SortKey(role, Evaluation(s), _ratings))
                     .ToList();
             }
         }
@@ -73,86 +78,116 @@ namespace OnlyWar.Helpers
             return soldier.SoldierEvaluationHistory[0];
         }
 
-        private static bool IsEligible(FoundingRole role, SoldierEvaluation e)
+        private static bool IsEligible(
+            FoundingRole role,
+            SoldierEvaluation e,
+            RatingConsumerBindings ratings)
         {
             return role switch
             {
                 FoundingRole.ChapterMaster => true,
-                FoundingRole.MasterOfTheForge => e.TechRating > 100 && e.LeadershipRating > 60,
-                FoundingRole.Techmarine => e.TechRating > 75,
-                FoundingRole.MasterOfTheApothecarion => e.MedicalRating > 115 && e.LeadershipRating > 60,
-                FoundingRole.Apothecary => e.MedicalRating > 95,
-                FoundingRole.MasterOfSanctity => e.PietyRating > 100 && e.LeadershipRating > 60,
-                FoundingRole.Chaplain => e.PietyRating > 90,
-                FoundingRole.VeteranCaptain => e.LeadershipRating > 75
-                    && e.MeleeRating > 105 && e.RangedRating > 110,
+                FoundingRole.MasterOfTheForge => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 100
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
+                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 75,
+                FoundingRole.MasterOfTheApothecarion => Rating(ratings, e, RatingConsumerRole.MedicalCapacity) > 115
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
+                FoundingRole.Apothecary => Rating(ratings, e, RatingConsumerRole.MedicalCapacity) > 95,
+                FoundingRole.MasterOfSanctity => Rating(ratings, e, RatingConsumerRole.SpiritualCapability) > 100
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
+                FoundingRole.Chaplain => Rating(ratings, e, RatingConsumerRole.SpiritualCapability) > 90,
+                FoundingRole.VeteranCaptain => Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 75
+                    && Rating(ratings, e, RatingConsumerRole.MeleeCombat) > 105
+                    && Rating(ratings, e, RatingConsumerRole.RangedCombat) > 110,
                 FoundingRole.Captain => true,
-                FoundingRole.VeteranSergeant => IsVeteranCandidate(e) && e.LeadershipRating > 60,
+                FoundingRole.VeteranSergeant => IsVeteranCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
                 // Rank-and-file veterans: sergeant-grade leaders are ranked in the
                 // VeteranSergeant list instead, mirroring the old veterans.Except(leaders).
-                FoundingRole.Veteran => IsVeteranCandidate(e) && e.LeadershipRating <= 60,
+                FoundingRole.Veteran => IsVeteranCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) <= 60,
                 FoundingRole.Champion => true,
                 FoundingRole.Ancient => true,
-                FoundingRole.TacticalSergeant => IsTacticalCandidate(e) && e.LeadershipRating > 50,
-                FoundingRole.TacticalMarine => IsTacticalCandidate(e) && e.LeadershipRating < 50,
-                FoundingRole.AssaultSergeant => IsAssaultCandidate(e) && e.LeadershipRating > 50,
-                FoundingRole.AssaultMarine => IsAssaultCandidate(e) && e.LeadershipRating < 50,
-                FoundingRole.DevastatorSergeant => IsDevastatorCandidate(e) && e.LeadershipRating > 50,
-                FoundingRole.DevastatorMarine => IsDevastatorCandidate(e) && e.LeadershipRating < 50,
+                FoundingRole.TacticalSergeant => IsTacticalCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 50,
+                FoundingRole.TacticalMarine => IsTacticalCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) < 50,
+                FoundingRole.AssaultSergeant => IsAssaultCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 50,
+                FoundingRole.AssaultMarine => IsAssaultCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) < 50,
+                FoundingRole.DevastatorSergeant => IsDevastatorCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 50,
+                FoundingRole.DevastatorMarine => IsDevastatorCandidate(e, ratings)
+                    && Rating(ratings, e, RatingConsumerRole.CommandLeadership) < 50,
                 FoundingRole.ScoutSergeant => true,
                 _ => false
             };
         }
 
-        private static float SortKey(FoundingRole role, SoldierEvaluation e)
+        private static float SortKey(
+            FoundingRole role,
+            SoldierEvaluation e,
+            RatingConsumerBindings ratings)
         {
             return role switch
             {
-                FoundingRole.ChapterMaster => e.LeadershipRating,
-                FoundingRole.MasterOfTheForge => e.TechRating,
-                FoundingRole.Techmarine => e.TechRating,
-                FoundingRole.MasterOfTheApothecarion => e.MedicalRating,
-                FoundingRole.Apothecary => e.MedicalRating,
-                FoundingRole.MasterOfSanctity => e.PietyRating,
-                FoundingRole.Chaplain => e.PietyRating,
-                FoundingRole.VeteranCaptain => e.LeadershipRating,
-                FoundingRole.Captain => e.LeadershipRating,
-                FoundingRole.VeteranSergeant => e.LeadershipRating,
-                FoundingRole.Veteran => e.MeleeRating,
-                FoundingRole.Champion => e.MeleeRating,
-                FoundingRole.Ancient => e.AncientRating,
-                FoundingRole.TacticalSergeant => e.LeadershipRating,
-                FoundingRole.TacticalMarine => e.RangedRating,
-                FoundingRole.AssaultSergeant => e.LeadershipRating,
-                FoundingRole.AssaultMarine => e.MeleeRating,
-                FoundingRole.DevastatorSergeant => e.LeadershipRating,
-                FoundingRole.DevastatorMarine => e.RangedRating,
-                FoundingRole.ScoutSergeant => e.LeadershipRating,
+                FoundingRole.ChapterMaster => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
+                FoundingRole.MasterOfTheForge => Rating(ratings, e, RatingConsumerRole.TechnicalCapability),
+                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability),
+                FoundingRole.MasterOfTheApothecarion => Rating(ratings, e, RatingConsumerRole.MedicalCapacity),
+                FoundingRole.Apothecary => Rating(ratings, e, RatingConsumerRole.MedicalCapacity),
+                FoundingRole.MasterOfSanctity => Rating(ratings, e, RatingConsumerRole.SpiritualCapability),
+                FoundingRole.Chaplain => Rating(ratings, e, RatingConsumerRole.SpiritualCapability),
+                FoundingRole.VeteranCaptain => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
+                FoundingRole.Captain => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
+                FoundingRole.VeteranSergeant => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
+                FoundingRole.Veteran => Rating(ratings, e, RatingConsumerRole.MeleeCombat),
+                FoundingRole.Champion => Rating(ratings, e, RatingConsumerRole.MeleeCombat),
+                FoundingRole.Ancient => Rating(ratings, e, RatingConsumerRole.AncientService),
+                FoundingRole.TacticalSergeant => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
+                FoundingRole.TacticalMarine => Rating(ratings, e, RatingConsumerRole.RangedCombat),
+                FoundingRole.AssaultSergeant => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
+                FoundingRole.AssaultMarine => Rating(ratings, e, RatingConsumerRole.MeleeCombat),
+                FoundingRole.DevastatorSergeant => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
+                FoundingRole.DevastatorMarine => Rating(ratings, e, RatingConsumerRole.RangedCombat),
+                FoundingRole.ScoutSergeant => Rating(ratings, e, RatingConsumerRole.CommandLeadership),
                 _ => 0f
             };
         }
 
         // Tactical baseline plus an Adamantium-level spike in either combat rating.
-        private static bool IsVeteranCandidate(SoldierEvaluation e)
+        private static bool IsVeteranCandidate(SoldierEvaluation e, RatingConsumerBindings ratings)
         {
-            bool tacticalBaseline = e.MeleeRating > 90 && e.RangedRating > 105;
-            bool adamantiumCombatSpike = e.MeleeRating > 115 || e.RangedRating > 120;
+            float melee = Rating(ratings, e, RatingConsumerRole.MeleeCombat);
+            float ranged = Rating(ratings, e, RatingConsumerRole.RangedCombat);
+            bool tacticalBaseline = melee > 90 && ranged > 105;
+            bool adamantiumCombatSpike = melee > 115 || ranged > 120;
             return tacticalBaseline && adamantiumCombatSpike;
         }
 
-        private static bool IsTacticalCandidate(SoldierEvaluation e)
+        private static bool IsTacticalCandidate(SoldierEvaluation e, RatingConsumerBindings ratings)
         {
-            return e.MeleeRating > 90 && e.RangedRating > 105;
+            return Rating(ratings, e, RatingConsumerRole.MeleeCombat) > 90
+                && Rating(ratings, e, RatingConsumerRole.RangedCombat) > 105;
         }
 
-        private static bool IsAssaultCandidate(SoldierEvaluation e)
+        private static bool IsAssaultCandidate(SoldierEvaluation e, RatingConsumerBindings ratings)
         {
-            return e.MeleeRating > 90 && e.RangedRating > 95 && e.RangedRating < 105;
+            float ranged = Rating(ratings, e, RatingConsumerRole.RangedCombat);
+            return Rating(ratings, e, RatingConsumerRole.MeleeCombat) > 90
+                && ranged > 95 && ranged < 105;
         }
 
-        private static bool IsDevastatorCandidate(SoldierEvaluation e)
+        private static bool IsDevastatorCandidate(SoldierEvaluation e, RatingConsumerBindings ratings)
         {
-            return e.MeleeRating > 80 && e.MeleeRating < 90 && e.RangedRating > 95;
+            float melee = Rating(ratings, e, RatingConsumerRole.MeleeCombat);
+            return melee > 80 && melee < 90
+                && Rating(ratings, e, RatingConsumerRole.RangedCombat) > 95;
         }
+
+        private static float Rating(
+            RatingConsumerBindings ratings,
+            SoldierEvaluation evaluation,
+            RatingConsumerRole role) => ratings.Get(evaluation, role);
     }
 }

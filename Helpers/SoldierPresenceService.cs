@@ -1,6 +1,8 @@
+using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.UI;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -16,7 +18,10 @@ namespace OnlyWar.Helpers
                 member is not PlayerSoldier player || player.IndividualPosting == null).ToList() ?? [];
 
         public static IReadOnlyList<ISoldier> DeployableMembers(Squad squad) =>
-            PresentMembers(squad).Where(member => member.IsCombatEffective).ToList();
+            PresentMembers(squad)
+                .Where(member => SquadStrengthSnapshotBuilder.IsCombatEffectiveMember(
+                    member, CurrentProgram))
+                .ToList();
 
         public static IReadOnlyList<PlayerSoldier> OrderParticipants(Order order)
         {
@@ -24,8 +29,16 @@ namespace OnlyWar.Helpers
             return order.Force.AllPlayerSoldiers.Distinct().ToList();
         }
 
-        public static int NominalCount(Squad squad) => squad?.Members?.Count ?? 0;
-        public static int PresentCount(Squad squad) => PresentMembers(squad).Count;
-        public static int DeployableCount(Squad squad) => DeployableMembers(squad).Count;
+        public static int NominalCount(Squad squad) =>
+            SquadStrengthSnapshotBuilder.Build(squad, CurrentProgram).Rostered;
+
+        public static int PresentCount(Squad squad) =>
+            SquadStrengthSnapshotBuilder.Build(squad, CurrentProgram).Present;
+
+        public static int DeployableCount(Squad squad) =>
+            SquadStrengthSnapshotBuilder.Build(squad, CurrentProgram).Effective;
+
+        private static OnlyWar.Models.Recruitment.RecruitmentProgram CurrentProgram =>
+            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram;
     }
 }

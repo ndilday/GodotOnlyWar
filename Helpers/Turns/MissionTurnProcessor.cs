@@ -12,6 +12,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -219,7 +220,8 @@ namespace OnlyWar.Helpers.Turns
                 fieldCareByOrder[mission.Order.Id] = new FieldCareReport();
             }
             IReadOnlyList<BaseSkill> medicalSkills = FieldCareService.ResolveMedicalSkills(
-                _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap);
+                _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap,
+                _session.Rules?.RatingConsumers);
 
             MissionDayScheduler.Run(
                 scheduled.Select(mission => mission.Driver).ToList(),
@@ -229,7 +231,12 @@ namespace OnlyWar.Helpers.Turns
                 onDayEnd: day =>
                 {
                     ApplyDailyHealing();
-                    ApplyDailyFieldCare(distinctPlayerOrders, fieldCareByOrder, medicalSkills, day);
+                    ApplyDailyFieldCare(
+                        distinctPlayerOrders,
+                        fieldCareByOrder,
+                        medicalSkills,
+                        _session.Rules?.RatingConsumers,
+                        day);
                 });
 
             foreach (ScheduledMission mission in scheduled)
@@ -413,12 +420,13 @@ namespace OnlyWar.Helpers.Turns
             IReadOnlyDictionary<int, Order> distinctPlayerOrders,
             IReadOnlyDictionary<int, FieldCareReport> reports,
             IReadOnlyList<BaseSkill> medicalSkills,
+            RatingConsumerBindings ratingBindings,
             int day)
         {
             foreach (KeyValuePair<int, Order> entry in distinctPlayerOrders)
             {
                 FieldCareService.ApplyDailyFieldCare(
-                    entry.Value, reports[entry.Key], medicalSkills, day);
+                    entry.Value, reports[entry.Key], medicalSkills, day, ratingBindings);
             }
         }
 

@@ -186,7 +186,7 @@ namespace OnlyWar.Helpers
             PlayerSoldier chapterMaster = playerForce.Army.OrderOfBattle?.GetAllMembers()
                 .OfType<PlayerSoldier>()
                 .FirstOrDefault(soldier => soldier.Template?.Id
-                    == gameRulesData.ChapterTemplates.ChapterMaster.Id);
+                    == gameRulesData.ChapterDoctrine.ChapterMaster.Id);
             Character authority = sector.Characters.FirstOrDefault(character =>
                 character.Id == sector.Scenario.OriginalAuthorityCharacterId);
             int fallbackWeek = Math.Max(1, currentDate?.GetTotalWeeks() ?? 1);

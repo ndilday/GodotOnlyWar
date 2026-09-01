@@ -20,7 +20,7 @@ public partial class ChapterMusterScreenController : MainScreenController
         System.Environment.GetEnvironmentVariable("MUSTER_PERF_LOG") == "1";
 
     private readonly MusterPlanService _plan = new();
-    private readonly ChapterMusterViewModelBuilder _builder = new();
+    private ChapterMusterViewModelBuilder _builder;
     private readonly SoldierFilterService _filters = new();
     private MusterPopulationMode _populationMode = MusterPopulationMode.PromotionEligible;
     private List<SoldierFilterCondition> _activeFilters = [];
@@ -72,6 +72,8 @@ public partial class ChapterMusterScreenController : MainScreenController
 
     public override void _Ready()
     {
+        _builder = new ChapterMusterViewModelBuilder(
+            GameDataSingleton.Instance?.GameRulesData?.AwardCatalog);
         BuildWorkspace();
         BuildDialogs();
     }
@@ -483,7 +485,11 @@ public partial class ChapterMusterScreenController : MainScreenController
         List<PlayerSoldier> scoped = scope.ToList();
         if (_activeFilters.Count > 0)
         {
-            scoped = _filters.Apply(scoped, _activeFilters, GameDataSingleton.Instance.Date)
+            scoped = _filters.Apply(
+                    scoped,
+                    _activeFilters,
+                    GameDataSingleton.Instance.Date,
+                    GameDataSingleton.Instance.GameRulesData.RatingConsumers)
                 .OfType<PlayerSoldier>().ToList();
         }
         _transferContext = SoldierTransferContext.Build(force.Army.OrderOfBattle);
@@ -755,29 +761,42 @@ public partial class ChapterMusterScreenController : MainScreenController
             SizeFlagsStretchRatio = 2.4f
         };
         formationCell.AddThemeConstantOverride("separation", 5);
-        TextureRect icon = RosterRowStyle.CreateIconRect(formation.SquadIconKey, 34);
-        formationCell.AddChild(icon);
+        if (formation.CommonRow != null)
+        {
+            SquadRowView commonRow = new();
+            commonRow.Configure(formation.CommonRow);
+            commonRow.SetSelected(selected);
+            // The surrounding button owns formation selection; the common row supplies only
+            // the shared facts and must not intercept that button's input.
+            commonRow.MouseFilter = MouseFilterEnum.Ignore;
+            formationCell.AddChild(commonRow);
+        }
+        else
+        {
+            TextureRect icon = RosterRowStyle.CreateIconRect(formation.SquadIconKey, 34);
+            formationCell.AddChild(icon);
 
-        VBoxContainer formationDetails = new()
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ShrinkCenter
-        };
-        formationDetails.AddThemeConstantOverride("separation", 0);
-        Label formationName = new()
-        {
-            Text = formation.FormationName,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        formationName.AddThemeFontSizeOverride("font_size", 12);
-        formationDetails.AddChild(formationName);
-        Label state = new() { Text = formation.StateLabel, ClipText = true };
-        state.AddThemeFontSizeOverride("font_size", 10);
-        state.AddThemeColorOverride("font_color", FormationStateColor(formation.Group));
-        formationDetails.AddChild(state);
-        formationCell.AddChild(formationDetails);
+            VBoxContainer formationDetails = new()
+            {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter
+            };
+            formationDetails.AddThemeConstantOverride("separation", 0);
+            Label formationName = new()
+            {
+                Text = formation.FormationName,
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            formationName.AddThemeFontSizeOverride("font_size", 12);
+            formationDetails.AddChild(formationName);
+            Label state = new() { Text = formation.StateLabel, ClipText = true };
+            state.AddThemeFontSizeOverride("font_size", 10);
+            state.AddThemeColorOverride("font_color", FormationStateColor(formation.Group));
+            formationDetails.AddChild(state);
+            formationCell.AddChild(formationDetails);
+        }
         content.AddChild(formationCell);
 
         AddFormationDivider(content);
@@ -1066,8 +1085,12 @@ public partial class ChapterMusterScreenController : MainScreenController
         List<PlayerSoldier> scope = (_scopeCompanyId.HasValue
             ? Force.Army.OrderOfBattle.ChildUnits.First(unit => unit.Id == _scopeCompanyId).GetAllMembers().OfType<PlayerSoldier>()
             : Force.Army.PlayerSoldierMap.Values).ToList();
-        _filterDialog.Populate(_filters.GetAvailableRoles(scope),
-            _filters.GetAvailableHonors(scope, GameDataSingleton.Instance.GameRulesData.RatingAwardTiers),
+            _filterDialog.Populate(_filters.GetAvailableRoles(scope),
+            _filters.GetAvailableHonors(
+                scope,
+                GameDataSingleton.Instance.GameRulesData.RatingAwardTiers,
+                GameDataSingleton.Instance.GameRulesData.AwardCatalog,
+                GameDataSingleton.Instance.GameRulesData.RatingConsumers),
             _activeFilters);
         _filterDialog.PopupCentered();
     }

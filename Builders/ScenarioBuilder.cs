@@ -16,7 +16,7 @@ namespace OnlyWar.Builders
 {
     // Stamps the "Promised World" opening scenario on top of an already-generated, already-
     // governed sector (Design/Reference/OpeningScenario.md). This is an override layer, not a fork of
-    // the generator: it selects a mostly-Imperial world, confines a Tyranid incursion to a few
+    // the generator: it selects a mostly-host-controlled world, confines an invader incursion to a few
     // regions, parks the chapter fleet in orbit (the player must land), resolves the sitting
     // Sector Lord as the promising authority, and returns the persistent CampaignScenario.
     //
@@ -33,47 +33,52 @@ namespace OnlyWar.Builders
             Sector sector, GameRulesData data, Date currentDate,
             PlayerForce playerForce, List<Planet> planetList, List<Character> characterList)
         {
+            ScenarioProfile profile = data.ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
+            Faction infiltrator = SelectScenarioFaction(
+                profile, ScenarioFactionSlotKeys.Infiltrator, data);
+            Faction invader = SelectScenarioFaction(
+                profile, ScenarioFactionSlotKeys.Invader, data);
+
             // The opening plays out as a timed sequence during generation rather than being stamped
             // as a static board (Design/Reference/OpeningScenario.md): the
-            // world the player inherits is emergent — sometimes a fresh Tyranid beachhead, sometimes a
+            // world the player inherits is emergent — sometimes a fresh invader beachhead, sometimes a
             // month-eaten ruin — from the same simulation that runs during play. All draws come from
             // the already-seeded RNG stream, so seed + scenario still reproduces the same opening.
-            Planet promised = SelectPromisedWorld(planetList, data);
+            Planet promised = SelectPromisedWorld(planetList, data, profile);
 
-            // Seed the hidden cult, pull it up to landing-site strength (this world was chosen
-            // because its cult is deep and ready), then have it rise in open revolt: its psychic
-            // ascension is the beacon that calls the hive fleet down (§3.1a).
-            EnsureInfiltrator(promised, data);
-            StrengthenPromisedWorldInfiltrator(promised, data);
-            RevealInfiltrator(promised, data);
-            SeedPromisedWorldInfiltratorIntel(promised, data);
+            // Seed the hidden infiltrator, pull it up to landing-site strength (this world was
+            // chosen because its infiltrator is deep and ready), then have it rise in open revolt.
+            EnsureInfiltrator(promised, infiltrator, profile);
+            StrengthenPromisedWorldInfiltrator(promised, infiltrator, profile);
+            RevealInfiltrator(promised, infiltrator);
+            SeedPromisedWorldInfiltratorIntel(promised, infiltrator, profile);
 
             // A single TurnController drives both planet-scoped sims (no player upkeep, no other
             // planets, no scenario resolution — see SimulatePlanetForward).
             TurnController controller = new TurnController();
 
-            // Pre-landing: the revealed cult wars against the PDF, weakening the defenders the
-            // Tyranids will land into.
-            controller.SimulatePlanetForward(sector, promised, ScenarioRules.PreLandingTurns);
+            // Pre-landing: the revealed infiltrator wars against the host faction, weakening the
+            // defenders the invader will land into.
+            controller.SimulatePlanetForward(sector, promised, profile.PreLandingTurns);
 
             // The authored beachhead makes planetfall onto the now-weakened board.
-            StampInvaderPresence(promised, data);
+            StampInvaderPresence(promised, data, invader, profile);
 
             // Post-landing: the stranded swarm eats and spreads for a Gaussian-random stretch (the
             // Navy strands it — no reinforcement mechanism exists) before the player arrives.
-            controller.SimulatePlanetForward(sector, promised, PostLandingTurns());
+            controller.SimulatePlanetForward(sector, promised, PostLandingTurns(profile));
 
             // The player arrives last, into whatever state the sims produced.
             PlaceFleetInOrbit(sector, playerForce, promised);
             Character authority = ResolveAuthority(sector, planetList, characterList, data,
                                                    out GovernanceTier authorityTier);
             string briefingText = ComposeBriefing(sector, promised, authority, authorityTier,
-                                                  playerForce, data, currentDate);
+                                                  playerForce, invader, currentDate);
 
             PlayerSoldier chapterMaster = playerForce.Army.OrderOfBattle
                 .GetAllMembers()
                 .OfType<PlayerSoldier>()
-                .FirstOrDefault(soldier => soldier.Template == data.ChapterTemplates.ChapterMaster);
+                .FirstOrDefault(soldier => soldier.Template == data.ChapterDoctrine.ChapterMaster);
             playerForce.RecordChapterFounded(
                 currentDate,
                 new ChapterFoundedPayload(
@@ -98,82 +103,119 @@ namespace OnlyWar.Builders
                 authority.Id);
         }
 
-        // Weeks the stranded Tyranid swarm feeds after planetfall before the player arrives:
+        // Weeks the stranded invader force feeds after planetfall before the player arrives:
         // max(0, round(mean + z)), z ~ N(0,1), so the opening varies from a fresh beachhead to a
         // deeply consumed world across seeds (Design/Reference/OpeningScenario.md). Drawn from the
         // seeded RNG so it is deterministic per seed.
-        private static int PostLandingTurns()
+        private static int PostLandingTurns(ScenarioProfile profile)
         {
-            double turns = ScenarioRules.PostLandingTurnsMean + RNG.NextRandomZValue();
+            double turns = profile.PostLandingTurnsMean + RNG.NextRandomZValue();
             return Math.Max(0, (int)Math.Round(turns));
         }
 
-        // Pulls the promised world's Genestealer Cult up to landing-site strength: in each region the
-        // infiltrator takes ScenarioRules.PromisedWorldInfiltratorStrengthFraction of the combined
+        private static Faction SelectScenarioFaction(
+            ScenarioProfile profile,
+            string slotKey,
+            GameRulesData data)
+        {
+            IReadOnlyList<ScenarioFactionOption> options = profile.GetFactionOptions(slotKey);
+            if (options.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scenario profile '{profile.Key}' has no faction for slot '{slotKey}'.");
+            }
+
+            ScenarioFactionOption selected = options[0];
+            if (options.Count > 1)
+            {
+                double totalWeight = options.Sum(option => option.SelectionWeight);
+                double roll = RNG.GetLinearDouble() * totalWeight;
+                foreach (ScenarioFactionOption option in options)
+                {
+                    if (roll < option.SelectionWeight)
+                    {
+                        selected = option;
+                        break;
+                    }
+                    roll -= option.SelectionWeight;
+                }
+            }
+
+            return data.Factions.First(faction => faction.Id == selected.FactionId);
+        }
+
+        // Pulls the promised world's infiltrator up to landing-site strength: in each region the
+        // infiltrator takes the profile's strength fraction of the combined
         // population and garrison, carving the increase out of the Imperial owner — the deep
         // infiltration that hollowed out this world's PDF and drew the swarm (§4.24). Only ever adds
-        // to the cult (a region where a random roll already seeded a larger cult is left alone).
-        private static void StrengthenPromisedWorldInfiltrator(Planet promised, GameRulesData data)
+        // to the infiltrator (a region where a random roll already seeded a larger presence is left alone).
+        private static void StrengthenPromisedWorldInfiltrator(
+            Planet promised,
+            Faction infiltrator,
+            ScenarioProfile profile)
         {
-            Faction cultFaction = data.SectorFactions.Infiltrator;
-            Faction imperialFaction = data.DefaultFaction;
-            float share = ScenarioRules.PromisedWorldInfiltratorStrengthFraction;
+            Faction imperialFaction = promised.Regions
+                .SelectMany(region => region.RegionFactionMap.Values)
+                .Select(regionFaction => regionFaction.PlanetFaction.Faction)
+                .FirstOrDefault(faction => faction.IsDefaultFaction);
+            if (imperialFaction == null) return;
+
+            float share = profile.PromisedWorldInfiltratorStrengthFraction;
             foreach (Region region in promised.Regions)
             {
-                if (!region.RegionFactionMap.TryGetValue(cultFaction.Id, out RegionFaction cult)
+                if (!region.RegionFactionMap.TryGetValue(infiltrator.Id, out RegionFaction infiltratorPresence)
                     || !region.RegionFactionMap.TryGetValue(imperialFaction.Id, out RegionFaction imperial))
                 {
                     continue;
                 }
 
-                long targetPopulation = (long)((cult.Population + imperial.Population) * share);
-                if (targetPopulation > cult.Population)
+                long targetPopulation = (long)((infiltratorPresence.Population + imperial.Population) * share);
+                if (targetPopulation > infiltratorPresence.Population)
                 {
-                    long delta = targetPopulation - cult.Population;
-                    cult.Population += delta;
+                    long delta = targetPopulation - infiltratorPresence.Population;
+                    infiltratorPresence.Population += delta;
                     imperial.Population -= delta;
                 }
 
-                long targetGarrison = (long)((cult.Garrison + imperial.Garrison) * share);
-                if (targetGarrison > cult.Garrison)
+                long targetGarrison = (long)((infiltratorPresence.Garrison + imperial.Garrison) * share);
+                if (targetGarrison > infiltratorPresence.Garrison)
                 {
-                    long delta = targetGarrison - cult.Garrison;
-                    cult.Garrison += delta;
+                    long delta = targetGarrison - infiltratorPresence.Garrison;
+                    infiltratorPresence.Garrison += delta;
                     imperial.Garrison -= delta;
                 }
             }
         }
 
-        // The infiltrated Genestealer Cult throws off concealment and rises in open revolt, calling
-        // the hive fleet down. It has been waiting for this moment, so its cells are already fully
+        // The infiltrated faction throws off concealment and rises in open revolt. It has been
+        // waiting for this moment, so its cells are already fully
         // mobilized (Organization 100 — the whole cell can field offensive force immediately).
         // Idempotent if no infiltrator is present (EnsureInfiltrator always seeds one first).
         //
         // The per-region flip goes through FactionRevealService rather than setting IsPublic by
         // hand, so the opening reveal is the same transition CheckForPlanetaryRevolt performs.
-        // Setting the flag directly skipped the service's whole reason for existing: a hidden cult's
+        // Setting the flag directly skipped the service's whole reason for existing: a hidden infiltrator's
         // Garrison is personnel embedded in the nominal PDF, and reveal is supposed to strip them
         // from that roster. Because a PUBLIC Conversion faction neither converts nor drafts, nothing
         // downstream ever cleared the seeded garrison either, so every cell carried a vestigial
         // embedded-PDF count for the rest of the campaign. It also picks up HasEmergenceAdvantage
-        // (the cult's first offensive after rising is planned as an Ambush) and the PlanetFaction
+        // (the infiltrator's first offensive after rising is planned as an Ambush) and the PlanetFaction
         // rollup, both of which the hand-rolled flip was silently missing.
-        private static void RevealInfiltrator(Planet promised, GameRulesData data)
+        private static void RevealInfiltrator(Planet promised, Faction infiltrator)
         {
-            Faction cultFaction = data.SectorFactions.Infiltrator;
-            if (!promised.PlanetFactionMap.TryGetValue(cultFaction.Id, out PlanetFaction cultPlanetFaction))
+            if (!promised.PlanetFactionMap.TryGetValue(infiltrator.Id, out PlanetFaction infiltratorPlanetFaction))
             {
                 return;
             }
-            cultPlanetFaction.IsPublic = true;
+            infiltratorPlanetFaction.IsPublic = true;
             foreach (Region region in promised.Regions)
             {
-                if (region.RegionFactionMap.TryGetValue(cultFaction.Id, out RegionFaction cultRegionFaction))
+                if (region.RegionFactionMap.TryGetValue(infiltrator.Id, out RegionFaction infiltratorRegionFaction))
                 {
-                    FactionRevealService.Reveal(cultRegionFaction);
-                    if (cultRegionFaction.Organization < 100)
+                    FactionRevealService.Reveal(infiltratorRegionFaction);
+                    if (infiltratorRegionFaction.Organization < 100)
                     {
-                        cultRegionFaction.Organization = 100;
+                        infiltratorRegionFaction.Organization = 100;
                     }
                 }
             }
@@ -186,36 +228,38 @@ namespace OnlyWar.Builders
         // the over-stretched Imperium can't spare a regiment for) and keeps the first objective off
         // the populous sector core. Fallbacks widen the band and, ultimately, reuse the old
         // lowest-population-enemy rule so generation can never fail.
-        // The promised-world cult has already infiltrated local government and PDF command. Give it
-        // strong per-region belief about every public non-cult force on the planet so its opening
+        // The promised-world infiltrator has already infiltrated local government and PDF command.
+        // Give it strong per-region belief about every public non-infiltrator force on the planet so its opening
         // decisions model an insider revolt rather than a blind invader scouting from scratch.
-        private static void SeedPromisedWorldInfiltratorIntel(Planet promised, GameRulesData data)
+        private static void SeedPromisedWorldInfiltratorIntel(
+            Planet promised,
+            Faction infiltrator,
+            ScenarioProfile profile)
         {
-            Faction cultFaction = data.SectorFactions.Infiltrator;
-            if (!promised.PlanetFactionMap.TryGetValue(cultFaction.Id, out PlanetFaction cultPlanetFaction))
+            if (!promised.PlanetFactionMap.TryGetValue(infiltrator.Id, out PlanetFaction infiltratorPlanetFaction))
             {
                 return;
             }
 
-            // The cult knows its home ground intimately: give it strong awareness of every region
-            // holding a public non-cult force, so its opening decisions — and the strategic ambush
+            // The infiltrator knows its home ground intimately: give it strong awareness of every region
+            // holding a public non-infiltrator force, so its opening decisions — and the strategic ambush
             // edge it enjoys attacking from within (the attacker-vs-defender intel differential in
             // StrategicCombatResolver) — model an insider revolt rather than a blind invader. The PDF,
             // having built no listening posts, starts blind to these same regions.
             foreach (Region region in promised.Regions
                          .Where(region => region.RegionFactionMap.Values
-                             .Any(rf => rf.PlanetFaction.Faction.Id != cultFaction.Id && rf.IsPublic)))
+                              .Any(rf => rf.PlanetFaction.Faction.Id != infiltrator.Id && rf.IsPublic)))
             {
-                cultPlanetFaction.AddRegionAwareness(
+                infiltratorPlanetFaction.AddRegionAwareness(
                     region,
-                    ScenarioRules.PromisedWorldInfiltratorStartingIntel);
+                    profile.PromisedWorldInfiltratorStartingIntel);
 
                 foreach (RegionFaction target in region.RegionFactionMap.Values
-                    .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id != cultFaction.Id
+                    .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id != infiltrator.Id
                         && regionFaction.IsPublic)
                     .OrderBy(regionFaction => regionFaction.PlanetFaction.Faction.Id))
                 {
-                    cultPlanetFaction.SeedTargetBelief(
+                    infiltratorPlanetFaction.SeedTargetBelief(
                         region,
                         target.PlanetFaction.Faction,
                         FactionIntelligenceRules.ConfirmedThreshold,
@@ -227,13 +271,18 @@ namespace OnlyWar.Builders
             }
         }
 
-        private static Planet SelectPromisedWorld(List<Planet> planetList, GameRulesData data)
+        private static Planet SelectPromisedWorld(
+            List<Planet> planetList,
+            GameRulesData data,
+            ScenarioProfile profile)
         {
             List<Planet> eligible = planetList
                 .Where(p => p.GetControllingFaction()?.IsDefaultFaction == true
                             && p.GovernanceTier == GovernanceTier.Planetary
-                            && !ScenarioRules.ExcludedPromisedWorldTypes.Contains(p.Template.Name)
-                            && p.Population <= ScenarioRules.MaxPromisedWorldPopulation)
+                            && data.PlanetTemplateEligibility.IsEligible(
+                                PlanetTemplateEligibilityKeys.PromisedWorld,
+                                p.Template.Id)
+                            && p.Population <= profile.MaxPromisedWorldPopulation)
                 .ToList();
 
             if (eligible.Count == 0)
@@ -244,7 +293,9 @@ namespace OnlyWar.Builders
                 eligible = planetList
                     .Where(p => p.GetControllingFaction()?.IsDefaultFaction == true
                                 && p.GovernanceTier == GovernanceTier.Planetary
-                                && !ScenarioRules.ExcludedPromisedWorldTypes.Contains(p.Template.Name))
+                                && data.PlanetTemplateEligibility.IsEligible(
+                                    PlanetTemplateEligibilityKeys.PromisedWorld,
+                                    p.Template.Id))
                     .ToList();
             }
 
@@ -277,31 +328,44 @@ namespace OnlyWar.Builders
             return Math.Min(Math.Min(x, maxX - x), Math.Min(y, maxY - y));
         }
 
-        // §3.1a — canon: the Tyranid invasion is drawn in by a Genestealer Cult that has already
-        // infiltrated the target world, its psychic beacon calling the hive fleet down. So the
-        // promised world must always harbour a hidden cult, whether or not planet generation
-        // happened to seed one there. If a cult is already present (generation rolled the ~10%
-        // chance), we leave it as-is; otherwise we seed one with the same infiltration logic
-        // generation uses. This runs before StampInvaderPresence so the infiltrator carves its
-        // population out of the intact Imperial regions, not the reduced post-incursion remnant.
-        private static void EnsureInfiltrator(Planet promised, GameRulesData data)
+        // §3.1a — the selected scenario infiltrator must always be present on the target world,
+        // whether or not ordinary planet generation happened to seed it there. This runs before
+        // StampInvaderPresence so the infiltrator carves its population out of the intact host
+        // regions, not the reduced post-incursion remnant.
+        private static void EnsureInfiltrator(
+            Planet promised,
+            Faction infiltrator,
+            ScenarioProfile profile)
         {
-            Faction cultFaction = data.SectorFactions.Infiltrator;
-            if (promised.PlanetFactionMap.ContainsKey(cultFaction.Id))
+            if (promised.PlanetFactionMap.ContainsKey(infiltrator.Id))
             {
                 return;
             }
-            PlanetBuilder.HandleInfiltratingFaction(cultFaction, promised);
+            PlanetBuilder.ApplyFactionPresence(
+                infiltrator,
+                promised,
+                new FactionPlanetPresenceRule(
+                    SectorGenerationProfileKeys.Standard,
+                    infiltrator.Id,
+                    promised.Template.Id,
+                    FactionPresenceMode.Hidden,
+                    1.0,
+                    profile.InitialInfiltratorPopulationShareMin,
+                    profile.InitialInfiltratorPopulationShareMax,
+                    profile.InitialInfiltratorGarrisonPerPopulation));
         }
 
-        // §3.2 — confine the Tyranids to a contiguous cluster of N regions, leaving the rest of
-        // the world default-Imperial. Each stamped region gets a public Tyranid RegionFaction
+        // §3.2 — confine the selected invader to a contiguous cluster of N regions, leaving the rest of
+        // the world default-Imperial. Each stamped region gets a public invader RegionFaction
         // with tuned strength and a sub-1 growth throttle; the local Imperial garrison is broken
         // and its civilians reduced to a hidden, displaced remnant so the region resolves to
-        // single (Tyranid) control.
-        private static void StampInvaderPresence(Planet promised, GameRulesData data)
+        // single invader control.
+        private static void StampInvaderPresence(
+            Planet promised,
+            GameRulesData data,
+            Faction invaderFaction,
+            ScenarioProfile profile)
         {
-            Faction invaderFaction = data.SectorFactions.Invader;
             if (!promised.PlanetFactionMap.TryGetValue(invaderFaction.Id, out PlanetFaction invaderPlanetFaction))
             {
                 invaderPlanetFaction = new PlanetFaction(invaderFaction);
@@ -311,15 +375,16 @@ namespace OnlyWar.Builders
             invaderPlanetFaction.IsPublic = true;
 
             int regionCount = RNG.GetIntBelowMax(
-                ScenarioRules.MinInvaderRegions, ScenarioRules.MaxInvaderRegions + 1);
+                profile.MinInvaderRegions, profile.MaxInvaderRegions + 1);
             int startIndex = RNG.GetIntBelowMax(0, promised.Regions.Length);
 
-            // Size the Tyranids relative to the world's own PDF (measured before the stamp), so the
+            // Size the invader relative to the world's own host garrison (measured before the stamp), so the
             // fight scales across the wide promised-world population band rather than being fixed by
-            // an absolute headcount that is meaningless on a hive-scale world (§8 / ScenarioRules).
+            // an absolute headcount that is meaningless on a hive-scale world (§8).
             // The region count is drawn first because the planetary total is split across it; the
             // Draw order is unchanged because ScaledInvaderStrength consumes no randomness.
-            long invaderPopulation = ScaledInvaderStrength(promised, data, regionCount);
+            long invaderPopulation = ScaledInvaderStrength(
+                promised, data, profile, regionCount);
 
             for (int i = 0; i < regionCount; i++)
             {
@@ -328,17 +393,17 @@ namespace OnlyWar.Builders
                 if (region.RegionFactionMap.TryGetValue(data.DefaultFaction.Id, out RegionFaction imperial))
                 {
                     imperial.Garrison = 0;
-                    imperial.Population = (long)(imperial.Population * ScenarioRules.ImperialRemnantFraction);
-                    // Displaced remnant: hidden, so the region reads as Tyranid-controlled rather
+                    imperial.Population = (long)(imperial.Population * profile.ImperialRemnantFraction);
+                    // Displaced remnant: hidden, so the region reads as invader-controlled rather
                     // than as two-public-faction (which has no single controlling faction).
                     imperial.IsPublic = false;
                 }
 
-                // The world-average-scaled Tyranid population can exceed a specific region's
-                // carrying capacity (regions vary in size); clamp it so the stamped Tyranid plus every
+                // The world-average-scaled invader population can exceed a specific region's
+                // carrying capacity (regions vary in size); clamp it so the stamped invader plus every
                 // population already in the region (the displaced Imperial remnant and the hidden
-                // Genestealer Cult seeded by EnsureGenestealerCult) never overpopulate it — a
-                // generation invariant (no region starts above capacity). The Tyranid faction is not
+                // infiltrator seeded by EnsureInfiltrator) never overpopulate it — a generation
+                // invariant (no region starts above capacity). The invader faction is not
                 // added yet, so region.Population is the current headcount to leave room for. Garrison
                 // is not population, so it is left unclamped.
                 long existingPopulation = region.Population;
@@ -359,21 +424,24 @@ namespace OnlyWar.Builders
                     Entrenchment = 0,
                     ListeningPost = 0,
                     AntiAir = 0
-                    // No GrowthMultiplier throttle: Tyranids are a Consumption faction with no organic
-                    // birthrate — they grow only by eating biomass (predating headcount and scouring
-                    // carrying capacity), which does not read GrowthMultiplier (PRD §4.24). Winnability
+                    // No GrowthMultiplier throttle: the invader's simulation behavior governs its
+                    // population change. Winnability
                     // comes from the finite, stranded biomass budget, not a growth throttle.
                 };
                 region.RegionFactionMap[invaderFaction.Id] = invader;
             }
         }
 
-        // Tyranid per-region starting population: the planet's whole pre-stamp Imperial garrison
+        // Invader per-region starting population: the planet's whole pre-stamp Imperial garrison
         // scaled by InvaderGarrisonStrengthMultiple, then split evenly across the stamped regions
-        // (§8). Garrison rather than civilian population because a Tyranid faction's Population is
-        // its MilitaryStrength, so this is an army-against-army ratio — see the constant's comment.
+        // (§8). Garrison rather than civilian population because the opening's invader strength is
+        // an army-against-army ratio.
         // Returns at least 1 so a stamped region is never empty even on a tiny world.
-        private static long ScaledInvaderStrength(Planet promised, GameRulesData data, int regionCount)
+        private static long ScaledInvaderStrength(
+            Planet promised,
+            GameRulesData data,
+            ScenarioProfile profile,
+            int regionCount)
         {
             List<RegionFaction> imperialRegions = promised.Regions
                 .Where(r => r.RegionFactionMap.ContainsKey(data.DefaultFaction.Id))
@@ -384,7 +452,7 @@ namespace OnlyWar.Builders
                 return 1L;
             }
             long planetaryGarrison = imperialRegions.Sum(rf => rf.Garrison);
-            double totalStrength = planetaryGarrison * ScenarioRules.InvaderGarrisonStrengthMultiple;
+            double totalStrength = planetaryGarrison * profile.InvaderGarrisonStrengthMultiple;
             return Math.Max(1L, (long)(totalStrength / regionCount));
         }
 
@@ -490,13 +558,18 @@ namespace OnlyWar.Builders
         // objective sits alongside "Chapter Founding" on the Chapter screen. The authority title is
         // derived from the rank of the seat they hold; the subsector name is sourced from its
         // governance capital (subsectors carry no authored name today).
-        private static string ComposeBriefing(Sector sector, Planet promised, Character authority,
-                                              GovernanceTier authorityTier, PlayerForce playerForce,
-                                              GameRulesData data, Date currentDate)
+        private static string ComposeBriefing(
+            Sector sector,
+            Planet promised,
+            Character authority,
+            GovernanceTier authorityTier,
+            PlayerForce playerForce,
+            Faction invader,
+            Date currentDate)
         {
             string chapterName = playerForce.Army.OrderOfBattle.Name;
             string authorityTitle = BriefingComposer.GetAuthorityTitle(authorityTier);
-            string enemyName = data.SectorFactions.Invader.Name;
+            string enemyName = invader.Name;
             string subsectorName = ResolveSubsectorName(sector, promised);
 
             BriefingTokens tokens = new BriefingTokens

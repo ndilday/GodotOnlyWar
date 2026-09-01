@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using OnlyWar.Helpers.UI;
 
 public enum TreeNodeKind
 {
@@ -16,13 +17,21 @@ public class TreeNode
     public IReadOnlyList<TreeNode> Children;
     public bool Selectable;
     public TreeNodeKind Kind;
+    public SquadRowViewModel SquadRow;
 
-    public TreeNode(int id, string name, IReadOnlyList<TreeNode> children, bool selectable = true, TreeNodeKind kind = TreeNodeKind.General)
+    public TreeNode(
+        int id,
+        string name,
+        IReadOnlyList<TreeNode> children,
+        bool selectable = true,
+        TreeNodeKind kind = TreeNodeKind.General,
+        SquadRowViewModel squadRow = null)
     {
         Id = id;
         Name = name;
         Children = children;
         Selectable = selectable;
         Kind = kind;
+        SquadRow = squadRow;
     }
 }

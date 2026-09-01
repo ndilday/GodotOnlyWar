@@ -613,6 +613,11 @@ namespace OnlyWar.Helpers.Battles
                 or EngagementSquadRole.Follow
                 or EngagementSquadRole.Press;
 
+        private static EngagementOptionKind FastApproachOption(BattleSquad squad) =>
+            squad.CanRun
+                ? EngagementOptionKind.RunToward
+                : EngagementOptionKind.JogToward;
+
         private List<EngagementOptionKind> GetLegalOptionKinds(
             BattleSquad squad,
             SquadEngagementFrame frame,
@@ -623,12 +628,12 @@ namespace OnlyWar.Helpers.Battles
                 or EngagementSquadRole.BreakOff)
             {
                 return frame.Role == EngagementSquadRole.Bound
-                    ? [EngagementOptionKind.RunToward]
+                    ? [FastApproachOption(squad)]
                     : [EngagementOptionKind.Hold];
             }
             if (frame.Role == EngagementSquadRole.Routing)
             {
-                return [EngagementOptionKind.RunToward];
+                return [FastApproachOption(squad)];
             }
             if (squad.IsInMelee || frame.Role == EngagementSquadRole.RearGuard && squad.IsInMelee)
             {
@@ -656,7 +661,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     return distance <= profile.MoveSpeed + BattleContactRules.MeleeContactAllowance
                         ? [EngagementOptionKind.CloseToContact]
-                        : [EngagementOptionKind.RunToward];
+                        : [FastApproachOption(squad)];
                 }
                 if (HasPursuitAimCommitment(squad, frame, primary))
                 {
@@ -667,11 +672,13 @@ namespace OnlyWar.Helpers.Battles
                 // RunToward is intentionally scored here rather than treated as Press doctrine:
                 // this keeps the choice between hold, low-accuracy moving fire, and a faster
                 // approach in the same value comparison.
-                return [
-                    EngagementOptionKind.Hold,
-                    EngagementOptionKind.JogToward,
-                    EngagementOptionKind.RunToward
-                ];
+                return squad.CanRun
+                    ? [
+                        EngagementOptionKind.Hold,
+                        EngagementOptionKind.JogToward,
+                        EngagementOptionKind.RunToward
+                    ]
+                    : [EngagementOptionKind.Hold, EngagementOptionKind.JogToward];
             }
             if (frame.Role == EngagementSquadRole.Press)
             {
@@ -679,7 +686,7 @@ namespace OnlyWar.Helpers.Battles
                 float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
                 return distance <= profile.MoveSpeed + BattleContactRules.MeleeContactAllowance
                     ? [EngagementOptionKind.CloseToContact]
-                    : [EngagementOptionKind.RunToward];
+                    : [FastApproachOption(squad)];
             }
             if (frame.Role == EngagementSquadRole.Pursuit)
             {
@@ -694,7 +701,7 @@ namespace OnlyWar.Helpers.Battles
                     // before any aimed-fire stickiness so a useless sidearm cannot freeze a squad.
                     return distance <= profile.MoveSpeed + BattleContactRules.MeleeContactAllowance
                         ? [EngagementOptionKind.CloseToContact]
-                        : [EngagementOptionKind.RunToward];
+                        : [FastApproachOption(squad)];
                 }
                 // Pursuit stickiness is a policy commitment, not a price for having an aim. The
                 // latter is carried by the state potential so non-pursuit squads may trade it
@@ -706,8 +713,10 @@ namespace OnlyWar.Helpers.Battles
                 EngagementOptionKind fast = distance <= profile.MoveSpeed
                         + BattleContactRules.MeleeContactAllowance
                     ? EngagementOptionKind.CloseToContact
-                    : EngagementOptionKind.RunToward;
-                return [EngagementOptionKind.Hold, EngagementOptionKind.JogToward, fast];
+                    : FastApproachOption(squad);
+                return new[] { EngagementOptionKind.Hold, EngagementOptionKind.JogToward, fast }
+                    .Distinct()
+                    .ToList();
             }
 
             if (primary == null)
@@ -743,7 +752,7 @@ namespace OnlyWar.Helpers.Battles
                 // as the movement rules permit. Slower approach policies are not value choices in
                 // this state; exposing them lets a zero-rate exchange tie resolve to a walk/jog
                 // baseline even though every yard covered is the squad's only contribution.
-                result = [EngagementOptionKind.RunToward];
+                result = [FastApproachOption(squad)];
             }
             if (!profile.IsContactSeeking
                 && primaryDistance > profile.MoveSpeed + BattleContactRules.MeleeContactAllowance)
@@ -752,7 +761,7 @@ namespace OnlyWar.Helpers.Battles
                 // Ranged squads keep RunToward/JogToward for movement toward their useful band;
                 // only a contact-reachable state may expose the charge option.
                 result.Remove(EngagementOptionKind.CloseToContact);
-                result.Add(EngagementOptionKind.RunToward);
+                result.Add(FastApproachOption(squad));
             }
             // A melee-only squad with no usable ranged answer has no doctrinal reason to give up
             // ground. This is the old WeakNoOption guarantee expressed as an option mask: the
@@ -766,14 +775,14 @@ namespace OnlyWar.Helpers.Battles
                     + BattleContactRules.MeleeContactAllowance)
                 {
                     result.Remove(EngagementOptionKind.CloseToContact);
-                    result.Add(EngagementOptionKind.RunToward);
+                    result.Add(FastApproachOption(squad));
                 }
             }
             if (frame.InterposePoint.HasValue)
             {
                 result.Add(EngagementOptionKind.MoveToInterpose);
             }
-            return result;
+            return result.Distinct().ToList();
         }
 
         private EngagementOptionEvaluation EvaluateEngagementOption(
@@ -884,8 +893,12 @@ namespace OnlyWar.Helpers.Battles
                     && BattleEngagementFrameBuilder.MinimumDistance(squad, primary)
                         <= squad.GetSquadMove() + 1
                             ? SquadMovementTier.InMelee
-                            : SquadMovementTier.Run,
-                EngagementOptionKind.RunToward => SquadMovementTier.Run,
+                            : squad.CanRun
+                                ? SquadMovementTier.Run
+                                : SquadMovementTier.Jog,
+                EngagementOptionKind.RunToward => squad.CanRun
+                    ? SquadMovementTier.Run
+                    : SquadMovementTier.Jog,
                 _ => SquadMovementTier.Stationary
             };
         }
@@ -900,7 +913,7 @@ namespace OnlyWar.Helpers.Battles
             float move = squad.GetSquadMove();
             if (distance <= move * WalkSpeedMultiplier) return SquadMovementTier.Walk;
             if (distance <= move * JogSpeedMultiplier) return SquadMovementTier.Jog;
-            return SquadMovementTier.Run;
+            return squad.CanRun ? SquadMovementTier.Run : SquadMovementTier.Jog;
         }
 
         private static ValueTuple<float, float>? GetIntendedDestination(
@@ -1456,7 +1469,9 @@ namespace OnlyWar.Helpers.Battles
             {
                 SquadMovementTier.Walk => WalkSpeedMultiplier,
                 SquadMovementTier.Jog => JogSpeedMultiplier,
-                SquadMovementTier.Run or SquadMovementTier.InMelee => 1f,
+                SquadMovementTier.Run when squad.CanRun => 1f,
+                SquadMovementTier.Run => JogSpeedMultiplier,
+                SquadMovementTier.InMelee => 1f,
                 _ => 0f
             });
             float fraction = tierReference <= 0
@@ -1538,6 +1553,10 @@ namespace OnlyWar.Helpers.Battles
         {
             Dictionary<int, PlannedSoldierAction> actions = (decision.Chosen.RootActions ?? [])
                 .ToDictionary(action => action.SoldierId);
+            SquadMovementTier movementTier = decision.Chosen.Tier == SquadMovementTier.Run
+                && !squad.CanRun
+                    ? SquadMovementTier.Jog
+                    : decision.Chosen.Tier;
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(member => member.Soldier.Id))
             {
                 ValueTuple<int, int> line = MovementLineFor(
@@ -1548,9 +1567,9 @@ namespace OnlyWar.Helpers.Battles
                     decision.Chosen.IntendedDestination);
                 ValueTuple<int, int> direction = AddMoveAction(
                     soldier,
-                    GetMovementBudget(soldier, decision.Chosen.Tier),
+                    GetMovementBudget(soldier, movementTier),
                     line,
-                    decision.Chosen.Tier);
+                    movementTier);
                 if (actions.TryGetValue(soldier.Soldier.Id, out PlannedSoldierAction action))
                 {
                     ExecutePlannedRootAction(action);
@@ -1771,6 +1790,7 @@ namespace OnlyWar.Helpers.Battles
             squad.WithdrawalRole = WithdrawalRole.Bound;
             squad.MovementTier = SquadMovementTier.Run;
             ApplyDeclaredMovementState(squad);
+            SquadMovementTier movementTier = squad.MovementTier;
             ValueTuple<int, int> direction = BattleForcePlanner.GetHeadingVector(withdrawalHeading);
             ValueTuple<int, int> movementLine = new(direction.Item1 * 10_000, direction.Item2 * 10_000);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
@@ -1789,9 +1809,9 @@ namespace OnlyWar.Helpers.Battles
 
                 AddMoveAction(
                     soldier,
-                    GetMovementBudget(soldier, SquadMovementTier.Run),
+                    GetMovementBudget(soldier, movementTier),
                     movementLine,
-                    SquadMovementTier.Run);
+                    movementTier);
                 AddPermittedRunUtilityActionToBag(soldier);
             }
         }
@@ -1813,6 +1833,7 @@ namespace OnlyWar.Helpers.Battles
             squad.WithdrawalRole = WithdrawalRole.Routing;
             squad.MovementTier = SquadMovementTier.Run;
             ApplyDeclaredMovementState(squad);
+            SquadMovementTier movementTier = squad.MovementTier;
             ValueTuple<int, int>? routLine = CalculateSquadRoutLine(squad);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
@@ -1827,9 +1848,9 @@ namespace OnlyWar.Helpers.Battles
                 if (routLine == null) continue;
                 AddMoveAction(
                     soldier,
-                    GetMovementBudget(soldier, SquadMovementTier.Run),
+                    GetMovementBudget(soldier, movementTier),
                     routLine.Value,
-                    SquadMovementTier.Run);
+                    movementTier);
                 // Deliberately no run-utility action: routing permits no voluntary actions.
             }
         }
@@ -1871,12 +1892,17 @@ namespace OnlyWar.Helpers.Battles
 
         private void ApplyDeclaredMovementState(BattleSquad squad)
         {
+            if (squad.MovementTier == SquadMovementTier.Run && !squad.CanRun)
+            {
+                squad.MovementTier = SquadMovementTier.Jog;
+            }
             foreach (BattleSoldier soldier in squad.AbleSoldiers)
             {
                 // Only the Run tier strips a soldier's melee guard (see BattleSoldier.IsRunning).
                 // A soldier who subsequently stops to fight clears the flag in
                 // AddMeleeActionsToBag, so the declaration here is a default, not a verdict.
-                soldier.IsRunning = squad.MovementTier == SquadMovementTier.Run;
+                soldier.IsRunning = squad.MovementTier == SquadMovementTier.Run
+                    && soldier.CanRun;
                 switch (squad.MovementTier)
                 {
                     case SquadMovementTier.Stationary:

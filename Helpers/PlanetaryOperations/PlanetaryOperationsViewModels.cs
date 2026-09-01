@@ -8,6 +8,7 @@ using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Supply;
@@ -45,6 +46,10 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         int? ControlFactionId,
         string ControlFactionName,
         Color ControlBorderColor,
+        int PlayerSquads,
+        int PlayerEffectiveStrength,
+        int PlayerFullStrength,
+        int ActiveOrders,
         int UnassignedSquads,
         int MissionOpportunities,
         IReadOnlyList<RegionEnemyForceEstimate> PublicEnemyForces,
@@ -191,10 +196,20 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     factionPresence, DefenseType.AntiAir),
                 _ => string.Empty
             };
-            bool playerForces = region.RegionFactionMap.Values
-                .Where(presence => presence.PlanetFaction.Faction.IsPlayerFaction)
-                .SelectMany(presence => presence.LandedSquads)
-                .Any();
+            List<Squad> playerSquads = region.RegionFactionMap.Values
+                .Where(presence => presence?.PlanetFaction?.Faction?.IsPlayerFaction == true)
+                .SelectMany(presence => presence.LandedSquads ?? [])
+                .Where(squad => squad?.IsPresentOperationalForce == true)
+                .DistinctBy(squad => squad.Id)
+                .OrderBy(squad => squad.Id)
+                .ToList();
+            bool playerForces = playerSquads.Count > 0;
+            RecruitmentProgram recruitmentProgram = sector?.PlayerForce?.RecruitmentProgram;
+            int playerEffectiveStrength = playerSquads.Sum(squad =>
+                SquadStrengthSnapshotBuilder.Build(squad, recruitmentProgram).Effective);
+            int playerFullStrength = playerSquads.Sum(squad =>
+                SquadStrengthSnapshotBuilder.Build(squad, recruitmentProgram).Full);
+            int activeOrders = CountActivePlayerOrders(sector, region);
             List<(RegionFaction Presence, IntelEstimatePresentation Estimate)> hostileEstimates = region.RegionFactionMap.Values
                 .Where(presence => presence.IsPublic
                     && !FactionRelationshipService.IsImperial(presence.PlanetFaction.Faction))
@@ -220,6 +235,10 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 control.State == RegionControlState.Contested ? null : controllingFactionDefinition?.Id,
                 control.State == RegionControlState.Contested ? null : controllingFactionDefinition?.Name,
                 controlBorderColor,
+                playerSquads.Count,
+                playerEffectiveStrength,
+                playerFullStrength,
+                activeOrders,
                 CountUnassignedPlayerSquads(region),
                 CountUnassignedSpecialMissions(sector, region),
                 publicEnemyForces,
@@ -295,6 +314,11 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         private static int CurrentWeek() =>
             GameDataSingleton.Instance?.Date?.GetTotalWeeks() ?? 0;
 
+        private static int CountActivePlayerOrders(Sector sector, Region region) =>
+            sector?.Orders.Values.Count(order =>
+                order?.Mission?.RegionFaction?.Region == region
+                && HasPlayerParticipant(order)) ?? 0;
+
         private static bool HasPlayerParticipant(Order order) =>
             order?.OwnerFaction?.IsPlayerFaction == true
             || order?.AssignedSquads.Any(squad => squad?.Faction?.IsPlayerFaction == true) == true
@@ -303,10 +327,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
 
         private static string OrderOverlay(Sector sector, Region region)
         {
-            int count = sector?.Orders.Values.Count(order =>
-                order?.Mission?.RegionFaction?.Region == region
-                && HasPlayerParticipant(order)) ?? 0;
-            return $"Orders: {count}";
+            return $"Orders: {CountActivePlayerOrders(sector, region)}";
         }
 
         private static string DefenseOverlay(

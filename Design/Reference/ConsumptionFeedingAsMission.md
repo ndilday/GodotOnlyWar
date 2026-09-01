@@ -186,8 +186,8 @@ the opening scenario than either scenario tunable.
 
 ## Related work in flight
 
-- **Already applied this session:** `ScenarioRules.PromisedWorldInfiltratorStrengthFraction` cut from
-  `0.10f` to `0.05f` (`Helpers/ScenarioRules.cs:78`), with a comment recording why. Motivation: the
+- **Already applied this session:** `ScenarioProfile.PromisedWorldInfiltratorStrengthFraction` is
+  authored as `0.05` in the shipped `ScenarioProfile` rules row. Motivation: the
   seed-1 "invaded but not conquered" invariant was failing. **Not yet verified** — the test had not
   been re-run after the edit.
 - **Failing test this is aimed at:**
@@ -214,11 +214,11 @@ If the opening scenario still hands off badly after this change, in rough order 
 
 1. `BiomassAppetitePerTroop = 0.5` (`Helpers/Turns/ConsumptionTurnProcessor.cs`) — the base of the
    growth exponential.
-2. `ScenarioRules.PostLandingTurnsMean = 4.0` — weeks the swarm feeds unopposed before the player
+2. `ScenarioProfile.PostLandingTurnsMean = 4.0` — weeks the swarm feeds unopposed before the player
    arrives. Drawn as `max(0, round(mean + z))`, `z ~ N(0,1)`, deterministic per seed
    (`Builders/ScenarioBuilder.cs:81`). Worth checking what `z` seed 1 actually rolled before
    assuming a typical 4 weeks.
-3. `ScenarioRules.InvaderGarrisonStrengthMultiple = 1.0f` — the landing stamp, sized as the planet's
+3. `ScenarioProfile.InvaderGarrisonStrengthMultiple = 1.0f` — the landing stamp, sized as the planet's
    whole pre-stamp Imperial *garrison* split across 2–3 regions. A linear knob sitting under an
    exponential; its own comment records that on seed 1 the post-landing window multiplied it ~6.8x,
    so halving it buys well under a week of grace.

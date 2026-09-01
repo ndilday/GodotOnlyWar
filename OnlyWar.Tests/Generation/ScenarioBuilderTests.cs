@@ -86,8 +86,9 @@ public class ScenarioBuilderTests
             .Select(r => r.RegionFactionMap[tyranids.Id])
             .ToList();
         Assert.NotEmpty(tyranidFactions);
-        Assert.True(tyranidFactions.Count >= ScenarioRules.MinInvaderRegions,
-            $"expected at least {ScenarioRules.MinInvaderRegions} invader regions, got {tyranidFactions.Count}");
+        ScenarioProfile profile = _data.ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
+        Assert.True(tyranidFactions.Count >= profile.MinInvaderRegions,
+            $"expected at least {profile.MinInvaderRegions} invader regions, got {tyranidFactions.Count}");
         Assert.True(tyranidFactions.Count < promised.Regions.Length,
             "the swarm should not hold the entire world at hand-off");
 
@@ -103,8 +104,19 @@ public class ScenarioBuilderTests
 
         // No squad has landed: none carries a CurrentRegion and no region holds a landed squad.
         Assert.All(sector.PlayerForce.Army.SquadMap.Values, s => Assert.Null(s.CurrentRegion));
-        Assert.All(sector.PlayerForce.Army.SquadMap.Values.Where(s => s.Members.Count > 0),
+        Assert.All(
+            sector.PlayerForce.Army.SquadMap.Values
+                .Where(s => s.Members.Count > 0 && !s.PermitsIndividualDeployment),
             s => Assert.NotNull(s.BoardedLocation));
+        Assert.All(
+            sector.PlayerForce.Army.SquadMap.Values
+                .Where(s => s.Members.Count > 0 && s.PermitsIndividualDeployment),
+            s =>
+            {
+                Assert.Null(s.BoardedLocation);
+                Assert.NotNull(s.DutyStation?.Ship);
+                Assert.Contains(s, s.DutyStation.Ship.AdministrativeStations);
+            });
         IEnumerable<Squad> landed = sector.Planets.Values
             .SelectMany(p => p.Regions)
             .SelectMany(r => r.RegionFactionMap.Values)

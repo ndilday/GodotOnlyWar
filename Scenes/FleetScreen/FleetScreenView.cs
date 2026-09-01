@@ -58,7 +58,15 @@ public partial class FleetScreenView : MainScreenView
         foreach (TreeNode childNode in nodes)
         {
             TreeItem childItem = _fleetTree.CreateItem(parentItem);
-            childItem.SetText(0, childNode.Name);
+            string rowText = childNode.SquadRow == null
+                ? childNode.Name
+                : $"{childNode.Name}  {childNode.SquadRow.StrengthLabel} · "
+                    + childNode.SquadRow.CommitmentLabel;
+            childItem.SetText(0, rowText);
+            if (childNode.SquadRow != null)
+            {
+                childItem.SetTooltipText(0, childNode.SquadRow.Tooltip);
+            }
             string key = $"{childNode.Kind}:{childNode.Id}";
             childItem.SetMetadata(0, Variant.From(key));
             childItem.SetSelectable(0, childNode.Selectable);

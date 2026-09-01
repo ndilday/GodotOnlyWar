@@ -114,11 +114,11 @@ public class TrainingUnitScreenControllerTests
     }
 
     [Fact]
-    public void GetSquadListLabel_UnassignedSquad_ShowsTrainingFocus()
+    public void GetSquadListLabel_UnassignedSquad_ShowsTrainingOption()
     {
         Squad squad = new(1, "Alpha Scouts", null, CreateScoutTemplate(101, "Scout Squad"))
         {
-            TrainingFocus = TrainingFocuses.Melee
+            TrainingOptionKey = ScoutTrainingOptionKeys.Melee
         };
 
         Assert.Equal("Alpha Scouts (Melee)", TrainingUnitScreenController.GetSquadListLabel(squad));
@@ -129,7 +129,7 @@ public class TrainingUnitScreenControllerTests
     {
         Squad squad = new(1, "Alpha Scouts", null, CreateScoutTemplate(101, "Scout Squad"))
         {
-            TrainingFocus = TrainingFocuses.Melee
+            TrainingOptionKey = ScoutTrainingOptionKeys.Melee
         };
         Mission mission = new(MissionType.Patrol, null, 1);
         _ = new Order([squad], false, true, Aggression.Normal, mission);

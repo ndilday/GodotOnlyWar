@@ -7,6 +7,7 @@ using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Helpers.UI;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -39,7 +40,9 @@ namespace OnlyWar.Helpers.Orders
         {
             if (squads == null || squads.Count == 0
                 || squads.Any(squad => squad?.CanAcceptSquadOrder != true
-                    || squad.SquadTemplate?.PermitsIndividualDetachment == true))
+                    || squad.SquadTemplate?.PermitsIndividualDetachment == true
+                    || squad.CurrentOrders == null
+                        && !SquadReadinessService.CanBeginNewDeployment(squad)))
             {
                 return null;
             }
@@ -165,6 +168,11 @@ namespace OnlyWar.Helpers.Orders
                 .ToList();
             if (distinctSquads.Count == 0 && distinctCharacters.Count == 0
                 || distinctSquads.Any(squad => squad.CanAcceptSquadOrder != true))
+            {
+                return null;
+            }
+            if (distinctSquads.Any(squad => squad.CurrentOrders == null
+                && !SquadReadinessService.CanBeginNewDeployment(squad)))
             {
                 return null;
             }

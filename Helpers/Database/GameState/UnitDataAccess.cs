@@ -29,7 +29,8 @@ namespace OnlyWar.Helpers.Database.GameState
                                                                IReadOnlyDictionary<int, Ship> shipMap,
                                                                IReadOnlyDictionary<int, Region> regionMap,
                                                                IReadOnlyDictionary<int, Mission> missionMap,
-                                                               IReadOnlyDictionary<int, Faction> factionMap = null)
+                                                               IReadOnlyDictionary<int, Faction> factionMap = null,
+                                                               ScoutTrainingOptionCatalog scoutTrainingOptions = null)
         {
             Dictionary<int, List<Squad>> squadMap = [];
             Dictionary<int, Squad> squadByIdMap = [];
@@ -48,7 +49,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     Squad squad = new Squad(id, name, null, template);
                     if (reader.FieldCount > 6 && reader[6].GetType() != typeof(DBNull))
                     {
-                        squad.TrainingFocus = (TrainingFocuses)reader.GetInt32(6);
+                        squad.TrainingOptionKey = ReadTrainingOptionKey(
+                            reader,
+                            scoutTrainingOptions,
+                            id);
                     }
                     squad.UsesLoadoutDoctrine = reader.GetBoolean(7);
                     if (reader[8].GetType() != typeof(DBNull))
@@ -127,6 +131,21 @@ namespace OnlyWar.Helpers.Database.GameState
             PopulateOrdersBySquadId(connection, regionMap, squadByIdMap, orderSquadMap, missionMap, factionMap);
 
             return squadMap;
+        }
+
+        private static string ReadTrainingOptionKey(
+            IDataRecord reader,
+            ScoutTrainingOptionCatalog scoutTrainingOptions,
+            int squadId)
+        {
+            string optionKey = Convert.ToString(reader.GetValue(6));
+            if (string.IsNullOrWhiteSpace(optionKey))
+            {
+                throw new InvalidDataException(
+                    $"Squad {squadId} contains an empty scout training option key.");
+            }
+            scoutTrainingOptions?.GetRequired(optionKey);
+            return optionKey;
         }
 
         private Dictionary<int, List<Squad>> GetOrderSquadMapping(IDbConnection connection,
@@ -339,9 +358,9 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Squad
                     (Id, SquadTemplateId, ParentUnitId, Name, LoadedShipId, LandedRegionId,
-                     TrainingFocus, UsesLoadoutDoctrine, FormationOrdinal, HasBattleHistory,
+                     ScoutTrainingOptionKey, UsesLoadoutDoctrine, FormationOrdinal, HasBattleHistory,
                      DutyStationShipId, DutyStationRegionId) VALUES
-                    (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingFocus,
+                    (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingOptionKey,
                      @usesLoadoutDoctrine, @formationOrdinal, @hasBattleHistory,
                      @dutyStationShip, @dutyStationRegion);";
                 command.AddParam("@id", squad.Id);
@@ -350,7 +369,12 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@name", squad.Name);
                 command.AddParam("@ship", ship);
                 command.AddParam("@region", region);
-                command.AddParam("@trainingFocus", (int)squad.TrainingFocus);
+                if (string.IsNullOrWhiteSpace(squad.TrainingOptionKey))
+                {
+                    throw new InvalidDataException(
+                        $"Squad {squad.Id} has no scout training option key.");
+                }
+                command.AddParam("@trainingOptionKey", squad.TrainingOptionKey);
                 command.AddParam("@usesLoadoutDoctrine", squad.UsesLoadoutDoctrine ? 1 : 0);
                 command.AddParam("@formationOrdinal", squad.FormationOrdinal.HasValue
                     ? squad.FormationOrdinal.Value

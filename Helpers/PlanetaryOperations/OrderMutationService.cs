@@ -7,6 +7,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.UI;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -76,6 +77,12 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             if (squads.Count == 0 && characters.Count == 0)
             {
                 return Failure("Select at least one eligible squad or character.");
+            }
+            if (squads.Any(squad => squad.CurrentOrders == null
+                && SquadReadinessService.Evaluate(squad).PrimaryBlocker
+                    == SquadReadinessBlocker.Leaderless))
+            {
+                return Failure("A formation that requires a leader cannot begin a new deployment.");
             }
 
             Order existing = FindEquivalentOrder(

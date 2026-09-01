@@ -74,8 +74,10 @@ namespace OnlyWar.Builders
             return nameIndex;
         }
 
-        public Planet GenerateNewPlanet(IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap, 
-                                        Coordinate position, Faction controllingFaction, Faction infiltratingFaction)
+        public Planet GenerateNewPlanet(
+            IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap,
+            Coordinate position,
+            Faction controllingFaction)
         {
             PlanetTemplate template = DeterminePlanetTemplate(planetTemplateMap);
             Faction leaderFaction = controllingFaction;
@@ -99,11 +101,6 @@ namespace OnlyWar.Builders
                 .OrderByDescending(region => region.Population)
                 .ThenBy(region => region.Id)
                 .First().Id);
-            if (infiltratingFaction != null)
-            {
-                HandleInfiltratingFaction(infiltratingFaction, planet);
-            }
-
             if (controllingFaction.IsDefaultFaction)
             {
                 planetFaction.Leader = CharacterBuilder.GenerateCharacter(_nextLeaderId, leaderFaction);
@@ -145,32 +142,56 @@ namespace OnlyWar.Builders
             }
         }
 
-        // Seeds a hidden infiltrating faction (a Genestealer Cult) across every region of a
-        // world, carving population and PDF out of each region's public owner. Exposed to
-        // ScenarioBuilder so the opening scenario can guarantee a cult on the promised world even
-        // when planet generation didn't roll one there.
-        internal static void HandleInfiltratingFaction(Faction infiltratingFaction, Planet planet)
+        // Applies one data-authored faction start rule across every region of a world. Hidden
+        // presence is carved from the current public owner; public presence takes control of the
+        // region and leaves any displaced owner hidden. The builder owns this state transition,
+        // while the rule supplies the modifiable chance and distribution inputs.
+        internal static void ApplyFactionPresence(
+            Faction faction,
+            Planet planet,
+            FactionPlanetPresenceRule rule)
         {
-            PlanetFaction infiltration = new PlanetFaction(infiltratingFaction);
-            // The cult claims a uniform 0-5% of each region's population. Kept small because a cult now
-            // rises on its population strength vs the PDF (PRD §4.24), so a large infiltration would
-            // revolt almost immediately; a cult must grow (conversion) before it can overrun a world.
-            double infiltrationRate = RNG.GetLinearDouble() * 0.05;
-            infiltration.PlayerReputation = 0;
-            infiltration.IsPublic = false;
-            planet.PlanetFactionMap[infiltratingFaction.Id] = infiltration;
+            if (faction == null) throw new ArgumentNullException(nameof(faction));
+            if (planet == null) throw new ArgumentNullException(nameof(planet));
+            if (rule == null) throw new ArgumentNullException(nameof(rule));
+            if (planet.PlanetFactionMap.ContainsKey(faction.Id)) return;
+
+            PlanetFaction presence = new PlanetFaction(faction)
+            {
+                PlayerReputation = 0,
+                IsPublic = rule.PresenceMode == FactionPresenceMode.Public
+            };
+            planet.PlanetFactionMap[faction.Id] = presence;
+
+            double populationShare = rule.PopulationShareMin
+                + RNG.GetLinearDouble() * (rule.PopulationShareMax - rule.PopulationShareMin);
 
             foreach (Region region in planet.Regions)
             {
-                RegionFaction owningRegionFaction = region.RegionFactionMap.First().Value;
-                long infiltrationPopulation = (long)(region.Population * infiltrationRate);
-                long infiltrationPdf = infiltrationPopulation / 33;
-                RegionFaction regionFaction = new RegionFaction(infiltration, region);
-                regionFaction.Population = infiltrationPopulation;
-                regionFaction.Garrison = infiltrationPdf;
-                owningRegionFaction.Population -= infiltrationPopulation;
-                owningRegionFaction.Garrison -= infiltrationPdf;
-                region.RegionFactionMap[infiltration.Faction.Id] = regionFaction;
+                RegionFaction owningRegionFaction = region.RegionFactionMap.Values
+                    .FirstOrDefault(regionFaction => regionFaction.IsPublic)
+                    ?? region.RegionFactionMap.Values.FirstOrDefault();
+                if (owningRegionFaction == null) continue;
+
+                long initialPopulation = (long)(owningRegionFaction.Population * populationShare);
+                long initialGarrison = (long)(initialPopulation * rule.GarrisonPerPopulation);
+                initialPopulation = Math.Clamp(initialPopulation, 0, owningRegionFaction.Population);
+                initialGarrison = Math.Clamp(initialGarrison, 0, owningRegionFaction.Garrison);
+
+                if (rule.PresenceMode == FactionPresenceMode.Public)
+                {
+                    owningRegionFaction.IsPublic = false;
+                }
+
+                RegionFaction regionFaction = new RegionFaction(presence, region)
+                {
+                    IsPublic = rule.PresenceMode == FactionPresenceMode.Public,
+                    Population = initialPopulation,
+                    Garrison = initialGarrison
+                };
+                owningRegionFaction.Population -= initialPopulation;
+                owningRegionFaction.Garrison -= initialGarrison;
+                region.RegionFactionMap[faction.Id] = regionFaction;
             }
         }
 

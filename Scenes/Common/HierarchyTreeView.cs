@@ -264,6 +264,11 @@ public partial class HierarchyTreeView : ScrollContainer
 
     private RowState CreateRow(HierarchyTreeItem entry, RowState parent, int depth)
     {
+        if (entry.SquadRow != null)
+        {
+            return CreateSquadRow(entry, parent, depth);
+        }
+
         PanelContainer panel = new()
         {
             CustomMinimumSize = new Vector2(0,
@@ -376,6 +381,54 @@ public partial class HierarchyTreeView : ScrollContainer
         return row;
     }
 
+    private RowState CreateSquadRow(HierarchyTreeItem entry, RowState parent, int depth)
+    {
+        SquadRowView panel = new()
+        {
+            CustomMinimumSize = new Vector2(0,
+                entry.RowHeight > 0 ? entry.RowHeight : RowDefaultHeight),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            MouseFilter = MouseFilterEnum.Stop
+        };
+        panel.SetIndent(depth * IndentWidth);
+        panel.Configure(entry.SquadRow);
+
+        RowState row = new(entry, parent, panel, null);
+        panel.RowSelected += (_, _) => OnSquadRowSelected(row);
+        panel.RowActivated += (_, key) => Activated?.Invoke(this, key);
+        RefreshRowStyle(row);
+        return row;
+    }
+
+    private void OnSquadRowSelected(RowState row)
+    {
+        if (!row.Entry.Selectable)
+        {
+            return;
+        }
+
+        bool controlPressed = Input.IsKeyPressed(Key.Ctrl) || Input.IsKeyPressed(Key.Meta);
+        bool wasSelected = row.Selected;
+        if (SelectMode == Tree.SelectModeEnum.Multi && controlPressed)
+        {
+            row.Selected = !row.Selected;
+        }
+        else
+        {
+            ClearSelectionInternal();
+            row.Selected = true;
+        }
+
+        RefreshAllRowStyles();
+        if (row.Selected != wasSelected || AllowReselect)
+        {
+            if (!_suppressSelectionSignals)
+            {
+                SelectionChanged?.Invoke(this, row.Entry.Key);
+            }
+        }
+    }
+
     private void OnRowGuiInput(RowState row, InputEvent inputEvent)
     {
         if (inputEvent is not InputEventMouseButton mouseButton
@@ -464,6 +517,13 @@ public partial class HierarchyTreeView : ScrollContainer
 
     private static void RefreshRowStyle(RowState row)
     {
+        if (row.Panel is SquadRowView squadRow)
+        {
+            squadRow.SetSelected(row.Selected);
+            squadRow.SetHovered(row.Hovered);
+            return;
+        }
+
         StyleBoxFlat style = OnlyWarStyle.GetListRowStyle(row.Selected || row.Hovered);
         style.ContentMarginLeft = 4;
         row.Panel.AddThemeStyleboxOverride("panel", style);

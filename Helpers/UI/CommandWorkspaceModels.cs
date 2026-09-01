@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -70,7 +71,10 @@ namespace OnlyWar.Helpers.UI
     {
         public static string SquadLabel(Squad squad)
         {
-            string strength = $"{squad.Members.Count(member => member.IsCombatEffective)}/{squad.Members.Count}";
+            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(
+                squad,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            string strength = $"{strengthSnapshot.Effective}/{strengthSnapshot.Full}";
             string order = squad.CurrentOrders != null ? squad.CurrentOrders.Mission.MissionType.ToString() : "Unassigned";
             return $"{squad.Name} | {strength} | {order}";
         }
@@ -80,7 +84,10 @@ namespace OnlyWar.Helpers.UI
             return filterKey switch
             {
                 "unassigned" => squad.CurrentOrders == null,
-                "injured" => squad.Members.Count(member => member.IsCombatEffective) < 5,
+                "injured" => SquadStrengthSnapshotBuilder.Build(
+                    squad,
+                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram)
+                    .Unavailable > 0,
                 _ => true
             };
         }

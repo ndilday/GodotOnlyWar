@@ -69,10 +69,35 @@ namespace OnlyWar.Models.Fleets
 
         public TaskForce(Faction faction, FleetTemplate template) : this(faction)
         {
+            if (faction == null)
+            {
+                throw new ArgumentNullException(nameof(faction));
+            }
+            if (template == null)
+            {
+                throw new ArgumentNullException(nameof(template));
+            }
+            if (template.Ships == null || template.Ships.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Fleet template '{template.Name}' has no ship templates.");
+            }
+
+            BoatTemplate boatTemplate = faction.BoatTemplates?.Values.FirstOrDefault();
+            if (boatTemplate == null)
+            {
+                throw new InvalidOperationException(
+                    $"Faction '{faction.Name}' has no boat template for fleet creation.");
+            }
+
             int i = Id * 1000;
-            BoatTemplate boatTemplate = faction.BoatTemplates.First().Value;
             foreach(ShipTemplate shipTemplate in template.Ships)
             {
+                if (shipTemplate == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Fleet template '{template.Name}' contains a null ship template.");
+                }
                 Ship newShip = new Ship(i, $"{shipTemplate.ClassName}-{i}", shipTemplate, boatTemplate)
                 {
                     Fleet = this

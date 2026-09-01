@@ -115,7 +115,11 @@ namespace OnlyWar.Models.Squads
         /// </summary>
         public CampaignLocation DutyStation { get; internal set; }
         public Order CurrentOrders { get; set; }
-        public TrainingFocuses TrainingFocus { get; set; }
+        /// <summary>
+        /// Stable key of the selected scout-training option. The key is resolved against the
+        /// active rules database; it is not a display name or a numeric enum value.
+        /// </summary>
+        public string TrainingOptionKey { get; set; } = ScoutTrainingOptionKeys.Balanced;
         //public List<int> AssignedVehicles;
         public Squad(string name, Unit parentUnit, SquadTemplate template)
         {
@@ -163,6 +167,7 @@ namespace OnlyWar.Models.Squads
             // loadout doesn't need a deep copy
             clone.Loadout = Loadout;
             clone.UsesLoadoutDoctrine = UsesLoadoutDoctrine;
+            clone.TrainingOptionKey = TrainingOptionKey;
             clone.FormationOrdinal = FormationOrdinal;
             clone.HasBattleHistory = HasBattleHistory;
             return clone;

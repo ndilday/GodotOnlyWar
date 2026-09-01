@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using OnlyWar.Helpers.UI;
 
 public enum ChapterBrowserLevel
 {
@@ -118,7 +119,8 @@ public sealed record ChapterBrowserMenuItem(
     bool IsSelected,
     string DrillText = ">",
     string Location = null,
-    bool CanNavigate = false);
+    bool CanNavigate = false,
+    SquadRowViewModel SquadRow = null);
 
 public sealed record ChapterBrowserMetric(string Value, string Label);
 

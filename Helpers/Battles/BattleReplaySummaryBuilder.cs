@@ -164,7 +164,8 @@ namespace OnlyWar.Helpers.Battles
                 selectedFormationId == source.Id,
                 startingStrength,
                 currentStrength,
-                []);
+                [],
+                source);
         }
 
         private static BattleFormationSummary BuildFormationSummary(BattleStateSnapshot initialState, BattleStateSnapshot currentState, int formationId)

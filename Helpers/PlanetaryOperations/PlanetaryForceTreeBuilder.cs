@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
+using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Squads;
@@ -27,6 +28,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
     public static class PlanetaryForceTreeBuilder
     {
         private const string CharacterSquadGroupPrefix = "group:characters:squad:";
+        private static readonly SquadRowViewModelBuilder RowBuilder = new();
 
         public static IReadOnlyList<HierarchyTreeItem> BuildCharacterGroup(
             IEnumerable<SpecialistOption> options,
@@ -189,6 +191,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             SquadEligibilityExclusion.NonOperational => "Formation is non-operational",
             SquadEligibilityExclusion.EmptyFormation => "Formation has no members",
             SquadEligibilityExclusion.PersonnelPool => "Personnel pool; attach individuals instead",
+            SquadEligibilityExclusion.Leaderless => "Formation requires a squad leader",
             SquadEligibilityExclusion.ProcedureBlocked => "A member is reserved for a Chapter procedure",
             SquadEligibilityExclusion.AssignedElsewhere => "Committed to another order",
             SquadEligibilityExclusion.MissionUnavailable => "Mission is unavailable from this origin",
@@ -243,6 +246,17 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 ?? (item.Exclusion == SquadEligibilityExclusion.None
                     ? strength
                     : $"{ExclusionReason(item.Exclusion).ToUpperInvariant()} · {strength}");
+            SquadRowContext rowContext = new(
+                SquadRowContextKind.PlanetaryOperations,
+                SquadRowAction.BeginOrder,
+                isSelected: item.Assigned || selectedIds.Contains(squad.Id),
+                isSelectable: item.Selectable,
+                isEnabled: item.Selectable,
+                contextBadge: assignment);
+            SquadRowViewModel row = RowBuilder.Build(
+                squad,
+                rowContext,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
             return new HierarchyTreeItem(
                 $"squad:{squad.Id}",
                 squad.Name,
@@ -253,7 +267,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 isSelected: item.Assigned || selectedIds.Contains(squad.Id),
                 badgeColor: item.Exclusion == SquadEligibilityExclusion.None
                     ? OnlyWarStyle.BodyText : OnlyWarStyle.MutedText,
-                rowHeight: 34);
+                rowHeight: 34,
+                squadRow: row);
         }
 
         private static string BuildAssignedSquadText(ForceTreeSquad item)

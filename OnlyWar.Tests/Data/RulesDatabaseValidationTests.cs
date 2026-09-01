@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -5,10 +6,12 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace OnlyWar.Tests.Data;
@@ -27,15 +30,365 @@ public class RulesDatabaseValidationTests
 
         Assert.NotEmpty(rules.RatingDefinitions);
         Assert.NotEmpty(rules.RatingAwardTiers);
+        Assert.Equal(
+            RatingKeys.Ranged,
+            rules.RatingConsumers[RatingConsumerRole.RangedCombat]);
+        Assert.Equal(
+            "core:honor_gun",
+            rules.AwardCatalog.Get(AwardTypes.Gun).IconAssetKey);
         Assert.NotEmpty(rules.TrainingProfiles);
+        Assert.Equal(
+            [
+                ScoutTrainingOptionKeys.Balanced,
+                ScoutTrainingOptionKeys.Physical,
+                ScoutTrainingOptionKeys.Vehicles,
+                ScoutTrainingOptionKeys.Melee,
+                ScoutTrainingOptionKeys.Ranged
+            ],
+            rules.ScoutTrainingOptions.Options.Select(option => option.Key));
+        Assert.Same(
+            rules.ScoutTrainingOptions.GetRequired(ScoutTrainingOptionKeys.Balanced).Profile,
+            rules.TrainingProfiles[
+                rules.ScoutTrainingOptions.GetRequired(ScoutTrainingOptionKeys.Balanced)
+                    .Profile.Id]);
         Assert.NotNull(rules.SupplyEconomyRules);
         Assert.NotEmpty(rules.SupplyEconomyRules.RequestValuation.ThroughputBands);
         Assert.True(rules.SupplyEconomyRules.RequestValuation.RequisitionPerBattleValueTime > 0);
         Assert.NotEmpty(rules.EquipmentTemplates);
         Assert.NotEmpty(rules.EquipmentKits);
         Assert.NotEmpty(rules.PersonalEquipmentRoles);
+        Assert.All(rules.BaseSkillMap.Values, skill => Assert.False(string.IsNullOrWhiteSpace(skill.SkillKey)));
+        Assert.Same(
+            rules.BaseSkillMap.Values.Single(skill => skill.SkillKey == SkillRoleKeys.Stealth),
+            rules.Skills.Stealth);
         Assert.NotNull(rules.PlayerFaction);
         Assert.NotNull(rules.DefaultFaction);
+        Assert.NotNull(rules.SectorFactions.Infiltrator);
+        Assert.NotNull(rules.SectorFactions.Invader);
+        Assert.NotNull(rules.SectorFactions.Insurrectionists);
+        ScenarioProfile promisedWorld = rules.ScenarioProfiles
+            .GetRequired(ScenarioKeys.PromisedWorld);
+        Assert.Equal(2, promisedWorld.MinInvaderRegions);
+        Assert.Equal(3, promisedWorld.MaxInvaderRegions);
+        Assert.Contains(promisedWorld.GetFactionOptions(ScenarioFactionSlotKeys.Infiltrator),
+            option => option.IsRequired);
+        Assert.Contains(promisedWorld.GetFactionOptions(ScenarioFactionSlotKeys.Invader),
+            option => option.IsRequired);
+        Assert.NotEmpty(rules.FactionPlanetPresence.Rules);
+        Assert.Equal(
+            new[] { 1, 2, 3, 4, 5 },
+            rules.PlanetTemplateEligibility.GetEligibleTemplateIds(
+                PlanetTemplateEligibilityKeys.PromisedWorld));
+        Assert.Equal(
+            new[] { 1, 3, 4, 5 },
+            rules.PlanetTemplateEligibility.GetEligibleTemplateIds(
+                PlanetTemplateEligibilityKeys.OrkGhostSource));
+    }
+
+    [Fact]
+    public void RulesDatabase_MissingRequiredTable_FailsBeforeHydration()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "missing-table",
+            "PRAGMA foreign_keys = OFF; DROP TABLE PlanetTemplate;");
+
+        Assert.True(
+            exception.Message.Contains("required tables", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+        Assert.True(
+            exception.Message.Contains("PlanetTemplate", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_MissingPlanetTemplateEligibilityTable_FailsBeforeHydration()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "missing-planet-template-eligibility-table",
+            "DROP TABLE PlanetTemplateEligibility;");
+
+        Assert.Contains("required tables", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PlanetTemplateEligibility", exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_RequiredCollectionsCannotBeEmpty()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "empty-planet-templates",
+            "DELETE FROM PlanetTemplateEligibility; "
+                + "PRAGMA foreign_keys = OFF; DELETE FROM PlanetTemplate;");
+
+        Assert.True(
+            exception.Message.Contains("PlanetTemplate", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+        Assert.True(
+            exception.Message.Contains("empty", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_PlanetTemplateProbabilitiesRequirePositiveTotal()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "zero-planet-probabilities",
+            "UPDATE PlanetTemplate SET Probability = 0;");
+
+        Assert.True(
+            exception.Message.Contains("positive total", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_PlanetTemplateEligibilityRequiresEachGenerationContext()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "missing-ork-ghost-context",
+            "DELETE FROM PlanetTemplateEligibility "
+                + "WHERE ContextKey = 'ambient.ork_ghost_source';");
+
+        Assert.Contains(PlanetTemplateEligibilityKeys.OrkGhostSource, exception.Message);
+        Assert.Contains("at least one template", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RulesDatabase_PlanetTemplateEligibilityRequiresPositiveContextProbability()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "zero-ork-ghost-probabilities",
+            "UPDATE PlanetTemplate SET Probability = 0 "
+                + "WHERE Id IN (SELECT PlanetTemplateId FROM PlanetTemplateEligibility "
+                + "WHERE ContextKey = 'ambient.ork_ghost_source');");
+
+        Assert.Contains(PlanetTemplateEligibilityKeys.OrkGhostSource, exception.Message);
+        Assert.Contains("positive total", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PlanetTemplateEligibility_UsesStableAssignmentsAfterTemplateRename()
+    {
+        GameRulesData original = new(RulesDatabaseFixture.DatabasePath);
+        GameRulesData renamed = LoadRulesWithMutation(
+            "renamed-planet-templates",
+            "UPDATE PlanetTemplate SET Name = 'Localized world ' || Id;");
+
+        Assert.Equal(
+            original.PlanetTemplateEligibility.GetEligibleTemplateIds(
+                PlanetTemplateEligibilityKeys.PromisedWorld),
+            renamed.PlanetTemplateEligibility.GetEligibleTemplateIds(
+                PlanetTemplateEligibilityKeys.PromisedWorld));
+        Assert.Equal(
+            original.PlanetTemplateEligibility.GetEligibleTemplateIds(
+                PlanetTemplateEligibilityKeys.OrkGhostSource),
+            renamed.PlanetTemplateEligibility.GetEligibleTemplateIds(
+                PlanetTemplateEligibilityKeys.OrkGhostSource));
+    }
+
+    [Theory]
+    [InlineData(
+        "missing-player-boats",
+        "DELETE FROM BoatTemplate WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);",
+        "BoatTemplate",
+        true)]
+    [InlineData(
+        "missing-player-fleets",
+        "DELETE FROM FleetTemplateShipTemplate "
+            + "WHERE FleetTemplateId IN (SELECT Id FROM FleetTemplate "
+            + "WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1)); "
+            + "DELETE FROM FleetTemplate "
+            + "WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);",
+        "FleetTemplate",
+        true)]
+    [InlineData(
+        "player-fleet-without-ships",
+        "DELETE FROM FleetTemplateShipTemplate "
+            + "WHERE FleetTemplateId IN (SELECT Id FROM FleetTemplate "
+            + "WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1));",
+        "ShipTemplates",
+        false)]
+    [InlineData(
+        "missing-player-ships",
+        "PRAGMA foreign_keys = OFF; DELETE FROM ShipTemplate "
+            + "WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);",
+        "ShipTemplate",
+        false)]
+    public void RulesDatabase_PlayerFactionRequiresFleetCarrierPrerequisites(
+        string suffix,
+        string mutationSql,
+        string expectedMessage,
+        bool expectPlayerMessage)
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(suffix, mutationSql);
+
+        Assert.True(
+            exception.Message.Contains(expectedMessage, StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+        Assert.Contains("Rules database", exception.Message, StringComparison.OrdinalIgnoreCase);
+        if (expectPlayerMessage)
+        {
+            Assert.Contains("player faction", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void RulesDatabase_DanglingSkillTemplateReferenceReportsSourceRelation()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "missing-skill-reference",
+            "PRAGMA foreign_keys = OFF; "
+                + "UPDATE SkillTemplate SET BaseSkillId = -1;");
+
+        Assert.True(
+            exception.Message.Contains("SkillTemplate", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+        Assert.True(
+            exception.Message.Contains("BaseSkillId", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+        Assert.True(
+            exception.Message.Contains("missing id", StringComparison.OrdinalIgnoreCase),
+            exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_ExplicitlyOptionalCompatibilityTablesMayBeAbsent()
+    {
+        GameRulesData rules = LoadRulesWithMutation(
+            "optional-extensions",
+            "DROP TABLE SkillRoleAssignment; "
+                + "DROP TABLE RatingConsumerAssignment; "
+                + "DROP TABLE AwardFamily;");
+
+        Assert.NotNull(rules);
+        Assert.Same(
+            rules.BaseSkillMap.Values.Single(skill => skill.SkillKey == SkillRoleKeys.Stealth),
+            rules.Skills.Stealth);
+        Assert.Equal(
+            "core:honor_gun",
+            rules.AwardCatalog.Get(AwardTypes.Gun).IconAssetKey);
+    }
+
+    [Fact]
+    public void ScoutTrainingOptions_UseStableKeysAndAllowAddedOrRenamedRows()
+    {
+        GameRulesData rules = LoadRulesWithMutation(
+            "scout-training-options",
+            "UPDATE TrainingProfile "
+                + "SET Name = 'Localized balanced training' "
+                + "WHERE Id = (SELECT TrainingProfileId FROM ScoutTrainingOption "
+                + "WHERE OptionKey = 'scout.balanced'); "
+                + "INSERT INTO ScoutTrainingOption "
+                + "(OptionKey, DisplayName, TrainingProfileId, SortOrder) "
+                + "SELECT 'scout.custom', 'Custom', TrainingProfileId, -1 "
+                + "FROM ScoutTrainingOption WHERE OptionKey = 'scout.physical';");
+
+        Assert.Equal("Localized balanced training",
+            rules.ScoutTrainingOptions.GetRequired(ScoutTrainingOptionKeys.Balanced)
+                .Profile.Name);
+        Assert.Equal(
+            "scout.custom",
+            rules.ScoutTrainingOptions.Options[0].Key);
+        Assert.Equal("Custom",
+            rules.ScoutTrainingOptions.GetRequired("scout.custom").DisplayName);
+    }
+
+    [Fact]
+    public void ScoutTrainingOptions_RequireBalancedAsTheDefaultOption()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "missing-balanced-scout-option",
+            "DELETE FROM ScoutTrainingOption WHERE OptionKey = 'scout.balanced';");
+
+        Assert.Contains(ScoutTrainingOptionKeys.Balanced, exception.Message);
+    }
+
+    [Fact]
+    public void RulesDatabase_OptionalEquipmentExtensionsMayBeAbsentWithoutDiscardingCoreCatalog()
+    {
+        GameRulesData rules = LoadRulesWithMutation(
+            "optional-equipment-extensions",
+            "DROP TABLE EquipmentGearProfile; DROP TABLE EquipmentRequirement;");
+
+        Assert.NotEmpty(rules.EquipmentTemplates);
+        Assert.NotEmpty(rules.EquipmentKits);
+    }
+
+    [Fact]
+    public void ChapterDoctrine_ResolvesRenamedTemplatesThroughStableAssignments()
+    {
+        string temporaryDatabasePath = Path.Combine(
+            Path.GetTempPath(), $"onlywar-chapter-doctrine-{Guid.NewGuid():N}.s3db");
+        File.Copy(RulesDatabaseFixture.DatabasePath, temporaryDatabasePath);
+
+        try
+        {
+            using (SqliteConnection connection = new(new SqliteConnectionStringBuilder
+            {
+                DataSource = temporaryDatabasePath,
+                Mode = SqliteOpenMode.ReadWrite,
+                Pooling = false
+            }.ToString()))
+            {
+                connection.Open();
+                using SqliteCommand command = connection.CreateCommand();
+                command.CommandText = @"
+UPDATE SoldierTemplate
+SET Name = 'Renamed soldier ' || Id
+WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);
+UPDATE SquadTemplate
+SET Name = 'Renamed squad ' || Id
+WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);
+UPDATE UnitTemplate
+SET Name = 'Renamed unit ' || Id
+WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
+                command.ExecuteNonQuery();
+            }
+
+            GameRulesData rules = new(temporaryDatabasePath);
+            Assert.StartsWith("Renamed soldier ", rules.ChapterDoctrine.TacticalMarine.Name);
+            Assert.StartsWith("Renamed squad ", rules.ChapterDoctrine.TacticalSquad.Name);
+            Assert.StartsWith("Renamed unit ", rules.ChapterDoctrine.BattleCompany.Name);
+
+            Assert.Equal(
+                new[]
+                {
+                    rules.ChapterDoctrine.VeteranCompany,
+                    rules.ChapterDoctrine.BattleCompany,
+                    rules.ChapterDoctrine.BattleCompany,
+                    rules.ChapterDoctrine.BattleCompany,
+                    rules.ChapterDoctrine.BattleCompany,
+                    rules.ChapterDoctrine.TacticalCompany,
+                    rules.ChapterDoctrine.TacticalCompany,
+                    rules.ChapterDoctrine.AssaultCompany,
+                    rules.ChapterDoctrine.DevastatorCompany,
+                    rules.ChapterDoctrine.ScoutCompany
+                },
+                rules.ChapterDoctrine.GetOrderedChildUnits(rules.ChapterDoctrine.RootUnit));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(temporaryDatabasePath))
+            {
+                File.Delete(temporaryDatabasePath);
+            }
+        }
+    }
+
+    [Fact]
+    public void RulesDatabase_DoesNotContainCodeOwnedSupplyTables()
+    {
+        using SqliteConnection connection = new(new SqliteConnectionStringBuilder
+        {
+            DataSource = RulesDatabaseFixture.DatabasePath,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString());
+        connection.Open();
+
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE 'Supply%'";
+
+        Assert.Equal(0L, (long)command.ExecuteScalar());
     }
 
     [Fact]
@@ -181,6 +534,64 @@ public class RulesDatabaseValidationTests
             && requirement.RequiredValue == requiredValue);
     }
 
+    private static InvalidOperationException AssertRulesDatabaseRejects(
+        string suffix,
+        string mutationSql)
+    {
+        string databasePath = CreateMutatedRulesDatabase(suffix, mutationSql);
+        try
+        {
+            return Assert.Throws<InvalidOperationException>(() => new GameRulesData(databasePath));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(databasePath))
+            {
+                File.Delete(databasePath);
+            }
+        }
+    }
+
+    private static GameRulesData LoadRulesWithMutation(string suffix, string mutationSql)
+    {
+        string databasePath = CreateMutatedRulesDatabase(suffix, mutationSql);
+        try
+        {
+            return new GameRulesData(databasePath);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(databasePath))
+            {
+                File.Delete(databasePath);
+            }
+        }
+    }
+
+    private static string CreateMutatedRulesDatabase(string suffix, string mutationSql)
+    {
+        string databasePath = Path.Combine(
+            Path.GetTempPath(), $"onlywar-rules-validation-{suffix}-{Guid.NewGuid():N}.s3db");
+        File.Copy(RulesDatabaseFixture.DatabasePath, databasePath);
+
+        using (SqliteConnection connection = new(new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadWrite,
+            Pooling = false
+        }.ToString()))
+        {
+            connection.Open();
+            using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = mutationSql;
+            command.ExecuteNonQuery();
+        }
+
+        return databasePath;
+    }
+
     [Fact]
     public void RangedWeaponTemplates_LoadTemplateWeaponColumnsFromShippedDatabase()
     {
@@ -263,6 +674,24 @@ public class RulesDatabaseValidationTests
             Assert.True(validation.IsValid,
                 $"{kit.Name}: {string.Join("; ", validation.Issues.Select(issue => issue.Message))}");
         });
+    }
+
+    [Fact]
+    public void OrkMegaArmor_IsLoadedAsNonRunningArmor_InBothEquipmentPipelines()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+        Faction orks = rules.Factions.Single(faction => faction.Name == "Orks");
+        ArmorTemplate megaArmor = orks.SquadTemplates[31].Armor;
+        EquipmentTemplate megaEquipment = rules.EquipmentCatalog.EquipmentTemplates[
+            EquipmentRulesCatalog.GetArmorEquipmentId(megaArmor.Id)];
+
+        Assert.Equal("Mega Armor", megaArmor.Name);
+        Assert.Equal(25, megaArmor.ArmorProvided);
+        Assert.Equal(-4, megaArmor.StealthModifier);
+        Assert.True(megaArmor.PreventsRunning);
+        Assert.Equal(25, megaEquipment.ArmorProfile.ArmorProvided);
+        Assert.Equal(-4, megaEquipment.ArmorProfile.StealthModifier);
+        Assert.True(megaEquipment.ArmorProfile.PreventsRunning);
     }
 
     [Fact]

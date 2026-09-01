@@ -106,6 +106,11 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        // Run is a squad-level tactical tier. A single member in restrictive armor therefore
+        // keeps the whole formation from declaring Run; this avoids giving a mixed squad a tier
+        // that its slowest member cannot legally perform.
+        public bool CanRun => AbleSoldiers.Count > 0 && AbleSoldiers.All(soldier => soldier.CanRun);
+
         // A squad "provides synapse" iff any of its soldier templates' species carries the
         // ability (OnlyWar_TDD.md §6.6). This reads the full roster, not
         // AbleSoldiers — it describes squad composition, not current combat capability.
@@ -732,7 +737,8 @@ namespace OnlyWar.Helpers.Battles
                     resolved.Loadout.Armor.Name,
                     profile.ArmorProvided,
                     profile.StealthModifier,
-                    profile.CapacityModifier));
+                    profile.CapacityModifier,
+                    profile.PreventsRunning));
             }
             return true;
         }

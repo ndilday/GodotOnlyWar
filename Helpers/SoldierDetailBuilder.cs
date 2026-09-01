@@ -1,6 +1,7 @@
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -20,7 +21,8 @@ public class SoldierDetailBuilder
                 playerSoldier,
                 richTextInjury: false,
                 currentDate: GameDataSingleton.Instance.Date,
-                sector: GameDataSingleton.Instance.Sector);
+                sector: GameDataSingleton.Instance.Sector,
+                ratingBindings: GameDataSingleton.Instance.GameRulesData?.RatingConsumers);
             // Left grid, two columns: Posting/Sergeant, Battle/Honors, Injury.
             // Service Record is full-height on the right with its own scroll.
             cards.Add(new ChapterBrowserDetailCard("map_pin", "Posting", "Assignment", FormatPairs(dossier.Data)));

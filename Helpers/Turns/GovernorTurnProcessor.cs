@@ -319,7 +319,7 @@ namespace OnlyWar.Helpers.Turns
         private int ResolveDeadlineWeeks(RequestSeverity severity)
         {
             SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
-            return rules.SeverityDeadlineWeeks.TryGetValue(severity.ToString(), out int weeks)
+            return rules.SeverityDeadlineWeeks.TryGetValue(severity, out int weeks)
                 ? weeks
                 : rules.DefaultDeadlineWeeks;
         }
@@ -330,7 +330,7 @@ namespace OnlyWar.Helpers.Turns
             Faction threatFaction,
             int deadlineWeeks)
         {
-            SquadTemplate reference = _session.Rules.ChapterTemplates.TacticalSquad;
+            SquadTemplate reference = _session.Rules.ChapterDoctrine.TacticalSquad;
             SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
             long hostileStrength = threatFaction == null
                 ? 0
@@ -361,7 +361,7 @@ namespace OnlyWar.Helpers.Turns
             RequestHazard hazard)
         {
             SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
-            decimal hazardMultiplier = rules.HazardMultipliers[hazard.ToString()];
+            decimal hazardMultiplier = rules.HazardMultipliers[hazard];
             RequestValuationResult value = RequestValueCalculator.Calculate(
                 commitment,
                 rules.RequestValuation,
@@ -369,17 +369,14 @@ namespace OnlyWar.Helpers.Turns
                     commitment.QualificationTags.Contains(
                         premium.RequirementKey, StringComparer.OrdinalIgnoreCase)),
                 hazardMultiplier);
-            decimal worldMultiplier = rules.WorldRequisitionMultipliers.TryGetValue(
-                planet.Template.Id, out decimal authoredWorldMultiplier)
-                    ? authoredWorldMultiplier
-                    : 1m;
+            decimal worldMultiplier = rules.GetWorldRequisitionMultiplier(planet.Template);
             int worldAdjustedValue = RequestValueCalculator.RoundAndClamp(
                 value.RequisitionValue * worldMultiplier,
                 rules.RequestValuation.MinimumRequestValue,
                 rules.RequestValuation.MaximumRequestValue);
-            decimal authority = rules.AuthorityMultipliers[planet.GovernanceTier.ToString()];
+            decimal authority = rules.AuthorityMultipliers[planet.GovernanceTier];
             GovernorWillingness willingness = new(
-                rules.DesperationMultipliers[severity.ToString()],
+                rules.DesperationMultipliers[severity],
                 rules.RelationshipBaseMultiplier
                     + rules.RelationshipOpinionScale
                     * (decimal)Math.Clamp(governor.OpinionOfPlayerForce, 0f, 1f),

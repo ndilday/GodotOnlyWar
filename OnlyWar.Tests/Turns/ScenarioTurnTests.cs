@@ -122,11 +122,13 @@ public class ScenarioTurnTests
         Assert.NotNull(sector.PlayerForce.RecruitmentProgram);
         Assert.False(sector.PlayerForce.RecruitmentProgram.IsSetupComplete);
         Assert.True(sector.PlayerForce.Army.OrderOfBattle.ChildUnits
-            .Single(unit => unit.UnitTemplate == _data.ChapterTemplates.ScoutCompany)
+            .Single(unit => unit.UnitTemplate == _data.ChapterDoctrine.ScoutCompany)
             .HQSquad
             .IsAdministrative);
         // The current Sector Lord's opinion rises (resolved at resolution time).
-        Assert.Equal(opinionBefore + ScenarioRules.SectorLordOpinionReward,
+        float opinionReward = _data.ScenarioProfiles
+            .GetRequired(ScenarioKeys.PromisedWorld).SectorLordOpinionReward;
+        Assert.Equal(opinionBefore + opinionReward,
                      sector.GetSectorLord().OpinionOfPlayerForce, precision: 4);
     }
 
@@ -253,7 +255,9 @@ public class ScenarioTurnTests
         // No Chapter World granted.
         Assert.False(promised.PlanetFactionMap.ContainsKey(player.Id));
         // The current Sector Lord's opinion falls.
-        Assert.Equal(opinionBefore - ScenarioRules.SectorLordOpinionPenalty,
+        float opinionPenalty = _data.ScenarioProfiles
+            .GetRequired(ScenarioKeys.PromisedWorld).SectorLordOpinionPenalty;
+        Assert.Equal(opinionBefore - opinionPenalty,
                      sector.GetSectorLord().OpinionOfPlayerForce, precision: 4);
     }
 
@@ -498,7 +502,7 @@ public class ScenarioTurnTests
             Faction = player
         };
         Unit root = new(9001, "Test Chapter", template, []);
-        Unit scoutCompany = new("Tenth Company", _data.ChapterTemplates.ScoutCompany)
+        Unit scoutCompany = new("Tenth Company", _data.ChapterDoctrine.ScoutCompany)
         {
             ParentUnit = root
         };

@@ -24,7 +24,7 @@ namespace OnlyWar.Helpers.Recruitment
         {
             return force?.Army?.OrderOfBattle?.GetAllSquads()
                 .SingleOrDefault(squad => squad.SquadTemplate
-                    == rules?.ChapterTemplates?.ScoutCompanyHeadquarters);
+                    == rules?.ChapterDoctrine?.ScoutCompanyHeadquarters);
         }
 
         internal void Synchronize(PlayerForce force, GameRulesData rules, Sector sector = null)
@@ -74,9 +74,9 @@ namespace OnlyWar.Helpers.Recruitment
                 program.StaffAssignments.Add(new RecruitmentStaffAssignment(
                     soldier.Id,
                     role.Value,
-                    evaluation?[RatingKeys.Leadership] ?? 0,
-                    evaluation?[RatingKeys.Medical] ?? 0,
-                    evaluation?[RatingKeys.Piety] ?? 0));
+                    rules.RatingConsumers.Get(evaluation, RatingConsumerRole.CommandLeadership),
+                    rules.RatingConsumers.Get(evaluation, RatingConsumerRole.MedicalCapacity),
+                    rules.RatingConsumers.Get(evaluation, RatingConsumerRole.SpiritualCapability)));
             }
         }
 
@@ -125,21 +125,21 @@ namespace OnlyWar.Helpers.Recruitment
             PlayerSoldier soldier,
             GameRulesData rules)
         {
-            if (soldier?.Template == null || rules?.ChapterTemplates == null)
+            if (soldier?.Template == null || rules?.ChapterDoctrine == null)
             {
                 return null;
             }
 
-            if (soldier.Template == rules.ChapterTemplates.ScoutSergeant)
+            if (soldier.Template == rules.ChapterDoctrine.ScoutSergeant)
             {
                 return RecruitmentStaffRole.ScoutSergeant;
             }
-            if (soldier.Template == rules.ChapterTemplates.Apothecary)
+            if (soldier.Template == rules.ChapterDoctrine.Apothecary)
             {
                 return RecruitmentStaffRole.Apothecary;
             }
-            if (soldier.Template == rules.ChapterTemplates.Chaplain
-                || soldier.Template == rules.ChapterTemplates.Judiciar)
+            if (soldier.Template == rules.ChapterDoctrine.Chaplain
+                || soldier.Template == rules.ChapterDoctrine.Judiciar)
             {
                 return RecruitmentStaffRole.Chaplain;
             }

@@ -33,11 +33,11 @@ namespace OnlyWar.Helpers.Database.GameState
         public int EnsureCompatibleSaveVersion(IDbConnection connection)
         {
             int version = GetSaveVersion(connection);
-            if (version < SaveFormat.FirstMigratableVersion || version > SaveFormat.CurrentVersion)
+            if (version < SaveFormat.MinimumSupportedVersion || version > SaveFormat.CurrentVersion)
             {
                 throw new InvalidDataException(
                     $"Save version {version} is not supported by this build "
-                    + $"(supported {SaveFormat.FirstMigratableVersion}-{SaveFormat.CurrentVersion}).");
+                    + $"(supported {SaveFormat.MinimumSupportedVersion}-{SaveFormat.CurrentVersion}).");
             }
             return version;
         }

@@ -227,7 +227,7 @@ namespace OnlyWar.Helpers.Turns
                     new SquadLifecycleService(force).HandleEmptySquad(oldSquad);
                 }
                 target.AddSquadMember(neophyte);
-                neophyte.Template = _session.Rules.ChapterTemplates.DevastatorMarine;
+                neophyte.Template = _session.Rules.ChapterDoctrine.DevastatorMarine;
                 neophyte.AddEvent(new SoldierEvent(
                     CopyDate(_session.CurrentDate),
                     SoldierEventType.Promotion,
@@ -259,15 +259,15 @@ namespace OnlyWar.Helpers.Turns
         private bool HasDevastatorSeat(Squad squad)
         {
             if (squad?.CanAcceptSquadOrder != true
-                || squad.SquadTemplate != _session.Rules.ChapterTemplates.DevastatorSquad)
+                || squad.SquadTemplate != _session.Rules.ChapterDoctrine.DevastatorSquad)
             {
                 return false;
             }
             SquadTemplateElement slot = squad.SquadTemplate.Elements.FirstOrDefault(
-                item => item.SoldierTemplate == _session.Rules.ChapterTemplates.DevastatorMarine);
+                item => item.SoldierTemplate == _session.Rules.ChapterDoctrine.DevastatorMarine);
             return slot != null
                 && squad.Members.Count(member =>
-                    member.Template == _session.Rules.ChapterTemplates.DevastatorMarine)
+                    member.Template == _session.Rules.ChapterDoctrine.DevastatorMarine)
                     < slot.MaximumNumber;
         }
 

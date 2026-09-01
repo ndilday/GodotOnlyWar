@@ -207,6 +207,11 @@ public partial class ChapterView : MainScreenView
 
     private Control CreateMenuRow(ChapterBrowserMenuItem item)
     {
+        if (item.SquadRow != null)
+        {
+            return CreateSquadMenuRow(item);
+        }
+
         bool isSoldierEntry = item.Level == ChapterBrowserLevel.Soldier;
         PanelContainer row = new PanelContainer
         {
@@ -351,6 +356,66 @@ public partial class ChapterView : MainScreenView
         rowContent.AddChild(drillButton);
 
         return row;
+    }
+
+    private Control CreateSquadMenuRow(ChapterBrowserMenuItem item)
+    {
+        HBoxContainer menuRow = new()
+        {
+            CustomMinimumSize = new Vector2(0, RosterRowStyle.StandardRowHeight),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        menuRow.AddThemeConstantOverride("separation", RosterRowStyle.ContentSeparation);
+
+        SquadRowView row = new();
+        row.Configure(item.SquadRow);
+        row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        row.RowSelected += (_, _) =>
+            BrowserItemSelected?.Invoke(this, new ChapterBrowserItemEvent(item.Level, item.Id));
+        row.RowActivated += (_, _) =>
+        {
+            if (item.CanDrill)
+            {
+                BrowserItemDrillRequested?.Invoke(
+                    this, new ChapterBrowserItemEvent(item.Level, item.Id));
+            }
+            else
+            {
+                BrowserItemSelected?.Invoke(this, new ChapterBrowserItemEvent(item.Level, item.Id));
+            }
+        };
+        menuRow.AddChild(row);
+
+        if (item.CanNavigate)
+        {
+            Button navigateButton = new()
+            {
+                Text = "GO",
+                CustomMinimumSize = new Vector2(46, 32),
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                MouseDefaultCursorShape = CursorShape.PointingHand,
+                TooltipText = "Go to this squad's location"
+            };
+            navigateButton.Pressed += () =>
+                BrowserItemLocationRequested?.Invoke(
+                    this, new ChapterBrowserItemEvent(item.Level, item.Id));
+            menuRow.AddChild(navigateButton);
+        }
+
+        Button drillButton = new()
+        {
+            Text = item.CanDrill ? item.DrillText : "i",
+            CustomMinimumSize = new Vector2(32, 32),
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            MouseDefaultCursorShape = CursorShape.PointingHand,
+            TooltipText = item.CanDrill ? "Drill into this squad" : "Show squad details",
+            Disabled = !item.CanDrill
+        };
+        drillButton.Pressed += () =>
+            BrowserItemDrillRequested?.Invoke(
+                this, new ChapterBrowserItemEvent(item.Level, item.Id));
+        menuRow.AddChild(drillButton);
+        return menuRow;
     }
 
     private void OnDetailLocationLinkPressed()

@@ -104,7 +104,7 @@ public class NewChapterBuilderTests
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
 
         List<Squad> scoutSquads = chapter.Army.OrderOfBattle.GetAllSquads()
-            .Where(squad => squad.SquadTemplate == _data.ChapterTemplates.ScoutSquad)
+            .Where(squad => squad.SquadTemplate == _data.ChapterDoctrine.ScoutSquad)
             .Where(squad => squad.SquadLeader != null)
             .ToList();
 
@@ -163,9 +163,9 @@ public class NewChapterBuilderTests
 
         Squad reclusium = oob.Squads.First(s => s.SquadTemplate.Name == "Reclusium");
         Squad scoutHeadquarters = oob.ChildUnits
-            .Single(unit => unit.UnitTemplate == _data.ChapterTemplates.ScoutCompany)
+            .Single(unit => unit.UnitTemplate == _data.ChapterDoctrine.ScoutCompany)
             .HQSquad;
-        Assert.Same(_data.ChapterTemplates.ScoutCompanyHeadquarters, scoutHeadquarters.SquadTemplate);
+        Assert.Same(_data.ChapterDoctrine.ScoutCompanyHeadquarters, scoutHeadquarters.SquadTemplate);
         foreach (string staffRole in new[] { "Scout Sergeant", "Apothecary", "Chaplain", "Judiciar" })
         {
             SquadTemplateElement staffSlot = scoutHeadquarters.SquadTemplate.Elements
@@ -413,7 +413,7 @@ public class NewChapterBuilderTests
         {
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap,
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, string> squadTrainingOptionMap,
             float points = 0.2f, IReadOnlyDictionary<int, float> pointsBySquad = null)
         {
         }
@@ -459,7 +459,7 @@ public class NewChapterBuilderTests
         {
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap,
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, string> squadTrainingOptionMap,
             float points = 0.2f, IReadOnlyDictionary<int, float> pointsBySquad = null)
         {
         }

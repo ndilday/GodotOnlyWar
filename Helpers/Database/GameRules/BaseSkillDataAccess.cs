@@ -21,7 +21,14 @@ namespace OnlyWar.Helpers.Database.GameRules
                     SkillCategory category = (SkillCategory)reader.GetInt32(2);
                     var attribute = (Models.Soldiers.Attribute)reader.GetInt32(3);
                     float difficulty = Convert.ToSingle(reader[4]);
-                    BaseSkill baseSkill = new BaseSkill(id, category, name, attribute, difficulty);
+                    // SkillKey was appended to preserve compatibility with focused legacy
+                    // fixtures. Production rules data must provide it; GameRulesData validates
+                    // that contract before exposing the runtime registry.
+                    string skillKey = reader.FieldCount > 5 && !reader.IsDBNull(5)
+                        ? reader[5].ToString()
+                        : null;
+                    BaseSkill baseSkill = new BaseSkill(
+                        id, category, name, attribute, difficulty, skillKey);
 
                     baseSkillMap[id] = baseSkill;
                 }

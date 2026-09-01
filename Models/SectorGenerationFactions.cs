@@ -5,50 +5,69 @@ using System.Linq;
 namespace OnlyWar.Models
 {
     /// <summary>
-    /// Resolves the specific non-player factions that sector generation places by
-    /// name into stable, typed accessors. Resolution happens once at rules-database
-    /// load (via <see cref="GameRulesData"/>) and fails fast with a clear error if a
-    /// required faction is missing or ambiguous, instead of producing a runtime null
-    /// deep inside <c>SectorBuilder</c>.
-    ///
-    /// This is the sector-generation sibling of <see cref="Soldiers.NamedSkillRegistry"/>
-    /// and <see cref="ChapterGenerationTemplates"/>; see TDD §8.3 / §4.1.1 for the
-    /// validated-registry pattern these are migrating toward. The role-based property
-    /// names document how each faction is used; the concrete lore faction is noted
-    /// alongside.
+    /// Resolves the factions that sector generation uses from data-owned role assignments into
+    /// stable, typed accessors. Resolution happens once at rules-database load and fails fast with
+    /// a clear error if a required assignment is missing or points at an unknown faction.
     /// </summary>
     internal sealed class SectorGenerationFactions
     {
-        /// <summary>The hidden, infiltration-capable faction (Genestealer Cult).</summary>
+        /// <summary>The hidden, infiltration-capable faction.</summary>
         public Faction Infiltrator { get; }
 
-        /// <summary>The overt invasion faction (Tyranids).</summary>
+        /// <summary>The overt invasion faction.</summary>
         public Faction Invader { get; }
 
-        /// <summary>The sector-wide secular-rebellion faction.</summary>
+        /// <summary>The sector-wide rebellion faction.</summary>
         public Faction Insurrectionists { get; }
 
-        public SectorGenerationFactions(IReadOnlyList<Faction> factions)
+        public SectorGenerationFactions(
+            IReadOnlyList<Faction> factions,
+            IEnumerable<FactionRoleAssignment> assignments)
         {
-            Infiltrator = Resolve(factions, "Genestealer Cult");
-            Invader = Resolve(factions, "Tyranids");
-            Insurrectionists = Resolve(factions, "Insurrectionists");
+            if (factions == null) throw new ArgumentNullException(nameof(factions));
+
+            Dictionary<string, int> factionIdsByRole = new(StringComparer.OrdinalIgnoreCase);
+            foreach (FactionRoleAssignment assignment in assignments ?? [])
+            {
+                if (assignment == null)
+                {
+                    throw new InvalidOperationException("A faction role assignment is null.");
+                }
+                if (!FactionRoleKeys.TryParse(assignment.RoleKey, out string roleKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Unknown faction role '{assignment.RoleKey}'.");
+                }
+                if (!factionIdsByRole.TryAdd(roleKey, assignment.FactionId))
+                {
+                    throw new InvalidOperationException(
+                        $"Faction role '{assignment.RoleKey}' is assigned more than once.");
+                }
+            }
+
+            Infiltrator = Resolve(factions, factionIdsByRole, FactionRoleKeys.Infiltrator);
+            Invader = Resolve(factions, factionIdsByRole, FactionRoleKeys.Invader);
+            Insurrectionists = Resolve(factions, factionIdsByRole, FactionRoleKeys.Insurrectionists);
         }
 
-        private static Faction Resolve(IReadOnlyList<Faction> factions, string name)
+        private static Faction Resolve(
+            IReadOnlyList<Faction> factions,
+            IReadOnlyDictionary<string, int> factionIdsByRole,
+            string roleKey)
         {
-            List<Faction> matches = factions?.Where(f => f.Name == name).ToList() ?? new List<Faction>();
-            if (matches.Count == 0)
+            if (!factionIdsByRole.TryGetValue(roleKey, out int factionId))
             {
                 throw new InvalidOperationException(
-                    $"Required faction '{name}' was not found in the rules database.");
+                    $"Required faction role '{roleKey}' is not assigned.");
             }
-            if (matches.Count > 1)
+
+            Faction faction = factions.FirstOrDefault(candidate => candidate.Id == factionId);
+            if (faction == null)
             {
                 throw new InvalidOperationException(
-                    $"Required faction '{name}' is ambiguous; {matches.Count} entries share that name.");
+                    $"Faction role '{roleKey}' references missing faction id {factionId}.");
             }
-            return matches[0];
+            return faction;
         }
     }
 }

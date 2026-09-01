@@ -319,9 +319,10 @@ public class SectorEntityLogicTests
         int deadlineWeeks = request.Deadline.GetWeeksDifference(request.DateRequestMade);
         // a world under threat gets a shorter fuse than one that is merely uneasy
         Assert.True(deadlineWeeks < 39, $"expected a threat deadline under 39 weeks, got {deadlineWeeks}");
-        // whatever severity was classified, the deadline is the one the rules table names for it
+        // whatever severity was classified, the deadline is the one the code-owned supply profile
+        // assigns to it
         int expected = GameDataSingleton.Instance.GameRulesData
-            .SupplyEconomyRules.SeverityDeadlineWeeks[request.Severity.ToString()];
+            .SupplyEconomyRules.SeverityDeadlineWeeks[request.Severity];
         Assert.Equal(expected, deadlineWeeks);
         Assert.Equal(expected, request.Commitment.CompletionDeadlineWeeks);
     }

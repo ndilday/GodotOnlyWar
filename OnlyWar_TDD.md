@@ -2,7 +2,7 @@
 
 **Version:** Alpha 0.8
 
-**Last Updated:** August 28, 2026
+**Last Updated:** August 31, 2026
 
 **Author:** Nathan Dilday
 
@@ -46,6 +46,7 @@
    - 7.3 [Navigation Model](#73-navigation-model)
    - 7.4 [Last-Turn Report Snapshot](#74-last-turn-report-snapshot)
    - 7.5 [Operations Workspaces](#75-operations-workspaces)
+   - 7.6 [Force Legibility & Shared Squad Rows](#76-force-legibility--shared-squad-rows)
 8. [Identified Technical Risks & Debt](#8-identified-technical-risks--debt)
 9. [Testing Strategy](#9-testing-strategy)
 
@@ -121,7 +122,7 @@ Every Godot scene that has meaningful logic is split into two C# classes:
 `GameDataSingleton` is a globally accessible singleton (not a Godot autoload — it is a plain C# singleton accessed via `GameDataSingleton.Instance`) that holds:
 
 - `Sector` — the live sector state (all planets, factions, player force)
-- `GameRulesData` — the loaded rules blob (all templates, base skills, body templates)
+- `GameRulesData` — the loaded rules blob (all templates, profiles, base skills, body templates, and economy rules)
 - `Date` — current game date
 
 Most scene controllers still reach into this singleton for their data. End-of-turn simulation now treats it as a composition boundary instead: the default `TurnController` constructor captures the loaded rules, sector, date, and production `IRNG` adapter in a `GameSession`, then injects that session into the turn processors. Tests and future simulations can construct a session directly without making the singleton their source of truth.
@@ -168,19 +169,51 @@ At runtime, `GameStorage` locates the immutable install root and supplies the or
 
 - `Faction`, `Species`, `SoldierTemplate`, `SquadTemplate`, `SquadTemplateElement`
 - `UnitTemplate`, `UnitTemplateHierarchy`, `UnitTemplateSquadTemplate`
-- `BaseSkill`, `SkillTemplate`
+- `BaseSkill`, `SkillTemplate`, and the optional `SkillRoleAssignment` semantic bindings
 - `HitLocationTemplate` (grouped into body types)
 - `RangedWeaponTemplate`, `MeleeWeaponTemplate`, and the compatibility `WeaponSet` rows
 - `EquipmentTemplate`, `EquipmentRangedProfile`, `EquipmentMeleeProfile`, `EquipmentArmorProfile`,
   `AmmunitionType`, `EquipmentAmmunitionPackage`, `EquipmentKitTemplate`, `EquipmentKitItem`,
   and `PersonalEquipmentRole` for the itemized equipment catalog
 - `TrainingProfile`, `TrainingProfileEntry` for data-driven skill and attribute training distributions
-- `PlanetTemplate`
+- `PlanetTemplate` and `PlanetTemplateEligibility`
 - `ShipTemplate`, `BoatTemplate`, `FleetTemplate`, `FleetShipTemplate`
 
-Load order matters: skills → hit locations → weapon templates → training profiles → soldier/squad templates → unit templates → planet templates → fleet templates → factions.
+Load order matters: skills → hit locations → weapon templates → training profiles → soldier/squad templates → unit templates → planet templates → planet-template eligibility → fleet templates → factions.
 
-Rules-data display names are not intended to be stable code contracts. Any code path that needs a specific skill, faction, template, weapon, hit location, chapter role, or rating definition should eventually resolve that dependency through a stable key, a semantic flag, or a validated registry loaded at startup. Startup validation should fail fast with a clear error when required rules data is missing, rather than allowing a later `First(...)` or dictionary lookup failure during play.
+#### Data Ownership and Modding Contract
+
+The rules database is the primary mod surface. It contains universe content, templates, distributions, balance values, and configuration profiles that a campaign author may reasonably want to change. Code owns executable behavior: simulation algorithms, topology construction, closed vocabularies, and validation. A data-driven rule may provide inputs to an algorithm without moving the algorithm itself into the database.
+
+| Data category | Owner | Examples |
+| --- | --- | --- |
+| Universe content | Rules DB | Factions, species, planets, soldiers, squads, units, weapons, equipment, and fleets |
+| Configuration profiles | Rules DB when modifiable | Sector generation, travel, scenario, training, and ratings |
+| Semantic assignments | Rules DB plus validated code consumers | Infiltrator faction, chapter tactical squad, teaching skill, and default equipment roles |
+| Algorithms and simulation behavior | Code | Subsector clustering, warp-lane construction, request valuation, and turn processing |
+
+The supply economy is a deliberate exception to the general configuration rule. Its balance
+values live in the typed, code-owned `SupplyEconomyRules.CreateDefault()` profile. The rules
+database contains the universe and campaign-content vocabulary; it does not define request
+valuation, governor offers, pledge pacing, or supply multipliers. Requisition and pledge state
+remain campaign data in the save model. If a future economy overhaul becomes a first-class mod
+surface, it should be introduced as a separate versioned profile rather than restoring the old
+EAV tables to the universe database.
+
+Display names are presentation data and are never stable code identifiers. Numeric row IDs are likewise not semantic identities and must not be hardcoded in production code. Cross-table foreign keys are normal rules composition and are not considered hardcoded row dependencies. When code requires a semantic assignment, the database must provide a stable key, role, or flag, and the rules loader must validate that assignment at startup.
+
+Required content and profile tables must exist and contain enough data for their owning system to operate. Relationship or extension tables may be empty only when they are explicitly classified as optional or structurally empty-valid. Optional tables must have defined behavior when absent or empty. The loader is the boundary where these contracts are checked and should fail fast with a clear error rather than allowing a later `First(...)` or dictionary lookup failure during play.
+
+**Implemented (RDB-009):** `RulesDatabaseSchemaValidator` checks the required table contract before
+hydration, `RulesDatabaseReferenceValidator` rejects orphan relational rows, and
+`RulesDatabaseValidator` checks hydrated collection availability, positive planet probability totals,
+generation-faction content, training profiles, equipment availability, and player fleet
+prerequisites. Loader-side lookups now include their source relation in errors. Compatibility and
+extension tables remain absent-valid only where their loaders provide explicit fallback behavior.
+
+The rules database is loaded as an immutable rules profile for a campaign. Campaign compatibility should identify the rules/mod version used to generate the save so incompatible rules changes cannot silently alter an ongoing campaign. Current saves persist the random-algorithm version but not a rules-profile identity or content hash; adding that metadata remains a compatibility follow-up.
+
+The rules loader is the single boundary for resolving stable keys, semantic flags, and validated registries into runtime objects. Consumers should use those resolved identities rather than rediscovering rules rows by display name.
 
 ### 4.1.2 Equipment Rules & Loadout Resolution
 
@@ -213,26 +246,31 @@ effective-value path as bespoke loadouts.
 
 ### 4.1.1 Data-Driven Rule Profiles
 
-Training distributions are the first candidate for moving tunable rules out of C# and into the rules database. The long-term pattern is:
+Data-driven rule profiles follow this boundary:
 
 - Code owns the algorithm for applying a profile.
 - Rules data owns which skills or attributes a role trains, and at what relative weights.
 - `SoldierTemplate` records the work-experience training profile for that soldier type.
 - Scout focus modes use training profiles rather than hardcoded skill lists.
 
-Future profile/definition candidates:
+Additional profile/definition candidates:
 
 - Mission skill requirements, e.g. stealth checks and tactical planning checks.
 - Default battle resources, e.g. unarmed melee weapon/skill.
 - Chapter-generation role bindings, e.g. Chapter Master, Scout Company, Armory, Apothecarion.
 - Sector-generation faction roles, e.g. primary hidden infiltrator and invasion faction.
-- Soldier rating formulas and award thresholds.
 
-Rating formulas require a constrained evaluator rather than arbitrary script execution. The proposed model is to store `RatingDefinition`, `RatingComponent`, and `RatingNormalizationFactor` rows, with a small fixed set of component types such as attribute value, skill total, best skill bonus in category, and best skill total in category. This keeps formulas tunable without embedding a general-purpose expression language.
+Rating formulas use a constrained evaluator rather than arbitrary script execution. The model stores `RatingDefinition`, `RatingComponent`, and `RatingNormalizationFactor` rows, with a small fixed set of component types such as attribute value, skill total, best skill bonus in category, and best skill total in category. This keeps formulas tunable without embedding a general-purpose expression language.
 
-**Implemented (rating definitions & awards).** Soldier ratings and their award thresholds are fully data-driven. The rules DB holds `RatingDefinition` (`RatingKey`, display name, `Product`/`Sum` aggregation), `RatingComponent` (component type + polymorphic target — attribute, base-skill id, or skill category), `RatingNormalizationFactor` (uniform `(Low, High)` divisor factors), and `RatingAwardTier` (medal tiers and history-flag thresholds, with a `{bestSkillInCategory}` name placeholder). **`Database/OnlyWar.s3db` is the source of truth for the seven shipped formulas and their tiers** — read them there rather than from any document; the migration that seeded them ran through the since-deleted `RulesDbTool`. `RatingCalculator` (`Helpers/RatingCalculator.cs`) evaluates `Aggregate(components) / Π sample(factor)` using an injected `IRNG`, and applies the highest matching award/flag tier per rating (fixing the old double-Banner bug, caused by an `if` where an `else if` was meant, and the `"Admantium"` typo). `SoldierTrainingCalculator` delegates `UpdateRatings`/awards to it. `GameRulesData` validates the definitions at load (all required keys present, components reference real skills, award tiers reference real ratings), which transitively subsumes the old `RequiredSkillNames` check. The set of ratings is open-ended: `SoldierEvaluation` stores a `RatingKey → value` map (with convenience accessors over the seven well-known keys), persisted via the `SoldierEvaluationRating` child table (§4.3) keyed by the rating *string*, so adding a rating never touches the save schema. `IRNG`/`SeededRNG`/`StaticRNG` were introduced (§9.1). Remaining future candidates above (mission skill requirements, etc.) are unaffected.
+A profile belongs in the rules database when it is intended to be a mod surface. Code must not interpret arbitrary row presence as a feature contract: if a feature requires an assignment, model it explicitly with a stable key, role, or semantic flag and validate it at load time; if a table is optional, document its absent/empty behavior.
 
-Three properties of this design are easy to break and worth stating. The component vocabulary is a **closed set** (`AttributeValue`, `SkillTotal`, `BestSkillBonusInCategory`, `BestSkillTotalInCategory`) rather than an expression language — the same constraint the supply-economy rules data observes, and the reason formulas can be tuned without shipping an evaluator for arbitrary script. `ranged` is the only `Sum` aggregation and the only formula reading a best-skill-bonus-in-category instead of a named skill total, so it is the one that breaks first under a refactor that assumes uniformity; it also inherits `GetBestSkillInCategory`'s throw when a soldier has no skill in the category, which is safe only because every marine has a ranged skill. Award dedup keeps the highest award per `AwardType` across evaluations, and the material word (Bronze/Silver/Gold/Adamantium) is baked into each tier's `NameTemplate` rather than living in its own table — revisit only if materials need to be tuned independently.
+**Implemented (rating definitions, awards, and consumer bindings).** Soldier ratings and their award thresholds are fully data-driven. The rules DB holds `RatingDefinition` (`RatingKey`, display name, `Product`/`Sum` aggregation), `RatingComponent` (component type + polymorphic target — attribute, base-skill id, or skill category), `RatingNormalizationFactor` (uniform `(Low, High)` divisor factors), and `RatingAwardTier` (award tiers and history-flag thresholds, with a `{bestSkillInCategory}` name placeholder). **`Database/OnlyWar.s3db` is the source of truth for the seven shipped formulas and their tiers** — read them there rather than from any document; the migration that seeded them ran through the since-deleted `RulesDbTool`. `RatingCalculator` (`Helpers/RatingCalculator.cs`) evaluates `Aggregate(components) / Π sample(factor)` using an injected `IRNG`, and applies the highest matching award/flag tier per rating. `SoldierTrainingCalculator` delegates `UpdateRatings`/awards to it.
+
+The set of ratings is open-ended: `SoldierEvaluation` stores a `RatingKey → value` map, persisted via the `SoldierEvaluationRating` child table (§4.3) keyed by the rating *string*, so adding, removing, or renaming an ordinary rating never touches the save schema. Gameplay code does not require the seven shipped keys by name. `RatingConsumerBindings` maps stable code-owned capabilities (melee combat, ranged combat, command, medical, technical, spiritual, and ancient service) to data-owned rating keys. `GameRulesData` loads that mapping from the optional `RatingConsumerAssignment` table, falls back to the shipped mapping for older databases, and validates only the explicitly required capability roles. Legacy convenience accessors over the seven shipped keys remain for source compatibility; production consumers use the bindings.
+
+Award identity is likewise open-ended. `RatingAwardTier.AwardType` is retained as the serialized field name but is interpreted as an award-family key. The optional `AwardFamily` table supplies display name, sort/group metadata, and a logical `IconAssetKey`. `IconAssetRegistry` resolves that key from a core or mod manifest to either a standalone texture or an atlas region. Mod keys are namespaced (`package_id:local_key`), and unavailable art falls back to the generic award icon. `SoldierAward.Type` stores the stable family key while `SoldierAward.Name` stores the display-name snapshot. Older databases without the two optional rules tables use the shipped default consumer bindings and award catalogue.
+
+Three properties of this design are easy to break and worth stating. The component vocabulary is a **closed set** (`AttributeValue`, `SkillTotal`, `BestSkillBonusInCategory`, `BestSkillTotalInCategory`) rather than an expression language — the same constraint the supply-economy rules data observes, and the reason formulas can be tuned without shipping an evaluator for arbitrary script. `ranged` is the only `Sum` aggregation and the only formula reading a best-skill-bonus-in-category instead of a named skill total, so it is the one that breaks first under a refactor that assumes uniformity; it also inherits `GetBestSkillInCategory`'s throw when a soldier has no skill in the category, which is safe only because every marine has a ranged skill. Award dedup keeps the highest award per award-family key across evaluations, and the material word (Bronze/Silver/Gold/Adamantium) is baked into each tier's `NameTemplate` rather than living in its own table — revisit only if materials need to be tuned independently.
 
 ### 4.2 Save State Database
 
@@ -314,7 +352,7 @@ Ship                 (Id, ShipTemplateId, FleetId, Name, IsFlagship)
 
 Unit                 (Id, UnitTemplateId, ParentUnitId, Name)
 Squad                (Id, SquadTemplateId, UnitId, Name, LoadedShipId, LandedRegionId,
-                      TrainingFocus, UsesLoadoutDoctrine, FormationOrdinal, HasBattleHistory,
+                      ScoutTrainingOptionKey, UsesLoadoutDoctrine, FormationOrdinal, HasBattleHistory,
                       DutyStationShipId, DutyStationRegionId)
 SquadWeaponSet       (SquadId, WeaponSetId)
 ChapterEquipmentRoleLoadout
@@ -599,9 +637,14 @@ use the appropriate projection rather than approximating all of them with `Squad
 
 ```
 BaseSkill
+  ├─ SkillKey : string (stable rules-data identity)
   ├─ Category : SkillCategory
   ├─ BaseAttribute : Attribute
   └─ Difficulty : float
+
+SkillRoleAssignment
+  ├─ RoleKey : string (code-owned semantic role)
+  └─ SkillKey : string → BaseSkill.SkillKey
 
 Skill
   ├─ BaseSkill : BaseSkill
@@ -901,7 +944,7 @@ The processors are divided by simulation responsibility:
 
 `SimulatePlanetForward` reuses the same planning, mission, aftermath, planet, intelligence, and diagnostic processors for generation-time world evolution, but intentionally omits date advancement, Chapter upkeep, fleet movement, other planets, and scenario resolution. Because it has no following planning pass, it sweeps the transient AI forces (patrol screens, recon parties) still standing after its last week, so the world hands off to the player with nothing landed on it.
 
-Non-deployed non-Scout marines receive weekly work-experience training through `ApplySoldierWorkExperience`; Scout squads are routed through `TrainScouts` with each squad's selected `TrainingFocus`. Scout squads assigned to missions are excluded from weekly Scout training.
+Non-deployed non-Scout marines receive weekly work-experience training through `ApplySoldierWorkExperience`; Scout squads are routed through `TrainScouts` with each squad's selected database-defined `ScoutTrainingOption`. Scout squads assigned to missions are excluded from weekly Scout training. The option catalog includes Balanced as an ordinary option whose linked `TrainingProfile` defines its exact distribution; the selected stable option key is persisted with the squad.
 
 ### 6.2 Faction Strategy
 
@@ -965,10 +1008,10 @@ Each unconsumed special mission has a 25% chance of expiring each turn. Belief-b
 **Governor Requests:**
 - For each planetary leader with positive opinion of the player: consume Confirmed hostile beliefs; if none exists, Investigation can submit evidence about a real public hostile presence and Paranoia can submit a Rumor about a plausible hostile faction absent from the planet.
 - If a threat (real or imagined) is detected: roll `RequestGenerationRate × Neediness × OpinionOfPlayerForce`. On success, `RequestFactory.GenerateNewRequest` creates a `PresenceRequest` and adds it to `PlayerForce.Requests`.
-- `RequestGenerationRate` (`SupplyRule`) throttles the whole petition economy. Both gates are linear in the governor's traits, so it scales only how often worlds petition, not which ones do. Sector-wide arrivals per week ≈ `governorCount × 0.125 × RequestGenerationRate`; at the shipped 0.006 that is ~0.6/week for the ~800-governor production sector, holding ~13 petitions open at a time.
-- The deadline comes from `SupplySeverityDeadline`, keyed by the `RequestSeverity` that `ClassifyRequest` derives from the local threat ratio: Concerned 39 weeks, Serious 26, Desperate 13, Existential 13. It is deliberately a property of the petitioning world, not of where the Chapter's forces are — the Chapter may be spread across several task forces, so there is no single position to measure against, and keying off the nearest asset would tighten every deadline as the player expanded. Reachability instead falls out of geography: a round trip costs 4 weeks of system transit before any warp travel (`TaskForce.SystemTransitWeeksPerEnd`), so a short fuse is implicitly a proximity requirement and only urgent petitions near a standing force can be answered.
+- `RequestGenerationRate` (`SupplyEconomyRules`) throttles the whole petition economy. Both gates are linear in the governor's traits, so it scales only how often worlds petition, not which ones do. Sector-wide arrivals per week ≈ `governorCount × 0.125 × RequestGenerationRate`; at the shipped 0.006 that is ~0.6/week for the ~800-governor production sector, holding ~13 petitions open at a time.
+- The deadline comes from `SupplyEconomyRules.SeverityDeadlineWeeks`, keyed by the `RequestSeverity` that `ClassifyRequest` derives from the local threat ratio: Concerned 39 weeks, Serious 26, Desperate 13, Existential 13. It is deliberately a property of the petitioning world, not of where the Chapter's forces are — the Chapter may be spread across several task forces, so there is no single position to measure against, and keying off the nearest asset would tighten every deadline as the player expanded. Reachability instead falls out of geography: a round trip costs 4 weeks of system transit before any warp travel (`TaskForce.SystemTransitWeeksPerEnd`), so a short fuse is implicitly a proximity requirement and only urgent petitions near a standing force can be answered.
 - Severity is classified from stored target estimates before the commitment package is built, so `ForceCommitmentPackage.CompletionDeadlineWeeks` carries the real fuse length and `RequestValueCalculator`'s throughput premium prices urgent petitions higher without any separate urgency term.
-- Request valuation is data-driven through `SupplyEconomyRules`. The player sees squads, qualifications, service weeks, deadlines, progress, and the fixed offer; Battle Value and Battle-Value-Time remain internal accounting units. `GovernorTurnProcessor` advances request state, creates pledges on fulfillment, and applies opinion/cooldown consequences. `PledgeDeliveryProcessor` runs at sector scope because deliveries affect the Chapter economy and may originate from many worlds.
+- Request valuation uses the code-owned typed `SupplyEconomyRules` profile. The player sees squads, qualifications, service weeks, deadlines, progress, and the fixed offer; Battle Value and Battle-Value-Time remain internal accounting units. `GovernorTurnProcessor` advances request state, creates pledges on fulfillment, and applies opinion/cooldown consequences. `PledgeDeliveryProcessor` runs at sector scope because deliveries affect the Chapter economy and may originate from many worlds.
 
 ### 6.4 Mission Step State Machine
 
@@ -1287,11 +1330,13 @@ The irregular-strength path is opt-in through `SquadTemplateElement.RollsStrengt
 11. Initialize the fleet with the first available fleet template.
 12. Record a founding history entry.
 
-All role lists share the `unassignedSoldierMap` as the single consumption authority, so one soldier may qualify for several roles but can only be assigned once. `ChapterGenerationTemplates` resolves the required rules objects once by stable template identity and fails fast when required data is missing or ambiguous. The detailed founding eligibility and ordering table is retained in `Design/Reference/FoundingRoleAssignment.md`.
+All role lists share the `unassignedSoldierMap` as the single consumption authority, so one soldier may qualify for several roles but can only be assigned once. `ChapterGenerationDoctrine` resolves the required rules objects once by stable semantic assignment and fails fast when required data is missing or ambiguous. The detailed founding eligibility and ordering table is retained in `Design/Reference/FoundingRoleAssignment.md`.
 
 ### 6.9 Sector Generation
 
 `SubsectorBuilder.BuildSubsectors(planets, gridDimensions)` clusters planets using a greedy merge. The sector grid is 200×200 light years with each grid unit representing 1×1 light year. A subsector has a maximum diameter of 20 light years (10 light year radius), typically containing 2–8 star systems.
+
+Subsectors, warp lanes, and governance designations are derived runtime structures, not rules-database entities; they are reconstructed from the saved sector and rules profile. The topology algorithm remains code-owned. Dimensions, density, adjacency, and travel tuning are configuration candidates and should move to a rules-data profile only when they are intended to be modifiable.
 
 Warp lane generation (0.7 addition): after subsector clustering, the highest-population planet in each subsector is designated its capital. A warp lane is established from each capital to every other planet in its subsector, and between each capital and the capitals of adjacent subsectors. The resulting lane graph is used by fleet movement routing (Dijkstra shortest path, weighted by Euclidean hop distance) to compute known multi-hop lane routes. Travel duration is determined by subsector relationship and Gaussian subjective/objective time multipliers rather than by Euclidean distance alone.
 
@@ -1556,6 +1601,39 @@ These workspaces are covered primarily by pure domain/view-model tests and shall
 supported-resolution visual layout remains release QA. The orphaned Planet Detail and Region Detail
 surfaces were removed after their remaining specialist and tree behavior was ported.
 
+### 7.6 Force Legibility & Shared Squad Rows
+
+Live squad strength has one source of truth: `SquadStrengthSnapshotBuilder` produces a
+`SquadStrengthSnapshot` with `Full`, `Rostered`, `Present`, `Effective`, `Unavailable`, and
+`Vacancies`. `Full` is the template establishment, never below a legacy overstrength roster;
+`Rostered` includes every member; `Present` excludes individual postings; `Effective` is the
+present combat-effective subset; and `Unavailable` is the non-overlapping remainder classified as
+injury/incapacitation, individual posting, procedure reservation, or other. Region cards aggregate
+`Effective` and `Full` from these snapshots, and shared diagnostic formats use the same values.
+
+`SquadReadinessService` derives leadership, commitment, structural readiness, context restrictions,
+and a typed primary blocker. Required-leader formations report `Ready`, `Unavailable`, or `Vacant`;
+only `Vacant` blocks a non-empty formation from beginning a new deployment. The mutation boundary
+enforces that rule in order assignment and landing services, while existing orders, embark/recall,
+ship transfer, and Chapter Muster retain their separate semantics. Command attention facts use the
+same readiness and strength facts, so a leaderless formation is actionable attention rather than an
+idle deployable formation.
+
+`SquadRowViewModelBuilder` and `SquadRowView` own the common two-line row: squad icon and name,
+effective/full strength, unavailable and leadership tokens, location, commitment, context state,
+selection, focus, truncation, and tooltip detail. Screen controllers supply context and actions;
+they do not redefine the force vocabulary. `ProjectedSquadRowViewModel` adds Muster deltas and
+future strength, while `BattleSquadRowViewModel` adds historical starting/current strength and
+keeps replay rows non-actionable.
+
+The common row is integrated into the Planetary Operations force hierarchy, Chapter browser,
+Recruiter training list, Apothecarium hierarchy, Chapter Muster live formations, and Battle Review
+formation leaves. Fleet transfer nodes carry the same row payload and facts into the native
+drag-and-drop tree, whose native tree interaction remains the transfer surface. Recovery Operations
+and Command retain their purpose-built layouts but consume the canonical snapshot for squad facts.
+`HierarchyTreeItem` and fleet `TreeNode` therefore transport the shared row model without forcing
+group headers, individual-soldier rows, or drag/drop containers into the squad-row component.
+
 ---
 
 ## 8. Identified Technical Risks & Debt
@@ -1584,33 +1662,64 @@ The per-company inner loop iterated `chapter.Squads` rather than `company.Squads
 
 **Resolution:** Changed the inner iteration from `chapter.Squads` to `company.Squads`.
 
-### 8.3 Hardcoded String-Based Lookups — Medium
+### 8.3 Hardcoded String-Based Lookups — Medium — Partially Mitigated
 
 **Location:** `PlanetTurnProcessor`, all `IMissionStep` implementations, `NewChapterBuilder`
 
 Skills and templates are frequently looked up by name string (e.g., `s.Name == "Stealth"`, `st.Name == "Tactical Marine"`). A rename in the database silently breaks the lookup at runtime with no compile-time warning.
 
-**Fix:** Introduce constants or a validated by-name lookup dictionary populated at rules-DB load time. Ideally, the load step asserts that all expected named entries are present and fails fast if any are missing, rather than producing a null reference at runtime.
+**Fix direction:** Replace display-name lookups at the rules boundary with stable keys or semantic flags. Validated registries are useful consumer-facing boundaries, but they do not make display names stable identifiers; the registry itself must resolve an explicit rules-data contract and fail fast when it is missing or ambiguous.
 
 **Update:** The initial training-profile migration moved work-experience training distributions and scout focus distributions into rules data. This reduces hardcoded skill-list coupling in `SoldierTrainingCalculator`, but does not close the broader issue. The remaining notable example is rating formulas that reference named skills.
 
 **Update (validated skill registry):** `NamedSkillRegistry` (`Models/Soldiers/NamedSkillRegistry.cs`) resolves the base skills whose game-rule meaning is genuinely named — currently Stealth, Tactics, and Engineering (Fortification) — once at rules-DB load (`GameRulesData.Skills`), throwing a clear `InvalidOperationException` if any is missing or ambiguous. Mission execution projects Stealth and Tactics into `MissionRules`; individual steps no longer perform lookups or read global rules. Fist and Generic Melee are deliberately absent: unarmed combat derives its skill from the species-selected weapon template described below. Covered by `NamedSkillRegistryTests` and the mission execution tests.
 
-**Update (validated chapter-generation template registry):** `ChapterGenerationTemplates` (`Models/ChapterGenerationTemplates.cs`) extends the same pattern to the player-faction soldier and squad templates that `NewChapterBuilder` referenced by name. It resolves the full set (Chapter Master, Captain, Champion, Ancient, the Librarius/Armory/Apothecarion/Reclusium specialists, Veteran, the Tactical/Assault/Devastator/Scout marines and their sergeants, and the Tactical/Assault/Devastator/Scout squad templates) once at rules-DB load (`GameRulesData.ChapterTemplates`), failing fast on a missing or ambiguous template. All ~26 `faction.SoldierTemplates`/`SquadTemplates` `First(... Name == ...)` lookups and the three `squad.SquadTemplate.Name == "..."` string comparisons in `NewChapterBuilder` now resolve through this registry (the comparisons are now reference-equality against the resolved template). Covered by `ChapterGenerationTemplatesTests` and exercised end-to-end by the new-game path in `SaveLoadRoundTripTests`.
+**Update (RDB-005 resolved):** `BaseSkill.SkillKey` is now the stable identity for every rules skill;
+`Name` is presentation text. The optional `SkillRoleAssignment` table lets rules data map the required
+code-owned roles — Stealth, Tactics, Engineering (Fortification), Power Armor, and Teaching — to
+any stable skill keys. `NamedSkillRegistry` validates the role bindings once at load and exposes the
+resolved skills. Work-experience and scout training use that registry (or stable-key fallback in
+isolated domain tests), so renaming a skill no longer changes behavior and replacing the skill behind
+a role requires only a rules-data assignment change. Covered by the registry, training, and rules
+database validation tests.
 
-**Update (validated sector-generation faction registry):** `SectorGenerationFactions` (`Models/SectorGenerationFactions.cs`) extends the pattern to the non-player factions `SectorBuilder` places by name. It resolves the infiltration-capable cult faction (Genestealer Cult) and the invasion faction (Tyranids) once at rules-DB load (`GameRulesData.SectorFactions`), failing fast on a missing or ambiguous faction. The three `data.Factions.First(f => f.Name == ...)` lookups in `SectorBuilder.GeneratePlanet` now resolve through this registry via role-named accessors (`Infiltrator`, `Invader`). Covered by `SectorGenerationFactionsTests`.
+**Update (RDB-010 resolved):** Scout training choices are loaded from the rules database's
+`ScoutTrainingOption` catalog. Each stable `OptionKey` selects a linked `TrainingProfile`, while
+`DisplayName` and `SortOrder` are presentation data enumerated by the training screen. Balanced is
+an ordinary profile-backed option whose seeded profile preserves the former equal-share behavior;
+there is no code-owned Balanced branch. Squads persist the selected option key. The schema change
+is an intentional alpha save break, and unknown selected keys fail explicitly during load/training
+instead of becoming silent no-ops. Covered by `RulesDatabaseValidationTests`, training tests, and
+the save/load round-trip tests.
+
+**Update (RDB-013 resolved):** `PlanetTemplateEligibility` is a data-owned many-to-many catalog
+that assigns planet-template IDs to stable generation contexts. The shipped contexts are
+`scenario.promised_world` and `ambient.ork_ghost_source`; `ScenarioBuilder` filters promised-world
+candidates through the first context, and future Ork ghost-source generation will use the second.
+Runtime code no longer treats planet-template display names as eligibility rules. The rules loader
+validates table presence, referenced template IDs, required context coverage, and positive
+probability totals within each context. The migration seed retains the previous Hive/Forge and
+Hive/Forge/Civilised exclusions as data, rather than executable name checks. Covered by
+`RulesDatabaseValidationTests`.
+
+**Update (RDB-007 resolved — chapter-generation doctrine):** `ChapterGenerationDoctrine` (`Models/ChapterGenerationDoctrine.cs`) compiles the data-owned `ChapterGenerationProfile` assignment tables into a validated runtime contract. Soldier, squad, and unit roles resolve to the concrete template IDs selected by the profile; formation rows bind member and leader roles plus their code-owned founding candidate roles; unit-order rows preserve explicit company ordering and repeated instances. `NewChapterBuilder` consumes this doctrine for all chapter template, formation, company, and ordering decisions, while retaining founding thresholds and distribution algorithms in code. The loader validates faction ownership, complete role coverage, formation slot compatibility, administrative capabilities, and the selected root graph before a campaign can start. Covered by `RulesDatabaseValidationTests`, `ChapterGenerationDoctrineTests`, and `NewChapterBuilderTests`.
+
+**Update (validated sector-generation faction registry):** `SectorGenerationFactions` (`Models/SectorGenerationFactions.cs`) resolves the non-player factions `SectorBuilder` places from the rules database's stable role assignments. The infiltrator, invader, and insurrectionist roles are resolved once at rules-DB load (`GameRulesData.SectorFactions`), failing fast on a missing, duplicate, unknown, or behavior-incompatible assignment. Player and default faction flags are validated as exact singletons. Covered by `SectorGenerationFactionsTests` and `RulesDatabaseValidationTests`.
 
 **Update (species-owned unarmed defaults).** Unarmed combat is now a rules-data relationship, not a battle-side default or a player/NPC distinction. Every `Species` row has a validated `DefaultUnarmedWeaponTemplateId`; the resolved `MeleeWeaponTemplate` supplies the attack profile and its own `RelatedSkill`. Space Marines currently select template 12 (Fist), while the other shipped species select the stat-identical template 15 (Generic Melee) to preserve their existing training and balance. Nothing restricts either template to Astartes or to a faction: an ordinary-human species can select the Fist template in data. The obsolete `BattleDefaults` registry and the named Fist/Generic-Melee skill dependencies were removed. Battle planning, attack resolution, defense, and aftermath XP all use the combatant's species default. Covered by `SpeciesDefaultUnarmedWeaponTests` and battle-aftermath tests.
 
 **Update (geneseed progenoid flag).** The geneseed-status logic in `BattleTurnResolver` checked `hl.Template.Name == "Face"` / `== "Torso"` against a soldier's own body to decide whether a killed marine's geneseed was destroyed. This is now a semantic `HitLocationTemplate.HoldsProgenoid` flag: a new rules-DB column (added by the `migrate-progenoid` command in `RulesDbTool`, set for the Face and Torso locations) is read by `HitLocationTemplateDataAccess` and mirrored on the hardcoded test-fixture body templates. `GetGeneseedStatusDescription` now tests `hl.Template.HoldsProgenoid && hl.IsSevered`. Covered by a rules-DB validation test asserting exactly the Face/Torso locations carry the flag.
 
-**Update (chapter instance-graph lookups).** `NewChapterBuilder` located *generated* units and squads by display name (`chapter.Squads.First(s => s.Name == "Librarius"/"Armory"/...)`, `chapter.ChildUnits.First(u => u.Name == "First Company"/"Tenth Company")`). Because a generated child squad inherits its `SquadTemplate.Name` and the veteran "First Company" and scout "Tenth Company" map to *distinct* unit templates (Veteran Company / Scout Company), these are now resolved by **template identity** rather than display name. `ChapterGenerationTemplates` gained the Librarius/Armory/Apothecarion/Reclusium squad templates and the VeteranCompany/ScoutCompany unit templates; the lookups became `s.SquadTemplate == templates.Librarius` and `u.UnitTemplate == templates.VeteranCompany`. Validated by `ChapterGenerationTemplatesTests` and exercised end-to-end by `SaveLoadRoundTripTests`.
+**Update (chapter instance-graph lookups).** `NewChapterBuilder` resolves generated squads and units through the compiled doctrine's template identity and explicit unit order. It no longer searches the instance graph by inherited display names or infers companies from a name containing `Company`; the veteran/scout company distinction and specialist formations come from semantic profile assignments. Validated by the renamed-template rules test and exercised end-to-end by `NewChapterBuilderTests` and `SaveLoadRoundTripTests`.
 
-**Update (rating/training skill references — fully data-driven).** The rating formulas in `SoldierTrainingCalculator.UpdateRatings` (and the award thresholds in `EvaluateSoldier`) previously indexed a by-name skill dictionary (`_skillsByName["Sword"]`, etc.) and hardcoded medal/flag tiers. Both are now data-driven (see §4.1.1 "Implemented"): the formulas and awards live in rules tables, evaluated by `RatingCalculator`; `GameRulesData` validates the definitions at load. `SoldierTrainingCalculator.RequiredSkillNames` now covers only the two skills training still references by name directly (`Power Armor`, `Teaching`); rating-formula skills are validated transitively through the rating-component references. Covered by `RatingCalculatorTests`, `RatingDefinitionDataTests`, and `SoldierTrainingCalculatorValidationTests`.
+**Update (rating/training skill references — fully data-driven).** The rating formulas in `SoldierTrainingCalculator.UpdateRatings` (and the award thresholds in `EvaluateSoldier`) previously indexed a by-name skill dictionary (`_skillsByName["Sword"]`, etc.) and hardcoded medal/flag tiers. Both are now data-driven (see §4.1.1 "Implemented"): the formulas and awards live in rules tables, evaluated by `RatingCalculator`; `GameRulesData` validates the definitions at load. Before RDB-005, `SoldierTrainingCalculator.RequiredSkillNames` covered the two skills training still referenced by display name (`Power Armor`, `Teaching`); those references now use validated skill roles and stable keys. Rating-formula skills continue to be validated transitively through the rating-component references. Covered by `RatingCalculatorTests`, `RatingDefinitionDataTests`, and `SoldierTrainingCalculatorValidationTests`.
 
-With this, every named-lookup cluster in §8.3 has been moved onto stable keys / semantic flags / validated registries / data-driven definitions.
+**Current status:** The skill, sector-faction, chapter-generation, scout-training, and planet-
+template eligibility portions of this issue are resolved. Several runtime graph lookups now use
+validated registries, template identity, or data-owned semantic assignments. Remaining work is
+tracked in [RulesDatabasePolicyCleanup.md](Design/Active/RulesDatabasePolicyCleanup.md).
 
-**Long-term direction:** Introduce stable rules keys and semantic flags where appropriate, plus validated registries populated at rules-DB load time. For tunable behavior, prefer data-driven definitions over constants. Candidate migrations include mission skill requirement definitions, sector generation faction roles, chapter organization role bindings, default battle resource definitions, and rating formula definitions. The load step should assert that all required entries are present and fail fast with clear diagnostics.
+**Long-term direction:** Introduce stable rules keys and semantic flags where appropriate, plus validated registries populated at rules-DB load time. For tunable behavior, prefer data-driven definitions over constants. Candidate migrations include mission skill requirement definitions, default battle resource definitions, and scenario planet-type definitions. The load step should assert that all required entries are present and fail fast with clear diagnostics.
 
 ### 8.4 Dual Clone Paths on Battle Types — RESOLVED
 
@@ -1804,7 +1913,7 @@ Initial coverage now exists for wounds, skill math, Gaussian math, mission check
 
 1. **Save/load round-trip tests** — *(Implemented — `SaveLoadRoundTripTests`.)* Generates a real new-game sector via `SectorBuilder.GenerateSector`, saves it through `GameStateDataAccess.SaveData` to a temporary SQLite file, reads it back through `GetData`, and asserts high-level state survives (date, planet/character/request/ship/squad/soldier counts, total population, and the bounded latest-turn report). This also serves as the new-game smoke test (target #9 below) and is the regression guard for schema drift: any schema change not propagated to both `SaveData` and `GetData` fails here. Surfacing and fixing the provider-compatibility cluster in §8.5.1 was driven entirely by getting this test to pass.
 2. **Mission save duplication regression** — *(Implemented — `MissionSaveTests`.)* Drives `PlanetDataAccess.SavePlanet` against a freshly created save schema and asserts the `Mission` table holds exactly one row for a region with one special mission, plus field round-trip and null-`DefenseType` cases. Covers §8.1.
-3. **Rules DB schema validation** — *(Implemented — `RulesDatabaseValidationTests`.)* In addition to the existing `TrainingProfile` coverage, the suite now constructs `GameRulesData` against the shipped database (exercising the fail-fast load-time validation for the data-driven rating/training tables and the validated registries) and directly asserts rating-table referential integrity (every award tier references a defined rating; every `SkillTotal` rating component resolves to a real base skill). Mission-definition tables remain future work (§4.1.1) and will get the same treatment when introduced.
+3. **Rules DB schema and policy validation** — *(Implemented — `RulesDatabaseValidationTests`.)* The suite constructs `GameRulesData` against the shipped database and exercises fail-fast validation for required-table existence, nonempty content, positive planet probability totals, relational references, optional extension behavior, per-faction fleet prerequisites, rating/training tables, and validated registries. The remaining rules-policy work is tracked in [RulesDatabasePolicyCleanup.md](Design/Active/RulesDatabasePolicyCleanup.md).
 4. **`FactionStrategyController`** — *(Implemented — `FactionStrategyControllerTests`.)* The controller already takes `(faction, sector)` and reads no `GameDataSingleton` state, so no refactor was needed; tests build `Planet`/`Region`/`RegionFaction` graphs and cover the empty-result cases (faction absent, hidden regions, no spare troops) and the development-construction path (spare troops spent on `ConstructionMission` orders).
 5. **`SectorEntityLogic`** — *(Implemented — `SectorEntityLogicTests`, `SessionSimulationContextPrimitiveTests`, `GameSessionTurnControllerTests`.)* The end-of-turn domain logic lives in the `Helpers/Turns` processors and is driven through the `TurnController.ProcessTurn` orchestration facade over a compact hand-built sector (`SectorSimulationFixture`). Existing seeded tests protect turn behavior and random draw order; session/context tests cover dependency identity, per-run order isolation, null contracts, and a controller run whose date and RNG differ from `GameDataSingleton`. Domain coverage includes logistic growth, conversion growth (one default member converted per week), intelligence decay (×0.75/turn), stale special-mission expiration, and governor request generation against a public threat. Surfaced and fixed three latent bugs (see §8.12).
 6. **`BattleGridManager` and `WoundResolver`** — *(Implemented — `BattleGridAndPlacementTests`, `WoundResolverTests`.)* Grid tests cover placement/occupancy/reservation conflicts, movement (free-old/occupy-new and collision), removal, nearest-enemy/distance queries, open-adjacency selection, and clone fidelity. Wound tests cover the damage-ratio severity ladder, natural-armor subtraction, wound-multiplier scaling, already-severed short-circuit, and the vital-location-death / motive-location-fall event paths.

@@ -75,6 +75,7 @@ namespace OnlyWar.Models.Battles
         public int CurrentStrength { get; }
         public int Losses { get; }
         public IReadOnlyList<BattleForceHierarchyNode> Children { get; }
+        public BattleSquadSnapshot SquadSnapshot { get; }
 
         public BattleForceHierarchyNode(
             int? formationId,
@@ -85,7 +86,8 @@ namespace OnlyWar.Models.Battles
             bool isSelected,
             int startingStrength,
             int currentStrength,
-            IReadOnlyList<BattleForceHierarchyNode> children)
+            IReadOnlyList<BattleForceHierarchyNode> children,
+            BattleSquadSnapshot squadSnapshot = null)
         {
             FormationId = formationId;
             Title = title;
@@ -97,6 +99,7 @@ namespace OnlyWar.Models.Battles
             CurrentStrength = currentStrength;
             Losses = StartingStrength - CurrentStrength;
             Children = children;
+            SquadSnapshot = squadSnapshot;
         }
     }
 

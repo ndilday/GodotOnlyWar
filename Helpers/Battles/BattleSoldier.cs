@@ -451,6 +451,9 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        /// <summary>Whether this soldier's armor permits the Run tactical tier.</summary>
+        public bool CanRun => Armor?.Template?.PreventsRunning != true;
+
         private bool ReadyInitialPreferences()
         {
             List<(int Order, RangedWeapon Ranged, MeleeWeapon Melee)> preferences = RangedWeapons

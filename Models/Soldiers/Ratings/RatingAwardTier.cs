@@ -28,7 +28,11 @@ namespace OnlyWar.Models.Soldiers.Ratings
         public int Level { get; }
         public double Threshold { get; }
         public RatingAwardEffect Effect { get; }
+        // Backward-compatible name for the pre-catalogue field. AwardType is now
+        // interpreted as the stable award-family key; the presentation catalog
+        // supplies its icon, sort order, and grouping.
         public string AwardType { get; }
+        public string AwardFamilyKey => AwardType;
         public string NameTemplate { get; }
 
         public RatingAwardTier(int id, string ratingKey, int level, double threshold,
