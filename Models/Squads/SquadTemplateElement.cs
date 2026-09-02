@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,6 +7,12 @@ using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Models.Squads
 {
+    public enum SquadQuotaModelBasis
+    {
+        Element = 0,
+        Squad = 1
+    }
+
     /// <summary>
     /// How many bodies of a <see cref="SquadTemplateElement"/> may draw from one of its
     /// SoldierTemplate's named weapon-set menus, and within what range. The menu itself (which
@@ -18,12 +25,43 @@ namespace OnlyWar.Models.Squads
         public string OptionGroup { get; }
         public int MinimumRequired { get; }
         public int MaximumAllowed { get; }
+        public SquadQuotaModelBasis ModelBasis { get; }
+        public int ModelsPerBlock { get; }
+        public int SlotsPerBlock { get; }
 
-        public SquadTemplateElementQuota(string optionGroup, int minimumRequired, int maximumAllowed)
+        public SquadTemplateElementQuota(
+            string optionGroup,
+            int minimumRequired,
+            int maximumAllowed,
+            SquadQuotaModelBasis modelBasis = SquadQuotaModelBasis.Element,
+            int modelsPerBlock = 0,
+            int slotsPerBlock = 0)
         {
             OptionGroup = optionGroup;
             MinimumRequired = minimumRequired;
             MaximumAllowed = maximumAllowed;
+            ModelBasis = modelBasis;
+            ModelsPerBlock = modelsPerBlock;
+            SlotsPerBlock = slotsPerBlock;
+        }
+
+        /// <summary>
+        /// Resolves the quota's maximum for a concrete roster. A zero ModelsPerBlock retains the
+        /// legacy fixed maximum. Scaled quotas count complete model blocks, so a one-per-ten rule
+        /// allows one slot at 10 models, two at 20, and so on.
+        /// </summary>
+        public int GetMaximumAllowed(int elementModelCount, int squadModelCount)
+        {
+            if (ModelsPerBlock <= 0 || SlotsPerBlock <= 0)
+            {
+                return MaximumAllowed;
+            }
+
+            int modelCount = ModelBasis == SquadQuotaModelBasis.Squad
+                ? squadModelCount
+                : elementModelCount;
+            int scaledMaximum = Math.Max(0, modelCount / ModelsPerBlock * SlotsPerBlock);
+            return Math.Min(MaximumAllowed, scaledMaximum);
         }
     }
 
@@ -38,6 +76,12 @@ namespace OnlyWar.Models.Squads
         /// SquadTemplate.DefaultWeapons.
         /// </summary>
         public WeaponSet DefaultWeapons { get; }
+        /// <summary>
+        /// What this slot's bodies wear absent any itemized personal loadout. Null falls back to
+        /// SquadTemplate.Armor, allowing a leader or specialist slot to use different armor from
+        /// the rest of the formation.
+        /// </summary>
+        public ArmorTemplate DefaultArmor { get; }
         /// <summary>
         /// When present, this element owns a contextual personal-equipment role. The same
         /// SoldierTemplate can therefore be individually equipped in one formation and pooled in
@@ -73,13 +117,15 @@ namespace OnlyWar.Models.Squads
             WeaponSet defaultWeapons = null,
             IReadOnlyList<SquadTemplateElementQuota> quotas = null,
             bool rollsStrength = false,
-            PersonalEquipmentRole personalEquipmentRole = null)
+            PersonalEquipmentRole personalEquipmentRole = null,
+            ArmorTemplate defaultArmor = null)
         {
             Id = id;
             SoldierTemplate = soldierTemplate;
             MinimumNumber = minNumber;
             MaximumNumber = maxNumber;
             DefaultWeapons = defaultWeapons;
+            DefaultArmor = defaultArmor;
             PersonalEquipmentRole = personalEquipmentRole;
             Quotas = quotas ?? [];
             RollsStrength = rollsStrength && maxNumber > minNumber;

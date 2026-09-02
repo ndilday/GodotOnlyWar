@@ -120,7 +120,7 @@ public class NewChapterBuilderTests
             _data, new VeteranCandidateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
-        Unit veteranCompany = oob.ChildUnits.First(c => c.UnitTemplate.Name == "Veteran Company");
+        Unit veteranCompany = oob.ChildUnits.First(c => c.UnitTemplate == _data.ChapterDoctrine.VeteranCompany);
         var lineVeteranSquads = veteranCompany.Squads
             .Where(s => (s.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
             .Where(s => (s.SquadTemplate.SquadType & SquadTypes.Elite) > 0)
@@ -135,7 +135,7 @@ public class NewChapterBuilderTests
         Assert.NotEmpty(ledSquads);
         foreach (Squad squad in ledSquads)
         {
-            Assert.Equal("Veteran Sergeant", squad.SquadLeader.Template.Name);
+            Assert.Same(_data.ChapterDoctrine.VeteranSergeant, squad.SquadLeader.Template);
         }
 
         // Regression: the transfer dropdown previously offered a captain-rank promotion
@@ -147,7 +147,7 @@ public class NewChapterBuilderTests
         PlayerSoldier veteran = lineVeteranSquads
             .SelectMany(s => s.Members)
             .OfType<PlayerSoldier>()
-            .First(m => m.Template.Name == "Veteran");
+            .First(m => m.Template == _data.ChapterDoctrine.Veteran);
 
         var options = new SoldierTransferService().GetTransferOptions(oob, veteran);
         Assert.DoesNotContain(options, option =>
@@ -161,27 +161,35 @@ public class NewChapterBuilderTests
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
-        Squad reclusium = oob.Squads.First(s => s.SquadTemplate.Name == "Reclusium");
+        Squad reclusium = oob.Squads.First(s => s.SquadTemplate == _data.ChapterDoctrine.Reclusium);
         Squad scoutHeadquarters = oob.ChildUnits
             .Single(unit => unit.UnitTemplate == _data.ChapterDoctrine.ScoutCompany)
             .HQSquad;
         Assert.Same(_data.ChapterDoctrine.ScoutCompanyHeadquarters, scoutHeadquarters.SquadTemplate);
-        foreach (string staffRole in new[] { "Scout Sergeant", "Apothecary", "Chaplain", "Judiciar" })
+        foreach (SoldierTemplate staffTemplate in new[]
+        {
+            _data.ChapterDoctrine.ScoutSergeant,
+            _data.ChapterDoctrine.Apothecary,
+            _data.ChapterDoctrine.Chaplain,
+            _data.ChapterDoctrine.Judiciar
+        })
         {
             SquadTemplateElement staffSlot = scoutHeadquarters.SquadTemplate.Elements
-                .Single(element => element.SoldierTemplate.Name == staffRole);
+                .Single(element => element.SoldierTemplate == staffTemplate);
             Assert.Equal(50, staffSlot.MaximumNumber);
         }
         Assert.All(
             scoutHeadquarters.Members.Where(member =>
-                member.Template.Name is "Apothecary" or "Chaplain" or "Judiciar"),
+                member.Template == _data.ChapterDoctrine.Apothecary
+                || member.Template == _data.ChapterDoctrine.Chaplain
+                || member.Template == _data.ChapterDoctrine.Judiciar),
             member => Assert.Single(scoutHeadquarters.Members, other => other.Template == member.Template));
 
         // At most one Master of Sanctity and one Reclusiarch, and both live in the Reclusium.
         var mastersOfSanctity = oob.GetAllMembers().OfType<PlayerSoldier>()
-            .Where(s => s.Template.Name == "Master of Sanctity").ToList();
+            .Where(s => s.Template == _data.ChapterDoctrine.MasterOfSanctity).ToList();
         var reclusiarchs = oob.GetAllMembers().OfType<PlayerSoldier>()
-            .Where(s => s.Template.Name == "Reclusiarch").ToList();
+            .Where(s => s.Template == _data.ChapterDoctrine.Reclusiarch).ToList();
         Assert.True(mastersOfSanctity.Count <= 1);
         Assert.True(reclusiarchs.Count <= 1);
         Assert.All(mastersOfSanctity, s => Assert.Equal(reclusium, s.AssignedSquad));
@@ -189,14 +197,14 @@ public class NewChapterBuilderTests
 
         // Every Chaplain is seconded to a company HQ squad whose company has a Captain.
         var chaplains = oob.GetAllMembers().OfType<PlayerSoldier>()
-            .Where(s => s.Template.Name == "Chaplain").ToList();
+            .Where(s => s.Template == _data.ChapterDoctrine.Chaplain).ToList();
         foreach (PlayerSoldier chaplain in chaplains)
         {
             Squad hq = chaplain.AssignedSquad;
             Assert.True((hq.SquadTemplate.SquadType & SquadTypes.HQ) > 0,
                 $"{chaplain.Name} (Chaplain) is not in an HQ squad.");
             Assert.NotNull(hq.SquadLeader);
-            Assert.Equal("Captain", hq.SquadLeader.Template.Name);
+            Assert.Same(_data.ChapterDoctrine.Captain, hq.SquadLeader.Template);
         }
         // No more than one Chaplain per company HQ.
         Assert.All(chaplains.GroupBy(c => c.AssignedSquad.Id), g => Assert.True(g.Count() == 1));
@@ -204,7 +212,7 @@ public class NewChapterBuilderTests
         // Each Judiciar is either seconded to a captained company HQ (at most one per HQ)
         // or held in the Reclusium as part of the aspirant reserve.
         var judiciars = oob.GetAllMembers().OfType<PlayerSoldier>()
-            .Where(s => s.Template.Name == "Judiciar").ToList();
+            .Where(s => s.Template == _data.ChapterDoctrine.Judiciar).ToList();
         var companyJudiciars = judiciars.Where(j => j.AssignedSquad != reclusium).ToList();
         foreach (PlayerSoldier judiciar in companyJudiciars)
         {
@@ -212,7 +220,7 @@ public class NewChapterBuilderTests
             Assert.True((hq.SquadTemplate.SquadType & SquadTypes.HQ) > 0,
                 $"{judiciar.Name} (Judiciar) is not in an HQ squad or the Reclusium.");
             Assert.NotNull(hq.SquadLeader);
-            Assert.Equal("Captain", hq.SquadLeader.Template.Name);
+            Assert.Same(_data.ChapterDoctrine.Captain, hq.SquadLeader.Template);
         }
         Assert.All(companyJudiciars.GroupBy(j => j.AssignedSquad.Id), g => Assert.True(g.Count() == 1));
 
@@ -223,7 +231,8 @@ public class NewChapterBuilderTests
             if (hq != null && hq.SquadLeader == null)
             {
                 Assert.DoesNotContain(hq.Members.OfType<PlayerSoldier>(),
-                    m => m.Template.Name is "Chaplain" or "Judiciar");
+                    m => m.Template == _data.ChapterDoctrine.Chaplain
+                        || m.Template == _data.ChapterDoctrine.Judiciar);
             }
         }
     }
@@ -240,12 +249,12 @@ public class NewChapterBuilderTests
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
-        Squad librarius = oob.Squads.First(s => s.SquadTemplate.Name == "Librarius");
+        Squad librarius = oob.Squads.First(s => s.SquadTemplate == _data.ChapterDoctrine.Librarius);
         Assert.NotEmpty(librarius.Members);
 
         // Exactly one leader, and it is the Master of the Librarium.
         Assert.NotNull(librarius.SquadLeader);
-        Assert.Equal("Master of the Librarium", librarius.SquadLeader.Template.Name);
+        Assert.Same(_data.ChapterDoctrine.MasterOfTheLibrarium, librarius.SquadLeader.Template);
         Assert.Single(librarius.Members, m => m.Template.IsSquadLeader);
 
         // The Master is the best psyker the founding produced, whatever his absolute Ego.
@@ -253,11 +262,11 @@ public class NewChapterBuilderTests
 
         // Seniority tracks Ego order: no Lexicanium outranks a Codicier on Ego.
         float weakestCodicierEgo = librarius.Members
-            .Where(m => m.Template.Name == "Codiciers")
+            .Where(m => m.Template == _data.ChapterDoctrine.Codicier)
             .Select(m => m.Ego)
             .DefaultIfEmpty(float.MaxValue)
             .Min();
-        Assert.All(librarius.Members.Where(m => m.Template.Name == "Lexicanium"),
+        Assert.All(librarius.Members.Where(m => m.Template == _data.ChapterDoctrine.Lexicanium),
             m => Assert.True(m.Ego <= weakestCodicierEgo,
                 $"Lexicanium {m.Name} (Ego {m.Ego}) outranks a Codicier (Ego {weakestCodicierEgo})."));
 
@@ -276,7 +285,8 @@ public class NewChapterBuilderTests
 
         var veterans = oob.GetAllMembers()
             .OfType<PlayerSoldier>()
-            .Where(s => s.Template.Name is "Veteran" or "Veteran Sergeant")
+            .Where(s => s.Template == _data.ChapterDoctrine.Veteran
+                || s.Template == _data.ChapterDoctrine.VeteranSergeant)
             .ToList();
 
         Assert.NotEmpty(veterans);
@@ -287,7 +297,7 @@ public class NewChapterBuilderTests
             Assert.True(evaluation.RangedRating > 105, $"{veteran.Name} lacks the Veteran ranged baseline.");
             Assert.True(evaluation.MeleeRating > 115 || evaluation.RangedRating > 120,
                 $"{veteran.Name} lacks an Adamantium-level melee or ranged spike.");
-            if (veteran.Template.Name == "Veteran Sergeant")
+            if (veteran.Template == _data.ChapterDoctrine.VeteranSergeant)
             {
                 Assert.True(evaluation.LeadershipRating > 60, $"{veteran.Name} lacks Veteran Sergeant leadership.");
             }
@@ -344,7 +354,7 @@ public class NewChapterBuilderTests
 
         var devastators = oob.GetAllMembers()
             .OfType<PlayerSoldier>()
-            .Where(s => s.Template.Name == "Devastator Marine")
+            .Where(s => s.Template == _data.ChapterDoctrine.DevastatorMarine)
             .ToList();
         Assert.NotEmpty(devastators);
         // Every spilled devastator keeps his assault-profile evaluation, proving he
@@ -355,7 +365,7 @@ public class NewChapterBuilderTests
 
         // A company that only gained line squads through spill still gets its HQ
         // staffed at that point.
-        Unit devastatorCompany = oob.ChildUnits.First(c => c.UnitTemplate.Name == "Devastator Company");
+        Unit devastatorCompany = oob.ChildUnits.First(c => c.UnitTemplate == _data.ChapterDoctrine.DevastatorCompany);
         bool devCompanyHasSquads = devastatorCompany.Squads
             .Any(s => (s.SquadTemplate.SquadType & SquadTypes.HQ) == 0 && s.Members.Count > 0);
         if (devCompanyHasSquads)

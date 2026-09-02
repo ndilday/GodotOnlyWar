@@ -178,7 +178,8 @@ public partial class SquadScreenController : MainScreenController
                 // Capacity is THIS element's own able-bodied bodies, not the squad's — a
                 // sergeant's individually-equipped slot must not eat into the trooper pool.
                 element => _squad.Members.Count(
-                    member => member.IsCombatEffective && member.Template == element.SoldierTemplate)));
+                    member => member.IsCombatEffective && member.Template == element.SoldierTemplate),
+                _squad.Members.Count));
     }
 
     // Characters carry kit chosen for the individual, so they get a row each rather than a share

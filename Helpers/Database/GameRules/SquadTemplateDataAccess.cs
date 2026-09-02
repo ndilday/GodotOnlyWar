@@ -50,7 +50,31 @@ namespace OnlyWar.Helpers.Database.GameRules
                     soldierTemplateRequirements,
                     weaponOptionsByTemplateId);
             var armorTemplates = GetArmorTemplates(connection);
-            var elementQuotas = GetElementQuotasByElementId(connection);
+            Dictionary<(int ElementId, string OptionGroup),
+                (SquadQuotaModelBasis ModelBasis, int ModelsPerBlock, int SlotsPerBlock)>
+                quotaScaling = [];
+            try
+            {
+                quotaScaling = GetElementQuotaScalingByQuotaKey(connection);
+            }
+            catch (DbException exception) when (
+                exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            {
+                // The scaling relation is optional for older rules databases; absent rows retain
+                // the fixed MinimumRequired/MaximumAllowed behavior.
+            }
+            var elementQuotas = GetElementQuotasByElementId(connection, quotaScaling);
+            Dictionary<int, ArmorTemplate> elementArmors = [];
+            try
+            {
+                elementArmors = GetElementArmorsByElementId(connection, armorTemplates);
+            }
+            catch (DbException exception) when (
+                exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            {
+                // The relation is optional for legacy rules fixtures. Missing bindings inherit
+                // the squad template's armor.
+            }
             Dictionary<int, PersonalEquipmentRole> personalEquipmentRoles = [];
             Dictionary<int, int> personalRoleByElement = [];
             bool hasExplicitPersonalRoleBindings = false;
@@ -73,6 +97,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                 connection,
                 basicSoldierTemplateMap,
                 weaponSets,
+                elementArmors,
                 elementQuotas,
                 personalEquipmentRoles,
                 personalRoleByElement,
@@ -468,7 +493,31 @@ namespace OnlyWar.Helpers.Database.GameRules
         /// migration preserved the legacy SquadTemplateWeaponOption row order when it populated
         /// this table, so reading naturally keeps that draw deterministic across the schema change.
         /// </summary>
-        private Dictionary<int, List<SquadTemplateElementQuota>> GetElementQuotasByElementId(IDbConnection connection)
+        private Dictionary<(int ElementId, string OptionGroup),
+            (SquadQuotaModelBasis ModelBasis, int ModelsPerBlock, int SlotsPerBlock)>
+            GetElementQuotaScalingByQuotaKey(IDbConnection connection)
+        {
+            Dictionary<(int ElementId, string OptionGroup),
+                (SquadQuotaModelBasis ModelBasis, int ModelsPerBlock, int SlotsPerBlock)> result = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT SquadTemplateElementId, OptionGroup, ModelBasis, ModelsPerBlock, SlotsPerBlock "
+                + "FROM SquadTemplateElementQuotaScaling";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result[(reader.GetInt32(0), reader.GetString(1))] = (
+                    (SquadQuotaModelBasis)reader.GetInt32(2),
+                    reader.GetInt32(3),
+                    reader.GetInt32(4));
+            }
+            return result;
+        }
+
+        private Dictionary<int, List<SquadTemplateElementQuota>> GetElementQuotasByElementId(
+            IDbConnection connection,
+            IReadOnlyDictionary<(int ElementId, string OptionGroup),
+                (SquadQuotaModelBasis ModelBasis, int ModelsPerBlock, int SlotsPerBlock)> quotaScaling)
         {
             Dictionary<int, List<SquadTemplateElementQuota>> quotaMap = [];
             using var command = connection.CreateCommand();
@@ -482,13 +531,20 @@ namespace OnlyWar.Helpers.Database.GameRules
                 string optionGroup = reader.GetString(1);
                 int min = reader.GetInt32(2);
                 int max = reader.GetInt32(3);
+                quotaScaling.TryGetValue((elementId, optionGroup), out var scaling);
 
                 if (!quotaMap.TryGetValue(elementId, out List<SquadTemplateElementQuota> quotas))
                 {
                     quotas = [];
                     quotaMap[elementId] = quotas;
                 }
-                quotas.Add(new SquadTemplateElementQuota(optionGroup, min, max));
+                quotas.Add(new SquadTemplateElementQuota(
+                    optionGroup,
+                    min,
+                    max,
+                    scaling.ModelBasis,
+                    scaling.ModelsPerBlock,
+                    scaling.SlotsPerBlock));
             }
             return quotaMap;
         }
@@ -497,6 +553,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             IDbConnection connection,
             Dictionary<int, SoldierTemplate> soldierTemplateMap,
             Dictionary<int, WeaponSet> weaponSetMap,
+            IReadOnlyDictionary<int, ArmorTemplate> elementArmorMap,
             Dictionary<int, List<SquadTemplateElementQuota>> quotaMap,
             IReadOnlyDictionary<int, PersonalEquipmentRole> personalEquipmentRoles,
             IReadOnlyDictionary<int, int> personalRoleByElement,
@@ -525,6 +582,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                         : null;
                     bool rollsStrength = reader[6].GetType() != typeof(DBNull)
                         && reader.GetInt32(6) != 0;
+                    ArmorTemplate defaultArmor = elementArmorMap.GetValueOrDefault(id);
 
                     SoldierTemplate template = RulesDatabaseLookup.Require(
                         soldierTemplateMap,
@@ -566,10 +624,32 @@ namespace OnlyWar.Helpers.Database.GameRules
                     elementsMap[squadTemplateId].Add(
                         new SquadTemplateElement(
                             template, (byte)min, (byte)max, id, defaultWeapons, quotas, rollsStrength,
-                            personalRole));
+                            personalRole, defaultArmor));
                 }
             }
             return elementsMap;
+        }
+
+        private static Dictionary<int, ArmorTemplate> GetElementArmorsByElementId(
+            IDbConnection connection,
+            IReadOnlyDictionary<int, ArmorTemplate> armorTemplateMap)
+        {
+            Dictionary<int, ArmorTemplate> result = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT SquadTemplateElementId, ArmorTemplateId "
+                + "FROM SquadTemplateElementArmor ORDER BY SquadTemplateElementId";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int elementId = reader.GetInt32(0);
+                int armorId = reader.GetInt32(1);
+                result[elementId] = RulesDatabaseLookup.Require(
+                    armorTemplateMap,
+                    armorId,
+                    $"SquadTemplateElementArmor {elementId}.ArmorTemplateId");
+            }
+            return result;
         }
 
         private static Dictionary<int, PersonalEquipmentRole> GetPersonalEquipmentRoles(

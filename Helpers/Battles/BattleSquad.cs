@@ -507,7 +507,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 foreach (BattleSoldier soldier in tempSquad)
                 {
-                    soldier.Armor = new Armor(CampaignCharacter?.AssignedSquad?.SquadTemplate?.Armor);
+                    soldier.Armor = new Armor(ResolveElementArmor(soldier.Soldier));
                     MarkEquipmentValueSource(soldier);
                 }
                 return;
@@ -529,7 +529,7 @@ namespace OnlyWar.Helpers.Battles
                     BattleSoldier bestShooter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryRangedWeapon.RelatedSkill)).First();
                     (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(ws);
                     bestShooter.AddWeapons(ranged, melee);
-                    bestShooter.Armor = new Armor(Squad.SquadTemplate.Armor);
+                    bestShooter.Armor = new Armor(ResolveElementArmor(bestShooter.Soldier));
                     MarkEquipmentValueSource(bestShooter);
                     tempSquad.Remove(bestShooter);
                 }
@@ -538,7 +538,7 @@ namespace OnlyWar.Helpers.Battles
                     BattleSoldier bestHitter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryMeleeWeapon.RelatedSkill)).First();
                     (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(ws);
                     bestHitter.AddWeapons(ranged, melee);
-                    bestHitter.Armor = new Armor(Squad.SquadTemplate.Armor);
+                    bestHitter.Armor = new Armor(ResolveElementArmor(bestHitter.Soldier));
                     MarkEquipmentValueSource(bestHitter);
                     tempSquad.Remove(bestHitter);
                 }
@@ -551,7 +551,7 @@ namespace OnlyWar.Helpers.Battles
                     (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(defaultWeapons);
                     soldier.AddWeapons(ranged, melee);
                     // TODO: personalize armor and weapons
-                    soldier.Armor = new Armor(Squad.SquadTemplate.Armor);
+                    soldier.Armor = new Armor(ResolveElementArmor(soldier.Soldier));
                     MarkEquipmentValueSource(soldier);
                 }
             }
@@ -612,11 +612,18 @@ namespace OnlyWar.Helpers.Battles
                 }
                 (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(weaponSet);
                 battleSoldier.AddWeapons(ranged, melee);
-                battleSoldier.Armor = new Armor(
-                    Squad?.SquadTemplate?.Armor
-                    ?? CampaignCharacter?.AssignedSquad?.SquadTemplate?.Armor);
+                battleSoldier.Armor = new Armor(ResolveElementArmor(battleSoldier.Soldier));
                 tempSquad.RemoveAt(i);
             }
+        }
+
+        private ArmorTemplate ResolveElementArmor(ISoldier soldier)
+        {
+            SquadTemplate squadTemplate = Squad?.SquadTemplate
+                ?? CampaignCharacter?.AssignedSquad?.SquadTemplate;
+            SquadTemplateElement element = squadTemplate?.Elements
+                .FirstOrDefault(candidate => candidate.SoldierTemplate == soldier?.Template);
+            return element?.DefaultArmor ?? squadTemplate?.Armor;
         }
 
         private bool TryGetItemizedEquipment(

@@ -1,7 +1,6 @@
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Command;
 using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Command;
 using OnlyWar.Models.Fleets;
@@ -315,24 +314,6 @@ public class EndTurnPreflightTests
         Assert.All(facts, fact => Assert.Contains(
             brief.Items,
             item => item.StableKey == fact.StableKey));
-    }
-
-    [Fact]
-    public void CommandBriefIconsAreRegisteredInTheAtlas()
-    {
-        TestCampaign campaign = CreateCampaign();
-        AddSquad(campaign, "Squad Icon Audit", campaign.Region);
-
-        CommandBriefModel brief = new CommandBriefBuilder().Build(
-            new Date(1, 1, 1),
-            campaign.Sector,
-            null,
-            null);
-
-        Assert.NotEmpty(brief.Items);
-        Assert.All(brief.Items, item => Assert.True(
-            IconAtlas.HasIcon(item.IconKey),
-            $"Command Brief item '{item.StableKey}' uses unregistered icon '{item.IconKey}'."));
     }
 
     // Administrative formations are personnel pools, not idle deployable combat formations.

@@ -50,10 +50,14 @@ public sealed record ElementCountSectionData(
 public static class ElementLoadoutSections
 {
     public static List<ElementCountSectionData> Build(
-        SquadTemplate template, Func<SquadTemplateElement, int> capacityForElement)
+        SquadTemplate template,
+        Func<SquadTemplateElement, int> capacityForElement,
+        int? squadModelCount = null)
     {
         List<ElementCountSectionData> sections = [];
         if (template?.Elements == null) return sections;
+        int totalModelCount = squadModelCount
+            ?? template.Elements.Sum(element => (int)element.MaximumNumber);
 
         foreach (SquadTemplateElement element in template.Elements)
         {
@@ -75,7 +79,19 @@ public static class ElementLoadoutSections
             if (groups.Count == 0) continue;
 
             string standardName = element.DefaultWeapons?.Name ?? template.DefaultWeapons?.Name ?? "Standard weapons";
-            sections.Add(new ElementCountSectionData(standardName, capacityForElement(element), groups));
+            int elementCapacity = capacityForElement(element);
+            sections.Add(new ElementCountSectionData(
+                standardName,
+                elementCapacity,
+                groups.Select(group =>
+                {
+                    SquadTemplateElementQuota quota = element.Quotas
+                        .First(candidate => candidate.OptionGroup == group.OptionGroup);
+                    return group with
+                    {
+                        MaximumAllowed = quota.GetMaximumAllowed(elementCapacity, totalModelCount)
+                    };
+                }).ToList()));
         }
         return sections;
     }

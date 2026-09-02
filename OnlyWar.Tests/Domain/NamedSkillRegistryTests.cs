@@ -14,9 +14,9 @@ public class NamedSkillRegistryTests
     public void Registry_FailsFast_WhenRequiredSkillIsMissing()
     {
         var rules = RulesDatabaseFixture.LoadRules();
-        // Drop "Stealth" to simulate a rename/removal in the rules database.
+        // Remove the stable role key to simulate a rename/removal in the rules database.
         Dictionary<int, BaseSkill> withoutStealth = rules.BaseSkills.Values
-            .Where(s => s.Name != "Stealth")
+            .Where(s => s.SkillKey != SkillRoleKeys.Stealth)
             .ToDictionary(s => s.Id, s => s);
 
         var ex = Assert.Throws<InvalidOperationException>(() => new NamedSkillRegistry(withoutStealth));

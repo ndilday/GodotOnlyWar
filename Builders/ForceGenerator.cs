@@ -437,11 +437,9 @@ namespace OnlyWar.Builders
                                         .Where(st => (st.SquadType & SquadTypes.Scout) != 0).ToList();
 
             // NOTE: a faction with no Scout-typed squad templates fields no ScoutPatrol force at all.
-            // Verified against the rules DB 2026-07-29: the only such faction is the Orks, which have a
-            // single template (Ork Warboss, HQ) because the faction is not implemented yet. The
-            // Genestealer Cults are no longer affected - Acolyte Hybrids, Brood Brother Squad and
-            // Neophyte Hybrid Squad are all Scout-flagged - and the Imperial PDF Infantry Squad was
-            // flagged Scout by migrate-scout-skills.
+            // The Ork roster supplies Kommandos as its Scout-flagged patrol formation. The
+            // Genestealer Cults are also covered by Acolyte Hybrids, Brood Brother Squad and
+            // Neophyte Hybrid Squad, and the Imperial PDF Infantry Squad is Scout-flagged.
             //
             // The consequence is narrower than it used to be. This profile no longer feeds interception:
             // DetectedMissionStep intercepts with the squads a region actually has out looking and

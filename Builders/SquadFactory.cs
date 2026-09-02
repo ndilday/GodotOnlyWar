@@ -140,17 +140,20 @@ namespace OnlyWar.Builders
             }
             // Pooled special-weapon quotas: for every element's quota group other than Command
             // Weapon (the individually-equipped groups CharacterLoadoutService owns instead —
-            // see that class), roll how many of the group's menu get drafted into the squad's
-            // pooled loadout, then roll which set fills each slot.
+            // see that class), fill NPCs to their resolved allowance and roll the chosen set for
+            // each slot. Player-faction generation retains the authored minimum-to-maximum roll;
+            // the database minimum remains useful to the player loadout editor.
             //
-            // A degenerate quota consumes no randomness. A fixed count (min == max) and a one-item
-            // menu are both foregone conclusions, and asking the RNG a question with one possible
-            // answer still advances the shared stream — so a crew-served slot like Brood Brother
+            // A degenerate quota consumes no randomness. A fixed count (min == max), an NPC
+            // allowance, and a one-item menu are all foregone conclusions, and asking the RNG a
+            // question with one possible answer still advances the shared stream — so a crew-served
+            // slot like Brood Brother
             // Weapon Squad's single autocannon would shift every later draw in a seeded walk while
             // contributing no variation of its own. Skipping those calls costs nothing in outcome
             // and keeps the stream position meaningful. Note this is a deliberate departure from
             // the pre-migration squad-level SquadTemplateWeaponOption walk, which always drew:
             // seeded generation diverges for any squad holding such a quota.
+            bool fillNpcAllowances = squadTemplate.Faction?.IsPlayerFaction == false;
             foreach (SquadTemplateElement element in squadTemplate.Elements)
             {
                 foreach (SquadTemplateElementQuota quota in element.Quotas)
@@ -159,9 +162,16 @@ namespace OnlyWar.Builders
                     IReadOnlyList<WeaponSet> menu = element.GetMenu(quota.OptionGroup);
                     if (menu.Count == 0) continue;
 
-                    int taking = quota.MinimumRequired == quota.MaximumAllowed
-                        ? quota.MinimumRequired
-                        : random.GetIntBelowMax(quota.MinimumRequired, quota.MaximumAllowed + 1);
+                    int maximumAllowed = quota.GetMaximumAllowed(
+                        counts[element],
+                        squad.Members.Count);
+                    int taking = fillNpcAllowances
+                        ? maximumAllowed
+                        : quota.MinimumRequired == maximumAllowed
+                            ? quota.MinimumRequired
+                            : random.GetIntBelowMax(
+                                quota.MinimumRequired,
+                                maximumAllowed + 1);
                     taking = System.Math.Min(taking, squad.Members.Count);
                     for (int i = 0; i < taking; i++)
                     {

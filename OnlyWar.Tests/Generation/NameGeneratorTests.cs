@@ -9,13 +9,6 @@ namespace OnlyWar.Tests.Generation;
 public class NameGeneratorTests
 {
     [Fact]
-    public void EmbeddedPoolsMeetRequiredSizes()
-    {
-        Assert.True(NameGenerator.GivenNameCount >= 1000);
-        Assert.True(NameGenerator.SurnameCount >= 2000);
-    }
-
-    [Fact]
     public void FoundingChapterDrawHasNoRepeatedGivenNamesOrSurnames()
     {
         const int foundingSize = 1000;

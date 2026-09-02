@@ -65,6 +65,8 @@ namespace OnlyWar.Helpers.Database.GameRules
         //
         //   SkillRoleAssignment / RatingConsumerAssignment / AwardFamily: shipped defaults;
         //   PersonalEquipmentRole / SquadTemplateElementEquipmentRole: legacy role inference;
+        //   SquadTemplateElementArmor: unbound elements inherit SquadTemplate armor;
+        //   SquadTemplateElementQuotaScaling: absent rows keep quota maxima fixed;
         //   itemized equipment tables: legacy WeaponSet-derived catalog when unavailable;
         //   AmmunitionType: legacy weapon templates without ammunition identities.
         //
