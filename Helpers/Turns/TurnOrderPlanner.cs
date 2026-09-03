@@ -34,9 +34,10 @@ namespace OnlyWar.Helpers.Turns
 
             foreach (Faction faction in enemyFactions)
             {
-                orders.AddRange(planet == null
+                List<Order> factionOrders = (planet == null
                     ? _strategyController.GenerateFactionOrders(faction, sector)
-                    : _strategyController.GenerateFactionOrders(faction, sector, planet));
+                    : _strategyController.GenerateFactionOrders(faction, sector, planet)).ToList();
+                orders.AddRange(factionOrders);
             }
 
             Faction defaultFaction = rules.DefaultFaction;
@@ -48,6 +49,16 @@ namespace OnlyWar.Helpers.Turns
             orders.AddRange(planet == null
                 ? _strategyController.GenerateFactionOrders(defaultFaction, sector, defensiveOnly: true)
                 : _strategyController.GenerateFactionOrders(defaultFaction, sector, planet, defensiveOnly: true));
+
+            // Attach after every faction has planned. This lets a strategic invasion force see an assault generated
+            // by a later NPC faction and reserve its Warboss for the defensive battle, preserving
+            // the one-battle-per-turn command rule regardless of faction ordering in the rules DB.
+            foreach (Faction faction in FactionCapabilities.WithCapability(
+                rules.Factions, FactionBehavior.GeneratesInvasions))
+            {
+                FactionCapabilityCampaignProcessor.AttachCommandersToTacticalOrders(
+                    sector, faction, orders, orders);
+            }
         }
     }
 }

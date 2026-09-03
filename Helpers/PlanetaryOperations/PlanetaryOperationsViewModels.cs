@@ -58,7 +58,13 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         string OverlayTooltip,
         string IntelConfidence,
         int TerrainVariant,
-        bool HasPlayerForces);
+        bool HasPlayerForces,
+        string FactionActivity = null,
+        string FactionActivityIconKey = null)
+    {
+        [Obsolete("Use FactionActivity.")]
+        public string OrkActivity => FactionActivity;
+    }
 
     public sealed record RegionEnemyForceEstimate(
         string FactionName,
@@ -244,10 +250,14 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 publicEnemyForces,
                 control.Presences,
                 value,
-                $"{region.Name} · {value}\n{intelligenceDetail}",
+                $"{region.Name} · {value}\n{intelligenceDetail}"
+                    + (FactionActivityPresentation.Build(region) is string factionActivity
+                        ? $"\n{factionActivity}" : string.Empty),
                 IntelEstimatePresentationBuilder.Marks(weakest),
                 RegionTerrainPresentation.GetVariantIndex(region),
-                playerForces);
+                playerForces,
+                FactionActivityPresentation.Build(region),
+                FactionActivityPresentation.GetIconKey(region));
         }
 
         private static int CountUnassignedPlayerSquads(Region region) =>
@@ -274,9 +284,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         }
 
         private static bool IsPlayerVisibleSpecialMission(Mission mission) =>
-            mission != null
-            && (mission.MissionType != MissionType.Extermination
-                || mission.RegionFaction != null && !mission.RegionFaction.IsPublic);
+            MissionAvailability.IsPlayerVisibleSpecialMission(mission);
 
         private static string ForceOverlay(Region region, int currentWeek)
         {
@@ -591,6 +599,10 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     ? "None"
                     : string.Join(", ", control.Presences.Select(item => item.FactionName)))
             ];
+            if (FactionActivityPresentation.Build(region) is string factionActivity)
+            {
+                regionRows.Add(Row("Faction Activity", factionActivity));
+            }
             if (sector != null)
             {
                 int activeOrders = sector.Orders.Values.Count(order =>

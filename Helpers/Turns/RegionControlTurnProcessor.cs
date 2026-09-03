@@ -162,6 +162,10 @@ namespace OnlyWar.Helpers.Turns
 
         internal static bool CanRemoveRegionFaction(RegionFaction regionFaction)
         {
+            if (regionFaction?.PlanetFaction?.Faction?.HasBehavior(FactionBehavior.Indelible) == true)
+            {
+                return false;
+            }
             return regionFaction.Population <= 0
                 && regionFaction.Garrison <= 0
                 && regionFaction.LandedSquads.Count == 0

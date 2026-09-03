@@ -41,7 +41,8 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, Species> Species { get; }
         public IReadOnlyDictionary<int, SoldierTemplate> SoldierTemplates { get; }
         public IReadOnlyDictionary<int, SquadTemplate> SquadTemplates { get; }
-        public IReadOnlyDictionary<int, UnitTemplate> UnitTemplates { get; }
+        private readonly Dictionary<int, UnitTemplate> _unitTemplates;
+        public IReadOnlyDictionary<int, UnitTemplate> UnitTemplates => _unitTemplates;
         public IReadOnlyDictionary<int, ShipTemplate> ShipTemplates { get; }
         public IReadOnlyDictionary<int, BoatTemplate> BoatTemplates { get; }
         public IReadOnlyDictionary<int, FleetTemplate> FleetTemplates { get; }
@@ -87,11 +88,12 @@ namespace OnlyWar.Models
             Species = species;
             SoldierTemplates = soldierTemplates;
             SquadTemplates = squadTemplates;
-            UnitTemplates = unitTemplates;
+            _unitTemplates = (unitTemplates ?? new Dictionary<int, UnitTemplate>())
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
             BoatTemplates = boatTemplates ?? new Dictionary<int, BoatTemplate>();
             ShipTemplates = shipTemplates ?? new Dictionary<int, ShipTemplate>();
             FleetTemplates = fleetTemplates ?? new Dictionary<int, FleetTemplate>();
-            foreach(UnitTemplate template in UnitTemplates?.Values ?? Enumerable.Empty<UnitTemplate>())
+            foreach(UnitTemplate template in _unitTemplates.Values)
             {
                 template.Faction = this;
             }
@@ -103,5 +105,19 @@ namespace OnlyWar.Models
         }
 
         public bool HasBehavior(FactionBehavior behavior) => (Behavior & behavior) == behavior;
+
+        /// <summary>
+        /// Registers a code-owned unit template that is part of the faction's runtime model but
+        /// was not authored in the rules database. This is used only for persistent campaign
+        /// identities, such as an Ork Waaagh! command unit, so the normal Unit/Squad save shape can
+        /// still be reused when a faction has only tactical squad data.
+        /// </summary>
+        internal void AddRuntimeUnitTemplate(UnitTemplate template)
+        {
+            if (template == null) throw new System.ArgumentNullException(nameof(template));
+            if (_unitTemplates.ContainsKey(template.Id)) return;
+            template.Faction = this;
+            _unitTemplates.Add(template.Id, template);
+        }
     }
 }

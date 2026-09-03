@@ -318,6 +318,8 @@ namespace OnlyWar.Helpers.Battles
             Action<string> logSink = log == null ? null : log.Add;
             long planningStarted = Stopwatch.GetTimestamp();
             Plan(shootSegmentActions, moveSegmentActions, meleeSegmentActions, logSink);
+            ApplyPendingMobLeaderSuppression(
+                shootSegmentActions, moveSegmentActions, meleeSegmentActions, logSink);
             _planningElapsed += Stopwatch.GetElapsedTime(planningStarted);
             if (log != null)
             {
@@ -617,6 +619,63 @@ namespace OnlyWar.Helpers.Battles
                 meleeSegmentActions,
                 log,
                 planningContext);
+        }
+
+        private void ApplyPendingMobLeaderSuppression(
+            List<IAction> shootActions,
+            List<IAction> moveActions,
+            List<IAction> meleeActions,
+            Action<string> log)
+        {
+            foreach (BattleSquad squad in GetActiveSquads(BattleSide.Attacker)
+                .Concat(GetActiveSquads(BattleSide.Opposing))
+                .Where(squad => FactionCapabilities.HasMobMentality(squad?.Faction))
+                .Where(candidate => candidate.MobSuppressionPending)
+                .OrderBy(candidate => candidate.Id))
+            {
+                squad.MobSuppressionPending = false;
+                squad.MobSuppressionCommitted = true;
+                BattleSoldier leader = squad.SquadLeader;
+                if (leader == null) continue;
+
+                // The commitment consumes the leader's whole round. Remove any ordinary plan
+                // before inserting the coercion strike; the strike is still a normal melee action,
+                // so wounds, deaths, XP and replay state use the ordinary combat machinery.
+                shootActions.RemoveAll(action => action.ActorId == leader.Soldier.Id);
+                moveActions.RemoveAll(action => action.ActorId == leader.Soldier.Id);
+                meleeActions.RemoveAll(action => action.ActorId == leader.Soldier.Id);
+
+                BattleSoldier target = squad.AbleSoldiers
+                    .Where(candidate => candidate != leader)
+                    .Where(candidate => _grid.GetDistanceBetweenSoldiers(
+                        leader.Soldier.Id, candidate.Soldier.Id) <= 1.5f)
+                    .OrderBy(candidate => candidate.Soldier.Id)
+                    .FirstOrDefault();
+                MeleeWeapon weapon = leader.EquippedMeleeWeapons.FirstOrDefault()
+                    ?? leader.MeleeWeapons.FirstOrDefault();
+                if (target == null || weapon == null)
+                {
+                    log?.Invoke($"{squad.Name}'s leader spends the round suppressing the mob, but has no nearby target.");
+                    continue;
+                }
+
+                meleeActions.Add(new MeleeAttackAction(
+                    leader,
+                    target,
+                    weapon,
+                    didMove: false,
+                    log,
+                    _execution.Random,
+                    _execution.Rules.MeleeWeaponTemplates));
+                _turnEvents.Add(new BattleEvent(
+                    BattleEventType.MobLeaderSuppressionAttack,
+                    _currentState.TurnNumber,
+                    _currentState.AttackerSquads.ContainsKey(squad.Id)
+                        ? BattleSide.Attacker : BattleSide.Opposing,
+                    squad.Id,
+                    new[] { target.BattleSquad.Id },
+                    $"{leader.Soldier.Name} attacks {target.Soldier.Name} to suppress the mob."));
+            }
         }
 
         private void PlanSimultaneously(
@@ -1118,6 +1177,14 @@ namespace OnlyWar.Helpers.Battles
                 float localOutnumber = BattleMoraleEvaluator.ComputeLocalOutnumberRatio(
                     squad, friendly, enemy, _grid, MoraleConstants.VisualRange);
                 float commandAura = CommandAuraSupport(squad, side);
+                float mobSupport = MobMoraleSupportEvaluator.ComputeSupport(
+                    squad,
+                    friendly,
+                    GetAllSquads(side),
+                    _grid,
+                    _execution.Rules.FactionBehaviorRules,
+                    commandAura);
+                MoraleState moraleBeforeCheck = squad.MoraleState;
 
                 BattleSoldier leader = squad.SquadLeader;
                 List<BattleMoraleEvaluator.SoldierMoraleInput> soldiers = squad.AbleSoldiers
@@ -1137,21 +1204,57 @@ namespace OnlyWar.Helpers.Battles
                         routingVisible,
                         localOutnumber,
                         commandAura,
-                        forceDisadvantage),
+                        forceDisadvantage,
+                        mobSupport),
                     _execution.Random);
 
                 squad.MoraleState = result.Outcome;
-                if (result.Outcome == MoraleState.Routing)
+                if (FactionCapabilities.HasMobMentality(squad?.Faction)
+                    && MathF.Abs(mobSupport) > 0.0001f)
                 {
-                    squad.WithdrawalRole = WithdrawalRole.Routing;
-                    _everRoutedSquadIds.Add(squad.Id);
                     events.Add(new BattleEvent(
-                        BattleEventType.SquadRouted,
+                        BattleEventType.MobMoraleApplied,
                         _currentState.TurnNumber,
                         side,
                         squad.Id,
                         null,
-                        $"{squad.Name} broke and routed."));
+                        $"{squad.Name} received mob morale support {mobSupport:+0.##;-0.##;0}.",
+                        mobSupport));
+                }
+                if (result.Outcome == MoraleState.Routing)
+                {
+                    BattleSoldier leaderForSuppression = squad.SquadLeader;
+                    bool canSuppress = FactionCapabilities.HasMobMentality(squad?.Faction)
+                        && leaderForSuppression != null
+                        && !squad.MobSuppressionPending
+                        && !squad.MobSuppressionCommitted;
+                    if (canSuppress)
+                    {
+                        // The Routing result is ignored, not downgraded to Shaken. Preserve the
+                        // state that existed before this check; the cost is represented by the
+                        // pending full-round coercion commitment and its recorded attack.
+                        squad.MoraleState = moraleBeforeCheck;
+                        squad.MobSuppressionPending = true;
+                        events.Add(new BattleEvent(
+                            BattleEventType.MobLeaderSuppressionCommitted,
+                            _currentState.TurnNumber,
+                            side,
+                            squad.Id,
+                            null,
+                            $"{squad.Name}'s leader will spend the next round coercing the mob."));
+                    }
+                    else
+                    {
+                        squad.WithdrawalRole = WithdrawalRole.Routing;
+                        _everRoutedSquadIds.Add(squad.Id);
+                        events.Add(new BattleEvent(
+                            BattleEventType.SquadRouted,
+                            _currentState.TurnNumber,
+                            side,
+                            squad.Id,
+                            null,
+                            $"{squad.Name} broke and routed."));
+                    }
                 }
                 LogMoraleEval(
                     side,
@@ -1163,7 +1266,8 @@ namespace OnlyWar.Helpers.Battles
                     routingVisible,
                     localOutnumber,
                     commandAura,
-                    forceDisadvantage);
+                    forceDisadvantage,
+                    mobSupport);
             }
 
             // If every remaining active squad on the side is Routing, the side reflects Rout
@@ -1258,7 +1362,15 @@ namespace OnlyWar.Helpers.Battles
                     routingVisible,
                     localOutnumber,
                     commandAuraSupport,
-                    forceDisadvantage)) == MoraleState.Routing;
+                    forceDisadvantage,
+                    MobMoraleSupportEvaluator.ComputeSupport(
+                        squad,
+                        friendly,
+                        GetAllSquads(_currentState.AttackerSquads.ContainsKey(squad.Id)
+                            ? BattleSide.Attacker : BattleSide.Opposing),
+                        _grid,
+                        _execution.Rules.FactionBehaviorRules,
+                        commandAuraSupport))) == MoraleState.Routing;
         }
 
         private void LogMoraleSkip(
@@ -1288,7 +1400,8 @@ namespace OnlyWar.Helpers.Battles
             float routingVisible,
             float localOutnumber,
             float commandAura,
-            float forceDisadvantage)
+            float forceDisadvantage,
+            float mobSupport)
         {
             if (!BattleLog.IsEnabled) return;
             BattleDecisionTrace trace = new("MORALE_EVAL", new List<KeyValuePair<string, string>>
@@ -1305,6 +1418,7 @@ namespace OnlyWar.Helpers.Battles
                 // Signed §4.3 aura contribution: positive = support from a living HQ in
                 // radius; negative = command-loss stress (every fielded HQ destroyed).
                 BattleDecisionTrace.Field("command_aura", commandAura),
+                BattleDecisionTrace.Field("mob_support", mobSupport),
                 BattleDecisionTrace.Field("force_disadvantage", forceDisadvantage),
                 BattleDecisionTrace.Field("shock", result.Shock),
                 BattleDecisionTrace.Field("context", result.Context),
@@ -2141,6 +2255,11 @@ namespace OnlyWar.Helpers.Battles
             foreach (BattleSquad squad in _currentState.OpposingSquads.Values)
             {
                 UpdateSquadMeleeStatus(squad);
+            }
+            foreach (BattleSquad squad in _currentState.AttackerSquads.Values
+                .Concat(_currentState.OpposingSquads.Values))
+            {
+                squad.MobSuppressionCommitted = false;
             }
         }
 

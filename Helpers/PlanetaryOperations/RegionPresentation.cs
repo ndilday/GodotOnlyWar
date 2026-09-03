@@ -2,6 +2,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.FactionBehaviors;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -70,6 +71,65 @@ namespace OnlyWar.Helpers.PlanetaryOperations
 
         private static string PresenceName(Faction faction) =>
             faction.IsPlayerFaction ? "Chapter" : faction.Name;
+    }
+
+    /// <summary>
+    public sealed record FactionActivityPresentationModel(
+        Faction Faction,
+        string Text,
+        string IconKey);
+
+    /// Belief-gated dormant/invasion activity text shared by the map card and the selected-region dossier.
+    /// Ground truth is used only after the presence is already open; hidden feral activity is
+    /// disclosed solely through the observer's target-specific intelligence belief.
+    /// </summary>
+    public static class FactionActivityPresentation
+    {
+        public static string Build(Region region)
+        {
+            return BuildDetails(region)?.Text;
+        }
+
+        public static FactionActivityPresentationModel BuildDetails(Region region)
+        {
+            RegionFaction dormantPresence = region?.RegionFactionMap.Values
+                .Where(presence => FactionCapabilities.HasDormantPopulations(
+                    presence?.PlanetFaction?.Faction))
+                .OrderBy(presence => presence.PlanetFaction.Faction.Id)
+                .FirstOrDefault();
+            if (dormantPresence == null) return null;
+
+            FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
+                region,
+                dormantPresence.PlanetFaction.Faction);
+            if (!dormantPresence.IsOpenlyActive && !(belief?.Level >= IntelLevel.Confirmed))
+            {
+                return null;
+            }
+
+            string confidence = dormantPresence.IsOpenlyActive
+                ? "Open activity"
+                : $"{belief.Level} intelligence";
+            Faction faction = dormantPresence.PlanetFaction.Faction;
+            string text = dormantPresence.StrategicInvasionForceId.HasValue
+                ? $"Invasion force · {confidence}"
+                : $"Dormant population · {confidence}";
+            return new FactionActivityPresentationModel(
+                faction,
+                text,
+                IconAtlas.GetPlanetaryOperationsFactionIconKey(faction));
+        }
+
+        public static string GetIconKey(Region region) => BuildDetails(region)?.IconKey;
+    }
+
+    [System.Obsolete("Use FactionActivityPresentation.")]
+    public static class OrkActivityPresentation
+    {
+        public static string Build(Region region) => FactionActivityPresentation.Build(region);
+
+        public static bool IsOrkFaction(Faction faction) =>
+            FactionCapabilities.HasDormantPopulations(faction);
     }
 
     public static class RegionTerrainPresentation

@@ -13,6 +13,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -73,6 +74,22 @@ namespace OnlyWar.Helpers.Turns
 
                 long targetStrengthBefore = mission.RegionFaction?.MilitaryStrength ?? 0;
                 StrategicCombatResult result = resolver.Resolve(mission);
+                long? inferredForceId = null;
+                if (!order.StrategicInvasionForceId.HasValue)
+                {
+                    List<long> inferredIds = order.AssignedSquads
+                        .Select(squad => _session.Sector.StrategicInvasionForces.FirstOrDefault(force =>
+                            force.IsActive && force.CommandSquad == squad)?.Id)
+                        .Where(id => id.HasValue)
+                        .Select(id => id.Value)
+                        .Distinct()
+                        .ToList();
+                    // A direct order can be built by a caller without the runtime identity. Only
+                    // infer it when exactly one command identity owns the order; never pick the
+                    // first active invasion force when multiple identities are present.
+                    inferredForceId = inferredIds.Count == 1 ? inferredIds[0] : null;
+                }
+                result.OriginatingStrategicInvasionForceId = order.StrategicInvasionForceId ?? inferredForceId;
                 long targetStrengthAfter = mission.RegionFaction?.MilitaryStrength ?? 0;
                 _recordScenarioPdfLost?.Invoke(
                     mission.RegionFaction,
@@ -120,6 +137,15 @@ namespace OnlyWar.Helpers.Turns
                     && order.Mission.TargetFaction != null)
                 {
                     ResolveNoContactSearch(order);
+                    continue;
+                }
+
+                if (order?.Mission?.MissionType == MissionType.Extermination
+                    && FactionCapabilities.HasDormantPopulations(order.Mission.TargetFaction)
+                    && (order.Mission.RegionFaction == null
+                        || order.Mission.RegionFaction.StrategicInvasionForceId == null))
+                {
+                    ResolveDormantPopulationCulling(order, missionContexts);
                     continue;
                 }
 
@@ -267,6 +293,52 @@ namespace OnlyWar.Helpers.Turns
                     + $"killCredits={context.EnemyKillCredits}, "
                     + $"logEntries={context.Log.Count}");
             }
+        }
+
+        private void ResolveDormantPopulationCulling(
+            Order order,
+            ICollection<MissionContext> missionContexts)
+        {
+            RegionFaction target = order.Mission.RegionFaction;
+            Region region = order.Mission.Region;
+            Faction targetFaction = order.Mission.TargetFaction;
+            List<BattleSquad> squads = order.AssignedSquads
+                .Where(squad => squad?.Members.Any(member => member.IsCombatEffective) == true)
+                .Select(squad => new BattleSquad(true, squad))
+                .ToList();
+            MissionContext context = new(order, squads, []);
+            PlanetFaction observer = region?.Planet?.PlanetFactionMap
+                .GetValueOrDefault(order.OwnerFaction?.Id ?? _session.Rules.PlayerFaction.Id);
+            FactionIntelBelief belief = observer?.GetTargetBelief(region, targetFaction);
+            bool contact = target != null
+                && (belief?.Level >= IntelLevel.Located
+                || belief?.Level >= IntelLevel.Confirmed
+                    && _session.Random.GetLinearDouble() < 0.75);
+            if (contact)
+            {
+                DormantPopulationCullingResult result = DormantPopulationCulling.Resolve(
+                    target, belief, _session.Rules.FactionBehaviorRules,
+                    observer?.GetRegionAwareness(region) is float awareness
+                        ? (long)Math.Max(0, awareness * 100)
+                        : 0);
+                if (result.PopulationRemoved > 0)
+                {
+                    target.RemoveMilitaryStrength(result.PopulationRemoved);
+                    target.DormantConsolidation = Math.Clamp(
+                        target.DormantConsolidation - result.ConsolidationRemoved, 0.0, 1.0);
+                }
+                context.Impact = result.PopulationRemoved;
+                context.EnemiesKilled = result.PopulationRemoved > 0 ? 1 : 0;
+                context.AddLog($"Dormant population culling confirmed contact and removed {result.PopulationRemoved:N0} population.");
+            }
+            else
+            {
+                context.NoViableTarget = true;
+                context.AddLog(target == null
+                    ? "Dormant population culling found no contact; the search consumed this operation's capacity."
+                    : "Dormant population culling failed to confirm contact; the search consumed this operation's capacity.");
+            }
+            missionContexts.Add(context);
         }
 
         private void ResolveNoContactSearch(Order order)

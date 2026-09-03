@@ -12,6 +12,8 @@ namespace OnlyWar.Models.Planets
     public static class PlanetTemplateEligibilityKeys
     {
         public const string PromisedWorld = "scenario.promised_world";
+        public const string GhostPopulationSource = "ambient.ghost_population_source";
+        [Obsolete("Use GhostPopulationSource.")]
         public const string OrkGhostSource = "ambient.ork_ghost_source";
     }
 

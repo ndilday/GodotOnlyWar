@@ -60,6 +60,22 @@ namespace OnlyWar.Helpers.Battles
         public EngagementOptionKind? LastEngagementOptionKind { get; set; }
         public int? LastScreenThreatSquadId { get; set; }
         public int? LastProtectedSquadId { get; set; }
+        public bool MobSuppressionPending { get; set; }
+        public bool MobSuppressionCommitted { get; set; }
+
+        [Obsolete("Use MobSuppressionPending.")]
+        public bool OrkSuppressionPending
+        {
+            get => MobSuppressionPending;
+            set => MobSuppressionPending = value;
+        }
+
+        [Obsolete("Use MobSuppressionCommitted.")]
+        public bool OrkSuppressionCommitted
+        {
+            get => MobSuppressionCommitted;
+            set => MobSuppressionCommitted = value;
+        }
 
         public Squad Squad { get; }
         public List<BattleSoldier> AbleSoldiers
@@ -199,6 +215,8 @@ namespace OnlyWar.Helpers.Battles
             LastEngagementOptionKind = null;
             LastScreenThreatSquadId = null;
             LastProtectedSquadId = null;
+            MobSuppressionPending = false;
+            MobSuppressionCommitted = false;
             // order weapon sets by strength of primary weapon
             AllocateEquipment();
         }
@@ -223,6 +241,8 @@ namespace OnlyWar.Helpers.Battles
             Status = BattleSquadStatus.Active;
             WithdrawalRole = WithdrawalRole.None;
             MoraleState = MoraleState.Steady;
+            MobSuppressionPending = false;
+            MobSuppressionCommitted = false;
             AllocateEquipment();
         }
 
@@ -244,6 +264,8 @@ namespace OnlyWar.Helpers.Battles
             LastEngagementOptionKind = original.LastEngagementOptionKind;
             LastScreenThreatSquadId = original.LastScreenThreatSquadId;
             LastProtectedSquadId = original.LastProtectedSquadId;
+            MobSuppressionPending = original.MobSuppressionPending;
+            MobSuppressionCommitted = original.MobSuppressionCommitted;
             _missionStartingAbleSoldierCount = original._missionStartingAbleSoldierCount;
             Dictionary<AmmunitionReservePool, AmmunitionReservePool> reservePoolCopies = [];
             Dictionary<RangedWeapon, RangedWeapon> rangedWeaponCopies = original._missionRangedWeapons

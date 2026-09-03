@@ -64,15 +64,16 @@ namespace OnlyWar.Helpers.Database.GameState
                     if (type != ScenarioType.None)
                     {
                         int promisedPlanetId = reader.GetInt32(8);
-                        ObjectiveState scenarioState = (ObjectiveState)reader.GetInt32(9);
-                        bool briefingAcknowledged = reader.GetBoolean(10);
-                        string briefingText = reader[11] is DBNull ? null : reader.GetString(11);
-                        int authorityId = reader.GetInt32(12);
+                        int invaderFactionId = reader.GetInt32(9);
+                        ObjectiveState scenarioState = (ObjectiveState)reader.GetInt32(10);
+                        bool briefingAcknowledged = reader.GetBoolean(11);
+                        string briefingText = reader[12] is DBNull ? null : reader.GetString(12);
+                        int authorityId = reader.GetInt32(13);
                         scenario = new CampaignScenario(type, promisedPlanetId, briefingText,
-                            authorityId, scenarioState, briefingAcknowledged);
+                            authorityId, scenarioState, briefingAcknowledged, invaderFactionId);
                     }
 
-                    int? homeWorldPlanetId = reader[13] is DBNull ? null : reader.GetInt32(13);
+                    int? homeWorldPlanetId = reader[14] is DBNull ? null : reader.GetInt32(14);
                     CampaignIdentity campaignIdentity = ReadCampaignIdentity(reader);
                     state = new GlobalState(new Date(millenium, year, week), requisition,
                                             geneseedStockpile, geneseedPurity, scenario,
@@ -92,13 +93,13 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO GlobalData
                     (Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile,
-                     GeneseedPurity, ScenarioType, ScenarioPromisedPlanetId, ScenarioState,
+                     GeneseedPurity, ScenarioType, ScenarioPromisedPlanetId, ScenarioInvaderFactionId, ScenarioState,
                      ScenarioBriefingAcknowledged, ScenarioBriefingText,
                      ScenarioOriginalAuthorityCharacterId, HomeWorldPlanetId,
                      CampaignId, CampaignSeed, RandomAlgorithmVersion)
                     VALUES
                     (@millenium, @year, @week, @saveVersion, @requisition, @geneseedStockpile,
-                     @geneseedPurity, @scenarioType, @scenarioPromisedPlanetId, @scenarioState,
+                     @geneseedPurity, @scenarioType, @scenarioPromisedPlanetId, @scenarioInvaderFactionId, @scenarioState,
                      @scenarioBriefingAcknowledged, @scenarioBriefingText,
                      @scenarioOriginalAuthorityCharacterId, @homeWorldPlanetId,
                      @campaignId, @campaignSeed, @randomAlgorithmVersion);";
@@ -111,6 +112,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@geneseedPurity", geneseedPurity);
                 command.AddParam("@scenarioType", (int)(scenario?.Type ?? ScenarioType.None));
                 command.AddParam("@scenarioPromisedPlanetId", scenario?.PromisedPlanetId ?? 0);
+                command.AddParam("@scenarioInvaderFactionId", scenario?.InvaderFactionId ?? 0);
                 command.AddParam("@scenarioState", (int)(scenario?.State ?? ObjectiveState.Pending));
                 command.AddParam("@scenarioBriefingAcknowledged",
                     (scenario?.BriefingAcknowledged ?? false) ? 1 : 0);

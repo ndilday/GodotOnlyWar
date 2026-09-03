@@ -89,7 +89,8 @@ public partial class StartMenu : Control
                 new GameRulesData(GameStorage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 settings.ChapterName,
-                settings.Seed);
+                settings.Seed,
+                settings.InvaderSelection);
             string startupWarning = TryCreateInitialAutosave(settings.ChapterName);
             LaunchMainGameScene(startupWarning);
         }

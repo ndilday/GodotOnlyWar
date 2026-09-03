@@ -34,6 +34,11 @@ namespace OnlyWar.Models.Planets
                 // Preserve embedded personnel first when a population loss forces the pools down.
                 long remaining = _population - _garrison;
                 if (_armedCivilians > remaining) _armedCivilians = remaining;
+                if (_population == 0
+                    && PlanetFaction?.Faction?.HasBehavior(FactionBehavior.Indelible) == true)
+                {
+                    IsPublic = false;
+                }
                 TrackMilitaryStrengthChange(militaryBefore);
             }
         }
@@ -127,7 +132,32 @@ namespace OnlyWar.Models.Planets
         // would hand an attacker free ground.
         public long? AssignedDefensiveBattleValue { get; set; }
 
+        /// <summary>
+        /// Whether this presence is openly active on the ground. For feral Orks this remains
+        /// false even when an observer has a confirmed belief; observer knowledge lives in the
+        /// PlanetFaction target-intelligence store instead of duplicating visibility state.
+        /// </summary>
         public bool IsPublic { get; set; }
+        public bool IsOpenlyActive => IsPublic;
+        /// <summary>
+        /// Identity of the strategic invasion force coordinating this presence. Null means the
+        /// population is local and commandless; it is not a visibility marker.
+        /// </summary>
+        public long? StrategicInvasionForceId { get; set; }
+        /// <summary>Consolidation of commandless dormant population.</summary>
+        public double DormantConsolidation { get; set; }
+        [System.Obsolete("Use StrategicInvasionForceId.")]
+        public long? OrkWaaaghId
+        {
+            get => StrategicInvasionForceId;
+            set => StrategicInvasionForceId = value;
+        }
+        [System.Obsolete("Use DormantConsolidation.")]
+        public double OrkConsolidation
+        {
+            get => DormantConsolidation;
+            set => DormantConsolidation = value;
+        }
         // The first offensive after a hidden presence reveals is planned as an Ambush. Persisting
         // the marker prevents a save between revelation and planning from losing that advantage.
         public bool HasEmergenceAdvantage { get; set; }

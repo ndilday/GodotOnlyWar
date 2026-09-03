@@ -73,6 +73,13 @@ placeholder_text = "e.g. Heart of the Emperor"
 layout_mode = 2
 text = "Sector Seed"
 
+[node name="InvaderSelectionLabel" type="Label" parent="FormPanel/VBox"]
+layout_mode = 2
+text = "Opening Invader"
+
+[node name="InvaderSelection" type="OptionButton" parent="FormPanel/VBox"]
+layout_mode = 2
+
 [node name="SeedRow" type="HBoxContainer" parent="FormPanel/VBox"]
 layout_mode = 2
 theme_override_constants/separation = 8

@@ -6,6 +6,7 @@ using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -441,7 +442,7 @@ namespace OnlyWar.Helpers.Missions.Assault
         internal static List<Squad> GetRegionalDefensiveSquads(RegionFaction defendingRegionFaction)
         {
             Faction defender = defendingRegionFaction.PlanetFaction.Faction;
-            return defendingRegionFaction.Region.RegionFactionMap.Values
+            List<Squad> landedDefenders = defendingRegionFaction.Region.RegionFactionMap.Values
                 .Where(rf => FactionRelationshipService.AreAllied(
                     rf.PlanetFaction.Faction,
                     defender,
@@ -454,6 +455,22 @@ namespace OnlyWar.Helpers.Missions.Assault
                          // would be no show of force at all - it defends like any standing screen.
                          || s.CurrentOrders?.Mission.MissionType == MissionType.ShowOfForce)
                 .ToList();
+
+            // A strategic invasion force's command squad is strategic state, not a normal LandedSquad. It still
+            // has to be the first-class defender when its region is assaulted; otherwise the
+            // persistent commander can only die in strategic combat or assassination and never gets
+            // to exercise the defensive-battle priority described by the invasion-force rules.
+            if (GameDataSingleton.Instance?.Sector?.StrategicInvasionForces is IReadOnlyList<StrategicInvasionForce> forces)
+            {
+                landedDefenders.AddRange(forces
+                    .Where(force => force.IsActive
+                        && force.Faction == defender
+                        && force.CurrentRegion == defendingRegionFaction.Region
+                        && force.CommandSquad != null)
+                    .Select(force => force.CommandSquad));
+            }
+
+            return landedDefenders.Distinct().ToList();
         }
 
         private static List<Squad> CapTacticalForce(IEnumerable<Squad> squads)

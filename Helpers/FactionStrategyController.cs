@@ -5,6 +5,7 @@ using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -439,16 +440,18 @@ public class FactionStrategyController
             yield break;
         }
 
-        if (IsWinnable(offensive))
+        if (IsWinnableForFaction(faction, offensive, GameDataSingleton.Instance?.GameRulesData?.FactionBehaviorRules))
         {
             yield return new MissionCandidate
             {
                 Plan = OffensivePlan.Assault,
                 Offensive = offensive,
-                Score = RewardRiskScore(offensive) * 10.0
+                Score = FactionCapabilities.GeneratesInvasions(faction)
+                    ? offensive.DefenderBattleValue
+                    : RewardRiskScore(offensive) * 10.0
             };
         }
-        else if (IsRaidViable(offensive))
+        else if (!FactionCapabilities.GeneratesInvasions(faction) && IsRaidViable(offensive))
         {
             yield return new MissionCandidate
             {
@@ -1602,6 +1605,20 @@ public class FactionStrategyController
     {
         return offensive.AvailableAttackingForce
             > offensive.EstimatedDefenderBattleValue * OffensiveForceRatioThreshold;
+    }
+
+    private static bool IsWinnableForFaction(
+        Faction faction,
+        PotentialOffensive offensive,
+        FactionBehaviorRulesProfile behaviorRules = null)
+    {
+        if (FactionCapabilities.GeneratesInvasions(faction))
+        {
+            return offensive.AvailableAttackingForce
+                >= (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue
+                    * (behaviorRules?.DefendedLandingRatio ?? 2.0));
+        }
+        return IsWinnable(offensive);
     }
 
     internal static double RewardRiskScore(PotentialOffensive offensive)

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using System;
 
 namespace OnlyWar.Models.Missions
 {
@@ -68,6 +69,14 @@ namespace OnlyWar.Models.Missions
         public StrategicCombatOutcome Outcome { get; }
         public bool AttackerWon { get; }
         public bool ControlChanged { get; }
+        public long? OriginatingStrategicInvasionForceId { get; internal set; }
+
+        [Obsolete("Use OriginatingStrategicInvasionForceId.")]
+        public long? OriginatingOrkWaaaghId
+        {
+            get => OriginatingStrategicInvasionForceId;
+            internal set => OriginatingStrategicInvasionForceId = value;
+        }
 
         public StrategicCombatResult(
             RegionFaction target,

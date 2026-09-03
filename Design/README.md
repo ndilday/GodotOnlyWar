@@ -45,7 +45,8 @@ Generated Godot `.import` metadata does not belong here. Render scripts should o
 
 The Alpha 0.8 event spine, Command workspace, faction-relationship/target-intelligence plans,
 equipment/ammunition foundation, Chapter Muster and squad-lineage work, Recovery Operations and
-individual postings, and Planetary Operations workspace have been promoted into `OnlyWar_TDD.md`;
+individual postings, Planetary Operations workspace, and Ork rules completion have been promoted
+into `OnlyWar_TDD.md`;
 their implementation facts and verification boundaries are recorded there. The three corresponding
 Active plans were deleted on 2026-08-21 under the promotion rule. `ForceLegibility.md` was implemented,
 distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is now recorded in

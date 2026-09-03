@@ -7,6 +7,9 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.Units;
+using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Models.Orks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,6 +30,22 @@ namespace OnlyWar.Models
         public IReadOnlyList<Faction> Factions { get => _factions; }
         public Faction PlayerFaction { get; }
         public Faction DefaultFaction { get; }
+        public FactionBehaviorRulesProfile FactionBehaviorRules { get; }
+        public IReadOnlyDictionary<string, FactionBehaviorRulesProfile> FactionBehaviorRulesProfiles { get; }
+        internal UnitTemplate StrategicCommandUnitTemplate { get; }
+        // Legacy accessors are compatibility projections for old scenario/test content. New
+        // production behavior resolves factions through FactionCapabilities and uses the generic
+        // rules profile above.
+        [Obsolete("Resolve factions through FactionCapabilities.")]
+        public Faction OrkFaction => FactionCapabilities.WithCapability(
+            _factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
+        [Obsolete("Use FactionBehaviorRules.")]
+        public OrkCampaignRulesProfile OrkCampaignRules =>
+            FactionBehaviorRules as OrkCampaignRulesProfile;
+        [Obsolete("Use FactionBehaviorRules.")]
+        public FactionBehaviorRulesProfile OrkInfestationRulesProfile => FactionBehaviorRules;
+        [Obsolete("Use StrategicCommandUnitTemplate.")]
+        internal UnitTemplate OrkCommandUnitTemplate => StrategicCommandUnitTemplate;
         public IReadOnlyDictionary<int, BaseSkill> BaseSkillMap { get => _baseSkillMap; }
         public IReadOnlyList<SkillTemplate> SkillTemplateList { get => _skillTemplateList; }
         public IReadOnlyDictionary<int, List<HitLocationTemplate>> BodyHitLocationTemplateMap { get => _bodyHitLocationTemplateMap; }
@@ -49,7 +68,6 @@ namespace OnlyWar.Models
         public SupplyEconomyRules SupplyEconomyRules { get; }
         public ScenarioProfileCatalog ScenarioProfiles { get; }
         public FactionPlanetPresenceCatalog FactionPlanetPresence { get; }
-
         // Validated registry of code-owned skill roles resolved through stable rules-data keys
         // (see TDD §8.3). Resolved and validated at load; fails fast if missing.
         public NamedSkillRegistry Skills { get; }
@@ -106,9 +124,39 @@ namespace OnlyWar.Models
             ScenarioProfiles = new ScenarioProfileCatalog(gameBlob.ScenarioProfiles);
             FactionPlanetPresence = new FactionPlanetPresenceCatalog(
                 gameBlob.FactionPlanetPresenceRules);
+            FactionBehaviorRulesProfiles = ResolveFactionBehaviorRulesProfiles(
+                gameBlob.FactionBehaviorRulesProfiles);
+            FactionBehaviorRules = FactionBehaviorRulesProfiles.Values.First() is OrkCampaignRulesProfile legacyProfile
+                ? legacyProfile
+                : new OrkCampaignRulesProfile(FactionBehaviorRulesProfiles.Values.First());
+            StrategicCommandUnitTemplate = EnsureStrategicCommandUnitTemplate();
             ValidateFactionGenerationPolicies(gameBlob.ScenarioFactionOptions);
             ValidateRatingDefinitions();
             ValidateSoldierTemplateRequirements();
+        }
+
+        private static IReadOnlyDictionary<string, FactionBehaviorRulesProfile>
+            ResolveFactionBehaviorRulesProfiles(IReadOnlyList<FactionBehaviorRulesProfile> profiles)
+        {
+            if (profiles == null || profiles.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Rules database must define at least one faction behavior profile; found {profiles?.Count ?? 0}.");
+            }
+            Dictionary<string, FactionBehaviorRulesProfile> result =
+                new(StringComparer.OrdinalIgnoreCase);
+            foreach (FactionBehaviorRulesProfile profile in profiles)
+            {
+                if (profile == null) throw new InvalidOperationException(
+                    "Rules database contains a null faction behavior profile.");
+                profile.Validate();
+                if (!result.TryAdd(profile.Key.Trim(), profile))
+                {
+                    throw new InvalidOperationException(
+                        $"Rules database contains duplicate faction behavior profile '{profile.Key}'.");
+                }
+            }
+            return result;
         }
 
         private Faction ResolveExactlyOneFaction(
@@ -122,6 +170,40 @@ namespace OnlyWar.Models
                     $"Rules database must define exactly one {roleName}; found {matches.Count}.");
             }
             return matches[0];
+        }
+
+        private UnitTemplate EnsureStrategicCommandUnitTemplate()
+        {
+            Faction faction = FactionCapabilities.WithCapability(
+                _factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
+            if (faction == null) return null;
+
+            SquadTemplate commandTemplate = faction.SquadTemplates?.Values
+                .Where(candidate => candidate.BattleValue > 0
+                    && candidate.SquadType.HasFlag(SquadTypes.HQ))
+                .OrderByDescending(candidate => candidate.Elements
+                    .Count(element => element.SoldierTemplate?.IsSquadLeader == true))
+                .ThenByDescending(candidate => candidate.BattleValue)
+                .ThenBy(candidate => candidate.Id)
+                .FirstOrDefault();
+            if (commandTemplate == null) return null;
+
+            UnitTemplate existing = faction.UnitTemplates?.Values
+                .FirstOrDefault(candidate => candidate.HQSquad == commandTemplate);
+            if (existing != null) return existing;
+
+            const int runtimeTemplateId = -1700001;
+            existing = faction.UnitTemplates?.GetValueOrDefault(runtimeTemplateId);
+            if (existing != null) return existing;
+
+            UnitTemplate generated = new(
+                runtimeTemplateId,
+                "Strategic Invasion Warband",
+                false,
+                commandTemplate,
+                []);
+            faction.AddRuntimeUnitTemplate(generated);
+            return generated;
         }
 
         private static SectorGenerationProfile ResolveDefaultSectorGenerationProfile(

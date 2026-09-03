@@ -1,8 +1,10 @@
 using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -101,6 +103,8 @@ namespace OnlyWar.Helpers.Turns
 
         private void ProcessGovernors(Planet planet)
         {
+            Faction controllingFaction = planet.GetControllingFaction();
+            bool invasionControlled = FactionCapabilities.GeneratesInvasions(controllingFaction);
             foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values.ToList())
             {
                 long population = planet.Regions.Sum(region =>
@@ -109,7 +113,9 @@ namespace OnlyWar.Helpers.Turns
                         out RegionFaction regionFaction)
                         ? regionFaction.Population
                         : 0);
-                if (population > 0 && planetFaction.Leader != null)
+                if (population > 0
+                    && planetFaction.Leader != null
+                    && !(invasionControlled && planetFaction.Faction.IsDefaultFaction))
                 {
                     _governorTurnProcessor.ProcessGovernor(planet, planetFaction);
                 }

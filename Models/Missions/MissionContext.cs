@@ -118,6 +118,10 @@ namespace OnlyWar.Models.Missions
             DaysElapsed >= (MustExfiltrate ? MissionDurationDays - 1 : MissionDurationDays);
 
         public Order Order { get; }
+        public long? StrategicInvasionForceId => Order?.StrategicInvasionForceId;
+
+        [Obsolete("Use StrategicInvasionForceId.")]
+        public long? OrkWaaaghId => StrategicInvasionForceId;
         public List<BattleSquad> MissionSquads { get; }
         public IReadOnlyList<PlayerSoldier> StartingPlayerParticipants { get; }
 
@@ -207,6 +211,10 @@ namespace OnlyWar.Models.Missions
         // mission, so a brother can appear in exactly one of the two totals and only once.
         public int FriendlyDeaths { get; private set; }
         public int FriendlyIncapacitated { get; private set; }
+        // All confirmed battlefield deaths in this mission, including non-player soldiers. The
+        // Ork campaign uses the stable Warboss soldier identity for deterministic tactical leader
+        // death without changing the ordinary aftermath policy.
+        public HashSet<int> KilledSoldierIds { get; } = [];
 
         /// <summary>
         /// What the Apothecary attached to this order did over the operation
@@ -334,6 +342,10 @@ namespace OnlyWar.Models.Missions
 
         public void RecordBattleOutcome(BattleHistory battleHistory)
         {
+            if (battleHistory != null)
+            {
+                KilledSoldierIds.UnionWith(battleHistory.KilledSoldierIds);
+            }
             EnemiesKilled += battleHistory.FirstSideEnemyDeaths;
             EnemyKillCredits += battleHistory.FirstSideEnemiesKilled;
             if (AssassinationTargetSoldierId is int targetId

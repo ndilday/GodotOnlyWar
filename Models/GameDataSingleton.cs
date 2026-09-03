@@ -18,11 +18,12 @@ namespace OnlyWar.Models
         public bool IsInitialized => GameRulesData != null && Sector != null && Date != null;
         internal CampaignRecoverabilityTracker Recoverability { get; } = new();
 
-        public void InitializeNewGameData(GameRulesData gameRulesData, Date date, string chapterName = null, int seed = 1)
+        public void InitializeNewGameData(GameRulesData gameRulesData, Date date, string chapterName = null, int seed = 1,
+                                          InvaderFactionSelection invaderSelection = InvaderFactionSelection.Tyranids)
         {
             GameRulesData = gameRulesData;
             Date = date;
-            Sector = SectorBuilder.GenerateSector(seed, gameRulesData, date, chapterName); // New sector generation
+            Sector = SectorBuilder.GenerateSector(seed, gameRulesData, date, chapterName, invaderSelection); // New sector generation
             UpgradePending = false;
             Recoverability.BeginNewCampaign();
         }

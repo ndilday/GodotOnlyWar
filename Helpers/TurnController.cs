@@ -27,6 +27,7 @@ namespace OnlyWar.Helpers
         private readonly ScenarioTurnProcessor _scenarioTurnProcessor;
         private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
         private readonly RecruitmentTurnProcessor _recruitmentTurnProcessor;
+        private readonly FactionCapabilityCampaignProcessor _factionCapabilityCampaignProcessor;
         private readonly GameSession _session;
         private readonly TurnIntelligenceLedger _intelLedger;
         private readonly OrganicPopulationGrowthLedger _organicPopulationGrowthLedger;
@@ -84,6 +85,7 @@ namespace OnlyWar.Helpers
             _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_session);
             _recruitmentTurnProcessor = new RecruitmentTurnProcessor(
                 _session, _organicPopulationGrowthLedger);
+            _factionCapabilityCampaignProcessor = new FactionCapabilityCampaignProcessor(_session);
         }
 
         public TurnResolutionResult ProcessTurn(Sector sector)
@@ -105,6 +107,9 @@ namespace OnlyWar.Helpers
                 defaultFaction);
             InitializeWorldControlEpisodes(sector, defaultFaction);
             HashSet<(int PlanetId, int FactionId)> hiddenCults = SnapshotHiddenCults(sector);
+            // Ghost sources and already-active strategic invasion forces resolve before NPC planning, so a newly
+            // consolidated force can act in the same week it announces itself.
+            _factionCapabilityCampaignProcessor.ProcessWeeklyState(sector);
 
             // There is no longer a pre-planning shaping phase. Diversions used to resolve here, before
             // NPC planning, so their projected threat could inflate the garrison the enemy chose to
@@ -127,6 +132,14 @@ namespace OnlyWar.Helpers
             // --- 2. Mission Execution Phase ---
             var strategicCombatOrders = allOrdersThisTurn.Where(o => o.Mission is StrategicCombatMission);
             _missionTurnProcessor.ProcessStrategicCombatMissions(strategicCombatOrders, StrategicCombatResults);
+            foreach (StrategicCombatResult strategicResult in StrategicCombatResults)
+            {
+                if (strategicResult.ControlChanged)
+                {
+                    _factionCapabilityCampaignProcessor.AffiliateCapturedRegion(sector, strategicResult);
+                }
+            }
+            _factionCapabilityCampaignProcessor.ResolveStrategicLeaderDeaths(sector, StrategicCombatResults);
 
             var combatOrders = allOrdersThisTurn.Where(o =>
                 !o.Force.IsEmpty
@@ -146,12 +159,15 @@ namespace OnlyWar.Helpers
 
             // --- 3. Planetary Simulation & Resolution Phase ---
             _missionAftermathProcessor.ApplyMissionResults(MissionContexts);
+            _factionCapabilityCampaignProcessor.AffiliateTacticalCaptures(sector, MissionContexts);
+            _factionCapabilityCampaignProcessor.ResolveTacticalLeaderDeaths(sector, MissionContexts);
             _chapterUpkeepProcessor.ProcessMedical(sector);
             // Days a mission did not need become training credit, so the upkeep pass needs to know how
             // long each squad was actually committed for.
             _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector, BuildMissionDaysBySquad());
             _fleetTurnProcessor.AdvanceFleetMovement(sector);
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
+            _factionCapabilityCampaignProcessor.ProcessAttractionAndFragmentation(sector);
             RelocateAdministrativeStationsAfterHomeWorldLoss(sector);
             RecordStrategicNarrativeEvents(sector, defaultFaction, hiddenCults);
             _lastResult.RecruitmentReport = _recruitmentTurnProcessor.Process();

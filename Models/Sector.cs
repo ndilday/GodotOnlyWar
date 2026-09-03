@@ -1,6 +1,8 @@
 ﻿using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Models.Orks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,6 +21,11 @@ namespace OnlyWar.Models
         private readonly List<Character> _characters;
         private readonly Dictionary<int, Order> _orders;
         private readonly FactionRelationshipLedger _relationshipLedger;
+        private readonly List<OrkGhostSource> _orkGhostSources;
+        private readonly List<OrkWaaagh> _orkWaaaghs;
+        private readonly List<GhostPopulationSource> _ghostPopulationSources;
+        private readonly List<StrategicInvasionForce> _strategicInvasionForces;
+        private long _nextOrkWaaaghId;
 
         public List<Character> Characters { get => _characters; }
         public IReadOnlyDictionary<int, Planet> Planets { get => _planets; }
@@ -31,6 +38,10 @@ namespace OnlyWar.Models
         public PlayerForce PlayerForce { get; }
         public FactionRelationshipLedger RelationshipLedger => _relationshipLedger;
         public FactionRelationshipLedger FactionRelationships => _relationshipLedger;
+        public IReadOnlyList<OrkGhostSource> OrkGhostSources => _orkGhostSources;
+        public IReadOnlyList<OrkWaaagh> OrkWaaaghs => _orkWaaaghs;
+        public IReadOnlyList<GhostPopulationSource> GhostPopulationSources => _ghostPopulationSources;
+        public IReadOnlyList<StrategicInvasionForce> StrategicInvasionForces => _strategicInvasionForces;
 
         // The framed opening scenario stamped onto this sector at generation
         // (Design/Reference/OpeningScenario.md). Null for plain-sandbox sectors,
@@ -50,6 +61,11 @@ namespace OnlyWar.Models
             _warpLanes = [];
             _orders = [];
             _relationshipLedger = new FactionRelationshipLedger();
+            _orkGhostSources = [];
+            _orkWaaaghs = [];
+            _ghostPopulationSources = [];
+            _strategicInvasionForces = [];
+            _nextOrkWaaaghId = 1;
         }
 
         public Sector(PlayerForce playerForce, List<Character> characters, List<Planet> planets, List<TaskForce> fleets,
@@ -212,6 +228,89 @@ namespace OnlyWar.Models
         public void AddNewOrder(Order newOrder)
         {
             _orders[newOrder.Id] = newOrder;
+        }
+
+        public void AddOrkGhostSource(OrkGhostSource source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            AddGhostPopulationSource(source);
+        }
+
+        public void AddGhostPopulationSource(GhostPopulationSource source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (_ghostPopulationSources.Any(existing => existing.Id == source.Id))
+                throw new InvalidOperationException($"Ghost population source id {source.Id} already exists.");
+            if (source is OrkGhostSource legacy)
+            {
+                _orkGhostSources.Add(legacy);
+            }
+            else
+            {
+                // Keep a read-only compatibility projection for legacy callers that use the old
+                // collection to allocate the next source id. Canonical state remains the object
+                // in GhostPopulationSources.
+                _orkGhostSources.Add(new OrkGhostSource(
+                    source.Id, source.Position, source.WorldType, source.Population,
+                    source.PopulationCapacity, source.Consolidation));
+            }
+            _ghostPopulationSources.Add(source);
+        }
+
+        public bool RemoveGhostPopulationSource(GhostPopulationSource source) =>
+            source != null && _ghostPopulationSources.Remove(source)
+                && _orkGhostSources.RemoveAll(legacy => legacy.Id == source.Id) > 0;
+
+        public bool RemoveOrkGhostSource(OrkGhostSource source) =>
+            RemoveGhostPopulationSource(source);
+
+        public long GetNextStrategicInvasionForceId() => _nextOrkWaaaghId++;
+
+        public void AddStrategicInvasionForce(StrategicInvasionForce force)
+        {
+            if (force == null) throw new ArgumentNullException(nameof(force));
+            if (_strategicInvasionForces.Any(existing => existing.Id == force.Id))
+                throw new InvalidOperationException($"Strategic invasion force id {force.Id} already exists.");
+            if (force is OrkWaaagh legacy)
+            {
+                _orkWaaaghs.Add(legacy);
+            }
+            else
+            {
+                OrkWaaagh compatibility = new(
+                    force.Id,
+                    force.Faction,
+                    force.CommandSquad,
+                    force.CurrentRegion,
+                    force.OriginPlanet)
+                {
+                    DestinationPlanet = force.DestinationPlanet,
+                    TravelWeeksRemaining = force.TravelWeeksRemaining,
+                    TransitBattleValue = force.TransitBattleValue,
+                    IsActive = force.IsActive
+                };
+                foreach (RegionFaction presence in force.KnownRegions)
+                {
+                    compatibility.TrackRegion(presence);
+                }
+                _orkWaaaghs.Add(compatibility);
+            }
+            _strategicInvasionForces.Add(force);
+            _nextOrkWaaaghId = Math.Max(_nextOrkWaaaghId, force.Id + 1);
+        }
+
+        public bool RemoveStrategicInvasionForce(StrategicInvasionForce force)
+        {
+            if (force == null || !_strategicInvasionForces.Remove(force)) return false;
+            _orkWaaaghs.RemoveAll(legacy => legacy.Id == force.Id);
+            return true;
+        }
+
+        public long GetNextOrkWaaaghId() => GetNextStrategicInvasionForceId();
+
+        public void AddOrkWaaagh(OrkWaaagh waaagh)
+        {
+            AddStrategicInvasionForce(waaagh);
         }
 
         public void RemoveOrder(Order existingOrder)

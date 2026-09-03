@@ -5,10 +5,12 @@ using OnlyWar.Models.Battles;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models;
 using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Turns;
 
 namespace OnlyWar.Helpers.Missions.Assassinate
 {
@@ -48,21 +50,46 @@ namespace OnlyWar.Helpers.Missions.Assassinate
                 + MissionAggressionModifiers.EffectDifficulty(context.Order.LevelOfAggression);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
-            
-            // TODO: my current data design doesn't handle HQ+Bodyguard in a single squad very well, so for now, I should come up with a way to associate each HQ with a particular separate bodyguard squad
-            var request = new ForceGenerationRequest
-            {
-                Faction = context.Order.Mission.RegionFaction.PlanetFaction.Faction,
-                TargetBattleValue = (int)margin,
-                Profile = ForceCompositionProfile.SpecialHQTarget,
-                Tier = context.Order.Mission.MissionSize
-            };
-            context.OpposingSquads = ForceGenerator.GenerateForce(
-                    request,
+
+            Region targetRegion = enemyFaction.Region;
+            StrategicInvasionForce physicalForce = GameDataSingleton.Instance?.Sector?.StrategicInvasionForces
+                ?.FirstOrDefault(force => force.IsActive
+                    && force.Faction == enemyFaction.PlanetFaction.Faction
+                    && force.CurrentRegion == targetRegion);
+            bool reachedCommander = physicalForce != null
+                && FactionCapabilityCampaignProcessor.StrategicCommanderCanBeReached(
+                    physicalForce,
+                    targetRegion,
+                    margin,
                     execution.Random,
-                    execution.EntityIds)
-                .Select(s => new BattleSquad(false, s))
-                .ToList();
+                    GameDataSingleton.Instance?.GameRulesData?.FactionBehaviorRules);
+
+            if (reachedCommander)
+            {
+                // The strategic commander is a real persistent squad. Putting it directly into the encounter
+                // lets the existing battle casualty ledger drive the deterministic tactical death
+                // hook after the mission resolves.
+                context.OpposingSquads = [new BattleSquad(false, physicalForce.CommandSquad)];
+            }
+            else
+            {
+                // If the Warboss is not physically present, assassination still affects the local
+                // leader/bodyguard only. It must not manufacture a kill against the persistent
+                // invasion-force identity from another region (or from transit).
+                var request = new ForceGenerationRequest
+                {
+                    Faction = context.Order.Mission.RegionFaction.PlanetFaction.Faction,
+                    TargetBattleValue = (int)margin,
+                    Profile = ForceCompositionProfile.SpecialHQTarget,
+                    Tier = context.Order.Mission.MissionSize
+                };
+                context.OpposingSquads = ForceGenerator.GenerateForce(
+                        request,
+                        execution.Random,
+                        execution.EntityIds)
+                    .Select(s => new BattleSquad(false, s))
+                    .ToList();
+            }
 
             BattleSquad targetSquad = context.OpposingSquads.FirstOrDefault();
             context.AssassinationTargetSoldierId = targetSquad?.SquadLeader?.Soldier.Id

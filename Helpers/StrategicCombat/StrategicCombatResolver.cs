@@ -248,7 +248,14 @@ namespace OnlyWar.Helpers.StrategicCombat
             // (PrepareAssaultMissionStep.AssembleDefendingForce). Reading the raw pool here meant a
             // disorganized region was priced as fully mobilized for strategic combat while being priced
             // correctly everywhere else.
-            return defender.GetDeployedStrength() + landedNpcBattleValue;
+            long persistentCommandBattleValue = GameDataSingleton.Instance?.Sector?.StrategicInvasionForces
+                ?.Where(force => force.IsActive
+                    && force.Faction == defender.PlanetFaction.Faction
+                    && force.CurrentRegion == defender.Region)
+                .SelectMany(force => force.CommandSquad?.Members ?? [])
+                .Sum(member => (long)(member.Template?.BattleValue ?? 0))
+                ?? 0L;
+            return defender.GetDeployedStrength() + landedNpcBattleValue + persistentCommandBattleValue;
         }
 
         internal static long CalculateDefenderBattleValueAgainst(RegionFaction target, Faction attacker)

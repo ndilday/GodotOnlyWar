@@ -5,6 +5,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Models.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,6 +48,10 @@ namespace OnlyWar.Helpers.Database.GameRules
             RequireNotEmpty(rules.FactionPlanetPresenceRules, "FactionPlanetPresenceRule", errors);
             RequireNotEmpty(rules.ChapterGenerationProfiles, "ChapterGenerationProfile", errors);
             RequireNotEmpty(rules.SectorGenerationProfiles, "SectorGenerationProfile", errors);
+            RequireNotEmpty(
+                rules.FactionBehaviorRulesProfiles,
+                "FactionBehaviorRulesProfile (or legacy OrkCampaignProfile)",
+                errors);
 
             ValidateSectorGenerationProfiles(rules.SectorGenerationProfiles, errors);
             ValidatePlanetTemplates(rules.PlanetTemplates, errors);
@@ -59,11 +64,35 @@ namespace OnlyWar.Helpers.Database.GameRules
             ValidateScoutTrainingOptions(rules.ScoutTrainingOptions, errors);
             ValidateFactionContent(rules, errors);
             ValidateEquipmentCatalog(rules.EquipmentCatalog, errors);
+            ValidateFactionBehaviorProfiles(rules.FactionBehaviorRulesProfiles, errors);
 
             if (errors.Count > 0)
             {
                 throw new InvalidOperationException(
                     "Rules database validation failed:\n - " + string.Join("\n - ", errors));
+            }
+        }
+
+        private static void ValidateFactionBehaviorProfiles(
+            IReadOnlyList<FactionBehaviorRulesProfile> profiles,
+            ICollection<string> errors)
+        {
+            if (profiles == null) return;
+            HashSet<string> keys = new(StringComparer.OrdinalIgnoreCase);
+            foreach (FactionBehaviorRulesProfile profile in profiles)
+            {
+                if (profile == null)
+                {
+                    errors.Add("FactionBehaviorRulesProfile contains a null row.");
+                    continue;
+                }
+                if (!keys.Add(profile.Key ?? string.Empty))
+                {
+                    errors.Add($"FactionBehaviorRulesProfile '{profile.Key}' is defined more than once.");
+                    continue;
+                }
+                try { profile.Validate(); }
+                catch (InvalidOperationException exception) { errors.Add(exception.Message); }
             }
         }
 
@@ -189,6 +218,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             foreach (string requiredContext in new[]
             {
                 PlanetTemplateEligibilityKeys.PromisedWorld,
+                PlanetTemplateEligibilityKeys.GhostPopulationSource,
                 PlanetTemplateEligibilityKeys.OrkGhostSource
             })
             {

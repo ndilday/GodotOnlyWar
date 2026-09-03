@@ -111,9 +111,7 @@ namespace OnlyWar.Helpers.Turns
             facts.AddRange(sector.Planets.Values
                 .SelectMany(planet => planet.Regions.Where(region => region != null))
                 .SelectMany(region => region.SpecialMissions)
-                .Where(mission => mission != null
-                    && (mission.MissionType != MissionType.Extermination
-                        || mission.RegionFaction != null && !mission.RegionFaction.IsPublic)
+                .Where(mission => MissionAvailability.IsPlayerVisibleSpecialMission(mission)
                     && !assignedMissionIds.Contains(mission.Id))
                 .OrderBy(mission => mission.RegionFaction?.Region?.Planet?.Name)
                 .ThenBy(mission => mission.RegionFaction?.Region?.Name)

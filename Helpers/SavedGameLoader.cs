@@ -5,8 +5,11 @@ using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Events;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Orks;
+using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Helpers
 {
@@ -22,15 +25,19 @@ namespace OnlyWar.Helpers
         {
             // The loaded root units are not registered on their faction by the data access
             // layer, but both the Army construction below and the in-game save path
-            // (MainGameScene enumerates units via Faction.Units) expect the player's order of
-            // battle to live there. Register the loaded player-faction root unit(s) here,
-            // mirroring NewChapterBuilder, so both load and any subsequent save work.
-            foreach (var rootUnit in gameState.Units
-                         .Where(u => u.UnitTemplate.Faction.Id == gameRulesData.PlayerFaction.Id))
+            // (MainGameScene enumerates units via Faction.Units) expect root units to live on their
+            // owning faction. This includes persistent Ork Warband units; registering only the
+            // Chapter roots would make the first save after loading silently drop a Warboss unit.
+            Dictionary<int, Faction> factionsById = gameRulesData.Factions
+                .ToDictionary(faction => faction.Id);
+            foreach (var rootUnit in gameState.Units)
             {
-                if (!gameRulesData.PlayerFaction.Units.Contains(rootUnit))
+                int? ownerId = rootUnit.UnitTemplate.Faction?.Id;
+                if (ownerId.HasValue
+                    && factionsById.TryGetValue(ownerId.Value, out Faction owner)
+                    && !owner.Units.Contains(rootUnit))
                 {
-                    gameRulesData.PlayerFaction.Units.Add(rootUnit);
+                    owner.Units.Add(rootUnit);
                 }
             }
             Army army = new Army(
@@ -97,6 +104,7 @@ namespace OnlyWar.Helpers
                 gameState.Planets,
                 gameState.Fleets,
                 gameState.RelationshipLedger);
+            RestoreFactionCapabilityState(sector, gameState, gameRulesData);
             // Reattach the Opening Scenario state (null for sandbox saves), which rides on the
             // GlobalData row rather than being derived (Design/Reference/OpeningScenario.md).
             sector.Scenario = gameState.Scenario;
@@ -118,6 +126,83 @@ namespace OnlyWar.Helpers
                     && order.OwnerFaction == playerForce.Faction);
             }
             return sector;
+        }
+
+        private static void RestoreFactionCapabilityState(
+            Sector sector,
+            GameStateDataBlob gameState,
+            GameRulesData gameRulesData)
+        {
+            foreach (GhostPopulationSource source in gameState.GhostPopulationSources
+                ?? gameState.OrkGhostSources?.Cast<GhostPopulationSource>()
+                ?? [])
+            {
+                sector.AddGhostPopulationSource(source);
+            }
+
+            Dictionary<int, Region> regions = sector.Planets.Values
+                .SelectMany(planet => planet.Regions)
+                .ToDictionary(region => region.Id);
+            Dictionary<int, Squad> squads = gameState.Units
+                .SelectMany(unit => unit.GetAllSquads())
+                .ToDictionary(squad => squad.Id);
+            foreach (StrategicInvasionForceSaveData saved in gameState.StrategicInvasionForces
+                ?? gameState.OrkWaaaghs?.Cast<StrategicInvasionForceSaveData>()
+                ?? [])
+            {
+                if (!gameRulesData.Factions.Any(faction => faction.Id == saved.FactionId))
+                {
+                    throw new InvalidOperationException(
+                        $"Strategic invasion force {saved.Id} references missing faction {saved.FactionId}.");
+                }
+                if (!gameRulesData.Factions.ToDictionary(faction => faction.Id)
+                    .TryGetValue(saved.FactionId, out Faction faction)
+                    || !squads.TryGetValue(saved.CommandSquadId, out Squad commandSquad))
+                {
+                    throw new InvalidOperationException(
+                        $"Strategic invasion force {saved.Id} references a missing faction or command squad.");
+                }
+
+                Region currentRegion = saved.CurrentRegionId.HasValue
+                    ? regions.GetValueOrDefault(saved.CurrentRegionId.Value)
+                    : null;
+                Planet originPlanet = saved.OriginPlanetId.HasValue
+                    ? sector.Planets.GetValueOrDefault(saved.OriginPlanetId.Value)
+                    : null;
+                Planet destinationPlanet = saved.DestinationPlanetId.HasValue
+                    ? sector.Planets.GetValueOrDefault(saved.DestinationPlanetId.Value)
+                    : null;
+                // The legacy subtype is retained at this boundary so old save/test callers that
+                // inspect OrkWaaaghs continue to see the same object; the sector registers it
+                // through the capability-neutral StrategicInvasionForce collection.
+                OrkWaaagh force = new(
+                    saved.Id,
+                    faction,
+                    commandSquad,
+                    currentRegion,
+                    originPlanet)
+                {
+                    DestinationPlanet = destinationPlanet,
+                    TravelWeeksRemaining = saved.TravelWeeksRemaining,
+                    TransitBattleValue = saved.TransitBattleValue,
+                    IsActive = saved.IsActive
+                };
+                commandSquad.CurrentRegion = currentRegion;
+                if (currentRegion != null
+                    && currentRegion.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction presence))
+                {
+                    // UnitDataAccess treats every seated squad as a landed squad. The strategic
+                    // The strategic commander is physical but deliberately absent from LandedSquads.
+                    presence.LandedSquads.Remove(commandSquad);
+                }
+                foreach (RegionFaction trackedPresence in regions.Values
+                    .Select(region => region.RegionFactionMap.GetValueOrDefault(faction.Id))
+                    .Where(item => item?.StrategicInvasionForceId == saved.Id))
+                {
+                    force.TrackRegion(trackedPresence);
+                }
+                sector.AddStrategicInvasionForce(force);
+            }
         }
 
         private static void ValidateSquadLineageInvariants(PlayerForce force)

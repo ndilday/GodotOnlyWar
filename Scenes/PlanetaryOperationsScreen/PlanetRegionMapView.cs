@@ -187,6 +187,13 @@ public partial class RegionMapCardView : Button
                 $"Disclosed presence: {presence.FactionName}",
                 badgeKeys);
         }
+        if (model.FactionActivity is string factionActivity)
+        {
+            AddFactionBadge(
+                model.FactionActivityIconKey ?? "map_faction",
+                factionActivity,
+                badgeKeys);
+        }
         if (model.HasPlayerForces)
         {
             AddFactionBadge("map_player", "Chapter forces present", badgeKeys);
@@ -391,6 +398,10 @@ public partial class RegionMapCardView : Button
             $"Unassigned Squads: {model.UnassignedSquads}",
             $"Mission Opportunities: {model.MissionOpportunities}"
         ];
+        if (model.FactionActivity is string factionActivity)
+        {
+            rows.Add($"Faction Activity: {factionActivity}");
+        }
         rows.AddRange(model.PublicEnemyForces.Select(enemy =>
             $"{enemy.FactionName}: {enemy.ForceEstimate}"));
         return string.Join("\n", rows);
@@ -647,7 +658,6 @@ public partial class PlanetRegionMapView : PanelContainer
         AddFactionIconLegend(row, "map_player", "ASTARTES");
         AddFactionIconLegend(row, "map_genestealer_cult", "CULT");
         AddFactionIconLegend(row, "map_tyranids", "TYRANIDS");
-        AddFactionIconLegend(row, "map_orks", "ORKS");
         return row;
     }
 

@@ -2,7 +2,7 @@
 
 **Version:** Alpha 0.8
 
-**Last Updated:** August 31, 2026
+**Last Updated:** September 1, 2026
 
 **Author:** Nathan Dilday
 
@@ -40,6 +40,7 @@
    - 6.9 [Sector Generation](#69-sector-generation)
    - 6.10 [Campaign Operations Services](#610-campaign-operations-services)
    - 6.11 [Sector Map Label Layer](#611-sector-map-label-layer)
+   - 6.12 [Ork Infestation](#612-ork-infestation)
 7. [UI Layer](#7-ui-layer)
    - 7.1 [View / Controller Pattern](#71-view--controller-pattern)
    - 7.2 [Screen Inventory](#72-screen-inventory)
@@ -282,11 +283,11 @@ Three properties of this design are easy to break and worth stating. The compone
 
 Written in full on each save (file is deleted and recreated from scratch using the loose, read-only `Database/SaveStructure.sql`). Read on load via `GameStateDataAccess` (singleton). All writes are wrapped in a single transaction; exceptions trigger rollback. Player saves live under `user://saves` (`%APPDATA%\OnlyWar\saves` on Windows), never in the install directory. `SaveGameCatalog` discovers `*.s3db` files and inspects only their metadata for the start menu.
 
-**Current Alpha 0.8 behavior:** `SaveFormat.CurrentVersion` is 14 and is written to `GlobalData.SaveVersion`. Format 12 adds stable line-formation ordinals and durable squad battle-history retention; format 13 adds persisted individual postings; format 14 adds administrative formation stations, explicit order ownership, character participants, and physical-only postings. Only format 14 is currently accepted; older and newer versions are rejected before campaign-table loading. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
+**Current Alpha 0.8 behavior:** `SaveFormat.CurrentVersion` is 18 and is written to `GlobalData.SaveVersion`. Format 12 adds stable line-formation ordinals and durable squad battle-history retention; format 13 adds persisted individual postings; format 14 adds administrative formation stations, explicit order ownership, character participants, and physical-only postings; format 15 adds stable-key Scout training options; format 16 adds indelible Ork region state, latent ghost sources, and persistent Waaagh! identities; format 17 adds successor Waaagh! transit Battle Value; format 18 adds the resolved Promised-World invader faction. Only format 18 is currently accepted; older and newer versions are rejected before campaign-table loading. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
 
 Named manual slots, the initial recovery point, three rolling post-turn autosaves, and the protected pre-turn recovery point all use the same atomic persistence path. `CampaignRecoverabilityTracker` records whether the current in-memory revision has a successfully written recovery point, while `SaveGameManager` owns slot naming, metadata, retention, overwrite protection, and restoration of the prior valid save on failure. The protected pre-turn write completes before `ProcessTurn` mutates state; failure blocks turn resolution. Alpha saves use exact-version compatibility only: there is no legacy save migrator or legacy-history import path.
 
-**Format version 7 (historical, 2026-08-08).** The `LastTurnReport` table stores one optional bounded JSON snapshot of the latest resolved turn report. The row is written in the same atomic transaction as the campaign and is hydrated onto `PlayerForce`; a missing table or row is treated as a null report so a campaign-start/pre-turn save can still load and show an intentional empty Last Turn Report state. The payload contains display strings, debrief lines, and compact casualty data only — never `MissionContext`, `BattleHistory`, or live campaign entities. Current format 14 loading rejects format 7 before table access.
+**Format version 7 (historical, 2026-08-08).** The `LastTurnReport` table stores one optional bounded JSON snapshot of the latest resolved turn report. The row is written in the same atomic transaction as the campaign and is hydrated onto `PlayerForce`; a missing table or row is treated as a null report so a campaign-start/pre-turn save can still load and show an intentional empty Last Turn Report state. The payload contains display strings, debrief lines, and compact casualty data only — never `MissionContext`, `BattleHistory`, or live campaign entities. Current format 18 loading rejects format 7 before table access.
 
 **Format version 8 (historical, 2026-08-11).** The save schema includes the canonical `CampaignEvent` /
 `CampaignEventEntity` / `CampaignEventPublication` tables, the persistent Chapter Chronicle
@@ -318,7 +319,7 @@ the already-projected ledgers. New campaigns emit the founding event after scena
 loaded scenario saves missing it receive a deterministic compatibility event from persisted roster,
 scenario, and world facts.
 
-The format-14 change follows the same rule established by format 6: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`. A save/load round-trip test cannot catch a missed bump because the writer recreates the schema from scratch; only an older file read by a newer build exposes it. There is intentionally no migration boundary for this feature: a format-13 or older file is reported as incompatible and must be replaced by a new format-14 campaign. `ChapterEquipmentRoleLoadout` and `SoldierEquipmentLoadout` store complete armor/item compositions; their item tables preserve quantity and initial-ready order, and personal rows are filtered against the current `Soldier` roster during save. `Squad.FormationOrdinal` and `Squad.HasBattleHistory` preserve line identity and historical Scout retention. Format 14 stores administrative duty stations and `OrderCharacter` relationships separately from `IndividualPosting`, which now preserves only a detached soldier's physical purpose, location, and start date.
+The format-14 change follows the same rule established by format 6: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`. A save/load round-trip test cannot catch a missed bump because the writer recreates the schema from scratch; only an older file read by a newer build exposes it. There is intentionally no migration boundary: an older or newer format is reported as incompatible and must be replaced by a new current-format campaign. `ChapterEquipmentRoleLoadout` and `SoldierEquipmentLoadout` store complete armor/item compositions; their item tables preserve quantity and initial-ready order, and personal rows are filtered against the current `Soldier` roster during save. `Squad.FormationOrdinal` and `Squad.HasBattleHistory` preserve line identity and historical Scout retention. Format 14 stores administrative duty stations and `OrderCharacter` relationships separately from `IndividualPosting`, which now preserves only a detached soldier's physical purpose, location, and start date. Format 16 adds the Ork region links and persistent source/Waaagh! records; format 17 adds the transit Battle Value carried by a successor Waaagh!; format 18 adds the resolved scenario invader identity.
 
 `CurrentCampaignSaveWriter` passes `PlayerForce.LastTurnReportSnapshot` explicitly to `GameStateDataAccess.SaveData`. A null snapshot is written as a valid current-version save with no `LastTurnReport` row; it is not an error and represents a campaign whose first turn has not resolved yet. Full battle replay is deliberately not part of this payload. The chapter event chronicle is also separate: it cannot reconstruct all strategic, construction, governor, recruitment, and mission-report cards.
 
@@ -345,7 +346,15 @@ PlanetFactionTargetIntel
 Region               (Id, PlanetId, RegionNumber, RegionName, RegionType,
                       IsUnderAssault, IntelligenceLevel, CarryingCapacity)
 RegionFaction        (RegionId, FactionId, IsPublic, Population, Garrison,
-                      Organization, OrganizedMilitaryStrength, Entrenchment, Detection, AntiAir)
+                      Organization, OrganizedMilitaryStrength, Entrenchment, Detection, AntiAir,
+                      StrategicInvasionForceId, DormantConsolidation)
+GhostPopulationSource
+                     (Id, FactionId, x, y, PlanetTemplateId, Population,
+                      PopulationCapacity, Consolidation)
+StrategicInvasionForce
+                     (Id, FactionId, CommandSquadId→Squad, CurrentRegionId→Region,
+                      OriginPlanetId→Planet, DestinationPlanetId→Planet,
+                      TravelWeeksRemaining, TransitBattleValue, IsActive)
 Mission              (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId,
                       IsRegionMission)                     -- 1 = region special mission, 0 = order-attached
 
@@ -416,7 +425,7 @@ WorldControlEpisode      (PlanetId→Planet, ImperialFactionId, LastControllingF
 
 **Note:** Region adjacency is runtime-only. It is reconstructed from the ordered region array on load and is not persisted.
 
-**Canonical campaign event spine.** The current format-14 save retains the format-8 event spine as the durable source of truth
+**Canonical campaign event spine.** The current format-18 save retains the format-8 event spine as the durable source of truth
 for player-facing career and battle facts. `PayloadJson` is decoded through the explicit
 `(CampaignEventType, PayloadVersion)` registry; entity rows retain stable ids and display-name
 snapshots, and publication rows retain the classifier decision so loading never reclassifies an old
@@ -459,6 +468,8 @@ leave the original body untouched.
 Sector
   ├─ Planets : Dictionary<int, Planet>
   ├─ Subsectors : List<Subsector>
+  ├─ OrkGhostSources : IReadOnlyList<OrkGhostSource>
+  ├─ OrkWaaaghs : IReadOnlyList<OrkWaaagh>
   ├─ RelationshipLedger : FactionRelationshipLedger
   └─ PlayerForce : PlayerForce
 
@@ -485,6 +496,8 @@ RegionFaction
   ├─ Entrenchment : int
   ├─ AntiAir : int
   ├─ LandedSquads : List<Squad>            (squads of this RegionFaction's faction currently in this region)
+  ├─ OrkWaaaghId : long?                   (active Waaagh! affiliation, if any)
+  ├─ OrkConsolidation : double             (local indelible Ork consolidation)
   └─ IsPublic : bool
 
 PlanetFaction
@@ -851,7 +864,7 @@ roster, but are independently targetable participants when assigned. `Specialist
 the global character roster by effective location rather than scanning only a home squad's regional list.
 `CharacterAvailabilityService` supplies decision-specific evaluations and reason codes for movement,
 order assignment, organizational transfer, local support, and continuous tasks. Compatibility aliases for
-format-13 callers remain obsolete; format-14 production state is `AssignedCharacters`, `CurrentOrder`,
+format-13 callers remain obsolete; current production state is `AssignedCharacters`, `CurrentOrder`,
 and physical `IndividualPosting` state.
 
 `Recruitment` is a persistent construction-like task order for the 10th Company recruitment staff. It is
@@ -1437,6 +1450,111 @@ OnlyWar.Tests.UI.SectorMapLabelLayoutTests covers band selection, deterministic 
 collision rejection, map bounds, scaling, anchor fallback, and region containment. Governance
 hierarchy tests cover the derived subsector name.
 
+### 6.12 Ork Infestation
+
+`FactionCapabilityCampaignProcessor` coordinates the Ork lifecycle independently of the founding
+scenario's invader. `SectorBuilder` seeds latent sources and configured inhabited-world feral
+presences after ordinary world generation; `TurnController` runs the capability-owned weekly phase
+before NPC planning. Orks are one rules-data configuration of the reusable ghost, dormant-population,
+invasion-generation, and mob-morale capabilities; no consumer identifies them from a display name,
+hardcoded faction id, or a composite behavior test.
+
+**Rules profile and feral state.** `FactionBehaviorRulesProfile` is a validated rules-data row
+loaded by `GameRulesData`. It supplies ghost cadence, consolidation and mobilization values, landing
+and successor thresholds, travel, growth, culling, initial-belief, and morale coefficients. The
+capability-owned rules classes remain the calculation API; code owns equations, operation ordering,
+clamps, invariants, and safe fallbacks. Feral means `RegionFaction.StrategicInvasionForceId == null`;
+`IsPublic` is the open-ground state and remains false for a known feral presence. Observer-specific
+`FactionIntelBelief` is independent of that state. Feral Orks do not migrate or accumulate across
+regions without an active local Waaagh! attraction.
+
+**Latent sources.** Each eligible empty sector tile receives a seeded profile chance, with a minimum
+source fallback when eligible tiles exist but all rolls miss. A source stores position, a generated
+non-Hive/non-Forge/non-Civilised world template, ecosystem population/capacity, and consolidation.
+It is not a visible `Planet`, fleet, beacon, or travel object. Population grows through the logistic
+path; consolidation advances by the profile-backed normal draw and forms a Waaagh! at its threshold.
+Mobilization dispatches the profile-backed fraction, leaves the source in place, and resets source
+consolidation to remaining population/capacity.
+
+**Formation, operations, and exact identity.** A completed source lands at an existing planet.
+Defended regions receive desired allocations of `2 × defending BV`; undefended regions receive the
+profile's `1000 BV` token; remainder goes to the largest valid region. The same `2 × defending BV`
+viability rule and largest-plausible-target ordering drive ordinary Ork strategy. Each
+`StrategicInvasionForce` owns one persistent commander squad in a real saved Unit/Squad, outside
+`RegionFaction.LandedSquads`. It contributes to strategic strength, is assigned to at most one
+battle, joins an offensive only after defence is considered, and is included when its region is
+assaulted. Orders and strategic results carry the exact Waaagh! id; capture, tactical affiliation,
+leader death, successor creation, and reports refuse ambiguous first-active fallbacks. An active
+Waaagh! attracts one third of each adjacent unaffiliated Ork population; transit Waaaghs attract
+nothing.
+
+**Leader loss and successors.** Strategic Warboss death uses `0.5 × loss fraction`; tactical death
+uses command-squad presence and the mission killed-soldier ledger, with no second strategic roll.
+Assassination is physical-location and concentration/success-quality gated. Leader death ends only
+that identity and preserves indelible populations. Organized regional fragments at or above the
+profile threshold create successors; smaller fragments remain leaderless and can reconsolidate.
+Successors stay on the current planet when viable ground exists, otherwise use the nearest existing
+planet and ordinary route time multiplied by `1.10`. Same-destination successors merge into a new
+identity, lose `10%` per losing claimant, and keep the strongest Warboss. Stranded successors remain
+on-map and re-evaluate.
+
+**Morale and leader coercion.** `MobMoraleSupportEvaluator` computes only a bounded mob-side
+support term from nearby mobs, casualties, routs, separation, and living command presence. Generic
+HQ support/loss is authoritative and is not counted twice. Live morale and the RNG-free withdrawal
+forecast call the same evaluator; realized support is recorded in `BattleEvent`. When an Ork squad
+would Route and has an available leader, the next round is committed to normal melee attacks
+against nearby squadmates. The Routing result is ignored completely, the leader takes no ordinary
+action, casualties remain real, and commitment, attacks, and consequences are replay-visible.
+
+**Strategic culling and presentation.** Confirmed feral intelligence creates a belief-gated
+Extermination opportunity. PDF culling is strategic and consumes no tactical battle: public threats,
+committed defence, and PDF survival take precedence, while outside help is considered only below the
+profile's effective-PDF floor. True positives reduce population/consolidation but never delete the
+indelible presence; false positives resolve as no-contact searches that consume the operation. Map
+cards, dossiers, tooltips, mission availability, and command attention use the same observer belief
+gate and never reveal hidden ground truth.
+
+**Promised World.** `NewGameSettings` resolves Tyranids, Orks, or deterministic Random and persists
+the selected result in `CampaignScenario.InvaderFactionId`. The Ork opening reuses the existing
+Promised-World objective, victory/lapse, and Home World reward loop, preserves a naturally rolled
+Genestealer Cult, records the canonical destroyed-fleet/no-reinforcement briefing, and incorporates
+local feral Orks into one opening Waaagh!. No live enemy fleet is required; feral survivors remain
+indelible after victory.
+
+**Persistence.** Format 16 added regional Ork links, latent sources, and persistent Waaaghs; format
+17 added successor transit BV; format 18 adds the resolved scenario invader. The loader restores
+source positions, command identities, affiliations, physical locations, transit state, and scenario
+selection, validates references, and keeps persistent command squads out of ordinary landed-squad
+collections. `SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 18. Beacon/scope
+state is intentionally absent because visible ghost worlds, fleets, and persisted threat scopes are
+outside the completed feature.
+
+### 6.13 Faction Capability Decoupling
+
+Campaign behavior is capability-owned rather than identity-owned. `FactionBehavior` exposes the
+independent `HasGhostPlanets`, `HasDormantPopulations`, `GeneratesInvasions`, and `MobMentality`
+flags; `FactionCapabilities` is the shared query boundary. Consumers must not reconstruct a
+faction identity from hostility, indelibility, population model, faction id, or display name.
+`InvadesOnVictory` is likewise consumed directly for victory aftermath decisions.
+
+Visibility, activity, and command affiliation are separate state axes. A regional presence uses
+`IsPublic`/`IsOpenlyActive` for disclosure, `DormantConsolidation` for dormant ecosystem state, and
+`StrategicInvasionForceId` for persistent command affiliation. `GhostPopulationSource` and
+`StrategicInvasionForce` are generic domain models; their compatibility projections and the old
+Ork-named save members exist only at the load/API boundary.
+
+`FactionBehaviorRulesProfile` and `FactionBehaviorRulesDataAccess` own reusable numeric tuning.
+`FactionCapabilityCampaignProcessor` coordinates the capability stages, with named seams for ghost
+seeding, dormant-population processing, invasion generation, and strategic invasion lifecycle.
+Commanders are selected from rules-data HQ roles (`SquadTypes.HQ` plus `IsSquadLeader`), not from
+the display name `Warboss`. Tactical morale support is provided by `MobMentality`, and dormant
+culling is gated by `HasDormantPopulations` and observer belief.
+
+Persistence uses the generic `GhostPopulationSource`, `StrategicInvasionForce`, and canonical
+regional columns. Older Ork table/column/member names remain read-compatible so existing saves can
+load and round-trip into the generic state. The capability-subset regression tests, rules-data
+validation tests, save/load tests, and planetary-operations presentation tests cover the contract.
+
 ---
 
 ## 7. UI Layer
@@ -1704,8 +1822,9 @@ the save/load round-trip tests.
 
 **Update (RDB-013 resolved):** `PlanetTemplateEligibility` is a data-owned many-to-many catalog
 that assigns planet-template IDs to stable generation contexts. The shipped contexts are
-`scenario.promised_world` and `ambient.ork_ghost_source`; `ScenarioBuilder` filters promised-world
-candidates through the first context, and future Ork ghost-source generation will use the second.
+`scenario.promised_world` and `ambient.ghost_population_source`; `ScenarioBuilder` filters
+promised-world candidates through the first context, and `GhostPlanetSeeder` filters ghost sources
+through the second.
 Runtime code no longer treats planet-template display names as eligibility rules. The rules loader
 validates table presence, referenced template IDs, required context coverage, and positive
 probability totals within each context. The migration seed retains the previous Hive/Forge and
@@ -1715,6 +1834,13 @@ Hive/Forge/Civilised exclusions as data, rather than executable name checks. Cov
 **Update (RDB-007 resolved — chapter-generation doctrine):** `ChapterGenerationDoctrine` (`Models/ChapterGenerationDoctrine.cs`) compiles the data-owned `ChapterGenerationProfile` assignment tables into a validated runtime contract. Soldier, squad, and unit roles resolve to the concrete template IDs selected by the profile; formation rows bind member and leader roles plus their code-owned founding candidate roles; unit-order rows preserve explicit company ordering and repeated instances. `NewChapterBuilder` consumes this doctrine for all chapter template, formation, company, and ordering decisions, while retaining founding thresholds and distribution algorithms in code. The loader validates faction ownership, complete role coverage, formation slot compatibility, administrative capabilities, and the selected root graph before a campaign can start. Covered by `RulesDatabaseValidationTests`, `ChapterGenerationDoctrineTests`, and `NewChapterBuilderTests`.
 
 **Update (validated sector-generation faction registry):** `SectorGenerationFactions` (`Models/SectorGenerationFactions.cs`) resolves the non-player factions `SectorBuilder` places from the rules database's stable role assignments. The infiltrator, invader, and insurrectionist roles are resolved once at rules-DB load (`GameRulesData.SectorFactions`), failing fast on a missing, duplicate, unknown, or behavior-incompatible assignment. Player and default faction flags are validated as exact singletons. Covered by `SectorGenerationFactionsTests` and `RulesDatabaseValidationTests`.
+
+**Update (ambient faction registry):** `FactionCapabilities` resolves reusable behavior from
+independent flags, and `GhostPlanetSeeder` uses `HasGhostPlanets` plus the generic eligibility
+context for latent-world generation. The shipped Ork rules still provide the concrete soldier,
+squad, and commander HQ templates; `GameRulesData` creates a code-owned runtime command template
+when a capability-enabled faction has no authored command-unit template, so persistent command
+squads use the ordinary Unit/Squad and save/load machinery.
 
 **Update (species-owned unarmed defaults).** Unarmed combat is now a rules-data relationship, not a battle-side default or a player/NPC distinction. Every `Species` row has a validated `DefaultUnarmedWeaponTemplateId`; the resolved `MeleeWeaponTemplate` supplies the attack profile and its own `RelatedSkill`. Space Marines currently select template 12 (Fist), while the other shipped species select the stat-identical template 15 (Generic Melee) to preserve their existing training and balance. Nothing restricts either template to Astartes or to a faction: an ordinary-human species can select the Fist template in data. The obsolete `BattleDefaults` registry and the named Fist/Generic-Melee skill dependencies were removed. Battle planning, attack resolution, defense, and aftermath XP all use the combatant's species default. Covered by `SpeciesDefaultUnarmedWeaponTests` and battle-aftermath tests.
 
@@ -1940,9 +2066,9 @@ Coverage for the promoted Alpha 0.8 slice includes:
 - `CampaignEventSpineTests`: recorder dedupe/projection, crossed milestones, grouped Chronicle entries, founding projection/idempotence, and routine battle Chronicle policy.
 - `NarrativeEventEmissionTests`: near-death projection/recovery, typed medical/mentor/gene-seed facts, payload/entity data-access round trips, and invalid source/correlation validation.
 - `EndTurnPreflightTests`: shared attention-fact identity, preference-only suppression, and Command Brief retention.
-- `SaveLoadRoundTripTests` plus the data-access tests: current format-14 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, itemized equipment, squad-lineage, station, character-order, and physical-posting persistence; compatibility tests verify that older formats are rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
+- `SaveLoadRoundTripTests` plus the data-access tests: current format-18 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, itemized equipment, squad-lineage, station, character-order, physical-posting, scenario-invader, and Ork source/Waaagh! persistence; compatibility tests verify that older formats are rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
 - `EquipmentFoundationTests`, `RulesDatabaseValidationTests`, and the focused battle coverage: global equipment identity, requirements/capacity, kit validation, shared mission reserves, ammunition behavior, reload/recovery, initial-ready priority, effective tactical Battle Value, and carrier reassignment.
-- `SquadLineageTests`, `FleetCapacityPlanServiceTests`, `IndividualPostingServiceTests`, and `DeploymentStorageTests`: line identity/history retention, whole-squad capacity planning, individual posting invariants, and format-14 persistence. `PlanetaryOperationsServiceTests` and the Recovery/Planetary icon tests cover mission-scoped eligibility, atomic mixed-participant land/embark behavior, and required UI registrations.
+- `SquadLineageTests`, `FleetCapacityPlanServiceTests`, `IndividualPostingServiceTests`, `DeploymentStorageTests`, and `OrkInfestationStateTests`: line identity/history retention, whole-squad capacity planning, individual posting invariants, format-18 persistence, and persistent Ork source/Waaagh! state. `PlanetaryOperationsServiceTests` and the Recovery/Planetary icon tests cover mission-scoped eligibility, atomic mixed-participant land/embark behavior, and required UI registrations.
 - `Scenes/Debug/release_scene_wiring_smoke.tscn` plus the stable headless main-scene smoke: shallow scene wiring.
 
 ### 9.3 Regression Risk Areas

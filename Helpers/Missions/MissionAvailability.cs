@@ -3,7 +3,9 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.PlanetaryOperations;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -191,8 +193,7 @@ namespace OnlyWar.Helpers.Missions
             IReadOnlyDictionary<int, string> specialMissionLabels =
                 SpecialMissionPresentation.BuildLabels(targetRegion);
             foreach (var mission in targetRegion.SpecialMissions
-                .Where(mission => mission.MissionType != MissionType.Extermination
-                    || mission.RegionFaction != null && !mission.RegionFaction.IsPublic))
+                .Where(IsPlayerVisibleSpecialMission))
             {
                 // Show of Force has no movement step - the squads hold position to be seen - so a
                 // squad ordered onto it from elsewhere would never actually arrive, and only
@@ -209,6 +210,29 @@ namespace OnlyWar.Helpers.Missions
                     mission));
             }
             return missionOptions;
+        }
+
+        public static bool IsPlayerVisibleSpecialMission(Mission mission)
+        {
+            if (mission == null) return false;
+            if (mission.MissionType != MissionType.Extermination) return true;
+
+            RegionFaction target = mission.RegionFaction;
+            if (target == null)
+            {
+                return FactionCapabilities.HasDormantPopulations(mission.TargetFaction)
+                    && mission.Region != null
+                    && IntelligenceTargetService.GetBestPlayerVisibleBelief(
+                        mission.Region,
+                        mission.TargetFaction)?.Level >= IntelLevel.Confirmed;
+            }
+            if (target.IsPublic) return false;
+            return !FactionCapabilities.HasDormantPopulations(target.PlanetFaction?.Faction)
+                || DormantPopulationCulling.CanTarget(
+                    target,
+                    IntelligenceTargetService.GetBestPlayerVisibleBelief(
+                        target.Region,
+                        target.PlanetFaction.Faction));
         }
 
         private static void AddAttackOptions(

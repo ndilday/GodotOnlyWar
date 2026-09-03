@@ -1,5 +1,6 @@
 using OnlyWar.Builders;
 using OnlyWar.Models.Missions;
+using System;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models;
@@ -36,6 +37,16 @@ namespace OnlyWar.Models.Orders
         [System.Obsolete("Use AssignedCharacters.")]
         public List<Soldiers.PlayerSoldier> AttachedSoldiers => AssignedCharacters;
         public Faction OwnerFaction { get; }
+        // Runtime identity used to carry a Waaagh! through planning and result processing. It is
+        // deliberately not serialized on an Order because orders are weekly work items.
+        public long? StrategicInvasionForceId { get; set; }
+
+        [Obsolete("Use StrategicInvasionForceId.")]
+        public long? OrkWaaaghId
+        {
+            get => StrategicInvasionForceId;
+            set => StrategicInvasionForceId = value;
+        }
         public OrderForce Force => new(this);
 
         public Order(List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)

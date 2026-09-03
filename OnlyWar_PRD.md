@@ -2,7 +2,7 @@
 
 **Version:** Alpha 0.7.2 Released / Alpha 0.8 Roadmap
 
-**Last Updated:** August 2026
+**Last Updated:** September 1, 2026
 **Author:** Nathan Dilday  
 
 ---
@@ -57,7 +57,7 @@
    - 6.5 [Inquisition Role](#65-inquisition-role)
    - 6.6 [Navis Nobilite Relations (Post-0.7 Backlog)](#66-navis-nobilite-relations-post-07-backlog)
    - 6.7 [Pop-Based Population Model (raised by Revolt, §4.20)](#67-pop-based-population-model-raised-by-revolt-420)
-   - 6.8 [Ork Terminal Control State (raised by Orks, §4.22)](#68-ork-terminal-control-state-raised-by-orks-422)
+   - 6.8 [Ork Terminal Control State — RESOLVED](#68-ork-terminal-control-state--resolved)
    - 6.9 [Armory / Wargear Inventory Commitment (raised by Supply, §4.23)](#69-armory--wargear-inventory-commitment-raised-by-supply-423)
    - 6.10 [Pledge Interdiction in Transit (raised by Supply, §4.23)](#610-pledge-interdiction-in-transit-raised-by-supply-423)
    - 6.11 [Tyranid Breeding Structures as Strikable Objectives (raised by Tyranids, §4.24)](#611-tyranid-breeding-structures-as-strikable-objectives-raised-by-tyranids-424)
@@ -119,8 +119,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - On new game creation, a sector is generated with a configurable or default number of planets distributed across subsectors.
 - Planets begin in a variety of states: some are fully imperial-controlled, some are held entirely by hostile factions, some are actively contested between factions, and some are uninhabited or unknown. Not every planet will have an imperial presence at game start.
 - A portion of imperial-held planets contain hidden Genestealer Cult populations at game start.
-- The setup screen lets the player choose which enemy is invading the pledged **Promised World** (the opening-scenario objective, §5.2): **Tyranids** (§4.24), **Orks** (§4.22 opening variant), or **Random**. Random resolves deterministically from the sector seed, so re-using a seed reproduces the same invader. The choice selects which opening-scenario stamp variant runs during generation; the chosen invader is recorded on the `CampaignScenario` for reproducibility and narrative continuity, while the mechanically authoritative fact remains which faction actually holds the world in sector state. The two variants share the pledge, the win/lapse resolution, and the Sector Lord opinion swing — they differ only in the invading faction's mechanics and the character of the world the player inherits (a blighted-but-healing world vs. a permanently infested one).
-- New planets may become known during a campaign — for example, a previously uncharted Ork world launching a Waaagh! can introduce a new faction presence into the sector mid-game.
+- The setup screen lets the player choose which enemy is invading the pledged **Promised World** (the opening-scenario objective, §5.2): **Tyranids**, **Orks**, or **Random**. Random resolves deterministically from the sector seed, so re-using a seed reproduces the same invader. Ambient Ork sources and feral presences are seeded independently of this choice (§4.22).
 - A Space Marine chapter of 1,000 brothers is generated, evaluated, and assigned to companies and squads according to the Codex Astartes structure (HQ, 1st through 10th Companies).
 - Brothers are sorted into Tactical, Assault, Devastator, and Scout roles based on their individual aptitudes.
 - Each subsector has a designated capital world determined by an importance score. For 0.7, this score is based on population size. Strategic classification (Hive World, Forge World, etc.) is a post-0.7 addition that will be incorporated into the score when implemented.
@@ -682,7 +681,7 @@ Blast templates extend the cone-template machinery with a second delivery mode: 
 - **Rear guard:** when an orderly withdrawal is forecast to cause more soldiers to be caught, the battlefield commander may leave the already-exposed squad as a rear guard while the main body Runs. This is permitted only when the counterfactual predicts at least one additional survivor; expected survivor count is primary and surviving BV breaks ties. The AI must not pull a safely escaping squad back solely because it has better weapons.
 - **Breaking contact:** the battle grid has no escape edge. A force disengages when the pursuer stops, when mobility creates a gap the pursuer cannot close, when the main body creates a masked departure while a rear guard remains active, or when a special capability explicitly permits it. Terrain, smoke, darkness, obstacles, and friendly fallback lines will later add contact-breaking opportunities.
 - **Rout:** rout is an involuntary morale state, not a selected withdrawal plan. A routing squad Runs without covering fire or orderly role rotation and remains vulnerable to interception. Rout reuses the withdrawal/pursuit state and aftermath machinery. Triggers are decided (§6.2, resolved 2026-07-16): a per-turn stress score rolled per soldier against a resolve curve and aggregated to a squad-level Steady/Shaken/Routing outcome, with Synapse-covered squads skipping the check entirely.
-- **Ork Waaagh! context:** for Ork squads, the §4.22 Waaagh! threat scope and current battlefield pressure are contextual inputs to the same resolve curve. They can offset stress and reduce the chance of a rout, while leader death, broken neighboring mobs, and loss of the beacon reduce that protection. Waaagh! pressure never bypasses the ordinary morale outcome or makes an Ork squad immune to routing.
+- **Ork morale context:** Ork battles use the ordinary morale/resolve model with a bounded, Ork-only Waaagh! support term. Nearby mobs, casualties, routs, separation, and command loss are recalculated for live checks and forecasts; a leader may spend a following round coercing a squad that would Route (§4.22).
 - A wholly burrow-capable squad may disengage immediately when its force withdraws, bypassing the normal sequence. Flight will use the same capability seam when flying units exist.
 
 **Battle Record**
@@ -965,7 +964,9 @@ This behavioral specification is **implemented for Alpha 0.7.1** (see §5.3) on 
 
 These are specified together because they share the same per-faction-pair shape and the same consumers (offensive planning, garrison sizing, the fog-of-war/intelligence UI, governor requests).
 
-This is a behavioral specification. It is scheduled in Alpha 0.8 (§5.5) as the **substrate prerequisite** for Orks (§4.22, also 0.8) and for the later Tyranid line (§5.6), and is designed so the Revolt and governor systems can adopt it without rework.
+This is the implemented Alpha 0.8 substrate for Orks (§4.22) and the later Tyranid line (§5.6). It
+is shared by the Revolt and governor systems, so those systems use the same relationship and
+observer-belief contracts without faction-specific hostility shortcuts.
 
 **Acceptance Criteria:**
 
@@ -986,7 +987,7 @@ This is a behavioral specification. It is scheduled in Alpha 0.8 (§5.5) as the 
   - *False positive* — the observer believes a faction is present where it is not. This is materialized only by an explicit cause: a governor's **Paranoia** trait (§4.16) or deliberate **disinformation** planted by a rival. Intelligence is therefore stored state that ground truth *nudges*, never a pure function of ground truth.
 - Both stores are kept **sparse**. Regional awareness is materialized only when an observer has reason to understand or watch a region (local presence, listening posts, recon, battle contact, or scenario seeding). A target belief is materialized only when an observation attributes activity to that faction, including an explicitly injected phantom. Everything else resolves to `None`/0 without storage.
 - `ListeningPost` is the buildable/sabotageable sensor infrastructure, not the belief itself. Listening posts improve regional awareness; patrol contact, battle contact, recon/intelligence missions, public activity, and explicit scenario reports produce target observations whose evidence ratchets a belief upward, while decay pulls stale beliefs back down. A region with low `ListeningPost` coverage and no patrols remains easy to misunderstand, while a public expansion or a seeded insider revolt can be effectively self-announcing.
-- Consumers act on belief, not truth: a defender will only generate a *targeted* response (e.g. an Ork cull, §4.22) when its `IntelLevel` on the target reaches `Confirmed` or higher — and acting on a Confirmed-but-false belief wastes force chasing a threat that is not there.
+- Consumers act on belief, not truth: a defender will only generate a *targeted* response when its `IntelLevel` on the target reaches `Confirmed` or higher — and acting on a Confirmed-but-false belief wastes force chasing a threat that is not there. Ork culling is the first belief-gated faction-specific response (§4.22).
 - This generalizes and absorbs the existing governor detection of hidden factions (§4.16) and the OpFor fog-of-war already shipped (§5.2): "what the Imperials know" becomes the special case "what the default-Imperial faction believes about a target in a region."
 
 **Relationship to existing features**
@@ -997,82 +998,72 @@ This is a behavioral specification. It is scheduled in Alpha 0.8 (§5.5) as the 
 
 ### 4.22 Turn Simulation — Orks & Indelible Infestation
 
-**Description.** Orks are a fungal xenos whose biology makes them categorically different from the factions modeled so far: once their spores take root in a region they **cannot be eradicated** by force — exterminating every Ork only resets a decades-long regrowth, never clears the ground. They spend their feral phase fighting amongst themselves, growing but squandering their numbers, until a population coalesces and a Warboss unites it into a WAAAGH! that erupts outward and acts as a beacon drawing yet more Orks across the sector. This section specifies that lifecycle on top of the cross-faction substrate (§4.21), which it requires.
+**Status: Implemented — Alpha 0.8 Ork rules completion.** Orks are ambient sector content and use
+the ordinary population, force-generation, mission, strategic-combat, casualty, morale, intelligence,
+opening-scenario, and save/load systems. The architecture is recorded in `OnlyWar_TDD.md` §6.12.
 
-This is a behavioral specification. It depends on §4.21 (relationships + intelligence) and is scoped as the Ork line item in Alpha 0.8 (§5.5).
+**Faction, ecology, and knowledge**
+- ✅ Orks are `GrowthType.Logistic` with `PopulationIsMilitary | UniversallyHostile | Indelible`.
+Roster, Battle Value, equipment, and training are Ork-owned rules data; a persistent Warboss uses a
+runtime command-unit template only because no authored Ork unit template is required by the current
+rules database.
+- ✅ Ghost sources are off-map latent ecosystems. They occupy eligible empty sector tiles, use the
+`ambient.ork_ghost_source` eligibility context, grow and consolidate weekly, and launch to existing
+planets when ready. They never create visible ghost planets, fleets, beacons, or topology changes.
+- ✅ Configured inhabited worlds may also receive hidden feral Ork `RegionFaction` presences. Feral
+means `OrkWaaaghId == null`; `IsPublic` remains false even when an Imperial observer knows about the
+presence. Observer-specific `FactionIntelBelief` is seeded independently and remains the only source
+for belief-gated presentation and action.
+- ✅ Ork presences are indelible: culling can reduce population to zero and hide the presence, but
+cannot remove it. Population growth is centralized and distinguishes public and feral efficiency;
+Ork-controlled worlds apply the intended civilian decline while remaining reclaimable. Feral Orks do
+not migrate without an active Waaagh! attracting them.
+- ✅ Feral consolidation/emergence is population-gated and monotonic: tiny populations do not create
+a Warboss merely because a population-independent accumulator completed. All tunable rates and
+thresholds are supplied by the validated `OrkCampaignProfile`.
 
-**Acceptance Criteria:**
+**Waaagh! operations and identity**
+- ✅ Consolidation forms a Waaagh! at an existing planet. Landing allocation ranks defended regions,
+uses the `2 × defending BV` viability rule, gives undefended regions a `1000 BV` token, and sends
+remainder to the largest valid region. The active force uses ordinary target selection and combat,
+with largest viable targets preferred, until it must select an interplanetary successor.
+- ✅ Every Waaagh! owns one persistent Warboss command squad with a unique identity and physical
+location. It remains outside ordinary `LandedSquads`, contributes to strategic strength, participates
+in at most one battle, and is attached to operations by exact Waaagh! identity rather than
+first-active selection. Active Waaaghs attract one third of adjacent unaffiliated Ork population;
+transit Waaaghs do not attract.
+- ✅ Strategic Warboss death uses `0.5 × loss fraction`; tactical death is determined by command-squad
+presence and the mission killed-soldier ledger, without a second strategic roll. Assassination is
+locality- and concentration-gated. Leader death preserves indelible populations; organized regional
+fragments of at least `10000 BV` create successors, while smaller fragments remain leaderless and
+can later reconsolidate.
+- ✅ Successors stay on the current planet when a viable target exists, otherwise use the nearest
+existing routed planet with `1.10x` ordinary travel time. Same-destination successors merge into a
+new identity with `10%` loss per losing claimant; the strongest Warboss survives. Stranded fragments
+remain on-map and re-evaluate. Ork-on-Ork combat is not modeled.
 
-**Faction Definition & Seeding**
-- The Ork faction is defined by composition over the substrate: `FactionBehavior = UniversallyHostile | Indelible`, with `GrowthType.Logistic`. `UniversallyHostile` makes it an enemy of every other faction (§4.21); `Indelible` drives the no-eradication rules below.
-- At sector generation, a portion of inhabited worlds are seeded with a latent Ork presence — generally **feral and undetected** (low or zero population, not yet public), so the infestation exists to act on from turn 1 rather than only arriving mid-game.
+**Morale, culling, and opening scenario**
+- ✅ Waaagh! morale is a bounded Ork-only support term from nearby mobs and living command presence.
+Casualties, routs, separation, and command loss are dynamic; live checks and withdrawal forecasts
+share the same inputs, generic HQ support is not double-counted, and replay stores realized support.
+- ✅ When an Ork squad would Route, an available leader may commit the following round to normal
+melee attacks against nearby squadmates. The Routing result is ignored completely, the leader takes
+no ordinary action, companion casualties are possible, and commitment/attacks/results are recorded.
+- ✅ PDF and player culling are strategic, intelligence-gated operations. Public threats, committed
+defence, and PDF survival take precedence; outside help is requested only below the configured PDF
+floor. A true positive reduces feral population and consolidation without deleting the presence; a
+false positive is a no-contact search that consumes the operation.
+- ✅ New-game setup offers Tyranids, Orks, and deterministic Random selection. The resolved invader is
+persisted in `CampaignScenario`; the Ork opening preserves naturally rolled cult state, uses the
+existing Promised-World objective and victory/lapse loop, records the canonical no-reinforcement
+briefing, and leaves feral survivors indelible after victory. No live enemy fleet object is required.
 
-**Playable Ork Combat Roster**
-- The Ork faction must have a complete, faction-owned tactical roster rather than borrowing Imperial/PDF combat data. Species, squad templates, weapons, default weapon sets, training profiles, and Battle Value all resolve from Ork data and remain valid when an Ork force is generated by the strategic simulation.
-- The initial roster includes at least two species profiles: **Ork** (large, durable, strong melee combatant) and **Gretchin** (smaller, weaker, numerous support infantry). A Warboss/Nob is represented as an Ork character or leader profile with the leadership and Waaagh! hooks needed by the morale system; additional creatures such as Squigs are optional follow-on content, not a dependency for faction viability.
-- Ranged weapons cover the Ork battlefield roles: **Slugga**, **Shoota**, **Big Shoota**, and **Rokkit Launcha** at minimum. Their profiles must use the ordinary ranged-combat, ammunition, reload, and Battle Value systems rather than faction-specific shortcuts. Burnas, Lootas, and other specialist weapons may follow once the core roster is balanced.
-- Melee weapons cover the Ork battlefield roles: **Choppa**, **Big Choppa**, and **Power Klaw** at minimum, with appropriate handedness, strength, bulk, parry, and armor interaction. Unarmed Orks still use a species-defined default profile when disarmed.
-- The initial squad set includes a close-combat **Boyz Mob**, a ranged **Shoota Boyz Mob**, a **Gretchin Mob**, and a leader-bearing **Nob/Warboss Mob** or equivalent. Templates define minimum and maximum membership, leader/specialist slots, permitted species, allowed weapon sets, and Battle Value. A generated Ork force must be able to field a mixed melee/ranged force with leaders and replacement carriers, not only a single generic mob.
-- Ork training and weapon restrictions are data-driven. The roster is usable by feral, local, subsector, and sector-scale Ork forces, with threat scale changing force size, leadership, equipment quality, and access to specialist templates rather than swapping in an unrelated faction model.
-
-**Indelible Presence (cannot be eradicated)**
-- An Ork `RegionFaction` is **never removed** from a region once it exists. Reducing its population to zero does **not** delete the presence: instead it flips to non-public (`IsPublic = false`) and, the following turn, regrows to a population of 1 and resumes ordinary growth from there. There is no separate dormancy timer — the slowness of logistic growth from a population of 1 *is* the decades-long ramp.
-  - *Design note (math grounding):* at the current `LogisticGrowthRate` (0.0006/week) an empty region's Ork presence grows ~0.0006 individuals/week at population 1 — on the order of decades merely to climb into the hundreds, and roughly two centuries to reach ~1,000 ("real Orks" again) before crowding even matters. The Ork growth multiplier (below) tunes this from "centuries" down to the intended "decades."
-- Because presence is indelible and persistent, the no-eradication property lives on the **`RegionFaction`** (via the faction's `Indelible` behavior) rather than as a separate region-level infestation flag — there is no state in which the infestation exists but the `RegionFaction` object does not.
-
-**Growth — feral inefficiency**
-- Ork growth uses the existing logistic carrying-capacity model (§4.15) with two Ork-specific modifiers:
-  - a **growth multiplier** (Orks breed fast) applied to the base rate, tuned so a *unified* (public) Ork population fills a region in a couple of decades;
-  - a **feral efficiency penalty** applied while the presence is **not** public, representing infighting and cannibalism — feral Orks still grow but waste much of their increase fighting each other, so their effective threat ramps slowly until a Warboss unifies them, at which point the penalty lifts and numbers surge.
-- Note the existing crowding factor uses *total region population*, so feral Orks grow fastest in sparsely populated regions and are suppressed inside dense human regions — Orks naturally fester in the badlands, which dovetails with the amassing behavior below. This interaction is intentional and load-bearing.
-
-**Two-Dimensional State**
-- Ork status is tracked along two independent dimensions rather than a single public/hidden bool:
-  1. **Imperial (observer) awareness** — derived from the §4.21 intelligence model: do the region's defenders *believe* Orks are present, and at what `IntelLevel`? A feral camp may be unnoticed (`None`/`Rumor`) for a long time.
-  2. **Expansion stage** (`IsPublic`) — *feral* (internal only; not a strategic actor) vs. *WAAAGH!* (public; an extra-territorial actor and a beacon).
-- These yield three meaningful states without a third enum: **unnoticed-feral** (growing quietly), **noticed-feral** (defenders aware and able to cull — see below), and **WAAAGH!** (public, expanding, broadcasting).
-
-**Threat Escalation — Feral to Sector WAAAGH!**
-- Public status is the start of Ork escalation, not its final tier. A derived **Waaagh! threat scope** records the geographic reach and coordination of the active threat while preserving the awareness and expansion dimensions above:
-  - **Feral** — hidden, internally fighting, and not an extra-territorial actor. Tactical encounters are small, poorly coordinated, and receive no global Waaagh! morale support.
-  - **Local** — a Warboss has unified a public region or world. The Orks can raid or reinforce nearby regions, generate viable tactical mobs, and project a local Waaagh! morale effect in battles tied to that force.
-  - **Subsector** — public Ork forces are coordinated across multiple worlds or a connected subsector presence. The Waaagh! can redirect forces between worlds, draw reinforcements from other local infestations, and becomes a persistent subsector-level command concern.
-  - **Sector** — the Waaagh! crosses subsector boundaries or sustains a beacon/reinforcement network across the sector. It can spawn unmapped worlds, dispatch reinforcing fleets, and drive sector-wide threat reporting and response priorities.
-- Scope thresholds are data-driven and should consider public Ork population, organized military strength, number of public worlds/regions, beacon connectivity, and active Warboss leadership. Raw headcount alone must not make a tiny but concentrated mob a sector threat.
-- Escalation is hysteretic: a cull or the death of a Warboss can reduce a force's scope, but scope does not flicker up and down every turn as individual populations cross a boundary. Returning to feral remains possible only after the public force is broken; the underlying indelible presence persists.
-
-**Waaagh! on the Tactical Battlefield**
-- Every tactical battle involving Orks receives a battle-start Waaagh! context derived from the Ork force's threat scope, local public population, organized military strength, Warboss/leader presence, and the battle's distance from the active beacon. A feral encounter has no public Waaagh! context; a local, subsector, or sector force supplies progressively stronger context.
-- Waaagh! context modifies the existing morale/resolve system rather than replacing it. It supplies an Ork-side resolve bonus and a controlled enemy stress/pressure contribution, while leadership, casualties, wounds, isolation, synapse/command effects, and objective state continue to contribute independently. The effect must make Orks more willing to press an attack and less likely to rout, not make them immune to morale failure.
-- The tactical effect is dynamic: nearby Warbosses and intact Ork mobs sustain Waaagh! pressure; leader death, loss of the beacon region, heavy casualties, and broken neighboring mobs reduce it. A battle can therefore experience a rising Waaagh! during a successful charge and a collapse when its coordinating leader falls.
-- Waaagh! pressure is visible in battle setup and Battle Review as a named context/modifier, with enough explanation for the player to understand why an Ork mob held or broke. It is also included in Battle Value/encounter calibration so the tactical morale effect is not an unpriced difficulty spike.
-- The same rules apply to Ork AI and player-controlled Ork encounters: the faction's tactical advantage comes from its strategic state and battlefield leadership, not from an uninspectable side bonus.
-
-**Amassing & WAAAGH! Emergence**
-- Each turn a fraction of a region's feral Ork population **migrates toward the adjacent region holding the largest Ork population**, creating a gradient that converges the planet's feral Orks onto a single region over time.
-- The transition to public (`IsPublic = true`) is triggered by **internal scale** — the converged Ork population in a region crossing a threshold — not by relative military strength against the local garrison. The Warboss emerges because there are enough Orks to unite, not merely because they out-muscle the PDF. Emergence therefore occurs in the amassing/convergence region.
-
-**Imperial Cull (defender response to noticed-feral Orks)**
-- When a defender's intelligence on a feral Ork presence reaches `Confirmed`/`Located` (§4.21), and the defender has **spare capacity** (it is not already committed against a revolt, invasion, or other public enemy), it generates culling missions (Extermination/Advance) against the feral Ork `RegionFaction` to keep it suppressed — the canonical "keep the feral Orks down before they get out of hand."
-- The cull is intentionally imperfect: a defender with no spare capacity ignores known feral Orks, and a defender acting on a **false-positive** belief (paranoia/disinformation, §4.21) wastes force culling Orks that are not there while real ones grow elsewhere. Culling can never *clear* a region (indelible), only hold it down.
-
-**WAAAGH! as Beacon (sector-level)**
-- A public Ork presence at sufficient scale acts as a beacon that periodically:
-  - **spawns previously-unmapped Ork worlds** in empty sector tiles. This is physically justified: at solar-neighborhood stellar density (~0.004 stars/ly³; equivalently ~12–13 systems per full-galactic-height column per the 200×200 ly grid), an "empty" tile plausibly contains uncharted systems, so a new Ork world appearing there is honest, not a cheat. Such worlds become known to the player through the §4.2 discovery rules (a WAAAGH! announcing itself), not via player exploration.
-  - **dispatches reinforcing Ork fleets** toward the beacon world. Reinforcements originate from real spawned/existing Ork worlds in the sector rather than from an abstract off-map pressure pool — the spawned worlds *are* the reservoir.
-
-**Endings & Persistence**
-- A WAAAGH! can be broken (its public forces reduced, its regions re-suppressed), reverting affected regions to feral and, where reduced to zero, to the population-1 regrowth path. The world is never "cleansed": the indelible presence guarantees the threat can re-emerge, making Ork worlds a recurring management problem rather than a clearable objective. (Whether Orks can instead *win* a world outright — extinguish its population and hold it as an Ork-controlled terminal state — is an open question, §6.8.)
-
-**Opening Scenario Application (the Promised World — Ork variant)**
-- The Promised World may be pledged against an Ork WAAAGH! instead of a Tyranid incursion (selected at new-game setup, §4.1). This variant is the Ork sibling of the Tyranid opening (§4.24) and reuses the same headless pre-simulation machinery (`ScenarioBuilder.StampPromisedWorld`), sequencing the eruption in time so the beachhead is authored while the war for it is emergent. Where the Tyranid opening is driven by a Genestealer Cult beacon, the Ork opening is driven by an indigenous feral infestation reaching WAAAGH! critical mass — there is **no cult, no insider-belief seeding, and no biomass consumption**:
-  1. **Seed a feral infestation** — stamp a long-established feral Ork presence across the planet (indelible `RegionFaction`s, §4.22), already amassed to the brink rather than freshly spored. There is no hidden cult stage.
-  2. **The Warboss unites the ferals** — flip the Ork presence public in the amassing/convergence region on the internal-scale trigger: the WAAAGH! erupts. (This replaces the Tyranid "Cult reveals" + "seed insider belief" steps; an erupting WAAAGH! is loud and self-announcing, so defender intelligence on it jumps straight to `Located`, §4.21.)
-  3. **Pre-arrival simulation** — run ~2–3 headless turns of *this planet only*: converging feral mobs join the WAAAGH! (feral efficiency penalty lifting as they unify), overrun a contiguous cluster of regions, and grind the PDF, which fortifies and holds elsewhere (the same PDF-as-defensive-actor path as §4.24).
-  4. **The Navy interdicts the WAAAGH!** — narrative and mechanical: for the duration of the opening the WAAAGH!'s **beacon output is suppressed** (no unmapped-world spawning, no reinforcing fleets, §4.22) and its threat scope is capped at *local*, so the opening fight is the planet's own amassed ferals rather than a sector-drawing tide. This is the Ork analogue of the stranded-hive-fleet premise and is what keeps the world winnable — Orks lack the Tyranids' finite-biomass self-limit, so the bound must come from a capped scope rather than an exhausted budget.
-  5. **Post-eruption simulation** — run a Gaussian-rolled number of headless turns (`max(0, round(4 + z))`, `z ~ N(0,1)`, as in §4.24): the longer the player is delayed, the larger and more entrenched the WAAAGH!. Because Ork growth is logistic-with-feral-penalty (§4.22) rather than Consumption, the swarm **multiplies** rather than eating the world — Orks **predate** the population (slaughter and press-gang civilians, raise grots and squigs) but do **not** scour `CarryingCapacity`. The inherited world is therefore *overrun and infested* rather than *biologically blighted*.
-  6. **The player arrives** — the fleet is stamped into orbit and control passes to the player.
-- **Endings divergence from the Tyranid opening.** Retaking the Ork Promised World means breaking the public WAAAGH! and suppressing its regions back to feral — **not** eradicating the Orks. The liberated world is claimed as a Chapter Home World and grants recruitment rights like any other (§4.9), but because the infestation is indelible it carries a **standing feral-Ork management burden**: the regions remain infested and will regrow without ongoing culling. A Chapter founded against Orks inherits a permanently contested homeworld — a materially different (and thematically apt) prize than the Tyranid outcome's blighted-but-healing world. Its recruiting base, however, is spared the deep `CarryingCapacity` wound Tyranids inflict, since Orks predate headcount without scouring the land.
+**Persistence and boundaries**
+- ✅ Save format 18 persists scenario invader identity and the existing Ork regional, ghost-source,
+Waaagh!, command-squad, and transit state. Exact-version compatibility remains enforced.
+- ✅ Persisted threat scope, beacon suppression, visible ghost-world materialization, non-player
+reinforcement fleets, natural feral migration, Ork vehicles, and Ork-on-Ork tactical wars remain
+outside this feature.
 
 ---
 
@@ -1352,6 +1343,7 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 
 **Shipped.**
 
+- ✅ **Orks & Indelible Infestation** — ambient latent ghost sources, inhabited-world feral presences and independent beliefs, data-owned Ork force generation, indelible population, population-gated emergence, consolidation-driven Waaagh! formation, persistent Warboss command squads, exact multi-Waaagh identity through strategic/tactical/assassination resolution, successor transit/merging, active-Waaagh! attraction, Ork-only morale/coercion, strategic culling, belief-correct presentation, and the Ork Promised-World opening. Beacon-spawned planets/fleets, persisted threat scopes, and non-player reinforcement fleets remain deferred. §4.22; TDD §6.12.
 - ✅ **Structured soldier event log + death preservation** — the free-text `List<string>` history is replaced by typed, queryable `SoldierEvent` records carrying date, faction, weapon, magnitude, location, and related-soldier ids; persistence moved to a structured table (save compatibility intentionally broken); fallen brothers are preserved and round-trip through save/load. Prerequisite for everything below it: continuity callbacks (§4.19 Principle 3) and the notability classifier must *query* the past — "first kill?", "who was his mentor?", "survived the battle that killed his sergeant?" — which free text cannot reliably support. §4.12; TDD §4.3, §5.3.
 - ✅ **Event vocabulary** — first blood, kill milestones, typed battle participation/incapacitation/death and gene-seed outcomes, last-brother-standing and held-against-odds records, mentor relationships for campaign-recruited Marines, near-death recoveries, and significant cybernetic or vat-grown body-part replacements. TDD §§4.3, 6.6, 6.6.1. *(Non-combat mission-outcome events shipped early in 0.7 — §5.2. The reserved `Oath` enum value is unused; oath emission was dropped as untied to any player decision or planned system.)*
 - ✅ **Notability classifier** — versioned, frozen publication decisions across the full event vocabulary, senior-casualty rank/subrank boundaries, service-only 10/50 and notable 100/500/1,000 kill milestones, actual squad-leader unavailability, per-world cult revelations, and persisted saved/lost world episodes. TDD §4.3. *(Terminator Honours remains an explicit dormant snapshot trigger until honours exist.)*
@@ -1363,7 +1355,6 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 
 **Remaining in 0.8.**
 
-- ⬜ **Orks & Indelible Infestation** — the first faction built on the relationship substrate above, and dependent on it: an indelible, never-eradicable Ork presence with feral-to-WAAAGH! escalation, a faction-owned tactical roster, Waaagh! battlefield morale, beacon-driven sector expansion, and the Promised-World Ork opening variant with its new-game invader choice (§4.1). §4.22. Open question: terminal Ork-controlled world state (§6.8).
 - ⬜ **Founding myth** — a short generated chapter history at new-game start. §4.19.
 - ⬜ **Wider-Imperium dispatches (initial)** — voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing. §4.19.
 - ⬜ **Chapter Doctrine — Unfit For Duty Injury Level** — a Chapter Doctrine control on the loadout screens, initially carrying only this setting: default **Major**, adjustable across the injury-severity range from **None** through **Critical**. §4.5.
@@ -1384,11 +1375,6 @@ opening-scenario sequencing, and large-scale NPC combat now ship in 0.8. Their b
 §4.24 and their architecture and formulas belong in `OnlyWar_TDD.md` and
 `Design/Reference/BattleLogic.md`. This section records only the incomplete follow-through.
 
-- **Complete the cross-faction substrate.** Replace the interim `Faction` booleans and
-  Imperial/non-Imperial relationship rule with the per-faction-pair Stance store, `[Flags]
-  FactionBehavior`, and the `UniversallyHostile` behavior described in §4.21. Ensure the resulting
-  policy makes Tyranids hostile to other non-Imperial factions where required, including strategic
-  Tyranid-versus-Cult targeting.
 - **Correct the Imperial remnant lifecycle.** A hidden default-Imperial remnant must receive no
   organic growth or garrison drafting, and should return to public control only after the last public
   hostile faction has been cleared. Preserve the existing region-level state transition and defense
@@ -1426,6 +1412,12 @@ opening-scenario sequencing, and large-scale NPC combat now ship in 0.8. Their b
 
 Documented for planning purposes; not scheduled:
 
+**Ork escalation follow-through.** Add derived local/subsector/sector Waaagh! threat scopes,
+beacon-driven discovery of new visible Ork planets, and actual Ork fleet reinforcement. The Ork
+Promised-World opening, belief-gated feral culling, population-gated emergence, Ork-only morale
+support, and deterministic invader selection are shipped in §4.22; persisted threat scopes,
+beacons, and non-player fleets remain backlog items.
+
 **Deferred 0.8 connective work.** Chapter Mandates (§4.25) and display/UI/text scaling (§4.27) remain
 specified but are no longer in the active 0.8 sequence. Revisit them after the equipment/ammunition
 foundation rather than treating either as a prerequisite for it.
@@ -1447,7 +1439,7 @@ tracked here rather than kept as an active design document.
 
 **Battlefield recovery missions.** A follow-up mission type that returns to a field the chapter did not hold, to recover what was left there. Motivated by the incapacitation rules (§4.12): a brother whose wounds took him out of a fight the chapter then lost is currently presumed dead with his gene-seed lost, and there is no way to contest that outcome. A recovery mission should be able to retrieve some subset of — in descending order of luck — the brother himself (his armor's biostasis having kept him alive), his body and gene-seed, or merely his power armor and wargear. Deliberately deferred rather than scheduled: recovering *materiel* only means something once the Armory tracks wargear as inventory (§4.23 / §6.9), and a recovery operation into hostile territory wants transport, which lands with Vehicles. Design questions left open: how the chapter learns a recovery is possible and how long the window stays open; whether the enemy faction degrades or removes the prize over time; and whether this is a distinct mission type or an objective variant of the existing raid/recon types.
 
-**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Orks are now scheduled — see §5.5. **Vehicles depend on the 0.8 Techmarine pipeline (§4.28, scheduled in §5.5)** — armor cannot be fielded until the chapter has Techmarines to maintain and wake its machine spirits, so that pipeline must land first. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
+**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Ork Phase 1 is shipped in §5.5; its sector-level escalation remains in the Ork follow-through backlog. **Vehicles depend on the 0.8 Techmarine pipeline (§4.28, scheduled in §5.5)** — armor cannot be fielded until the chapter has Techmarines to maintain and wake its machine spirits, so that pipeline must land first. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
 
 **Enemy-generated diversions.** *(Now scheduled as part of "Next-level NPC mission planning" — see §5.6. The scoping analysis below is retained because it is the governing design note for the NPC-vs-player half, which is the genuinely hard part.)* Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
 
@@ -1553,13 +1545,15 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 
 **Decision (for now):** **Do not build Pops for 0.7.** The 0.7 Revolt ships on the faction-presence model, with Contentment as a proxy for "loyal share" and the hidden Insurrectionist `RegionFaction` as "pops who have crossed from sympathy into active rebellion." These are deliberately a forward-compatible *subset* of a Pop model: a later refactor would make Contentment a derived readout over the loyalty distribution and reframe the insurgent presence as a loyalty band, without discarding 0.7 work. Whether to commit to that refactor — a multi-phase change touching growth, carrying capacity, recruitment for every faction, save/load, and UI — is the open question, and it outlives the Revolt feature.
 
-### 6.8 Ork Terminal Control State (raised by Orks, §4.22)
+### 6.8 Ork Terminal Control State — RESOLVED
 
-**Question:** Can Orks *win* a world outright — extinguish its inhabited population and hold it as an Ork-controlled world that the player and the wider Imperium treat as a standing objective — or are Orks always a recurring infestation to be managed rather than a faction that can take and keep a world?
-
-**Why it comes up.** The indelible-presence rules (§4.22) deliberately make an Ork world un-cleansable, which frames Orks as a *management* problem. But that is about the floor (you can never reach zero Orks), not the ceiling (whether Orks can become the planet's controller). A WAAAGH! that overruns every region implies a terminal Ork-controlled state with its own downstream questions: does such a world still generate reinforcing fleets, can it ever be retaken, and how does it interact with the discovery and importance-scoring systems.
-
-**Leaning (not yet decided):** allow Orks to seize regional control through the normal combat path (consistent with §4.20's renegade-victory failure state for revolts), but treat a fully Ork-held world as a *persistent beacon* rather than a clean win condition — re-takeable in principle, never cleansable. Decide before implementing the WAAAGH!-beacon spawning in §4.22.
+**Decision:** Orks can seize every region on an existing planet through the normal combat path, but
+full control is not a clean victory or a sector-level beacon. The planet remains reclaimable; the
+derived Imperial governor is absent while Orks control the world; and the Ork populations,
+capacities, and indelible regional presences remain in place. If the active Waaagh! dies, the world
+can persist as a leaderless Ork infestation and later reconsolidate. A fully controlled planet
+without a viable target stays put and periodically re-evaluates rather than spawning new worlds or
+fleets. See §4.22 and `OnlyWar_TDD.md` §6.12.
 
 ### 6.9 Armory / Wargear Inventory Commitment (raised by Supply, §4.23)
 
@@ -1638,13 +1632,14 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Faction | Any organized force in the sector: Space Marines, Tyranids, Genestealer Cults, Imperial PDF, etc. |
 | Faction Behavior | A `[Flags]` field on a Faction composing its special behaviors (e.g. `CanInfiltrate`, `UniversallyHostile`, `Indelible`), replacing the previous ad-hoc booleans. A faction's identity is the composition of its behaviors (§4.21). |
 | Faction Relationship (Stance) | The stored posture between an unordered pair of factions: `Hostile | Neutral | Allied`. Default is Hostile; the player chapter and default-Imperial faction start Allied. Replaces the old binary Imperial-vs-non-Imperial enemy test (§4.21). |
-| Feral (Orks) | The pre-WAAAGH! Ork state: present and growing but not public — fighting internally, not yet an extra-territorial actor. Subject to a growth efficiency penalty representing infighting (§4.22). |
+| Feral (Orks) | A latent or leaderless Ork presence: indelible, growing through logistic population rules, and not represented by an active Waaagh! identity. Imperial awareness is tracked separately (§4.22). |
 | Garrison | The number of troops a faction keeps assigned to defending a specific region, as distinct from troops available for offensive operations. |
 | Genestealer Cult (GC) | A hidden faction that infects and converts a planet's population, growing covertly until strong enough to reveal itself. |
 | Geneseed | The biological material (progenoid glands) harvested from Space Marines. Required to create new initiates. |
 | Governor | A named NPC character who leads an imperial-aligned planet's civilian and military administration. Has personality traits that affect requests and opinion. |
 | Hit Location | A specific body part (head, torso, arm, leg, etc.) that can be individually wounded, crippled, or severed. |
-| Indelible Infestation | The property (via the `Indelible` Faction Behavior) that an Ork RegionFaction can never be eradicated: reducing its population to zero flips it non-public and it regrows from 1, rather than the presence being removed (§4.22). |
+| Indelible Infestation | The property (via the `Indelible` Faction Behavior) that an Ork `RegionFaction` can never be eradicated: reducing its population to zero hides it, but the presence remains and regrows through the logistic path (§4.22). |
+| Ork Ghost Source | A latent, off-map Ork ecosystem record with a sector-grid position, generated world type, population, capacity, and consolidation; it is not a visible planet in Phase 1 (§4.22). |
 | Inter-Faction Intelligence (Belief) | What an observer faction believes about a particular target faction's presence and strength in a region, allowed to diverge from ground truth in both directions (false negatives; paranoia/disinformation false positives). Alpha 0.8 stores these sparse target beliefs separately from target-agnostic regional awareness; observations from patrols, recon, battle contact, public activity, governors, and scenario seeding change them (§4.21). |
 | IntelLevel | The fidelity of an inter-faction intelligence belief: `None | Rumor | Suspected | Confirmed | Located`. A targeted response (e.g. an Ork cull) requires `Confirmed` or higher (§4.21). |
 | Insurrectionist Faction | A single sector-wide Conversion-growth Faction (like the Genestealer Cult faction) that recruits from discontented Imperial populations and contests regions through the normal combat systems. The mechanical embodiment of a revolt (§4.20). |
@@ -1659,10 +1654,10 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Order | The assignment of one or more squads to a Mission, specifying disposition and aggression level. |
 | Order of Battle | The full hierarchical structure of the chapter: Chapter HQ → Companies → Squads → Marines. |
 | OpFor | Opposing Force. Any non-player faction unit encountered in a mission or battle. |
-| Orks | A fungal xenos faction (`UniversallyHostile | Indelible`) that cannot be eradicated from a region, grows inefficiently while feral, and coalesces into a WAAAGH! that erupts outward and draws more Orks to the sector (§4.22). |
+| Orks | A fungal xenos faction (`PopulationIsMilitary | UniversallyHostile | Indelible`) that is seeded through latent ghost sources, can form persistent leader-driven Waaaghs, and cannot be eradicated from a region (§4.22). |
 | Universally Hostile | A Faction Behavior marking a faction as Hostile to every other faction regardless of stored stance, and unable to be set Neutral/Allied. Basis for Orks "fighting everyone" (§4.21). |
-| WAAAGH! | The public, expanding Ork state: a Warboss has united a region's amassed Orks into an extra-territorial force that acts as a beacon, spawning unmapped Ork worlds and reinforcing fleets (§4.22). |
-| Waaagh! Threat Scope | The derived geographic reach of an Ork threat: Feral, Local, Subsector, or Sector. It controls strategic coordination, beacon reach, and the strength of the contextual Waaagh! morale effect; it is distinct from Imperial awareness and public/feral expansion state (§4.22). |
+| WAAAGH! | The active, persistent Ork state: a Warboss command squad leads an organized force at an existing planet, with regional affiliation, target selection, transit, attraction, succession, and merge behavior (§4.22). |
+| Waaagh! Threat Scope | Deferred Ork escalation vocabulary for future local/subsector/sector coordination, beacon reach, and tactical Waaagh! morale pressure; it is not a Phase 1 runtime state (§4.22). |
 | Character Loadout | A persistent complete per-character assignment of armor, quantity-bearing carried equipment, and initial-ready preferences. Carried equipment is distinct from live battle hand state; capacity and eligibility are data-driven, and absent personal assignments inherit from the Chapter role and authored kit defaults (§4.5). |
 | Prone | A stance available to stationary soldiers. Only head and upper torso hit locations are valid ranged hit targets. Melee offense is heavily penalized; the soldier is significantly easier to hit in melee. A soldier can drop prone in one turn from any stance. Returning to crouching takes one turn; returning to standing takes two turns. A prone soldier cannot move. |
 | Region | A sub-area of a planet. Each region has its own faction presences, garrison counts, intelligence level, and infrastructure ratings. |

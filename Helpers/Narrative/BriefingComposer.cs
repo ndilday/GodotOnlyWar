@@ -90,5 +90,19 @@ namespace OnlyWar.Helpers.Narrative
             }
             return text;
         }
+
+        public static string ComposeInvasionPromisedWorldBriefing(BriefingTokens tokens)
+        {
+            return $"Brothers of the [b]{tokens.ChapterName}[/b], [b]{tokens.PlanetName}[/b] in the "
+                + $"[b]{tokens.SubsectorName}[/b] has been overrun by a {tokens.EnemyName} invasion force. The Navy "
+                + "has denied the xenos any fleet or reinforcement; what remains is a ground horde, "
+                + $"led by its commander. [b]{tokens.AuthorityTitle} {tokens.AuthorityName}[/b] offers "
+                + $"the world to the [b]{tokens.ChapterName}[/b] when the invasion is broken and its "
+                + "last survivors are hunted down.";
+        }
+
+        [System.Obsolete("Use ComposeInvasionPromisedWorldBriefing.")]
+        public static string ComposeOrkPromisedWorldBriefing(BriefingTokens tokens) =>
+            ComposeInvasionPromisedWorldBriefing(tokens);
     }
 }

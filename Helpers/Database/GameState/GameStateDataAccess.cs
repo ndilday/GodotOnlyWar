@@ -17,6 +17,8 @@ using OnlyWar.Helpers.Storage;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Reports;
 using OnlyWar.Models.Events;
+using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Models.Orks;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -57,6 +59,14 @@ namespace OnlyWar.Helpers.Database.GameState
         public CampaignIdentity CampaignIdentity { get; set; }
         public FactionRelationshipLedger RelationshipLedger { get; set; }
         public IReadOnlyList<WorldControlEpisodeState> WorldControlEpisodes { get; set; }
+        public List<GhostPopulationSource> GhostPopulationSources { get; set; }
+        public List<StrategicInvasionForceSaveData> StrategicInvasionForces { get; set; }
+        // Legacy projections are populated while old save consumers migrate. They intentionally
+        // do not drive new production behavior.
+        [Obsolete("Use GhostPopulationSources.")]
+        public List<OrkGhostSource> OrkGhostSources { get; set; }
+        [Obsolete("Use StrategicInvasionForces.")]
+        public List<OrkWaaaghSaveData> OrkWaaaghs { get; set; }
         public bool UpgradePending { get; set; }
     }
 
@@ -149,8 +159,10 @@ namespace OnlyWar.Helpers.Database.GameState
             var equipmentLoadoutDoctrine = equipmentTemplates != null && equipmentKits != null
                 ? _loadoutDoctrineDataAccess.GetEquipmentDoctrine(dbCon, equipmentTemplates, equipmentKits)
                 : new EquipmentLoadoutDoctrine();
-                var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
+            var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
             PlanetDataAccess.PopulateRegionFactions(dbCon, factionMap, regions);
+            List<GhostPopulationSource> ghostPopulationSources = LoadGhostPopulationSources(
+                dbCon, factionMap, planetTemplateMap);
             var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions, factionMap);
             var requests = _requestDataAccess.GetRequests(dbCon, characterMap, factionMap, planets);
             var pledges = _pledgeDataAccess.GetPledges(dbCon);
@@ -169,6 +181,7 @@ namespace OnlyWar.Helpers.Database.GameState
             var squads = _unitDataAccess.GetSquadsByUnitId(dbCon, squadTemplates, loadouts,
                                                            shipMap, regions, missionMap, factionMap,
                                                            scoutTrainingOptions);
+            List<StrategicInvasionForceSaveData> strategicInvasionForces = LoadStrategicInvasionForces(dbCon);
             var units = _unitDataAccess.GetUnits(dbCon, unitTemplateMap, squads);
             var squadMap = squads.Values.SelectMany(s => s).ToDictionary(s => s.Id);
             var soldiers = _soldierDataAccess.GetData(dbCon, hitLocationTemplates, baseSkillMap,
@@ -237,6 +250,10 @@ namespace OnlyWar.Helpers.Database.GameState
                 CampaignIdentity = campaignIdentity,
                 RelationshipLedger = relationshipLedger,
                 WorldControlEpisodes = worldControlEpisodes,
+                GhostPopulationSources = ghostPopulationSources,
+                StrategicInvasionForces = strategicInvasionForces,
+                OrkGhostSources = ghostPopulationSources.OfType<OrkGhostSource>().ToList(),
+                OrkWaaaghs = strategicInvasionForces.OfType<OrkWaaaghSaveData>().ToList(),
                 UpgradePending = false
             };
         }
@@ -268,7 +285,9 @@ namespace OnlyWar.Helpers.Database.GameState
                              FactionRelationshipLedger relationshipLedger = null,
                              EquipmentLoadoutDoctrine equipmentLoadoutDoctrine = null,
                              IEnumerable<WorldControlEpisodeState> worldControlEpisodes = null,
-                             IEnumerable<Order> additionalOrders = null)
+                             IEnumerable<Order> additionalOrders = null,
+                             IEnumerable<GhostPopulationSource> orkGhostSources = null,
+                             IEnumerable<StrategicInvasionForce> orkWaaaghs = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -302,7 +321,7 @@ namespace OnlyWar.Helpers.Database.GameState
                               homeWorldPlanetId, recruitment, lastTurnReportSnapshot,
                               campaignEventLedger, chapterChronicle, campaignIdentity,
                               relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
-                              additionalOrders);
+                              additionalOrders, orkGhostSources, orkWaaaghs);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -354,7 +373,9 @@ namespace OnlyWar.Helpers.Database.GameState
                                    FactionRelationshipLedger relationshipLedger,
                                    EquipmentLoadoutDoctrine equipmentLoadoutDoctrine,
                                    IEnumerable<WorldControlEpisodeState> worldControlEpisodes,
-                                   IEnumerable<Order> additionalOrders)
+                                   IEnumerable<Order> additionalOrders,
+                                   IEnumerable<GhostPopulationSource> ghostPopulationSources,
+                                   IEnumerable<StrategicInvasionForce> strategicInvasionForces)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -417,6 +438,9 @@ namespace OnlyWar.Helpers.Database.GameState
                             _soldierDataAccess.SaveSoldier(transaction, soldier);
                         }
                     }
+
+                    SaveGhostPopulationSources(transaction, ghostPopulationSources);
+                    SaveStrategicInvasionForces(transaction, strategicInvasionForces);
 
                     // Fallen brothers belong to no squad, so they are not covered by the
                     // loop above; persist their base soldier rows (with a null SquadId) here.
@@ -490,6 +514,144 @@ namespace OnlyWar.Helpers.Database.GameState
         private static string DefaultSchemaFilePath()
         {
             return GameStorage.SaveSchemaPath;
+        }
+
+        private static List<GhostPopulationSource> LoadGhostPopulationSources(
+            IDbConnection connection,
+            IReadOnlyDictionary<int, Faction> factionMap,
+            IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap)
+        {
+            bool genericTable = HasTable(connection, "GhostPopulationSource");
+            List<GhostPopulationSource> sources = [];
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = genericTable
+                ? "SELECT Id, FactionId, x, y, PlanetTemplateId, Population, PopulationCapacity, Consolidation FROM GhostPopulationSource"
+                : "SELECT Id, x, y, PlanetTemplateId, Population, PopulationCapacity, Consolidation FROM OrkGhostSource";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int id = reader.GetInt32(0);
+                int factionOrdinal = genericTable ? 1 : -1;
+                int xOrdinal = genericTable ? 2 : 1;
+                int yOrdinal = genericTable ? 3 : 2;
+                int templateOrdinal = genericTable ? 4 : 3;
+                int populationOrdinal = genericTable ? 5 : 4;
+                int capacityOrdinal = genericTable ? 6 : 5;
+                int consolidationOrdinal = genericTable ? 7 : 6;
+                int templateId = reader.GetInt32(templateOrdinal);
+                if (!planetTemplateMap.TryGetValue(templateId, out PlanetTemplate template))
+                {
+                    throw new InvalidDataException(
+                        $"Ghost population source {id} references missing planet template {templateId}.");
+                }
+                Faction faction = genericTable && !reader.IsDBNull(factionOrdinal)
+                    ? factionMap.GetValueOrDefault(reader.GetInt32(factionOrdinal))
+                    : null;
+                sources.Add(new OrkGhostSource(
+                    id,
+                    new Coordinate((ushort)reader.GetInt32(xOrdinal), (ushort)reader.GetInt32(yOrdinal)),
+                    template,
+                    reader.GetInt64(populationOrdinal),
+                    reader.GetInt64(capacityOrdinal),
+                    reader.GetDouble(consolidationOrdinal),
+                    faction));
+            }
+            return sources;
+        }
+
+        private static List<StrategicInvasionForceSaveData> LoadStrategicInvasionForces(IDbConnection connection)
+        {
+            string table = HasTable(connection, "StrategicInvasionForce")
+                ? "StrategicInvasionForce"
+                : "OrkWaaagh";
+            List<StrategicInvasionForceSaveData> forces = [];
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = $@"SELECT Id, FactionId, CommandSquadId, CurrentRegionId,
+                                           OriginPlanetId, DestinationPlanetId,
+                                           TravelWeeksRemaining, TransitBattleValue,
+                                           IsActive
+                                    FROM {table}";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                forces.Add(new OrkWaaaghSaveData
+                {
+                    Id = reader.GetInt64(0),
+                    FactionId = reader.GetInt32(1),
+                    CommandSquadId = reader.GetInt32(2),
+                    CurrentRegionId = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+                    OriginPlanetId = reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                    DestinationPlanetId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                    TravelWeeksRemaining = reader.GetInt32(6),
+                    TransitBattleValue = reader.GetInt64(7),
+                    IsActive = reader.GetBoolean(8)
+                });
+            }
+            return forces;
+        }
+
+        private static void SaveGhostPopulationSources(
+            IDbTransaction transaction,
+            IEnumerable<GhostPopulationSource> sources)
+        {
+            foreach (GhostPopulationSource source in sources ?? Enumerable.Empty<GhostPopulationSource>())
+            {
+                using IDbCommand command = transaction.Connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO GhostPopulationSource
+                    (Id, FactionId, x, y, PlanetTemplateId, Population, PopulationCapacity, Consolidation)
+                    VALUES (@id, @factionId, @x, @y, @planetTemplateId, @population, @populationCapacity, @consolidation);";
+                command.AddParam("@id", source.Id);
+                command.AddParam("@factionId", source.FactionId);
+                command.AddParam("@x", source.Position.X);
+                command.AddParam("@y", source.Position.Y);
+                command.AddParam("@planetTemplateId", source.WorldType.Id);
+                command.AddParam("@population", source.Population);
+                command.AddParam("@populationCapacity", source.PopulationCapacity);
+                command.AddParam("@consolidation", source.Consolidation);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private static void SaveStrategicInvasionForces(
+            IDbTransaction transaction,
+            IEnumerable<StrategicInvasionForce> forces)
+        {
+            foreach (StrategicInvasionForce force in forces ?? Enumerable.Empty<StrategicInvasionForce>())
+            {
+                if (force?.CommandSquad?.ParentUnit == null)
+                {
+                    throw new InvalidDataException(
+                        $"Strategic invasion force {force?.Id.ToString() ?? "<null>"} has no persistent command unit.");
+                }
+                using IDbCommand command = transaction.Connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO StrategicInvasionForce
+                    (Id, FactionId, CommandSquadId, CurrentRegionId, OriginPlanetId,
+                     DestinationPlanetId, TravelWeeksRemaining, TransitBattleValue,
+                     IsActive)
+                    VALUES (@id, @factionId, @commandSquadId, @currentRegionId, @originPlanetId,
+                            @destinationPlanetId, @travelWeeksRemaining, @transitBattleValue,
+                            @isActive);";
+                command.AddParam("@id", force.Id);
+                command.AddParam("@factionId", force.Faction.Id);
+                command.AddParam("@commandSquadId", force.CommandSquad.Id);
+                command.AddParam("@currentRegionId", force.CurrentRegion?.Id);
+                command.AddParam("@originPlanetId", force.OriginPlanet?.Id);
+                command.AddParam("@destinationPlanetId", force.DestinationPlanet?.Id);
+                command.AddParam("@travelWeeksRemaining", force.TravelWeeksRemaining);
+                command.AddParam("@transitBattleValue", force.TransitBattleValue);
+                command.AddParam("@isActive", force.IsActive ? 1 : 0);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private static bool HasTable(IDbConnection connection, string tableName)
+        {
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = @name LIMIT 1";
+            command.AddParam("@name", tableName);
+            return command.ExecuteScalar() != null;
         }
 
         private static string BuildConnectionString(string filePath, SqliteOpenMode mode)

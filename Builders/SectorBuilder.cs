@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Events;
 
@@ -12,7 +13,8 @@ namespace OnlyWar.Builders
 {
     internal static class SectorBuilder
     {
-        public static Sector GenerateSector(int seed, GameRulesData data, Date currentDate, string chapterName = null)
+        public static Sector GenerateSector(int seed, GameRulesData data, Date currentDate, string chapterName = null,
+                                            InvaderFactionSelection invaderSelection = InvaderFactionSelection.Tyranids)
         {
             List<Planet> planetList = [];
             List<Character> characterList = [];
@@ -60,11 +62,15 @@ namespace OnlyWar.Builders
             // parks it in orbit via Sector.AddNewFleet (Design/Reference/OpeningScenario.md).
             Sector sector = new Sector(playerForce, characterList, planetList, forceList);
             GenerateWarpNetwork(sector, data);
+            // Ambient ghost populations are latent state, not planets. Seed them after ordinary world
+            // generation so they can only occupy genuinely empty grid tiles and never change the
+            // sector's visible planet roster.
+            GhostPlanetSeeder.Seed(sector, data, StaticRNG.Instance);
             // Register the in-progress sector so the opening-scenario stamp can run its planet-scoped
             // simulations (which read GameDataSingleton.Instance.Sector) before generation returns.
             GameDataSingleton.Instance.SetSectorDuringGeneration(sector);
             sector.Scenario = ScenarioBuilder.StampPromisedWorld(
-                sector, data, currentDate, playerForce, planetList, characterList);
+                sector, data, currentDate, playerForce, planetList, characterList, invaderSelection);
             ChapterChronicleProjector.Reconcile(
                 playerForce.CampaignEventLedger,
                 playerForce.ChapterChronicle,
@@ -160,9 +166,47 @@ namespace OnlyWar.Builders
                 {
                     Faction faction = data.Factions.First(faction => faction.Id == rule.FactionId);
                     PlanetBuilder.ApplyFactionPresence(faction, planet, rule);
+                    SeedInitialFeralBelief(planet, data, faction, rule);
                 }
             }
             return planet;
+        }
+
+            // Dormant population presence and Imperial knowledge are separate rolls. A seeded population is
+        // therefore sometimes already suspected by local authorities and sometimes genuinely
+        // unknown; neither case changes the hidden/open state of the RegionFaction itself.
+        private static void SeedInitialFeralBelief(
+            Planet planet,
+            GameRulesData data,
+            Faction faction,
+            FactionPlanetPresenceRule rule)
+        {
+            if (!FactionCapabilities.HasDormantPopulations(faction)
+                || rule.PresenceMode != FactionPresenceMode.Hidden
+                || data.FactionBehaviorRules.DormantInitialBeliefChance <= 0
+                || RNG.GetLinearDouble() >= data.FactionBehaviorRules.DormantInitialBeliefChance)
+            {
+                return;
+            }
+
+            PlanetFaction observer = planet.PlanetFactionMap.Values
+                .FirstOrDefault(presence => presence.Faction.IsDefaultFaction);
+            if (observer == null) return;
+
+            foreach (Region region in planet.Regions)
+            {
+                RegionFaction target = region.RegionFactionMap.GetValueOrDefault(faction.Id);
+                if (target?.Population <= 0) continue;
+                observer.AddRegionAwareness(region, 1.0f);
+                observer.SeedTargetBelief(
+                    region,
+                    faction,
+                    (float)data.FactionBehaviorRules.DormantInitialBeliefEvidence,
+                    estimatedPopulation: null,
+                    estimatedMilitaryStrength: null,
+                    evidenceWeek: 0,
+                    source: IntelObservationSource.Scenario);
+            }
         }
 
         // Reward path (Design/Reference/OpeningScenario.md): install the player as the planet-wide

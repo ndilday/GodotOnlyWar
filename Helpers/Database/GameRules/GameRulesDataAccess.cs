@@ -5,6 +5,7 @@ using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Models.FactionBehaviors;
 
 using System;
 using System.Collections.Generic;
@@ -42,6 +43,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         public IReadOnlyList<FactionPlanetPresenceRule> FactionPlanetPresenceRules { get; set; }
         public IReadOnlyList<ChapterGenerationProfileData> ChapterGenerationProfiles { get; set; }
         public IReadOnlyList<SectorGenerationProfile> SectorGenerationProfiles { get; set; }
+        public IReadOnlyList<FactionBehaviorRulesProfile> FactionBehaviorRulesProfiles { get; set; }
 
     }
 
@@ -59,6 +61,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private readonly ChapterGenerationPolicyDataAccess _chapterGenerationPolicyDataAccess;
         private readonly ScoutTrainingOptionDataAccess _scoutTrainingOptionDataAccess;
         private readonly SectorGenerationProfileDataAccess _sectorGenerationProfileDataAccess;
+        private readonly FactionBehaviorRulesDataAccess _factionBehaviorRulesDataAccess;
 
         private static GameRulesDataAccess _instance;
 
@@ -76,6 +79,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             _chapterGenerationPolicyDataAccess = new ChapterGenerationPolicyDataAccess();
             _scoutTrainingOptionDataAccess = new ScoutTrainingOptionDataAccess();
             _sectorGenerationProfileDataAccess = new SectorGenerationProfileDataAccess();
+            _factionBehaviorRulesDataAccess = new FactionBehaviorRulesDataAccess();
         }
 
         public static GameRulesDataAccess Instance
@@ -148,6 +152,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                 _factionGenerationPolicyDataAccess.GetFactionPlanetPresenceRules(dbCon);
             var sectorGenerationProfiles =
                 _sectorGenerationProfileDataAccess.GetProfiles(dbCon);
+            var factionBehaviorRulesProfiles = _factionBehaviorRulesDataAccess.GetProfiles(dbCon);
             EquipmentRulesCatalog compatibilityEquipmentCatalog = EquipmentRulesCatalog.FromLegacyRules(
                 squadDataBlob.RangedWeaponTemplateMap,
                 squadDataBlob.MeleeWeaponTemplateMap,
@@ -197,7 +202,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                 ScenarioFactionOptions = scenarioFactionOptions,
                 FactionPlanetPresenceRules = factionPlanetPresenceRules,
                 ChapterGenerationProfiles = chapterGenerationProfiles,
-                SectorGenerationProfiles = sectorGenerationProfiles
+                SectorGenerationProfiles = sectorGenerationProfiles,
+                FactionBehaviorRulesProfiles = factionBehaviorRulesProfiles
             };
             RulesDatabaseValidator.Validate(rules);
             return rules;
@@ -278,7 +284,11 @@ namespace OnlyWar.Helpers.Database.GameRules
                 | FactionBehavior.DefendsHostWhileHidden
                 | FactionBehavior.OffersExternalEnemyTruce
                 | FactionBehavior.UniversallyHostile
-                | FactionBehavior.Indelible;
+                | FactionBehavior.Indelible
+                | FactionBehavior.HasGhostPlanets
+                | FactionBehavior.HasDormantPopulations
+                | FactionBehavior.GeneratesInvasions
+                | FactionBehavior.MobMentality;
             if ((behavior & ~allKnown) != 0)
             {
                 throw new InvalidDataException(

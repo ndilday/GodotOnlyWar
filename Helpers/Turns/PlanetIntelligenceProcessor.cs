@@ -7,6 +7,7 @@ using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -151,6 +152,30 @@ namespace OnlyWar.Helpers.Turns
                         && !regionFaction.IsPublic))
                 {
                     HandleHiddenFactionIntelligence(hiddenFaction);
+                }
+
+                // A confirmed dormant-population belief is an actionable strategic culling opportunity,
+                // even when the underlying presence has gone to ground between observations. Keep
+                // this deterministic offer separate from the generic hidden-cell ambush roll so
+                // the player can act on the specific capability operation the intelligence supports.
+                foreach (FactionIntelBelief belief in playerBeliefs
+                    .Where(item => FactionCapabilities.HasDormantPopulations(item.TargetFaction)))
+                {
+                    RegionFaction current = region.RegionFactionMap
+                        .GetValueOrDefault(belief.TargetFaction.Id);
+                    if (current?.StrategicInvasionForceId != null) continue;
+                    if (region.SpecialMissions.Any(mission =>
+                        mission.MissionType == MissionType.Extermination
+                        && mission.TargetFaction?.Id == belief.TargetFaction.Id))
+                    {
+                        continue;
+                    }
+
+                    Mission culling = current == null
+                        ? new Mission(MissionType.Extermination, region, belief.TargetFaction, 1)
+                        : new Mission(MissionType.Extermination, current, 1);
+                    region.SpecialMissions.Add(culling);
+                    _specialMissions.Add(culling);
                 }
 
                 float beliefEvidence = playerBeliefs

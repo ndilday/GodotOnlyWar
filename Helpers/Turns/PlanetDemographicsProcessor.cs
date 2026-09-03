@@ -2,6 +2,7 @@ using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.FactionBehaviors;
 using System;
 using System.Linq;
 
@@ -35,12 +36,29 @@ namespace OnlyWar.Helpers.Turns
             Faction controllingFaction = planet.GetControllingFaction();
             float newPop = 0;
             bool isOverrunRemnant = regionFaction.PlanetFaction.Faction.IsDefaultFaction && !regionFaction.IsPublic;
+            bool isInvasionOccupiedCivilian = regionFaction.PlanetFaction.Faction.IsDefaultFaction
+                && FactionCapabilities.GeneratesInvasions(controllingFaction);
 
-            switch (regionFaction.PlanetFaction.Faction.GrowthType)
+            if (isInvasionOccupiedCivilian)
+            {
+                // Invasion-held civilians are enslaved rather than allowed to reproduce normally. The
+                // decline is deliberately population-only; it does not create a new military pool.
+                newPop = (float)(-regionFaction.Population
+                    * _session.Rules.FactionBehaviorRules.OccupiedCivilianDeclineRate);
+            }
+            else switch (regionFaction.PlanetFaction.Faction.GrowthType)
             {
                 case GrowthType.Logistic:
+                    float factionGrowthMultiplier = regionFaction.GrowthMultiplier;
+                    if (FactionCapabilities.HasDormantPopulations(
+                        regionFaction.PlanetFaction.Faction))
+                    {
+                        factionGrowthMultiplier *= (float)DormantPopulationRules.GrowthEfficiency(
+                            _session.Rules.FactionBehaviorRules,
+                            regionFaction.IsPublic);
+                    }
                     newPop = ApplyCarryingCapacity(
-                        regionFaction.Population * LogisticGrowthRate * regionFaction.GrowthMultiplier,
+                        regionFaction.Population * LogisticGrowthRate * factionGrowthMultiplier,
                         regionFaction.Region);
                     break;
                 case GrowthType.Conversion:

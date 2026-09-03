@@ -5,6 +5,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Narrative;
 using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -31,13 +32,14 @@ namespace OnlyWar.Builders
         // BriefingComposer / founding-history entry that lands next session.
         internal static CampaignScenario StampPromisedWorld(
             Sector sector, GameRulesData data, Date currentDate,
-            PlayerForce playerForce, List<Planet> planetList, List<Character> characterList)
+            PlayerForce playerForce, List<Planet> planetList, List<Character> characterList,
+            InvaderFactionSelection invaderSelection = InvaderFactionSelection.Tyranids)
         {
             ScenarioProfile profile = data.ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
-            Faction infiltrator = SelectScenarioFaction(
-                profile, ScenarioFactionSlotKeys.Infiltrator, data);
-            Faction invader = SelectScenarioFaction(
-                profile, ScenarioFactionSlotKeys.Invader, data);
+            Faction infiltrator = invaderSelection == InvaderFactionSelection.Orks
+                ? null
+                : SelectScenarioFaction(profile, ScenarioFactionSlotKeys.Infiltrator, data);
+            Faction invader = SelectInvaderFaction(profile, data, invaderSelection);
 
             // The opening plays out as a timed sequence during generation rather than being stamped
             // as a static board (Design/Reference/OpeningScenario.md): the
@@ -48,10 +50,13 @@ namespace OnlyWar.Builders
 
             // Seed the hidden infiltrator, pull it up to landing-site strength (this world was
             // chosen because its infiltrator is deep and ready), then have it rise in open revolt.
-            EnsureInfiltrator(promised, infiltrator, profile);
-            StrengthenPromisedWorldInfiltrator(promised, infiltrator, profile);
-            RevealInfiltrator(promised, infiltrator);
-            SeedPromisedWorldInfiltratorIntel(promised, infiltrator, profile);
+            if (infiltrator != null)
+            {
+                EnsureInfiltrator(promised, infiltrator, profile);
+                StrengthenPromisedWorldInfiltrator(promised, infiltrator, profile);
+                RevealInfiltrator(promised, infiltrator);
+                SeedPromisedWorldInfiltratorIntel(promised, infiltrator, profile);
+            }
 
             // A single TurnController drives both planet-scoped sims (no player upkeep, no other
             // planets, no scenario resolution — see SimulatePlanetForward).
@@ -59,10 +64,18 @@ namespace OnlyWar.Builders
 
             // Pre-landing: the revealed infiltrator wars against the host faction, weakening the
             // defenders the invader will land into.
-            controller.SimulatePlanetForward(sector, promised, profile.PreLandingTurns);
+            if (infiltrator != null)
+            {
+                controller.SimulatePlanetForward(sector, promised, profile.PreLandingTurns);
+            }
 
             // The authored beachhead makes planetfall onto the now-weakened board.
             StampInvaderPresence(promised, data, invader, profile);
+            if (FactionCapabilities.GeneratesInvasions(invader))
+            {
+                new FactionCapabilityCampaignProcessor(new GameSession(data, sector, currentDate, StaticRNG.Instance)).EstablishOpeningInvasion(
+                    sector, promised, invader);
+            }
 
             // Post-landing: the stranded swarm eats and spreads for a Gaussian-random stretch (the
             // Navy strands it — no reinforcement mechanism exists) before the player arrives.
@@ -100,7 +113,32 @@ namespace OnlyWar.Builders
                 ScenarioType.PromisedWorld,
                 promised.Id,
                 briefingText,
-                authority.Id);
+                authority.Id,
+                invaderFactionId: invader.Id);
+        }
+
+        private static Faction SelectInvaderFaction(
+            ScenarioProfile profile,
+            GameRulesData data,
+            InvaderFactionSelection selection)
+        {
+            if (selection == InvaderFactionSelection.Orks)
+            {
+                Faction faction = FactionCapabilities.WithCapability(
+                    data.Factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
+                if (faction == null)
+                    throw new InvalidOperationException("The invasion opening was selected but no invasion-generating faction is configured.");
+                return faction;
+            }
+
+            IReadOnlyList<ScenarioFactionOption> options = profile.GetFactionOptions(ScenarioFactionSlotKeys.Invader)
+                .Where(option => selection != InvaderFactionSelection.Tyranids
+                    || !FactionCapabilities.GeneratesInvasions(
+                        data.Factions.FirstOrDefault(faction => faction.Id == option.FactionId)))
+                .ToList();
+            if (options.Count == 0)
+                throw new InvalidOperationException($"Scenario profile '{profile.Key}' has no eligible non-invasion invader.");
+            return SelectScenarioFaction(profile, ScenarioFactionSlotKeys.Invader, data, options);
         }
 
         // Weeks the stranded invader force feeds after planetfall before the player arrives:
@@ -116,9 +154,11 @@ namespace OnlyWar.Builders
         private static Faction SelectScenarioFaction(
             ScenarioProfile profile,
             string slotKey,
-            GameRulesData data)
+            GameRulesData data,
+            IReadOnlyList<ScenarioFactionOption> candidateOptions = null)
         {
-            IReadOnlyList<ScenarioFactionOption> options = profile.GetFactionOptions(slotKey);
+            IReadOnlyList<ScenarioFactionOption> options = candidateOptions
+                ?? profile.GetFactionOptions(slotKey);
             if (options.Count == 0)
             {
                 throw new InvalidOperationException(
@@ -371,6 +411,7 @@ namespace OnlyWar.Builders
             {
                 invaderPlanetFaction = new PlanetFaction(invaderFaction);
                 promised.PlanetFactionMap[invaderFaction.Id] = invaderPlanetFaction;
+                promised.NotifyPlanetFactionAdded(invaderPlanetFaction);
             }
             // The Navy already identified the incursion; the world is known to be invaded.
             invaderPlanetFaction.IsPublic = true;
@@ -411,25 +452,33 @@ namespace OnlyWar.Builders
                 long regionInvaderPopulation = Math.Max(0L,
                     Math.Min(invaderPopulation, region.CarryingCapacity - existingPopulation));
 
-                RegionFaction invader = new RegionFaction(invaderPlanetFaction, region)
+                RegionFaction invader = region.RegionFactionMap
+                    .GetValueOrDefault(invaderFaction.Id);
+                if (invader == null)
                 {
-                    IsPublic = true,
-                    Population = regionInvaderPopulation,
-                    // A landed swarm is fully mobilized: Organization is a 0-100 percentage and the
-                    // whole brood feeds and fights, so the beachhead starts at 100. (This was 1,
-                    // written when 1 was mistaken for "100%"; at the true scale that left only 1% of
-                    // the swarm eating/attacking — the cause of the glacial post-landing consumption.)
-                    // Restraint on spread comes from Entrenchment=0 (raiders, not dug-in) and the
-                    // finite stranded biomass budget, not from throttling how much of the swarm acts.
-                    Organization = 100,
-                    Entrenchment = 0,
-                    ListeningPost = 0,
-                    AntiAir = 0
-                    // No GrowthMultiplier throttle: the invader's simulation behavior governs its
-                    // population change. Winnability
-                    // comes from the finite, stranded biomass budget, not a growth throttle.
-                };
-                region.RegionFactionMap[invaderFaction.Id] = invader;
+                    invader = new RegionFaction(invaderPlanetFaction, region)
+                    {
+                        IsPublic = true,
+                        Entrenchment = 0,
+                        ListeningPost = 0,
+                        AntiAir = 0
+                        // No GrowthMultiplier throttle: the invader's simulation behavior governs
+                        // its population change. Winnability comes from the finite, stranded
+                        // biomass budget, not a growth throttle.
+                    };
+                    region.RegionFactionMap[invaderFaction.Id] = invader;
+                }
+
+                // An explicit invasion opening must incorporate a naturally seeded dormant presence on
+                // the promised world instead of replacing that indelible object. The existing
+                // population is already included in regionInvaderPopulation's capacity check;
+                // add only the authored beachhead allocation on top of it.
+                invader.IsPublic = true;
+                invader.Organization = 100;
+                invader.AddMilitaryStrength(regionInvaderPopulation);
+                invader.DormantConsolidation = FactionCapabilities.GeneratesInvasions(invaderFaction)
+                    ? 1.0
+                    : invader.DormantConsolidation;
             }
         }
 
@@ -585,7 +634,9 @@ namespace OnlyWar.Builders
                 TemplateSelector = promised.Id
             };
 
-            string briefingText = BriefingComposer.ComposePromisedWorldBriefing(tokens);
+            string briefingText = FactionCapabilities.GeneratesInvasions(invader)
+                ? BriefingComposer.ComposeInvasionPromisedWorldBriefing(tokens)
+                : BriefingComposer.ComposePromisedWorldBriefing(tokens);
 
             playerForce.AddToBattleHistory(currentDate, "The Promised World", new List<string>
             {

@@ -275,6 +275,16 @@ namespace OnlyWar.Helpers.Database.GameState
                         GetOrdinalOrDefault(reader, "OrganizedMilitaryStrength");
                     int assignedDefensiveOrdinal =
                         GetOrdinalOrDefault(reader, "AssignedDefensiveBattleValue");
+                    int strategicForceOrdinal = GetOrdinalOrDefault(reader, "StrategicInvasionForceId");
+                    if (strategicForceOrdinal < 0)
+                    {
+                        strategicForceOrdinal = GetOrdinalOrDefault(reader, "OrkWaaaghId");
+                    }
+                    int dormantConsolidationOrdinal = GetOrdinalOrDefault(reader, "DormantConsolidation");
+                    if (dormantConsolidationOrdinal < 0)
+                    {
+                        dormantConsolidationOrdinal = GetOrdinalOrDefault(reader, "OrkConsolidation");
+                    }
                     float contentment = contentmentOrdinal >= 0
                         ? Convert.ToSingle(reader[contentmentOrdinal])
                         : 70f;
@@ -310,6 +320,14 @@ namespace OnlyWar.Helpers.Database.GameState
                             AntiAir = antiAir,
                             GrowthMultiplier = growthMultiplier
                         };
+                    if (strategicForceOrdinal >= 0 && !reader.IsDBNull(strategicForceOrdinal))
+                    {
+                        regionFaction.StrategicInvasionForceId = reader.GetInt64(strategicForceOrdinal);
+                    }
+                    if (dormantConsolidationOrdinal >= 0 && !reader.IsDBNull(dormantConsolidationOrdinal))
+                    {
+                        regionFaction.DormantConsolidation = reader.GetDouble(dormantConsolidationOrdinal);
+                    }
                     if (organizedStrengthOrdinal >= 0 && !reader.IsDBNull(organizedStrengthOrdinal))
                     {
                         regionFaction.SetOrganizedMilitaryStrength(
@@ -623,6 +641,11 @@ namespace OnlyWar.Helpers.Database.GameState
 
         private static void SaveRegionFactions(IDbTransaction transaction, Region[] regions)
         {
+            // Focused mission-save tests and a few legacy tooling callers persist a planet against
+            // an older RegionFaction table. Keep PlanetDataAccess backward-compatible there; the
+            // current save schema uses capability-neutral column names.
+            bool hasStrategicForceColumns = HasColumn(transaction.Connection, "RegionFaction", "StrategicInvasionForceId")
+                && HasColumn(transaction.Connection, "RegionFaction", "DormantConsolidation");
             foreach (var region in regions)
             {
                 foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
@@ -630,7 +653,9 @@ namespace OnlyWar.Helpers.Database.GameState
                     using (var command = transaction.Connection.CreateCommand())
                     {
                         command.Transaction = transaction;
-                        command.CommandText = @"INSERT INTO RegionFaction
+                        command.CommandText = hasStrategicForceColumns ? @"INSERT INTO RegionFaction
+                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage, OrganizedMilitaryStrength, AssignedDefensiveBattleValue, StrategicInvasionForceId, DormantConsolidation) VALUES
+                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage, @organizedMilitaryStrength, @assignedDefensiveBattleValue, @strategicForceId, @dormantConsolidation);" : @"INSERT INTO RegionFaction
                             (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage, OrganizedMilitaryStrength, AssignedDefensiveBattleValue) VALUES
                             (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage, @organizedMilitaryStrength, @assignedDefensiveBattleValue);";
                         command.AddParam("@regionId", region.Id);
@@ -652,6 +677,11 @@ namespace OnlyWar.Helpers.Database.GameState
                         // PrepareAssaultMissionStep.ResolveDefensiveReserve).
                         command.AddParam("@assignedDefensiveBattleValue",
                             regionFaction.AssignedDefensiveBattleValue);
+                        if (hasStrategicForceColumns)
+                        {
+                            command.AddParam("@strategicForceId", regionFaction.StrategicInvasionForceId);
+                            command.AddParam("@dormantConsolidation", regionFaction.DormantConsolidation);
+                        }
                         command.ExecuteNonQuery();
                     }
                 }
@@ -680,6 +710,21 @@ namespace OnlyWar.Helpers.Database.GameState
                     command.ExecuteNonQuery();
                 }
             }
+        }
+
+        private static bool HasColumn(IDbConnection connection, string table, string column)
+        {
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = $"PRAGMA table_info({table});";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static void SavePlanetFactionTargetIntel(

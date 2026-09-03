@@ -1,10 +1,12 @@
 using Godot;
+using OnlyWar.Models;
 using System;
 
 public class NewGameSettings
 {
     public string ChapterName { get; set; }
     public int Seed { get; set; }
+    public InvaderFactionSelection InvaderSelection { get; set; } = InvaderFactionSelection.Tyranids;
 }
 
 public partial class NewGameSetupController : Control
@@ -15,6 +17,7 @@ public partial class NewGameSetupController : Control
     private Panel _summaryPanel;
     private LineEdit _chapterNameEdit;
     private LineEdit _seedEdit;
+    private OptionButton _invaderSelection;
     private Label _validationLabel;
     private RichTextLabel _summaryLabel;
 
@@ -27,6 +30,11 @@ public partial class NewGameSetupController : Control
         _summaryPanel = GetNode<Panel>("SummaryPanel");
         _chapterNameEdit = GetNode<LineEdit>("FormPanel/VBox/ChapterNameEdit");
         _seedEdit = GetNode<LineEdit>("FormPanel/VBox/SeedRow/SeedEdit");
+        _invaderSelection = GetNode<OptionButton>("FormPanel/VBox/InvaderSelection");
+        _invaderSelection.AddItem("Tyranids", (int)InvaderFactionSelection.Tyranids);
+        _invaderSelection.AddItem("Orks", (int)InvaderFactionSelection.Orks);
+        _invaderSelection.AddItem("Random", (int)InvaderFactionSelection.Random);
+        _invaderSelection.Selected = 0;
         _validationLabel = GetNode<Label>("FormPanel/VBox/ValidationLabel");
         _summaryLabel = GetNode<RichTextLabel>("SummaryPanel/VBox/SummaryLabel");
 
@@ -59,7 +67,8 @@ public partial class NewGameSetupController : Control
 
         _validationLabel.Text = "";
         _summaryLabel.Text =
-            $"[b]Chapter:[/b] {settings.ChapterName}\n[b]Sector Seed:[/b] {settings.Seed}\n\n"
+            $"[b]Chapter:[/b] {settings.ChapterName}\n[b]Sector Seed:[/b] {settings.Seed}\n"
+            + $"[b]Opening Invader:[/b] {_invaderSelection.GetItemText(_invaderSelection.Selected)}\n\n"
             + "The Chapter will be founded and the sector generated from this seed. "
             + "Re-using a seed reproduces the same sector.";
         ShowSummary();
@@ -102,7 +111,12 @@ public partial class NewGameSetupController : Control
             return false;
         }
 
-        settings = new NewGameSettings { ChapterName = name, Seed = seed };
+        settings = new NewGameSettings
+        {
+            ChapterName = name,
+            Seed = seed,
+            InvaderSelection = (InvaderFactionSelection)_invaderSelection.Selected
+        };
         error = "";
         return true;
     }
