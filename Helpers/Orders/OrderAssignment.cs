@@ -36,13 +36,14 @@ namespace OnlyWar.Helpers.Orders
             AvailableMission mission,
             int targetFactionId,
             Aggression aggression,
-            IReadOnlyList<PlayerSoldier> attachedSoldiers = null)
+            IReadOnlyList<PlayerSoldier> attachedSoldiers = null,
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (squads == null || squads.Count == 0
                 || squads.Any(squad => squad?.CanAcceptSquadOrder != true
                     || squad.SquadTemplate?.PermitsIndividualDetachment == true
                     || squad.CurrentOrders == null
-                        && !SquadReadinessService.CanBeginNewDeployment(squad)))
+                        && !SquadReadinessService.CanBeginNewDeployment(squad, null, doctrine)))
             {
                 return null;
             }
@@ -97,7 +98,7 @@ namespace OnlyWar.Helpers.Orders
                 List<Squad> existingStaging = existingOrder.AssignedSquads
                     .Concat(distinctSquads)
                     .ToList();
-                if (!CanAttachAll(distinctSpecialists, existingOrder, existingStaging))
+                if (!CanAttachAll(distinctSpecialists, existingOrder, existingStaging, doctrine))
                 {
                     return null;
                 }
@@ -105,12 +106,12 @@ namespace OnlyWar.Helpers.Orders
                 MoveSquadsToOrder(distinctSquads, existingOrder, sector);
                 foreach (PlayerSoldier specialist in distinctSpecialists)
                 {
-                    OrderAttachment.Attach(specialist, existingOrder);
+                    OrderAttachment.Attach(specialist, existingOrder, doctrine);
                 }
                 return existingOrder;
             }
 
-            if (!CanAttachAll(distinctSpecialists, null, distinctSquads))
+            if (!CanAttachAll(distinctSpecialists, null, distinctSquads, doctrine))
             {
                 return null;
             }
@@ -138,15 +139,15 @@ namespace OnlyWar.Helpers.Orders
             sector.AddNewOrder(newOrder);
             foreach (PlayerSoldier specialist in distinctSpecialists)
             {
-                OrderAttachment.Attach(specialist, newOrder);
+                OrderAttachment.Attach(specialist, newOrder, doctrine);
             }
             return newOrder;
         }
 
         /// <summary>
         /// Creates or updates a mission from a mixed movement force. Characters are first-class
-        /// order participants here: a character-only selection is legal and remains a warning/UI
-        /// concern rather than an order invariant violation.
+        /// order participants here, but a new order still requires at least one manoeuvre squad;
+        /// characters may be added to an existing squad-backed order independently.
         /// </summary>
         public static Order AssignParticipantsToMission(
             IReadOnlyList<Squad> squads,
@@ -154,7 +155,8 @@ namespace OnlyWar.Helpers.Orders
             Region targetRegion,
             AvailableMission mission,
             int targetFactionId,
-            Aggression aggression)
+            Aggression aggression,
+            ChapterOperationalDoctrine doctrine = null)
         {
             List<Squad> distinctSquads = (squads ?? [])
                 .Where(squad => squad != null)
@@ -172,7 +174,7 @@ namespace OnlyWar.Helpers.Orders
                 return null;
             }
             if (distinctSquads.Any(squad => squad.CurrentOrders == null
-                && !SquadReadinessService.CanBeginNewDeployment(squad)))
+                && !SquadReadinessService.CanBeginNewDeployment(squad, null, doctrine)))
             {
                 return null;
             }
@@ -198,6 +200,13 @@ namespace OnlyWar.Helpers.Orders
             Order targetOrder = equivalentOrders.FirstOrDefault();
             if (targetOrder == null)
             {
+                // An attached character supplements an operation; it cannot be the operation's
+                // only force. Keep this invariant at the mutation boundary as well as in the
+                // ordinary AssignSquadsToMission API.
+                if (distinctSquads.Count == 0)
+                {
+                    return null;
+                }
                 Faction ownerFaction = distinctSquads.Select(squad => squad.Faction)
                     .Concat(distinctCharacters.Select(character => character.AssignedSquad?.Faction))
                     .FirstOrDefault(faction => faction != null)
@@ -214,20 +223,20 @@ namespace OnlyWar.Helpers.Orders
                 CharacterAvailabilityService availability = new();
                 if (distinctCharacters.Any(character =>
                     !availability.EvaluateOrderAssignment(
-                        character, targetOrder, explicitOrigin, staging).IsAllowed))
+                        character, targetOrder, explicitOrigin, staging, doctrine).IsAllowed))
                 {
                     return null;
                 }
                 foreach (Squad squad in distinctSquads)
                 {
-                    if (!OrderForceService.AssignSquad(targetOrder, squad))
+                    if (!OrderForceService.AssignSquad(targetOrder, squad, doctrine))
                     {
                         OrderForceService.ReleaseOrder(targetOrder);
                         return null;
                     }
                 }
                 if (distinctCharacters.Any(character =>
-                    !OrderForceService.AssignCharacter(targetOrder, character)))
+                    !OrderForceService.AssignCharacter(targetOrder, character, doctrine)))
                 {
                     OrderForceService.ReleaseOrder(targetOrder);
                     return null;
@@ -247,12 +256,12 @@ namespace OnlyWar.Helpers.Orders
                 foreach (Squad duplicateSquad in duplicateOrder.AssignedSquads.ToList())
                 {
                     OrderForceService.RemoveSquad(duplicateOrder, duplicateSquad);
-                    OrderForceService.AssignSquad(targetOrder, duplicateSquad);
+                    OrderForceService.AssignSquad(targetOrder, duplicateSquad, doctrine);
                 }
                 foreach (PlayerSoldier duplicateCharacter in duplicateOrder.AssignedCharacters.ToList())
                 {
                     OrderForceService.RemoveCharacter(duplicateOrder, duplicateCharacter);
-                    OrderForceService.AssignCharacter(targetOrder, duplicateCharacter);
+                    OrderForceService.AssignCharacter(targetOrder, duplicateCharacter, doctrine);
                 }
                 sector.RemoveOrder(duplicateOrder);
             }
@@ -264,20 +273,20 @@ namespace OnlyWar.Helpers.Orders
             Region origin = stagingSquads.Count == 0 ? targetRegion : null;
             if (distinctCharacters.Any(character =>
                 !targetAvailability.EvaluateOrderAssignment(
-                    character, targetOrder, origin, stagingSquads).IsAllowed))
+                    character, targetOrder, origin, stagingSquads, doctrine).IsAllowed))
             {
                 return null;
             }
             foreach (Squad squad in distinctSquads)
             {
-                if (!OrderForceService.AssignSquad(targetOrder, squad))
+                if (!OrderForceService.AssignSquad(targetOrder, squad, doctrine))
                 {
                     return null;
                 }
             }
             foreach (PlayerSoldier character in distinctCharacters)
             {
-                if (!OrderForceService.AssignCharacter(targetOrder, character))
+                if (!OrderForceService.AssignCharacter(targetOrder, character, doctrine))
                 {
                     return null;
                 }
@@ -293,10 +302,11 @@ namespace OnlyWar.Helpers.Orders
         private static bool CanAttachAll(
             IReadOnlyList<PlayerSoldier> specialists,
             Order targetOrder,
-            IReadOnlyList<Squad> stagingSquads)
+            IReadOnlyList<Squad> stagingSquads,
+            ChapterOperationalDoctrine doctrine)
         {
             return specialists.All(soldier => OrderAttachment.CanAttach(
-                soldier, targetOrder, stagingSquads, null, out _));
+                soldier, targetOrder, stagingSquads, null, out _, doctrine));
         }
 
         public static bool UnassignSquads(IReadOnlyList<Squad> squads)

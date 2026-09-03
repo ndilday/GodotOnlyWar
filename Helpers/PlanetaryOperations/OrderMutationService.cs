@@ -76,7 +76,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 .ToList();
             if (squads.Count == 0 && characters.Count == 0)
             {
-                return Failure("Select at least one eligible squad or character.");
+                return Failure("Select at least one eligible squad.");
             }
             if (squads.Any(squad => squad.CurrentOrders == null
                 && SquadReadinessService.Evaluate(squad).PrimaryBlocker
@@ -90,6 +90,10 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             if (!IsSpecialMissionCurrent(target, mission))
             {
                 return Failure("That special mission is no longer available.");
+            }
+            if (squads.Count == 0 && existing == null)
+            {
+                return Failure("An operation requires at least one squad; characters can reinforce an existing order.");
             }
             if (squads.Any(squad => squad.CurrentOrders != null)
                 || characters.Any(character => character.CurrentOrder != null

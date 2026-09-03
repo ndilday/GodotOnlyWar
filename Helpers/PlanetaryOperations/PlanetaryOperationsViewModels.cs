@@ -62,6 +62,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         string FactionActivity = null,
         string FactionActivityIconKey = null)
     {
+        public int PlayerDutyReadyStrength => PlayerEffectiveStrength;
     }
 
     public sealed record RegionEnemyForceEstimate(
@@ -210,7 +211,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             bool playerForces = playerSquads.Count > 0;
             RecruitmentProgram recruitmentProgram = sector?.PlayerForce?.RecruitmentProgram;
             int playerEffectiveStrength = playerSquads.Sum(squad =>
-                SquadStrengthSnapshotBuilder.Build(squad, recruitmentProgram).Effective);
+                SquadStrengthSnapshotBuilder.Build(squad, recruitmentProgram).DutyReady);
             int playerFullStrength = playerSquads.Sum(squad =>
                 SquadStrengthSnapshotBuilder.Build(squad, recruitmentProgram).Full);
             int activeOrders = CountActivePlayerOrders(sector, region);

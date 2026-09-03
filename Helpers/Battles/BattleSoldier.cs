@@ -17,6 +17,7 @@ namespace OnlyWar.Helpers.Battles
         private HashSet<int> _functioningHandGroupIdSet = [];
         private bool _canFight;
         private bool _canMove;
+        private bool _hasUntreatedSeveredLimb;
         private float _motiveSpeedMultiplier = 1f;
         private Body _cachedInjuryBody;
         private int _cachedInjuryRevision = -1;
@@ -117,15 +118,25 @@ namespace OnlyWar.Helpers.Battles
         }
 
         /// <summary>
-        /// Still a participant in the battle: able to fight and able to move. This is the
-        /// predicate the planners, targeting, and casualty removal use.
+        /// Still a participant in the battle: able to fight and able to move, with an untreated
+        /// severed limb removing the soldier immediately. This is the predicate the planners,
+        /// targeting, and casualty removal use.
         /// </summary>
         public bool IsCombatEffective
         {
             get
             {
                 EnsureInjuryState();
-                return _canFight && _canMove;
+                return !_hasUntreatedSeveredLimb && _canFight && _canMove;
+            }
+        }
+
+        public bool HasUntreatedSeveredLimb
+        {
+            get
+            {
+                EnsureInjuryState();
+                return _hasUntreatedSeveredLimb;
             }
         }
 
@@ -498,6 +509,7 @@ namespace OnlyWar.Helpers.Battles
             _canFight = Soldier.CanFight;
             _motiveSpeedMultiplier = MotiveImpairment.CalculateSpeedMultiplier(body);
             _canMove = _motiveSpeedMultiplier > 0f;
+            _hasUntreatedSeveredLimb = Soldier.HasUntreatedSeveredLimb;
 
             _cachedInjuryBody = body;
             _cachedInjuryRevision = body.InjuryRevision;

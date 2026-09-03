@@ -68,11 +68,10 @@ namespace OnlyWar.Helpers
         /// What the Apothecary attached to the operation did (Design/Reference/CasualtyRealism.md
         /// §2.6), appended after the casualty line by the caller.
         ///
-        /// Its real job is to make an attached specialist VISIBLE. He is in no BattleSquad, so he
-        /// appears in no battle report, earns no field XP through the battle path, and takes no part
-        /// in the roster -- all correct under the no-battlefield-presence rule, and all of it reads
-        /// as a bug the first time a player sends an Apothecary out and finds no trace of him. This
-        /// is the trace. Returns "" when no Apothecary was attached, so ordinary orders are silent.
+        /// Its real job is to make an attached specialist's medical work VISIBLE. He may also be
+        /// represented by a one-person battle element when duty-ready, but field-care reporting is
+        /// independent of that engagement boundary. Returns "" when no Apothecary was attached, so
+        /// ordinary orders are silent.
         /// </summary>
         public static string BuildFieldCareLine(MissionOutcomeClassification classification)
         {

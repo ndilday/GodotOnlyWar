@@ -97,6 +97,7 @@ internal sealed class GameStateRoundTripFixture
             campaignIdentity: sector.PlayerForce.CampaignIdentity,
             relationshipLedger: sector.RelationshipLedger,
             equipmentLoadoutDoctrine: sector.PlayerForce.Army.EquipmentLoadoutDoctrine,
+            chapterOperationalDoctrine: sector.PlayerForce.Army.ChapterOperationalDoctrine,
             worldControlEpisodes: sector.PlayerForce.WorldControlEpisodes.States,
             ghostPopulationSources: sector.GhostPopulationSources,
             strategicInvasionForces: sector.StrategicInvasionForces);

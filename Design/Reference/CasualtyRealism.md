@@ -14,9 +14,28 @@ architecture is summarized in `OnlyWar_TDD.md` §5.3 and §6.6.1; this document 
 - **Ranged-vs-melee pricing** is now part of the unified `Design/Reference/BattleLogic.md`; the
   two cone/grenade planner tests are green regression coverage. This file retains the wound-band
   and medical decision tables rather than the engagement-scoring implementation history.
-- **Phase 2c** (characters as units of one in battle) and **Phase 4** (stance / prone combat) — PRD
-  §5.7, deliberately not scheduled. §5 below is the confidence assessment behind cutting stance and
-remains the governing argument.
+- **Phase 2c** (characters as units of one in battle) shipped as part of Phase 2, with
+  engagement-boundary materialization rather than mid-fight join/leave. **Phase 4** (stance / prone
+  combat) remains deliberately unscheduled. §5 below is the confidence assessment behind cutting
+  stance and remains the governing argument.
+
+## Operational duty readiness (Phase 2)
+
+Physical casualty state and Chapter deployment policy are deliberately separate. A brother can be
+combat-effective in the current battle while being physically undeployable for a later engagement
+(for example, after losing a second functioning arm/hand group), or physically deployable while
+being **WITHHELD** by the Chapter's operational doctrine. `DutyReadinessService` evaluates these
+questions in order: untreated severance, procedure reservation, combat incapacitation, insufficient
+functioning arms, then the Chapter's inclusive worst-wound threshold. The explicit **Incapacitated**
+policy has no additional wound threshold, but does not waive the physical or procedure exclusions.
+
+The worst active band anywhere on the body is used; wounds on separate locations are not summed.
+Squads additionally require the configured minimum duty-ready strength and, by default, a
+duty-ready leader. Individually deployed characters do not inherit those squad gates. A threshold
+crossing that does not cause physical incapacitation does not remove a brother from an engagement
+already under way: the next engagement boundary rebuilds the participant set and withholds him
+until healing or a doctrine change makes him duty-ready again. Doctrine-only transitions do not
+create near-death, recovery, or other permanent service-history events.
 
 Covers three PRD items that share one substrate (the wound model and what "out of the fight"
 means) and should be planned together:
@@ -325,10 +344,16 @@ screen.
   reads as a tax.
 - **What it cannot do:** unfreeze a replacement-eligible location. Surgery remains surgery.
 
-**First-pass scope limit (decided).** The attached Apothecary has **no battlefield presence at all**
-in this pass — he is with the force but abstracted out of the engagement, and only his between-days
-healing effect is modeled. He therefore cannot become a casualty, and no battle-time squad binding
-is needed. This defers the whole "characters as units of 1" problem (§3.1) out of this plan.
+**Historical first-pass scope limit (0.7; superseded by Phase 2).** The attached Apothecary had
+**no battlefield presence** in the original field-care pass — he was with the force but abstracted
+out of the engagement, and only his between-days healing effect was modeled. That boundary kept the
+first field-care implementation from silently inventing battle-layer entities.
+
+Phase 2 now materializes an individually duty-ready attached character as a one-person battle
+element at each engagement boundary. The character retains the home squad, equipment, order, and
+history identity; a withheld or physically unavailable character remains attached but contributes
+no battle element. Mid-fight join/leave behavior and specialist battlefield auras remain future
+work, but the current attached-character casualty and equipment boundary is no longer abstracted.
 
 ---
 
@@ -357,18 +382,17 @@ presence is felt force-wide. Binding him to one squad would mean choosing an arb
 then writing rules to leak his effect back out to the others. Order-level attachment also makes
 field care's reach fall out for free: **the order is the reach** (§2.4).
 
-**Battlefield presence is deferred, not solved.** Order-level attachment does not tell the battle
-layer where the man physically stands. The eventual model is settled in principle — **an attached
-character is a unit of one**: he can attach himself to a squad, and can leave that squad and join
-another during the fight. That is a real addition to the battle layer (a one-man entity that
-formation, cohesion, morale, and the planner must all tolerate, plus a join/leave action), and it is
-the natural home for every *battlefield* specialist effect: a Champion's presence, a Chaplain's
-morale aura, a Techmarine's repairs.
+**Battlefield presence — Phase 2 boundary model.** Order-level attachment still does not bind the
+character to a particular standing squad. At an engagement boundary, however, an individually
+duty-ready attached character is constructed as a unit of one alongside the ordered squads. The
+campaign `Squad` remains the identity anchor for cohesion, equipment, aftermath, and history, while
+the battle wrapper freezes the participant set for the current engagement. A later boundary can
+withhold the character after a wound or doctrine change without rewriting the order or home roster.
 
-Because this pass gives the Apothecary **no battlefield effect whatsoever** (§2.6), none of that is
-needed yet. Phase 2a can ship attachment as a purely organizational and post-battle concept, and the
-unit-of-one battle model becomes a follow-on requirement — the thing that unlocks the other
-specialist roles rather than a prerequisite for this one.
+This deliberately ships the smallest useful unit-of-one model: engagement-boundary entry and
+casualty handling. Mid-fight join/leave actions and specialist battlefield effects (Champion
+presence, Chaplain morale, Techmarine repairs) remain follow-on work rather than being inferred from
+the attachment relationship.
 
 **Dependent: squads whose members can be detached.** Attaching individuals to orders implies that
 administrative and HQ squads must be able to give up members independently, which line squads should
@@ -393,11 +417,14 @@ BUILT.** Answers, for reference (see that doc for rationale):
   deliberately replaced an earlier pair of mutual-exclusion guards that produced order-dependent
   behavior. Enforced in `OrderAssignment`, *not* by marking the templates `Administrative` —
   `IsOperational` must stay true or surgery staffing and recruitment/implantation break.
-- *Unit-of-one join/leave (Phase 2c)?* The squad planner, via a specialist-specific heuristic seeded
-  by the order's aggression. Nothing in Phase 2a encodes a squad binding, so 2c stays free.
+- *Unit-of-one join/leave (Phase 2c)?* **Engagement-boundary materialization shipped in Phase 2.**
+  `BattleSquadFactory` creates a one-person battle element for each individually duty-ready
+  attachment and freezes that participant for the current engagement. Mid-fight join/leave remains
+  a future specialist-specific heuristic, potentially seeded by the order's aggression.
 
-**For the record — what "first-class detachments" would have meant.** Today an HQ or specialist
-squad is a `Squad` with members that deploys as a unit. In the pool model it stops being deployable
+**For the record — what "first-class detachments" would have meant.** Before specialist pools and
+the Phase 2 engagement boundary, an HQ or specialist squad was a `Squad` with members that deployed
+as a unit. In the pool model it stops being deployable
 at all and becomes a *roster you draw from*: every deployment composes an ad-hoc **detachment** — an
 arbitrary list of individuals and squads — and that detachment, not the standing squad, is what
 receives orders and fights. It is the most canonical model (it is how a company actually task-organizes),
@@ -467,9 +494,11 @@ men carrying several Critical wounds who would otherwise be out for two months.
   and the same man can never spend the same day twice. One capacity pool shared under a single
   triage was considered and rejected — it would have let a forward Apothecary keep clearing the
   Apothecarium backlog from the field, which is precisely the tension §2.6 wants to create.
-- **Apothecary casualties.** Not applicable this pass — he has no battlefield presence, so he cannot
-  be hit (§2.6). Once the unit-of-one model lands, his capacity must stop the day he goes down, and
-  a wounded Apothecary presumably treats at reduced capacity rather than not at all.
+- **Apothecary casualties.** An attached, individually duty-ready Apothecary now enters as a
+  one-person battle element and can become a casualty. The current field-care model still treats
+  medical capacity as a between-days effect; stopping or reducing that capacity after a tactical
+  casualty remains a future medical-specialist behavior rather than an implicit side effect of
+  attachment.
 - **Daily healing scope. Resolved (Phase 1b) — Astartes-only**, expressed as
   `SpeciesAbilities.AcceleratedHealing` on the species rather than as a player-faction check, so
   the gate is a property of the biology and a future transhuman enemy gets it for the same reason.
@@ -550,11 +579,11 @@ everyone) and is kept explicit so the daily rule does not silently depend on it.
 a band once it exceeds `WOUND_MAX` (5), so the sixth Negligible graze becomes one Minor wound. The
 design intent is unaffected — a battle's worth still compounds, a week of separate days does not.
 
-**Phase 2a — Order-level specialist attachment (organizational only).** `Order.AttachedSoldiers`,
-the squad-template detachment flag, availability validation, save/load, the order-issue picker, and
-the chapter-side UI for pulling a specialist out of his squad and returning him. **No battlefield
-presence** — an attached specialist is with the force, not in the engagement. Prerequisite for 2b,
-and the piece most worth designing in its own doc first.
+**Phase 2a — Order-level specialist attachment.** `Order.AttachedSoldiers`, the squad-template
+detachment flag, availability validation, save/load, the order-issue picker, and the chapter-side
+UI for pulling a specialist out of his squad and returning him. Phase 2 adds the battle-construction
+boundary: an individually duty-ready attachment becomes a one-person battle element while the
+organizational attachment remains the source of home identity and equipment.
 
 **Phase 2b — Apothecary field care. ✅ Done (2026-08-06).** `Helpers/Medical/FieldCareService.cs`
 plus `FieldCareConstants.cs` (every tunable, §3.2). Treatment is a forced band demotion —
@@ -583,11 +612,13 @@ computed through `PlayerSoldier.EffectiveRegion` (trap 2); `MedicalProcedureServ
 was routed through the same accessor in this phase, so an attached Apothecary can no longer staff a
 surgery at a site he has left.
 
-**Player-visible surfaces** (trap 3 — an attached specialist is in no `BattleSquad` and would
-otherwise leave no trace at all): `MissionContext.FieldCare` →
-`MissionOutcomeClassification` → `MissionReportSummaryBuilder.BuildFieldCareLine`, appended to the
-end-of-turn debrief; and `MedicalSoldierSummary.FieldCareStatus` on the Apothecarium screen, which
-names who is covering a brother and at what daily capacity — or says nobody is.
+**Player-visible surfaces** include the attached specialist's duty status and battle participation
+boundary: `BattleSquad` retains the campaign identity and `MissionContext` retains the engagement
+participant set, while `MissionContext.FieldCare` → `MissionOutcomeClassification` →
+`MissionReportSummaryBuilder.BuildFieldCareLine` is appended to the end-of-turn debrief. The
+Apothecarium's `MedicalSoldierSummary.FieldCareStatus` names who is covering a brother and at what
+daily capacity — or says nobody is — and its status separates duty-ready, physically unavailable,
+and doctrine-withheld characters.
 
 Carries the `AddWound` progress-reset decision (§3.3) unchanged. Pinned by
 `OnlyWar.Tests/Domain/FieldCareServiceTests.cs` — capacity curve, cost-curve flatness, worst-first
@@ -596,12 +627,13 @@ next day, garrison settlement and its co-location boundary, field-beats-garrison
 replacement-eligible locations untouched, and the once-per-order property behind trap 1 — plus three
 report-line cases in `MissionReportSummaryBuilderTests`.
 
-**Phase 2c — Characters as units of one in battle. Follow-on, not scheduled here.** A one-man battle
-entity that can join and leave squads mid-fight, tolerated by formation, cohesion, morale, and the
-planner. Unlocks battlefield effects for every specialist role — Champion, Chaplain, Techmarine —
-and is the point at which an attached Apothecary can himself become a casualty. Deliberately out of
-scope for this plan; see §5 for why adding entities to the planner is the class of change to take on
-deliberately rather than incidentally.
+**Phase 2c — Characters as units of one in battle. ✅ Boundary slice shipped with Phase 2.** An
+individually duty-ready attached character is materialized as a one-person battle element at the
+engagement boundary; the campaign squad remains the identity/equipment/history anchor and the
+current engagement freezes its participant set. This makes an attached Apothecary eligible for
+ordinary battle casualty handling. Mid-fight join/leave and battlefield effects for Champion,
+Chaplain, and Techmarine remain deliberately deferred; those are the planner-facing expansion that
+§5 argues should be taken on separately.
 
 **Phase 3 — Graded motive impairment.** DB migration + `Body.cs` fallbacks + banded speed
 multiplier with the foot floor. Expect battle-balance churn and BV recalibration pressure.

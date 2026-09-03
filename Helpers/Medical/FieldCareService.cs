@@ -22,8 +22,8 @@ namespace OnlyWar.Helpers.Medical
     /// <summary>
     /// What field care did for one order (or one garrison location) over the days it ran. Carried
     /// into the mission report so the player can see the Apothecary he sent forward doing something
-    /// -- see §7 trap 3 of Design/Reference/SpecialistAttachment.md: he is in no BattleSquad, earns no
-    /// field XP through the battle path, and would otherwise leave no trace whatsoever.
+    /// -- see §7 trap 3 of Design/Reference/SpecialistAttachment.md: the attached specialist's
+    /// field-care work must remain visible whether or not he is duty-ready for the engagement.
     /// </summary>
     public sealed class FieldCareReport
     {
@@ -78,8 +78,9 @@ namespace OnlyWar.Helpers.Medical
     /// shortcut that surgery. What he CAN do is return the walking wounded to the line, including
     /// men carrying several severe wounds who would otherwise be out for months.
     ///
-    /// NO BATTLEFIELD PRESENCE. The Apothecary is abstracted out of the engagement entirely and
-    /// cannot become a casualty (§2.6 first-pass scope limit).
+    /// BATTLE BOUNDARY. An individually duty-ready Apothecary may be materialized as a one-person
+    /// battle element by BattleSquadFactory. Field-care capacity remains a separate between-days
+    /// medical effect and is not itself a tactical aura.
     /// </summary>
     public static class FieldCareService
     {

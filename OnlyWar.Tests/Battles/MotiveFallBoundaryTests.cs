@@ -15,8 +15,9 @@ namespace OnlyWar.Tests.Battles;
 // Its motive branch used to fire unconditionally, relying on the (then true) equivalence
 // "a crippled motive location means !CanMove means !IsCombatEffective". Phase 3 broke that
 // equivalence in both directions -- a crippled foot no longer stops anyone, and a leg no longer
-// cripples until Massive -- so the branch now tests IsCombatEffective explicitly. These tests
-// pin that boundary, because getting it wrong decides whether a man leaves the fight.
+// cripples until Massive -- so the branch now tests IsCombatEffective explicitly. Untreated
+// severance is a separate hard boundary even when a foot remains mechanically mobile. These
+// tests pin that boundary, because getting it wrong decides whether a man leaves the fight.
 //
 // Test soldiers have Constitution 10 and their legs/feet have NaturalArmor 0 and
 // WoundMultiplier 1, so damage/10 is the wound ratio: 5 -> Major, 10 -> Critical, 20 -> Massive.
@@ -88,16 +89,67 @@ public class MotiveFallBoundaryTests
     }
 
     [Fact]
-    public void SeveredFoot_DoesNotFellTheSoldier()
+    public void SeveredFoot_FellsTheSoldierImmediately()
     {
         Soldier soldier = TestModelFactory.CreateSoldier();
         BattleSoldier battleSoldier = new(soldier, null);
 
-        List<WoundLevel> falls = ResolveHit(battleSoldier, soldier, "Right Foot", 10f);
+        List<WoundLevel> falls = ResolveHit(battleSoldier, soldier, "Right Foot", float.MaxValue);
 
         Assert.True(Find(soldier, "Right Foot").IsSevered);
-        Assert.Empty(falls);
-        Assert.True(battleSoldier.IsCombatEffective);
+        Assert.Single(falls);
+        Assert.True(battleSoldier.CanMove);
+        Assert.True(battleSoldier.HasUntreatedSeveredLimb);
+        Assert.False(battleSoldier.IsCombatEffective);
+    }
+
+    [Theory]
+    [InlineData("Left Arm")]
+    [InlineData("Left Hand")]
+    [InlineData("Left Leg")]
+    [InlineData("Left Foot")]
+    public void SeveredLimb_FellsTheSoldierImmediately(string locationName)
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        BattleSoldier battleSoldier = new(soldier, null);
+
+        List<WoundLevel> falls = ResolveHit(
+            battleSoldier, soldier, locationName, float.MaxValue);
+
+        Assert.True(Find(soldier, locationName).IsSevered);
+        Assert.True(battleSoldier.HasUntreatedSeveredLimb);
+        Assert.False(battleSoldier.IsCombatEffective);
+        Assert.Single(falls);
+    }
+
+    [Fact]
+    public void SeveringAnAlreadyCrippledFoot_FellsWithoutADuplicateBoundaryEvent()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        BattleSoldier battleSoldier = new(soldier, null);
+
+        Assert.Empty(ResolveHit(battleSoldier, soldier, "Left Foot", 5f));
+        List<WoundLevel> falls = ResolveHit(
+            battleSoldier, soldier, "Left Foot", float.MaxValue);
+
+        Assert.True(Find(soldier, "Left Foot").IsSevered);
+        Assert.Single(falls);
+        Assert.False(battleSoldier.IsCombatEffective);
+    }
+
+    [Fact]
+    public void SeveringAnAlreadyIncapacitatedLeg_DoesNotRaiseASecondFall()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        BattleSoldier battleSoldier = new(soldier, null);
+
+        Assert.Equal(WoundLevel.Massive,
+            Assert.Single(ResolveHit(battleSoldier, soldier, "Left Leg", 20f)));
+        Assert.False(Find(soldier, "Left Leg").IsSevered);
+
+        Assert.Empty(ResolveHit(battleSoldier, soldier, "Left Leg", float.MaxValue));
+        Assert.True(Find(soldier, "Left Leg").IsSevered);
+        Assert.False(battleSoldier.IsCombatEffective);
     }
 
     // Two Critical legs compound to 0.36 and still leave him in the fight. Neither hit fires the

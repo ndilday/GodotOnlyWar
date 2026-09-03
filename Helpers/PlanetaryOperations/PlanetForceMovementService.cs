@@ -127,12 +127,22 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 {
                 return Failure("The force changed and at least one selected participant can no longer land.");
             }
-            if (squads.Any(squad => squad.CurrentOrders == null
-                && SquadReadinessService.Evaluate(
-                    squad, SquadRowContext.ForLanding(destination)).PrimaryBlocker
-                    == SquadReadinessBlocker.Leaderless))
+            ChapterOperationalDoctrine doctrine = sector.PlayerForce.Army
+                ?.ChapterOperationalDoctrine;
+            List<SquadReadinessSnapshot> landingReadiness = squads
+                .Where(squad => squad.CurrentOrders == null)
+                .Select(squad => SquadReadinessService.Evaluate(
+                    squad,
+                    SquadRowContext.ForLanding(destination),
+                    sector.PlayerForce.RecruitmentProgram,
+                    doctrine))
+                .ToList();
+            if (landingReadiness.Any(readiness => !readiness.CanBeginDeployment))
             {
-                return Failure("A formation that requires a leader cannot land for deployment.");
+                SquadReadinessSnapshot blocked = landingReadiness
+                    .First(readiness => !readiness.CanBeginDeployment);
+                return Failure($"The formation cannot land for deployment: "
+                    + $"{blocked.PrimaryBlockerText}.");
             }
 
             RegionFaction destinationPresence = GetOrCreatePlayerPresence(

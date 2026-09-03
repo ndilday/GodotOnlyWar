@@ -47,6 +47,7 @@ namespace OnlyWar.Helpers
                 gameRulesData.PlayerFaction.Units.First().GetAllMembers().Select(m => (PlayerSoldier)m));
             army.Requisition = gameState.Requisition;
             army.LoadoutDoctrine.ReplaceWith(gameState.ChapterLoadoutDoctrine);
+            army.ChapterOperationalDoctrine.ReplaceWith(gameState.ChapterOperationalDoctrine);
             army.CharacterLoadoutDoctrine.ReplaceWith(gameState.CharacterLoadoutDoctrine);
             army.EquipmentLoadoutDoctrine.ReplaceWith(gameState.EquipmentLoadoutDoctrine);
             army.MedicalProcedures.AddRange(gameState.MedicalProcedures ?? new List<MedicalProcedure>());

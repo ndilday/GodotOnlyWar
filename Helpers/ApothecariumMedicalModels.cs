@@ -93,13 +93,20 @@ namespace OnlyWar.Helpers
         string IconKey,
         string Name,
         string Assignment,
-        // Fit for duty: able to fight *and* able to move (ISoldier.IsCombatEffective).
+        // Operational readiness: the physical result plus the current Chapter injury doctrine.
+        // The legacy property name remains for saved/UI compatibility.
         bool IsCombatEffective,
         int MaxRecoveryWeeks,
         string GeneSeedStatus,
         MedicalSeverity WorstSeverity,
         IReadOnlyList<WoundLocationSummary> Wounds,
-        IReadOnlyList<ReplacementOption> ReplacementOptions);
+        IReadOnlyList<ReplacementOption> ReplacementOptions,
+        DutyReadinessReasonCode DutyReasonCode = DutyReadinessReasonCode.Ready)
+    {
+        public bool IsDutyReady => IsCombatEffective;
+        public bool IsWithheldByDoctrine =>
+            DutyReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold;
+    }
 
     public sealed record WoundLocationSummary(
         int HitLocationId,

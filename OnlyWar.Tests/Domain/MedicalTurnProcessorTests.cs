@@ -43,19 +43,20 @@ public class MedicalTurnProcessorTests
     [Fact]
     public void ApplyWeeklyHealing_DoesNotHealASeveredLocation()
     {
-        Body body = new(HumanBodyTemplate.Instance);
         // Left Arm severed (3x Critical reaches its sever threshold).
-        HitLocation arm = Location(body, 4);
-        arm.Wounds.AddWound(WoundLevel.Critical);
-        arm.Wounds.AddWound(WoundLevel.Critical);
-        arm.Wounds.AddWound(WoundLevel.Critical);
+        PlayerSoldier soldier = SeveredArmSoldier(1, out HitLocation arm);
+        Body body = soldier.Body;
         Assert.True(arm.IsSevered);
+        Assert.True(soldier.HasUntreatedSeveredLimb);
+        Assert.False(soldier.IsDeployable);
         uint before = arm.Wounds.WoundTotal;
 
         MedicalTurnProcessor.ApplyWeeklyHealing(body);
 
         Assert.Equal(before, arm.Wounds.WoundTotal);
         Assert.True(arm.IsSevered);
+        Assert.True(soldier.HasUntreatedSeveredLimb);
+        Assert.False(soldier.IsDeployable);
     }
 
     [Fact]
@@ -191,6 +192,8 @@ public class MedicalTurnProcessorTests
         Assert.Equal((uint)0, arm.Wounds.WoundTotal);
         Assert.False(arm.IsSevered);
         Assert.True(arm.IsCybernetic);
+        Assert.False(soldier.HasUntreatedSeveredLimb);
+        Assert.True(soldier.IsDeployable);
         Assert.False(soldier.IsUndergoingMedicalProcedure);
     }
 
@@ -214,6 +217,8 @@ public class MedicalTurnProcessorTests
         Assert.True(arm.IsCybernetic);
         Assert.True(hand.IsCybernetic);
         Assert.False(hand.IsSevered);
+        Assert.False(soldier.HasUntreatedSeveredLimb);
+        Assert.True(soldier.IsDeployable);
     }
 
     [Fact]

@@ -1,4 +1,6 @@
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Helpers;
+using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -23,7 +25,8 @@ namespace OnlyWar.Helpers.UI
         Injury = InjuryOrIncapacitation,
         IndividualPosting = 1,
         ProcedureReservation = 2,
-        Other = 3
+        DoctrineWithholding = 3,
+        Other = 4
     }
 
     public enum SquadLeaderStatus
@@ -57,6 +60,8 @@ namespace OnlyWar.Helpers.UI
         EmptyFormation,
         NoEffectiveMembers,
         Leaderless,
+        BelowMinimumDutyReadyStrength,
+        RequiredLeaderUnavailable,
         ReservedForProcedure,
         AssignedElsewhere,
         Embarked,
@@ -158,9 +163,10 @@ namespace OnlyWar.Helpers.UI
     /// Canonical strength accounting for a live player squad.
     ///
     /// Full is template establishment, never below a legacy overstrength roster. Rostered is
-    /// organizational membership, Present excludes an individual posting, and Effective is the
-    /// present combat-effective subset. Every unavailable member is assigned exactly one reason
-    /// using the precedence in <see cref="ClassifyUnavailable"/>.
+    /// organizational membership, Present excludes an individual posting, Effective is the
+    /// present combat-effective subset, and DutyReady is the subset permitted by the Chapter
+    /// operational doctrine. Every unavailable member is assigned exactly one reason using the
+    /// precedence in <see cref="ClassifyUnavailable"/>.
     /// </summary>
     public sealed class SquadStrengthSnapshot
     {
@@ -168,6 +174,9 @@ namespace OnlyWar.Helpers.UI
         public int Rostered { get; }
         public int Present { get; }
         public int Effective { get; }
+        public int CombatEffective => Effective;
+        public int DutyReady { get; }
+        public int DutyReadyCount => DutyReady;
         public int Unavailable { get; }
         public int Vacancies { get; }
         public IReadOnlyDictionary<SquadUnavailableReason, int> UnavailableReasonCounts { get; }
@@ -178,6 +187,8 @@ namespace OnlyWar.Helpers.UI
         public int IndividualPostingCount => Count(SquadUnavailableReason.IndividualPosting);
         public int ProcedureReservationCount => Count(SquadUnavailableReason.ProcedureReservation);
         public int ProcedureReservedCount => ProcedureReservationCount;
+        public int DoctrineWithholdingCount => Count(SquadUnavailableReason.DoctrineWithholding);
+        public int WithheldByDoctrineCount => DoctrineWithholdingCount;
         public int OtherUnavailableCount => Count(SquadUnavailableReason.Other);
         public int UnavailableCount => Unavailable;
 
@@ -194,6 +205,7 @@ namespace OnlyWar.Helpers.UI
                     SquadUnavailableReason.IndividualPosting,
                     SquadUnavailableReason.ProcedureReservation,
                     SquadUnavailableReason.InjuryOrIncapacitation,
+                    SquadUnavailableReason.DoctrineWithholding,
                     SquadUnavailableReason.Other
                 })
                 {
@@ -208,6 +220,7 @@ namespace OnlyWar.Helpers.UI
             int rostered,
             int present,
             int effective,
+            int dutyReady,
             int unavailable,
             int vacancies,
             IReadOnlyDictionary<SquadUnavailableReason, int> unavailableReasonCounts)
@@ -216,6 +229,7 @@ namespace OnlyWar.Helpers.UI
             Rostered = Math.Max(0, rostered);
             Present = Math.Max(0, present);
             Effective = Math.Max(0, effective);
+            DutyReady = Math.Max(0, dutyReady);
             Unavailable = Math.Max(0, unavailable);
             Vacancies = Math.Max(0, vacancies);
             UnavailableReasonCounts = unavailableReasonCounts
@@ -230,8 +244,10 @@ namespace OnlyWar.Helpers.UI
     {
         public static SquadStrengthSnapshot Build(
             Squad squad,
-            RecruitmentProgram program = null)
+            RecruitmentProgram program = null,
+            ChapterOperationalDoctrine doctrine = null)
         {
+            doctrine = ResolveDoctrine(squad, doctrine);
             IReadOnlyList<ISoldier> members = squad?.Members?.ToList()
                 ?? new List<ISoldier>();
             int rostered = members.Count;
@@ -240,6 +256,7 @@ namespace OnlyWar.Helpers.UI
             int full = Math.Max(rostered, establishment);
             int present = 0;
             int effective = 0;
+            int dutyReady = 0;
             Dictionary<SquadUnavailableReason, int> reasons = Enum
                 .GetValues<SquadUnavailableReason>()
                 .Distinct()
@@ -251,24 +268,29 @@ namespace OnlyWar.Helpers.UI
                     && player.IndividualPosting != null;
                 bool reserved = IsProcedureReserved(member, program);
                 bool combatEffective = IsCombatEffectiveMember(member, program);
+                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                    member, doctrine, program);
                 if (!posted) present++;
                 if (!posted && combatEffective)
                 {
                     effective++;
-                    continue;
                 }
 
+                if (!posted && duty.IsDutyReady) dutyReady++;
+                if (!posted && duty.IsDutyReady) continue;
+
                 SquadUnavailableReason reason = ClassifyUnavailable(
-                    posted, reserved, combatEffective);
+                    posted, reserved, combatEffective, duty.ReasonCode);
                 reasons[reason]++;
             }
 
-            int unavailable = rostered - effective;
+            int unavailable = rostered - dutyReady;
             return new SquadStrengthSnapshot(
                 full,
                 rostered,
                 present,
                 effective,
+                dutyReady,
                 unavailable,
                 Math.Max(0, full - rostered),
                 reasons);
@@ -276,16 +298,28 @@ namespace OnlyWar.Helpers.UI
 
         public static SquadStrengthSnapshot Create(
             Squad squad,
-            RecruitmentProgram program = null) => Build(squad, program);
+            RecruitmentProgram program = null,
+            ChapterOperationalDoctrine doctrine = null) => Build(squad, program, doctrine);
 
         internal static SquadUnavailableReason ClassifyUnavailable(
             bool posted,
             bool reserved,
-            bool combatEffective)
+            bool combatEffective,
+            DutyReadinessReasonCode dutyReason = DutyReadinessReasonCode.CombatIncapacitation)
         {
             if (posted) return SquadUnavailableReason.IndividualPosting;
             if (reserved) return SquadUnavailableReason.ProcedureReservation;
-            if (!combatEffective) return SquadUnavailableReason.InjuryOrIncapacitation;
+            if (dutyReason == DutyReadinessReasonCode.ChapterInjuryThreshold)
+            {
+                return SquadUnavailableReason.DoctrineWithholding;
+            }
+            if (!combatEffective
+                || dutyReason == DutyReadinessReasonCode.UntreatedSeverance
+                || dutyReason == DutyReadinessReasonCode.InsufficientFunctioningArms
+                || dutyReason == DutyReadinessReasonCode.CombatIncapacitation)
+            {
+                return SquadUnavailableReason.InjuryOrIncapacitation;
+            }
             return SquadUnavailableReason.Other;
         }
 
@@ -310,6 +344,24 @@ namespace OnlyWar.Helpers.UI
             if (member is not PlayerSoldier player) return false;
             return player.IsUndergoingMedicalProcedure
                 || RecruitmentPromotionService.IsReservedForProcedure(program, player.Id);
+        }
+
+        public static ChapterOperationalDoctrine ResolveDoctrine(
+            Squad squad,
+            ChapterOperationalDoctrine doctrine = null)
+        {
+            if (doctrine != null) return doctrine;
+            if (squad?.Faction?.IsPlayerFaction != true) return null;
+            PlayerForce playerForce = GameDataSingleton.Instance?.Sector?.PlayerForce;
+            // Detached simulations and inspection models can contain a player-shaped faction
+            // without belonging to the live campaign singleton. Do not leak the live Chapter's
+            // doctrine into those models; production squads share the same faction instance.
+            if (playerForce?.Faction == null
+                || !ReferenceEquals(squad.Faction, playerForce.Faction))
+            {
+                return null;
+            }
+            return playerForce.Army?.ChapterOperationalDoctrine;
         }
     }
 
@@ -359,9 +411,12 @@ namespace OnlyWar.Helpers.UI
         public static SquadReadinessSnapshot Evaluate(
             Squad squad,
             SquadRowContext context = null,
-            RecruitmentProgram program = null)
+            RecruitmentProgram program = null,
+            ChapterOperationalDoctrine doctrine = null)
         {
-            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(squad, program);
+            doctrine = SquadStrengthSnapshotBuilder.ResolveDoctrine(squad, doctrine);
+            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(
+                squad, program, doctrine);
             bool requiresLeader = squad?.SquadTemplate?.Elements?.Any(
                 element => element.SoldierTemplate?.IsSquadLeader == true) == true;
             ISoldier leader = squad?.SquadLeader;
@@ -369,7 +424,7 @@ namespace OnlyWar.Helpers.UI
                 ? SquadLeaderStatus.NotRequired
                 : leader == null
                     ? SquadLeaderStatus.Vacant
-                    : IsLeaderAvailable(leader, program)
+                    : IsLeaderAvailable(leader, program, doctrine)
                         ? SquadLeaderStatus.Ready
                         : SquadLeaderStatus.Unavailable;
 
@@ -392,9 +447,20 @@ namespace OnlyWar.Helpers.UI
                 {
                     structural.Add(SquadReadinessBlocker.Leaderless);
                 }
+                else if (doctrine != null
+                    && doctrine.RequireDutyReadySquadLeader
+                    && leaderStatus == SquadLeaderStatus.Unavailable)
+                {
+                    structural.Add(SquadReadinessBlocker.RequiredLeaderUnavailable);
+                }
                 if (strength.Effective == 0)
                 {
                     structural.Add(SquadReadinessBlocker.NoEffectiveMembers);
+                }
+                if (doctrine != null
+                    && strength.DutyReady < doctrine.MinimumDutyReadySquadStrength)
+                {
+                    structural.Add(SquadReadinessBlocker.BelowMinimumDutyReadyStrength);
                 }
                 if (strength.ProcedureReservationCount > 0
                     && strength.Effective == 0)
@@ -430,20 +496,26 @@ namespace OnlyWar.Helpers.UI
         public static SquadReadinessSnapshot Build(
             Squad squad,
             SquadRowContext context = null,
-            RecruitmentProgram program = null) => Evaluate(squad, context, program);
+            RecruitmentProgram program = null,
+            ChapterOperationalDoctrine doctrine = null) =>
+            Evaluate(squad, context, program, doctrine);
 
         public static bool CanBeginNewDeployment(
             Squad squad,
-            RecruitmentProgram program = null) =>
+            RecruitmentProgram program = null,
+            ChapterOperationalDoctrine doctrine = null) =>
             Evaluate(squad, new SquadRowContext(
                 SquadRowContextKind.Generic,
-                SquadRowAction.BeginOrder), program).CanBeginDeployment;
+                SquadRowAction.BeginOrder), program, doctrine).CanBeginDeployment;
 
         public static string GetBlockerText(SquadReadinessBlocker blocker) =>
             SquadReadinessPresentation.BlockerLabel(blocker);
 
-        private static bool IsLeaderAvailable(ISoldier leader, RecruitmentProgram program) =>
-            SquadStrengthSnapshotBuilder.IsCombatEffectiveMember(leader, program)
+        private static bool IsLeaderAvailable(
+            ISoldier leader,
+            RecruitmentProgram program,
+            ChapterOperationalDoctrine doctrine) =>
+            DutyReadinessService.Evaluate(leader, doctrine, program).IsDutyReady
             && (leader is not PlayerSoldier player || player.IndividualPosting == null);
 
         private static SquadCommitmentKind GetCommitment(Squad squad)
@@ -527,8 +599,10 @@ namespace OnlyWar.Helpers.UI
             {
                 SquadReadinessBlocker.Administrative,
                 SquadReadinessBlocker.Leaderless,
+                SquadReadinessBlocker.RequiredLeaderUnavailable,
                 SquadReadinessBlocker.EmptyFormation,
                 SquadReadinessBlocker.NoEffectiveMembers,
+                SquadReadinessBlocker.BelowMinimumDutyReadyStrength,
                 SquadReadinessBlocker.ReservedForProcedure,
                 SquadReadinessBlocker.AssignedElsewhere,
                 SquadReadinessBlocker.InWarp,
@@ -573,6 +647,8 @@ namespace OnlyWar.Helpers.UI
             SquadReadinessBlocker.EmptyFormation => "EMPTY FORMATION",
             SquadReadinessBlocker.NoEffectiveMembers => "NO EFFECTIVE MEMBERS",
             SquadReadinessBlocker.Leaderless => "NO LEADER",
+            SquadReadinessBlocker.BelowMinimumDutyReadyStrength => "BELOW MINIMUM DUTY STRENGTH",
+            SquadReadinessBlocker.RequiredLeaderUnavailable => "REQUIRED LEADER UNAVAILABLE",
             SquadReadinessBlocker.ReservedForProcedure => "PROCEDURE RESERVED",
             SquadReadinessBlocker.AssignedElsewhere => "ASSIGNED ELSEWHERE",
             SquadReadinessBlocker.Embarked => "ABOARD SHIP",
@@ -594,6 +670,7 @@ namespace OnlyWar.Helpers.UI
             SquadUnavailableReason.IndividualPosting => "POSTED",
             SquadUnavailableReason.ProcedureReservation => "PROCEDURE",
             SquadUnavailableReason.InjuryOrIncapacitation => "OUT",
+            SquadUnavailableReason.DoctrineWithholding => "WITHHELD",
             _ => "UNAVAILABLE"
         };
     }
@@ -624,7 +701,7 @@ namespace OnlyWar.Helpers.UI
         public string Tooltip { get; }
         public int PresentationPriority { get; }
 
-        public string StrengthLabel => $"{Strength.Effective}/{Strength.Full}";
+        public string StrengthLabel => $"{Strength.DutyReady}/{Strength.Full}";
         public string LeaderLabel => SquadReadinessPresentation.LeaderLabel(LeaderStatus);
         public string PrimaryStateLabel => Readiness.PrimaryBlocker != SquadReadinessBlocker.None
             ? SquadReadinessPresentation.BlockerLabel(Readiness.PrimaryBlocker)
@@ -774,7 +851,7 @@ namespace OnlyWar.Helpers.UI
                 : string.Empty;
             List<string> secondary = [];
             if (!string.IsNullOrWhiteSpace(unavailable)
-                && strength.Effective < strength.Full
+                && strength.DutyReady < strength.Full
                 && strength.PrimaryUnavailableReason.HasValue)
             {
                 secondary.Add(unavailable);
@@ -785,7 +862,7 @@ namespace OnlyWar.Helpers.UI
             }
             else if (readiness.LeaderStatus == SquadLeaderStatus.Unavailable)
             {
-                secondary.Add("LEADER OUT");
+                secondary.Add(LeaderAvailabilityLabel(squad));
             }
             if (context.Action == SquadRowAction.BeginOrder
                 && readiness.CanBeginDeployment)
@@ -865,6 +942,7 @@ namespace OnlyWar.Helpers.UI
                 currentStrength,
                 currentStrength,
                 currentStrength,
+                currentStrength,
                 0,
                 0,
                 new Dictionary<SquadUnavailableReason, int>());
@@ -918,10 +996,15 @@ namespace OnlyWar.Helpers.UI
             List<string> lines =
             [
                 squad?.Name ?? "Unknown formation",
-                $"Strength: {strength.Effective}/{strength.Full} effective",
+                $"Strength: {strength.DutyReady}/{strength.Full} duty-ready",
+                $"Combat-effective: {strength.Effective}/{strength.Full}",
                 $"Rostered: {strength.Rostered} · Present: {strength.Present}",
                 $"Vacancies: {strength.Vacancies}",
-                $"Leader: {SquadReadinessPresentation.LeaderLabel(readiness.LeaderStatus)}",
+                 $"Leader: {readiness.LeaderStatus switch
+                 {
+                     SquadLeaderStatus.Unavailable => LeaderAvailabilityLabel(squad),
+                     _ => SquadReadinessPresentation.LeaderLabel(readiness.LeaderStatus)
+                 }}",
                 $"Commitment: {SquadReadinessPresentation.CommitmentLabel(readiness.Commitment)}",
                 $"Location: {location}"
             ];
@@ -945,6 +1028,16 @@ namespace OnlyWar.Helpers.UI
                     .Select(SquadReadinessPresentation.BlockerLabel))}");
             }
             return string.Join("\n", lines);
+        }
+
+        private static string LeaderAvailabilityLabel(Squad squad)
+        {
+            DutyReadinessEvaluation evaluation = DutyReadinessService.Evaluate(
+                squad?.SquadLeader,
+                SquadStrengthSnapshotBuilder.ResolveDoctrine(squad));
+            return evaluation.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold
+                ? "LEADER WITHHELD"
+                : "LEADER OUT";
         }
     }
 }

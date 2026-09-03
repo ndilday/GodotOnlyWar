@@ -65,7 +65,7 @@ public class HandGroupTests
             null,
             null,
             battleSoldier,
-            float.MaxValue,
+            10f,
             Find(soldier, "Left Arm")));
 
         resolver.Resolve();
@@ -97,7 +97,7 @@ public class HandGroupTests
             null,
             null,
             battleSoldier,
-            float.MaxValue,
+            5f,
             Find(soldier, "Right Hand")));
 
         resolver.Resolve();

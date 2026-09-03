@@ -32,8 +32,10 @@ namespace OnlyWar.Models.Soldiers
         /// (Design/Reference/CasualtyRealism.md §2.1). Zero means he cannot walk at all.
         /// </summary>
         float MotiveSpeedMultiplier { get; }
-        /// <summary><see cref="CanFight"/> and <see cref="CanMove"/>: still in the fight.</summary>
+        /// <summary><see cref="CanFight"/> and <see cref="CanMove"/>, absent untreated severance: still in the fight.</summary>
         bool IsCombatEffective { get; }
+        /// <summary>True when an authored motive or hand-group limb is currently severed.</summary>
+        bool HasUntreatedSeveredLimb { get; }
         IReadOnlyCollection<Skill> Skills { get; }
 
         IReadOnlyList<int> FunctioningHandGroupIds { get; }

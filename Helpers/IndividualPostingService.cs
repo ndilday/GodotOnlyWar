@@ -22,7 +22,8 @@ namespace OnlyWar.Helpers
             IndividualPostingKind kind,
             CampaignLocation location,
             Order order,
-            out string reason)
+            out string reason,
+            ChapterOperationalDoctrine doctrine = null)
         {
             reason = null;
             if (soldier?.AssignedSquad == null)
@@ -53,14 +54,18 @@ namespace OnlyWar.Helpers
                 reason = "This formation does not permit individual detachment.";
                 return false;
             }
-            if (kind == IndividualPostingKind.OperationalAttachment
-                && (!soldier.IsCombatEffective
-                    || RecruitmentPromotionService.IsReservedForProcedure(
-                        GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram,
-                        soldier.Id)))
+            if (kind == IndividualPostingKind.OperationalAttachment)
             {
-                reason = "The specialist is not fit and available for operational duty.";
-                return false;
+                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                    soldier,
+                    doctrine ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army
+                        ?.ChapterOperationalDoctrine,
+                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+                if (!duty.IsDutyReady)
+                {
+                    reason = duty.Reason ?? "The specialist is not fit and available for operational duty.";
+                    return false;
+                }
             }
             if (location.Ship?.Fleet?.TravelPhase == Models.Fleets.FleetTravelPhase.InWarp)
             {
@@ -90,9 +95,10 @@ namespace OnlyWar.Helpers
             IndividualPostingKind kind,
             CampaignLocation location,
             Date startedDate,
-            Order order = null)
+            Order order = null,
+            ChapterOperationalDoctrine doctrine = null)
         {
-            if (!CanCreate(soldier, kind, location, order, out string reason))
+            if (!CanCreate(soldier, kind, location, order, out string reason, doctrine))
             {
                 throw new InvalidOperationException(reason);
             }
@@ -113,7 +119,8 @@ namespace OnlyWar.Helpers
             IndividualPostingKind kind,
             CampaignLocation location,
             Date startedDate,
-            Order order = null)
+            Order order = null,
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (soldier?.AssignedSquad == null)
                 throw new InvalidOperationException("The posting soldier has no organizational home.");
@@ -123,6 +130,17 @@ namespace OnlyWar.Helpers
                 throw new InvalidOperationException("The operational posting has no order.");
             if (kind != IndividualPostingKind.OperationalAttachment && order != null)
                 throw new InvalidOperationException("A non-operational posting targets an order.");
+            if (kind == IndividualPostingKind.OperationalAttachment)
+            {
+                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                    soldier,
+                    doctrine ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army
+                        ?.ChapterOperationalDoctrine,
+                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+                if (!duty.IsDutyReady)
+                    throw new InvalidOperationException(
+                        duty.Reason ?? "The specialist is not fit and available for operational duty.");
+            }
             if (location.Ship != null)
             {
                 int capacityAfterDeparture = location.Ship.AvailableCapacity;
@@ -198,13 +216,17 @@ namespace OnlyWar.Helpers
             location.Ship?.BoardIndividual(soldier);
         }
 
-        public void AttachToOrder(PlayerSoldier soldier, Order order, Date startedDate = null)
+    public void AttachToOrder(
+        PlayerSoldier soldier,
+        Order order,
+        Date startedDate = null,
+        ChapterOperationalDoctrine doctrine = null)
         {
             if (soldier == null || order == null) return;
             CampaignLocation destination = CampaignLocation.Landed(order.Mission?.RegionFaction?.Region);
             if (destination == null) throw new InvalidOperationException("Order has no physical region.");
             Create(soldier, IndividualPostingKind.OperationalAttachment, destination,
-                startedDate ?? GameDataSingleton.Instance?.Date ?? new Date(1), order);
+                startedDate ?? GameDataSingleton.Instance?.Date ?? new Date(1), order, doctrine);
         }
 
         public void ReleaseFromOrder(PlayerSoldier soldier)

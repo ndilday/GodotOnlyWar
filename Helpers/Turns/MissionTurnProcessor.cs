@@ -7,6 +7,7 @@ using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -168,26 +169,110 @@ namespace OnlyWar.Helpers.Turns
                 bool isPlayerOrder = order.OwnerFaction?.IsPlayerFaction == true
                     || order.Force.AllPlayerSoldiers.Any();
                 TacticalEntityIdAllocator entityIds = new();
+                ChapterOperationalDoctrine doctrine = isPlayerOrder
+                    ? _session.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine
+                    : null;
 
-                // Never construct a BattleSquad from a depleted squad. This also protects orders
-                // whose force was wiped out earlier in the same resolution pass.
-                List<BattleSquad> involvedBattleSquads = order.AssignedSquads
-                    .Where(s => s.Members.Any(m => m.IsCombatEffective))
-                    .Select(s => new BattleSquad(isPlayerOrder, s))
-                    .ToList();
+                // Player formations are admitted through the canonical duty decision. A squad that
+                // fails its structural doctrine remains assigned but is kept out of this battle;
+                // the issue is carried into the mission log instead of disappearing through a raw
+                // IsCombatEffective filter.
+                List<string> readinessMessages = [];
+                List<SquadReadinessBlocker> readinessBlockers = [];
+                List<MissionSquadReadinessIssue> readinessIssues = [];
+                List<BattleSquad> involvedBattleSquads = [];
+                foreach (Squad squad in order.AssignedSquads)
+                {
+                    if (squad == null) continue;
+                    SquadReadinessSnapshot readiness = isPlayerOrder
+                        ? SquadReadinessService.Evaluate(squad, doctrine: doctrine)
+                        : null;
+                    BattleSquad battleSquad = isPlayerOrder
+                        ? BattleSquadFactory.Create(true, squad, doctrine)
+                        : new BattleSquad(false, squad);
+                    if (battleSquad.AbleSoldiers.Count > 0)
+                    {
+                        involvedBattleSquads.Add(battleSquad);
+                    }
+                    else if (isPlayerOrder)
+                    {
+                        if (readiness?.StructuralBlockers.Count > 0)
+                        {
+                            readinessBlockers.AddRange(readiness.StructuralBlockers);
+                            string message =
+                                $"{squad.Name} withheld: {string.Join(", ", readiness.StructuralBlockers.Select(SquadReadinessPresentation.BlockerLabel))}.";
+                            readinessMessages.Add(message);
+                            readinessIssues.Add(new MissionSquadReadinessIssue(
+                                squad,
+                                MissionAvailabilityStatus.SquadStructuralBlocker,
+                                readiness.StructuralBlockers,
+                                message));
+                        }
+                        else
+                        {
+                            string message = $"{squad.Name} withheld: no duty-ready members are available.";
+                            readinessMessages.Add(message);
+                            readinessIssues.Add(new MissionSquadReadinessIssue(
+                                squad,
+                                MissionAvailabilityStatus.NoDutyReadyParticipants,
+                                [],
+                                message));
+                        }
+                    }
+                }
+
                 involvedBattleSquads.AddRange(order.AssignedCharacters
-                    .Where(character => character.IsCombatEffective)
-                    .Select(character => new BattleSquad(new BattleElementSpec(
-                        entityIds.GetNextId(),
-                        character.Name,
-                        character.AssignedSquad?.Faction ?? order.OwnerFaction,
-                        new ISoldier[] { character },
-                        new BattleElementTraits(
-                            IsHeadquarters: character.AssignedSquad?.SquadTemplate?.SquadType
-                                .HasFlag(SquadTypes.HQ) == true),
-                        CampaignCharacter: character)))
+                    .Select(character => isPlayerOrder
+                        ? BattleSquadFactory.CreateAttachedCharacter(
+                            character,
+                            entityIds.GetNextId(),
+                            order.OwnerFaction,
+                            doctrine)
+                        : character.IsCombatEffective
+                            ? new BattleSquad(new BattleElementSpec(
+                                entityIds.GetNextId(),
+                                character.Name,
+                                character.AssignedSquad?.Faction ?? order.OwnerFaction,
+                                new ISoldier[] { character },
+                                new BattleElementTraits(
+                                    IsHeadquarters: character.AssignedSquad?.SquadTemplate?.SquadType
+                                        .HasFlag(SquadTypes.HQ) == true),
+                                CampaignSquad: character.AssignedSquad,
+                                CampaignCharacter: character))
+                            : null)
+                    .Where(battleSquad => battleSquad != null)
                     .ToList());
-                if (involvedBattleSquads.Count == 0) continue;
+                if (isPlayerOrder)
+                {
+                    readinessMessages.AddRange(order.AssignedCharacters
+                        .Where(character => !DutyReadinessService.Evaluate(character, doctrine).IsDutyReady)
+                        .Select(character =>
+                            $"{character.Name} withheld: {DutyReadinessService.Evaluate(character, doctrine).Reason ?? "not duty-ready"}."));
+                }
+                if (involvedBattleSquads.Count == 0)
+                {
+                    MissionContext unavailable = new(order, [], [], doctrine);
+                    unavailable.MarkAvailabilityBlocked(
+                        readinessBlockers.Count > 0
+                            ? MissionAvailabilityStatus.SquadStructuralBlocker
+                            : MissionAvailabilityStatus.NoDutyReadyParticipants,
+                        readinessBlockers);
+                    foreach (MissionSquadReadinessIssue issue in readinessIssues)
+                    {
+                        unavailable.RecordReadinessIssue(issue);
+                    }
+                    unavailable.NoViableTarget = true;
+                    foreach (string message in readinessMessages)
+                    {
+                        unavailable.AddLog($"Duty readiness: {message}");
+                    }
+                    if (readinessMessages.Count == 0)
+                    {
+                        unavailable.AddLog("Duty readiness: no eligible force was available for this mission.");
+                    }
+                    missionContexts.Add(unavailable);
+                    continue;
+                }
 
                 // Squad.Faction resolves through SquadTemplate.Faction and can be absent; an
                 // unguarded read in a log-only path means raising the log level throws. See the
@@ -202,7 +287,21 @@ namespace OnlyWar.Helpers.Turns
 
                 foreach (List<BattleSquad> elementSquads in missionElements)
                 {
-                    MissionContext context = new(order, elementSquads, new List<BattleSquad>());
+                    MissionContext context = new(order, elementSquads, new List<BattleSquad>(), doctrine);
+                    if (readinessBlockers.Count > 0)
+                    {
+                        context.MarkAvailabilityBlocked(
+                            MissionAvailabilityStatus.SquadStructuralBlocker,
+                            readinessBlockers);
+                    }
+                    foreach (MissionSquadReadinessIssue issue in readinessIssues)
+                    {
+                        context.RecordReadinessIssue(issue);
+                    }
+                    foreach (string message in readinessMessages)
+                    {
+                        context.AddLog($"Duty readiness: {message}");
+                    }
                     var execution = new MissionExecutionContext(
                         context,
                         _missionRules,
@@ -303,10 +402,20 @@ namespace OnlyWar.Helpers.Turns
             Region region = order.Mission.Region;
             Faction targetFaction = order.Mission.TargetFaction;
             List<BattleSquad> squads = order.AssignedSquads
-                .Where(squad => squad?.Members.Any(member => member.IsCombatEffective) == true)
-                .Select(squad => new BattleSquad(true, squad))
+                .Where(squad => squad != null)
+                .Select(squad => BattleSquadFactory.Create(
+                    true,
+                    squad,
+                    _session.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine))
+                .Where(squad => squad.AbleSoldiers.Count > 0)
                 .ToList();
             MissionContext context = new(order, squads, []);
+            if (squads.Count == 0)
+            {
+                context.MarkAvailabilityBlocked(MissionAvailabilityStatus.NoDutyReadyParticipants);
+                context.NoViableTarget = true;
+                context.AddLog("Duty readiness: no eligible force was available for dormant-population culling.");
+            }
             PlanetFaction observer = region?.Planet?.PlanetFactionMap
                 .GetValueOrDefault(order.OwnerFaction?.Id ?? _session.Rules.PlayerFaction.Id);
             FactionIntelBelief belief = observer?.GetTargetBelief(region, targetFaction);

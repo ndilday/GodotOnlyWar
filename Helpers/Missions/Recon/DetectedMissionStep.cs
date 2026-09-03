@@ -28,10 +28,8 @@ namespace OnlyWar.Helpers.Missions.Recon
                 .SelectMany(squad => squad.AbleSoldiers)
                 .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
 
-        private static long AbleBattleValue(Squad squad) =>
-            squad.Members
-                .Where(member => member.IsCombatEffective)
-                .Sum(member => (long)member.Template.BattleValue);
+        private static long AbleBattleValue(BattleSquad squad) =>
+            squad?.AbleSoldiers.Sum(member => (long)member.Soldier.Template.BattleValue) ?? 0;
 
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
@@ -82,10 +80,16 @@ namespace OnlyWar.Helpers.Missions.Recon
             // Only forces actually out looking can intercept: squads on a Patrol or Recon order in the
             // spotter's region. Nothing is conjured. A region with sensors but nobody sweeping knows
             // perfectly well that there are enemies out there and is too busy to do anything about it.
-            List<Squad> screen = spotter.LandedSquads
+            List<BattleSquad> screen = spotter.LandedSquads
                 .Where(squad => squad.CurrentOrders?.Mission.MissionType == MissionType.Patrol
                     || squad.CurrentOrders?.Mission.MissionType == MissionType.Recon)
-                .Where(squad => squad.Members.Any(member => member.IsCombatEffective))
+                .Select(squad => BattleSquadFactory.Create(
+                    squad.Faction?.IsPlayerFaction == true,
+                    squad,
+                    squad.Faction?.IsPlayerFaction == true
+                        ? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine
+                        : null))
+                .Where(squad => squad.AbleSoldiers.Count > 0)
                 // Largest first, so the screen commits the fewest squads that will do the job and the
                 // rest carry on screening.
                 .OrderByDescending(AbleBattleValue)
@@ -113,13 +117,13 @@ namespace OnlyWar.Helpers.Missions.Recon
             // still engages - with less than it wanted, which is the cost of a thin screen.
             List<BattleSquad> interceptors = new();
             long committedBattleValue = 0;
-            foreach (Squad squad in screen)
+            foreach (BattleSquad squad in screen)
             {
                 // A modded or legacy combatant may carry zero BattleValue. Still commit one real
                 // squad rather than letting a zero requirement produce an empty "interception".
                 if (interceptors.Count > 0
                     && committedBattleValue >= requiredBattleValue) break;
-                interceptors.Add(new BattleSquad(squad.Faction?.IsPlayerFaction == true, squad));
+                interceptors.Add(squad);
                 committedBattleValue += AbleBattleValue(squad);
             }
             context.OpposingSquads = interceptors;

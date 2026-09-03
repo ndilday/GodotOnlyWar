@@ -140,17 +140,23 @@ namespace OnlyWar.Helpers
             string geneSeedStatus = BuildGeneSeedStatus(wounds);
             Squad squad = soldier.AssignedSquad;
 
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                soldier,
+                force?.Army?.ChapterOperationalDoctrine,
+                force?.RecruitmentProgram);
+
             return new MedicalSoldierSummary(
                 soldier.Id,
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template?.Name ?? "Battle-Brother"} {soldier.Name}",
                 $"{squad?.Name ?? "Unassigned"}, {squad?.ParentUnit?.Name ?? "No Company"} - {SquadLocationFormatter.Format(squad)}",
-                soldier.IsCombatEffective,
+                duty.IsDutyReady,
                 maxRecovery,
                 geneSeedStatus,
                 worstSeverity,
                 wounds,
-                BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id));
+                BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id),
+                duty.ReasonCode);
         }
 
         public static string GetSoldierIconKey(ISoldier soldier)
@@ -265,7 +271,7 @@ namespace OnlyWar.Helpers
                 ? "replacement"
                 : summary.MaxRecoveryWeeks > 0
                     ? $"{summary.MaxRecoveryWeeks} wk"
-                    : soldier.IsCombatEffective ? "ready" : "out";
+                    : summary.IsCombatEffective ? "ready" : "withheld";
 
             return new ApothecariumTreeItem(
                 ApothecariumSelectionKind.Soldier,
@@ -291,7 +297,9 @@ namespace OnlyWar.Helpers
             int healthy = soldiers.Count(s => !IsWounded(s));
             int wounded = CountWounded(soldiers);
             int outOfAction = CountOutOfAction(soldiers);
-            int readyNext = soldiers.Count(s => IsWounded(s) && BuildSoldierSummary(s, force).MaxRecoveryWeeks <= 1 && s.IsCombatEffective);
+            int readyNext = soldiers.Count(s => IsWounded(s)
+                && BuildSoldierSummary(s, force).MaxRecoveryWeeks <= 1
+                && BuildSoldierSummary(s, force).IsDutyReady);
             int maxRecovery = soldiers.Select(s => BuildSoldierSummary(s, force).MaxRecoveryWeeks).DefaultIfEmpty(0).Max();
 
             return new MedicalUnitSummary(

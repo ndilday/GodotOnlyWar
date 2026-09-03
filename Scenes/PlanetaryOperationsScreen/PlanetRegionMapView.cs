@@ -393,7 +393,7 @@ public partial class RegionMapCardView : Button
             model.Name,
             $"Control: {ControlLabel(model)}",
             $"Surface Squads: {model.PlayerSquads}",
-            $"Combat-Effective Strength: {model.PlayerEffectiveStrength}/{model.PlayerFullStrength}",
+            $"Duty-Ready Strength: {model.PlayerEffectiveStrength}/{model.PlayerFullStrength}",
             $"Active Orders: {model.ActiveOrders}",
             $"Unassigned Squads: {model.UnassignedSquads}",
             $"Mission Opportunities: {model.MissionOpportunities}"

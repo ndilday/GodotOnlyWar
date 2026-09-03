@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
@@ -162,13 +163,18 @@ public partial class SquadScreenController : MainScreenController
     {
         if (_squad == null || _view == null) return;
         EffectiveLoadout effective = LoadoutDoctrineService.Resolve(_squad);
-        int ableBodied = _squad.Members.Count(member => member.IsCombatEffective);
+        ChapterOperationalDoctrine operationalDoctrine = GameDataSingleton.Instance?.Sector
+            ?.PlayerForce?.Army?.ChapterOperationalDoctrine;
+        int dutyReady = SquadStrengthSnapshotBuilder.Build(
+            _squad,
+            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram,
+            operationalDoctrine).DutyReady;
         string location = _squad.CurrentRegion?.Planet?.Name
             ?? _squad.BoardedLocation?.Fleet?.Planet?.Name
             ?? "No active theater";
         _view.Display(
             _squad.Name,
-            $"{_squad.SquadTemplate.Name} · {ableBodied} combat-ready · {location}",
+            $"{_squad.SquadTemplate.Name} · {dutyReady} duty-ready · {location}",
             LoadoutDoctrineService.DescribeSource(effective),
             effective.WeaponSets,
             !_squad.UsesLoadoutDoctrine,
@@ -178,7 +184,9 @@ public partial class SquadScreenController : MainScreenController
                 // Capacity is THIS element's own able-bodied bodies, not the squad's — a
                 // sergeant's individually-equipped slot must not eat into the trooper pool.
                 element => _squad.Members.Count(
-                    member => member.IsCombatEffective && member.Template == element.SoldierTemplate),
+                    member => member.Template == element.SoldierTemplate
+                        && (member is not PlayerSoldier player || player.IndividualPosting == null)
+                        && DutyReadinessService.Evaluate(member, operationalDoctrine).IsDutyReady),
                 _squad.Members.Count));
     }
 

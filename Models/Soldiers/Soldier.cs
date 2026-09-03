@@ -101,6 +101,7 @@ namespace OnlyWar.Models.Soldiers
 
         public int FunctioningHands => FunctioningHandGroupIds.Count;
         public bool CanUseTwoHandedWeapon => FunctioningHands >= 2;
+        public bool HasUntreatedSeveredLimb => Body.HasUntreatedSeveredLimb;
 
         public float Strength { get; set; }
         public float Dexterity { get; set; }
@@ -171,11 +172,12 @@ namespace OnlyWar.Models.Soldiers
         public bool CanMove => MotiveSpeedMultiplier > 0f;
 
         /// <summary>
-        /// The old combined <c>CanFight</c>: able to both fight and move, i.e. still a
-        /// participant in a battle rather than a casualty. This is what deployment gating,
-        /// strength counts, and target selection mean.
+        /// The old combined <c>CanFight</c>: able to both fight and move, with an untreated
+        /// severed limb also taking the soldier out of the battle immediately. A crippled but
+        /// attached arm can therefore leave him combat-effective one-handed, while a severed
+        /// arm, hand, leg, or foot cannot.
         /// </summary>
-        public bool IsCombatEffective => CanFight && CanMove;
+        public bool IsCombatEffective => !HasUntreatedSeveredLimb && CanFight && CanMove;
 
         private static bool IsDisabled(HitLocation location)
         {

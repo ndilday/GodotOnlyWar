@@ -53,7 +53,8 @@ namespace OnlyWar.Helpers.Storage
                     ? []
                     : [force.RecruitmentProgram.TaskOrder],
                 ghostPopulationSources: game.Sector.GhostPopulationSources,
-                strategicInvasionForces: game.Sector.StrategicInvasionForces);
+                strategicInvasionForces: game.Sector.StrategicInvasionForces,
+                chapterOperationalDoctrine: force.Army.ChapterOperationalDoctrine);
             // A current-format save has committed successfully at this point. SaveData is
             // atomic, so reaching this line is the success boundary.
             game.UpgradePending = false;

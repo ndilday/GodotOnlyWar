@@ -283,11 +283,11 @@ Three properties of this design are easy to break and worth stating. The compone
 
 Written in full on each save (file is deleted and recreated from scratch using the loose, read-only `Database/SaveStructure.sql`). Read on load via `GameStateDataAccess` (singleton). All writes are wrapped in a single transaction; exceptions trigger rollback. Player saves live under `user://saves` (`%APPDATA%\OnlyWar\saves` on Windows), never in the install directory. `SaveGameCatalog` discovers `*.s3db` files and inspects only their metadata for the start menu.
 
-**Current Alpha 0.8 behavior:** `SaveFormat.CurrentVersion` is 18 and is written to `GlobalData.SaveVersion`. Format 12 adds stable line-formation ordinals and durable squad battle-history retention; format 13 adds persisted individual postings; format 14 adds administrative formation stations, explicit order ownership, character participants, and physical-only postings; format 15 adds stable-key Scout training options; format 16 adds indelible Ork region state, latent ghost sources, and persistent Waaagh! identities; format 17 adds successor Waaagh! transit Battle Value; format 18 adds the resolved Promised-World invader faction. Only format 18 is currently accepted; older and newer versions are rejected before campaign-table loading. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
+**Current Alpha 0.8 behavior:** `SaveFormat.CurrentVersion` is 19 and is written to `GlobalData.SaveVersion`. Format 12 adds stable line-formation ordinals and durable squad battle-history retention; format 13 adds persisted individual postings; format 14 adds administrative formation stations, explicit order ownership, character participants, and physical-only postings; format 15 adds stable-key Scout training options; format 16 adds indelible Ork region state, latent ghost sources, and persistent Waaagh! identities; format 17 adds successor Waaagh! transit Battle Value; format 18 adds the resolved Promised-World invader faction; format 19 adds the singleton Chapter operational doctrine. Only format 19 is currently accepted; older and newer versions are rejected before campaign-table loading. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
 
 Named manual slots, the initial recovery point, three rolling post-turn autosaves, and the protected pre-turn recovery point all use the same atomic persistence path. `CampaignRecoverabilityTracker` records whether the current in-memory revision has a successfully written recovery point, while `SaveGameManager` owns slot naming, metadata, retention, overwrite protection, and restoration of the prior valid save on failure. The protected pre-turn write completes before `ProcessTurn` mutates state; failure blocks turn resolution. Alpha saves use exact-version compatibility only: there is no legacy save migrator or legacy-history import path.
 
-**Format version 7 (historical, 2026-08-08).** The `LastTurnReport` table stores one optional bounded JSON snapshot of the latest resolved turn report. The row is written in the same atomic transaction as the campaign and is hydrated onto `PlayerForce`; a missing table or row is treated as a null report so a campaign-start/pre-turn save can still load and show an intentional empty Last Turn Report state. The payload contains display strings, debrief lines, and compact casualty data only — never `MissionContext`, `BattleHistory`, or live campaign entities. Current format 18 loading rejects format 7 before table access.
+**Format version 7 (historical, 2026-08-08).** The `LastTurnReport` table stores one optional bounded JSON snapshot of the latest resolved turn report. The row is written in the same atomic transaction as the campaign and is hydrated onto `PlayerForce`; a missing table or row is treated as a null report so a campaign-start/pre-turn save can still load and show an intentional empty Last Turn Report state. The payload contains display strings, debrief lines, and compact casualty data only — never `MissionContext`, `BattleHistory`, or live campaign entities. Current format 19 loading rejects format 7 before table access.
 
 **Format version 8 (historical, 2026-08-11).** The save schema includes the canonical `CampaignEvent` /
 `CampaignEventEntity` / `CampaignEventPublication` tables, the persistent Chapter Chronicle
@@ -319,7 +319,7 @@ the already-projected ledgers. New campaigns emit the founding event after scena
 loaded scenario saves missing it receive a deterministic compatibility event from persisted roster,
 scenario, and world facts.
 
-The format-14 change follows the same rule established by format 6: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`. A save/load round-trip test cannot catch a missed bump because the writer recreates the schema from scratch; only an older file read by a newer build exposes it. There is intentionally no migration boundary: an older or newer format is reported as incompatible and must be replaced by a new current-format campaign. `ChapterEquipmentRoleLoadout` and `SoldierEquipmentLoadout` store complete armor/item compositions; their item tables preserve quantity and initial-ready order, and personal rows are filtered against the current `Soldier` roster during save. `Squad.FormationOrdinal` and `Squad.HasBattleHistory` preserve line identity and historical Scout retention. Format 14 stores administrative duty stations and `OrderCharacter` relationships separately from `IndividualPosting`, which now preserves only a detached soldier's physical purpose, location, and start date. Format 16 adds the Ork region links and persistent source/Waaagh! records; format 17 adds the transit Battle Value carried by a successor Waaagh!; format 18 adds the resolved scenario invader identity.
+The format-14 change follows the same rule established by format 6: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`. A save/load round-trip test cannot catch a missed bump because the writer recreates the schema from scratch; only an older file read by a newer build exposes it. There is intentionally no migration boundary: an older or newer format is reported as incompatible and must be replaced by a new current-format campaign. `ChapterEquipmentRoleLoadout` and `SoldierEquipmentLoadout` store complete armor/item compositions; their item tables preserve quantity and initial-ready order, and personal rows are filtered against the current `Soldier` roster during save. `Squad.FormationOrdinal` and `Squad.HasBattleHistory` preserve line identity and historical Scout retention. Format 14 stores administrative duty stations and `OrderCharacter` relationships separately from `IndividualPosting`, which now preserves only a detached soldier's physical purpose, location, and start date. Format 16 adds the Ork region links and persistent source/Waaagh! records; format 17 adds the transit Battle Value carried by a successor Waaagh!; format 18 adds the resolved scenario invader identity; format 19 adds the Chapter operational doctrine row.
 
 `CurrentCampaignSaveWriter` passes `PlayerForce.LastTurnReportSnapshot` explicitly to `GameStateDataAccess.SaveData`. A null snapshot is written as a valid current-version save with no `LastTurnReport` row; it is not an error and represents a campaign whose first turn has not resolved yet. Full battle replay is deliberately not part of this payload. The chapter event chronicle is also separate: it cannot reconstruct all strategic, construction, governor, recruitment, and mission-report cards.
 
@@ -332,6 +332,9 @@ Key tables and their relationships:
 ```
 GlobalData           (Millenium, Year, Week, SaveVersion)
 LastTurnReport       (Id = 1, ResolvedDate, PayloadJson)
+ChapterOperationalDoctrine
+                     (Id = 1, InjuryThreshold nullable, RequireDutyReadySquadLeader,
+                      MinimumDutyReadySquadStrength)
 
 Planet               (Id, PlanetTemplateId, Name, x, y, Importance, TaxLevel)
 PlanetFaction        (PlanetId, FactionId, IsPublic, Population, PlanetaryControl,
@@ -425,7 +428,7 @@ WorldControlEpisode      (PlanetId→Planet, ImperialFactionId, LastControllingF
 
 **Note:** Region adjacency is runtime-only. It is reconstructed from the ordered region array on load and is not persisted.
 
-**Canonical campaign event spine.** The current format-18 save retains the format-8 event spine as the durable source of truth
+**Canonical campaign event spine.** The current format-19 save retains the format-8 event spine as the durable source of truth
 for player-facing career and battle facts. `PayloadJson` is decoded through the explicit
 `(CampaignEventType, PayloadVersion)` registry; entity rows retain stable ids and display-name
 snapshots, and publication rows retain the classifier decision so loading never reclassifies an old
@@ -624,7 +627,10 @@ WoundLevel enum (bitmask):
 
 - **`CanFight`** — hands and vitals. False if any *vital* location is crippled or severed, or no hand group functions.
 - **`CanMove`** — motive only. False when the motive speed multiplier reaches zero.
-- **`IsCombatEffective`** — `CanFight && CanMove`. This is the seam every consumer uses (planning, targeting, morale, deployment gating, the Apothecarium); nothing in production means "can shoot but need not walk".
+- **`IsCombatEffective`** — `CanFight && CanMove`. This is the current-battle seam for planning,
+  targeting, morale, and casualty handling; player-force deployment uses the separate
+  `DutyReadinessService` result, which adds physical deployment requirements and Chapter doctrine.
+  Nothing in production means "can shoot but need not walk".
 
 `MotiveImpairment` computes a **speed multiplier per motive location by wound band**, and immobility is simply the product reaching zero — there is no separate binary. Constants live in `CasualtyConstants`, not the rules DB. Below Major 1.0, Major 0.85, Critical 0.6, and zero at Massive/crippled/severed; locations compound **multiplicatively**, so two Critical legs give 0.36 and still fight. **Extremities floor at 0.40 and can never fell a soldier** — a location counts as an extremity when some other motive location on that body has a strictly higher cripple threshold, which makes legs principal and feet extremities on both authored bodies. `BattleSoldier.GetMoveSpeed()` multiplies `Soldier.MoveSpeed` by it, replacing the former binary `IsSlow` / flat ×0.75.
 
@@ -648,7 +654,7 @@ teleport them home.
 MembersOnly formation from its `DutyStation`, and finally a normal squad from its operational location.
 `SoldierPresenceService` keeps organizational and physical counts separate: nominal members include all
 home-squad members, present members exclude posted soldiers, deployable members additionally require
-combat effectiveness and existing deployment gates, and order participants combine present squad members
+canonical duty readiness and existing deployment gates, and order participants combine present squad members
 with assigned characters. Movement, battle rosters, field care, construction, readiness, and transport
 use the appropriate projection rather than approximating all of them with `Squad.Members.Count`.
 
@@ -1320,6 +1326,47 @@ Two seams, deliberately deduped. The mission pass runs on `MissionDayScheduler`'
 
 Gene-seed recovery resolves once per confirmed-dead brother in `BattleTurnResolver.RemoveSoldiersKilledInBattle` (`ResolveGeneseedRecovery`), folding any recovered gland's purity into the chapter aggregate and writing a structured `SoldierEventType.GeneseedRecovery` event onto the preserved fallen-brother dossier; the battle log reads that recorded outcome rather than recomputing it. `PlayerForce` carries a count-weighted aggregate `GeneseedPurity` float alongside `GeneseedStockpile` — seeded pristine at founding, each recovered gland contributing a purity rolled around a baseline with small downward drift (`GeneseedRules`). Both persist on the extended `GlobalData` row. Stockpile drawdown happens in the recruitment pipeline (one unit consumed on Phase 0 → Phase 1; PRD §4.9).
 
+### 6.6.2 Chapter Operational Doctrine & Duty Readiness
+
+`Army.ChapterOperationalDoctrine` is mutable campaign state, distinct from rules-data loadout
+doctrine. `ChapterOperationalDoctrine.InjuryThreshold` is nullable: null is the explicit
+**Incapacitated** policy, while the other accepted values are Critical, Major, Moderate, Minor,
+and Negligible. Threshold comparisons use the highest occupied wound band on any body location
+and are inclusive; wounds on separate locations are never summed. New campaigns use Major,
+`RequireDutyReadySquadLeader = true`, and `MinimumDutyReadySquadStrength = 5`.
+
+`DutyReadinessService` is the single individual decision path. It returns a typed
+`DutyReadinessEvaluation` with one of `CombatIncapacitation`, `UntreatedSeverance`,
+`InsufficientFunctioningArms`, `ProcedureReservation`, or `ChapterInjuryThreshold` (plus
+`Ready`). Physical and procedure exclusions run before the Chapter threshold, so changing the
+policy cannot make a severed, one-handed, incapacitated, or reserved brother eligible. NPC
+soldiers use physical combat effectiveness; player individuals use the same service without any
+squad minimum or leader rule.
+
+`SquadStrengthSnapshotBuilder` computes `Full`, `Rostered`, `Present`, `Effective` (the
+combat-effective projection), and `DutyReady`, and classifies each unavailable player member once
+as physical incapacity, individual posting, procedure reservation, or doctrine withholding.
+`SquadReadinessService` adds the structural blockers `BelowMinimumDutyReadyStrength` and
+`RequiredLeaderUnavailable`; the leader counts toward the minimum. Existing orders are not
+cancelled when policy changes, but order mutation and the mission boundary both use the same
+decision.
+
+The campaign-to-battle bridge gives each player `BattleSquad` an explicit frozen participant-id
+set. It is populated from duty-ready members only after squad gates pass, while individually
+attached characters become one-person battle elements after their own individual check. The set
+is refreshed before each mission stage or engagement. Wounds that cross the Chapter threshold
+without causing physical combat incapacity therefore do not remove a current combatant, but do
+exclude that identity from the next engagement. The wrapper still references the campaign squad,
+so equipment pools, ammunition, order membership, casualty history, and aftermath identity are
+not recreated or silently rewritten. A blocked or empty next-stage result is represented by the
+typed `MissionAvailabilityStatus`, a per-squad `MissionSquadReadinessIssue` retaining the campaign
+squad identity, and an explicit mission log entry.
+
+Loadout allocation counts duty-ready carriers, while stored squad, role, and personal loadouts
+remain intact when doctrine withholds a carrier. Operational fractions use `DutyReady / Full`;
+combat-effective counts remain available as a secondary diagnostic. Doctrine-only transitions
+do not enter the near-death/recovery event path.
+
 ### 6.7 Force Generation
 
 `ForceGenerator.GenerateForce(ForceGenerationRequest, IRNG, IEntityIdAllocator)` dispatches by `ForceCompositionProfile`. The allocator is optional at persistent-campaign call sites; tactical missions supply a mission-local `TacticalEntityIdAllocator`, which issues negative IDs and therefore does not advance or collide with the positive campaign counters:
@@ -1523,10 +1570,11 @@ local feral Orks into one opening Waaagh!. No live enemy fleet is required; fera
 indelible after victory.
 
 **Persistence.** Format 16 added regional Ork links, latent sources, and persistent Waaaghs; format
-17 added successor transit BV; format 18 adds the resolved scenario invader. The loader restores
+17 added successor transit BV; format 18 adds the resolved scenario invader; format 19 adds Chapter
+operational doctrine. The loader restores
 source positions, command identities, affiliations, physical locations, transit state, and scenario
 selection, validates references, and keeps persistent command squads out of ordinary landed-squad
-collections. `SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 18. Beacon/scope
+collections. `SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 19. Beacon/scope
 state is intentionally absent because visible ghost worlds, fleets, and persisted threat scopes are
 outside the completed feature.
 
@@ -1733,23 +1781,24 @@ surfaces were removed after their remaining specialist and tree behavior was por
 ### 7.6 Force Legibility & Shared Squad Rows
 
 Live squad strength has one source of truth: `SquadStrengthSnapshotBuilder` produces a
-`SquadStrengthSnapshot` with `Full`, `Rostered`, `Present`, `Effective`, `Unavailable`, and
-`Vacancies`. `Full` is the template establishment, never below a legacy overstrength roster;
-`Rostered` includes every member; `Present` excludes individual postings; `Effective` is the
-present combat-effective subset; and `Unavailable` is the non-overlapping remainder classified as
-injury/incapacitation, individual posting, procedure reservation, or other. Region cards aggregate
-`Effective` and `Full` from these snapshots, and shared diagnostic formats use the same values.
+`SquadStrengthSnapshot` with `Full`, `Rostered`, `Present`, combat-effective `Effective`,
+`DutyReady`, `Unavailable`, and `Vacancies`. `Full` is the template establishment, never below a
+legacy overstrength roster; `Rostered` includes every member; `Present` excludes individual
+postings; and `Unavailable` is the non-overlapping remainder classified as physical
+injury/incapacitation, individual posting, procedure reservation, or doctrine withholding. Region
+cards aggregate `DutyReady` and `Full`; combat-effective strength remains a secondary diagnostic.
 
 `SquadReadinessService` derives leadership, commitment, structural readiness, context restrictions,
-and a typed primary blocker. Required-leader formations report `Ready`, `Unavailable`, or `Vacant`;
-only `Vacant` blocks a non-empty formation from beginning a new deployment. The mutation boundary
-enforces that rule in order assignment and landing services, while existing orders, embark/recall,
-ship transfer, and Chapter Muster retain their separate semantics. Command attention facts use the
-same readiness and strength facts, so a leaderless formation is actionable attention rather than an
-idle deployable formation.
+and typed blockers. A required leader who is absent or not duty-ready blocks a new deployment when
+the Chapter policy requires one, and a formation below the configured minimum duty-ready strength
+also blocks. The leader counts toward the minimum. These gates are applied both by order mutation
+and by mission/battle construction; existing orders remain assigned when a later policy change
+blocks them. Embark/recall, ship transfer, and Chapter Muster retain their separate movement
+semantics, but any action that begins a new deployment uses the shared result. Command attention
+facts use the same readiness and strength facts.
 
 `SquadRowViewModelBuilder` and `SquadRowView` own the common two-line row: squad icon and name,
-effective/full strength, unavailable and leadership tokens, location, commitment, context state,
+duty-ready/full strength, secondary combat-effective strength, unavailable and leadership tokens, location, commitment, context state,
 selection, focus, truncation, and tooltip detail. Screen controllers supply context and actions;
 they do not redefine the force vocabulary. `ProjectedSquadRowViewModel` adds Muster deltas and
 future strength, while `BattleSquadRowViewModel` adds historical starting/current strength and
@@ -2067,9 +2116,10 @@ Coverage for the promoted Alpha 0.8 slice includes:
 - `CampaignEventSpineTests`: recorder dedupe/projection, crossed milestones, grouped Chronicle entries, founding projection/idempotence, and routine battle Chronicle policy.
 - `NarrativeEventEmissionTests`: near-death projection/recovery, typed medical/mentor/gene-seed facts, payload/entity data-access round trips, and invalid source/correlation validation.
 - `EndTurnPreflightTests`: shared attention-fact identity, preference-only suppression, and Command Brief retention.
-- `SaveLoadRoundTripTests` plus the data-access tests: current format-18 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, itemized equipment, squad-lineage, station, character-order, physical-posting, scenario-invader, and Ork source/Waaagh! persistence; compatibility tests verify that older formats are rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
+- `SaveLoadRoundTripTests` plus the data-access tests: current format-19 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, itemized equipment, squad-lineage, station, character-order, physical-posting, scenario-invader, Ork source/Waaagh!, and Chapter operational-doctrine persistence; compatibility tests verify that older formats are rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
 - `EquipmentFoundationTests`, `RulesDatabaseValidationTests`, and the focused battle coverage: global equipment identity, requirements/capacity, kit validation, shared mission reserves, ammunition behavior, reload/recovery, initial-ready priority, effective tactical Battle Value, and carrier reassignment.
-- `SquadLineageTests`, `FleetCapacityPlanServiceTests`, `IndividualPostingServiceTests`, `DeploymentStorageTests`, and `FactionCapabilityStateTests`: line identity/history retention, whole-squad capacity planning, individual posting invariants, format-18 persistence, and persistent dormant-population/invasion-force state. `PlanetaryOperationsServiceTests` and the Recovery/Planetary icon tests cover mission-scoped eligibility, atomic mixed-participant land/embark behavior, and required UI registrations.
+- `ChapterOperationalDoctrineTests` covers defaults, inclusive threshold boundaries, the explicit Incapacitated policy, worst-wound aggregation, physical-over-doctrine precedence, leader/minimum squad gates, individual deployment, and frozen battle participants.
+- `SquadLineageTests`, `FleetCapacityPlanServiceTests`, `IndividualPostingServiceTests`, `DeploymentStorageTests`, and `FactionCapabilityStateTests`: line identity/history retention, whole-squad capacity planning, individual posting invariants, format-19 persistence, and persistent dormant-population/invasion-force state. `PlanetaryOperationsServiceTests` and the Recovery/Planetary icon tests cover mission-scoped eligibility, atomic mixed-participant land/embark behavior, and required UI registrations.
 - `Scenes/Debug/release_scene_wiring_smoke.tscn` plus the stable headless main-scene smoke: shallow scene wiring.
 
 ### 9.3 Regression Risk Areas

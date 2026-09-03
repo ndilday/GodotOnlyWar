@@ -17,7 +17,10 @@ namespace OnlyWar.Helpers.Orders
     /// </summary>
     public static class OrderForceService
     {
-        public static bool AssignCharacter(Order order, PlayerSoldier character)
+        public static bool AssignCharacter(
+            Order order,
+            PlayerSoldier character,
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (order == null || character == null
                 || character.AssignedSquad?.PermitsIndividualDeployment != true)
@@ -35,6 +38,16 @@ namespace OnlyWar.Helpers.Orders
             }
 
             if (character.CurrentOrder != null)
+            {
+                return false;
+            }
+
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                character,
+                doctrine ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army
+                    ?.ChapterOperationalDoctrine,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            if (!duty.IsDutyReady)
             {
                 return false;
             }
@@ -69,7 +82,10 @@ namespace OnlyWar.Helpers.Orders
             return changed;
         }
 
-        public static bool AssignSquad(Order order, Squad squad)
+        public static bool AssignSquad(
+            Order order,
+            Squad squad,
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (order == null || squad?.CanAcceptSquadOrder != true) return false;
             if (ReferenceEquals(squad.CurrentOrders, order))
@@ -86,7 +102,7 @@ namespace OnlyWar.Helpers.Orders
             // newly committed to an order. Keeping this check at the participant mutation
             // boundary prevents callers from bypassing the UI's disabled row.
             if (squad.CurrentOrders == null
-                && !SquadReadinessService.CanBeginNewDeployment(squad))
+                && !SquadReadinessService.CanBeginNewDeployment(squad, null, doctrine))
             {
                 return false;
             }

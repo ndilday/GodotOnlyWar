@@ -19,6 +19,10 @@ CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NO
 -- chapter/planet loadout doctrine plus character (role and individual) loadout persistence.
 CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioInvaderFactionId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id), CampaignId TEXT, CampaignSeed INTEGER, RandomAlgorithmVersion INTEGER NOT NULL DEFAULT 1);
 
+-- One mutable operational policy belongs to the current player Chapter. A NULL threshold is the
+-- explicit Incapacitated option; physical deployability and procedure reservations still apply.
+CREATE TABLE ChapterOperationalDoctrine (Id INTEGER PRIMARY KEY CHECK (Id = 1), InjuryThreshold INTEGER, RequireDutyReadySquadLeader BOOLEAN NOT NULL, MinimumDutyReadySquadStrength INTEGER NOT NULL);
+
 -- The latest resolved turn report is intentionally one bounded JSON payload. A missing row is
 -- valid for a campaign that has not resolved a turn yet.
 CREATE TABLE LastTurnReport (Id INTEGER PRIMARY KEY CHECK (Id = 1), ResolvedDate INTEGER NOT NULL, PayloadJson TEXT NOT NULL);

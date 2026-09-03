@@ -986,6 +986,15 @@ namespace OnlyWar.Models.Soldiers
         public HitLocation[] HitLocations { get; private set; }
 
         /// <summary>
+        /// True when the body still contains a currently untreated severed limb. A limb is
+        /// identified from authored anatomy rather than display names: motive locations are
+        /// legs/feet, while locations with a <see cref="HitLocationTemplate.HandGroupId"/>
+        /// belong to an arm/hand group. A completed replacement clears the severing wounds, so
+        /// this remains a body-derived query and cannot drift from the installed replacement.
+        /// </summary>
+        public bool HasUntreatedSeveredLimb => HitLocations.Any(IsLimbLocationSevered);
+
+        /// <summary>
         /// The stance's total hit-lottery weight, indexed by <c>(int)Stance</c> -- the denominator
         /// every per-location share is taken against. An array rather than a
         /// <c>Dictionary&lt;Stance, int&gt;</c> because it is read once per removal estimate on the
@@ -1063,5 +1072,10 @@ namespace OnlyWar.Models.Soldiers
         {
             InjuryRevision++;
         }
+
+        private static bool IsLimbLocationSevered(HitLocation location) =>
+            location?.IsSevered == true
+            && (location.Template?.IsMotive == true
+                || location.Template?.HandGroupId.HasValue == true);
     }
 }

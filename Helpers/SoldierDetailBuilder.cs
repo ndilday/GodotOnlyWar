@@ -17,6 +17,10 @@ public class SoldierDetailBuilder
 
         if (soldier is PlayerSoldier playerSoldier)
         {
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                playerSoldier,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
             SoldierDossier dossier = _dossierService.BuildDossier(
                 playerSoldier,
                 richTextInjury: false,
@@ -29,7 +33,14 @@ public class SoldierDetailBuilder
             cards.Add(new ChapterBrowserDetailCard("training", "Sergeant Report", "Recommendation", dossier.SergeantReport));
             cards.Add(new ChapterBrowserDetailCard("threat", "Battle History", "Combat record", FormatPairs(dossier.CombatRecord)));
             cards.Add(new ChapterBrowserDetailCard("award", "Honors", "Awards", FormatLines(dossier.Awards, "No awards recorded."), Scrollable: true));
-            cards.Add(new ChapterBrowserDetailCard("medical", "Injury Report", playerSoldier.IsCombatEffective ? "Fit report" : "Recovery report", dossier.InjuryReport));
+            cards.Add(new ChapterBrowserDetailCard(
+                "medical",
+                "Injury Report",
+                duty.IsDutyReady ? "Duty-ready report"
+                    : duty.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold
+                        ? "Withheld by doctrine"
+                        : "Recovery report",
+                dossier.InjuryReport));
             cards.Add(new ChapterBrowserDetailCard("archive", "Service Record", "Full history", FormatLines(dossier.History, "No history recorded."), Scrollable: true, FullHeight: true));
         }
         else
@@ -44,7 +55,15 @@ public class SoldierDetailBuilder
         }
 
         Squad squad = soldier.AssignedSquad;
-        string status = soldier.IsCombatEffective ? "Available for duty" : "Wounded or impaired";
+        DutyReadinessEvaluation readiness = DutyReadinessService.Evaluate(
+            soldier,
+            GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine,
+            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+        string status = readiness.IsDutyReady
+            ? "Available for duty"
+            : readiness.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold
+                ? "Withheld by doctrine"
+                : "Wounded or impaired";
         string location = SquadLocationFormatter.Format(squad);
         bool canNavigateToLocation = SquadLocationNavigation.Resolve(squad) is not null;
 

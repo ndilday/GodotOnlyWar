@@ -132,7 +132,7 @@ namespace OnlyWar.Helpers
             return new RecoverySquadStatus(
                 squad?.Name ?? "Unassigned",
                 squad?.ParentUnit?.Name ?? "No company",
-                $"{strength.Effective}/{strength.Full} effective"
+                $"{strength.DutyReady}/{strength.Full} duty-ready"
                     + (strength.Unavailable > 0 ? $" · {strength.Unavailable} unavailable" : string.Empty),
                 CampaignLocationService.Format(CampaignLocationService.ForSquad(squad)),
                 squad?.CurrentOrders?.Mission?.MissionType.ToString() ?? "No order");

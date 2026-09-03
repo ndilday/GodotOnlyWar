@@ -18,7 +18,8 @@ namespace OnlyWar.Tests.Domain;
 // Phase 0 was a pure refactor. Phase 3 has since replaced the binary CanMove with a graded
 // speed multiplier (MotiveImpairment), so CanMove now means "speed above zero" and the leg and
 // foot cases below assert the NEW answers -- a Critical leg keeps him moving, only Massive or a
-// sever stops him, and a foot never stops him at all. CanFight is true throughout, unchanged.
+// sever stops him, and a foot never zeros movement on its own. An untreated severed foot still
+// removes him from battlefield combat effectiveness, while CanFight remains true.
 // The band-by-band curve itself is pinned by MotiveImpairmentTests.
 public class CanFightCanMoveTests
 {
@@ -87,7 +88,8 @@ public class CanFightCanMoveTests
     }
 
     // Feet are motive too, so they land on CanMove rather than CanFight -- but the foot floor
-    // ("a shattered foot never fells a man") means they can never take CanMove to false.
+    // means they can never take CanMove to false. Untreated severance is a separate physical
+    // battlefield-incapacity rule, covered by MotiveImpairmentTests.
     [Fact]
     public void CrippledFoot_SlowsSeverelyButNeverStops()
     {
@@ -195,6 +197,37 @@ public class CanFightCanMoveTests
             CasualtyConstants.CriticalMotiveSpeedMultiplier * CasualtyConstants.ExtremitySpeedFloor,
             player.MotiveSpeedMultiplier,
             5);
+    }
+
+    [Fact]
+    public void OneFunctioningHandGroup_RemainsCombatEffectiveButIsNotDeployable()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        PlayerSoldier player = new(soldier, soldier.Name);
+
+        Cripple(Find(soldier, "Left Arm"));
+        Cripple(Find(soldier, "Left Hand"));
+
+        Assert.Equal(1, player.FunctioningHands);
+        Assert.True(player.CanFight);
+        Assert.True(player.CanMove);
+        Assert.True(player.IsCombatEffective);
+        Assert.False(player.IsDeployable);
+    }
+
+    [Fact]
+    public void SeveredNonLimbLocation_DoesNotTriggerLimbIncapacity()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        PlayerSoldier player = new(soldier, soldier.Name);
+        HitLocation eye = Find(soldier, "Eyes");
+
+        eye.Wounds.AddWound(WoundLevel.Major);
+
+        Assert.True(eye.IsSevered);
+        Assert.False(player.HasUntreatedSeveredLimb);
+        Assert.True(player.IsCombatEffective);
+        Assert.True(player.IsDeployable);
     }
 
     // A crippled vital still bars deployment -- that half of the old rule is unchanged in effect,

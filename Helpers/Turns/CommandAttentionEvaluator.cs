@@ -291,7 +291,7 @@ namespace OnlyWar.Helpers.Turns
                 EndTurnWarningCategory.IdleDeployableSquads,
                 squad.Id,
                 $"{squad.Name}{unit}",
-                $"{strength.Effective}/{strength.Full} combat-effective in {location}; "
+                $"{strength.DutyReady}/{strength.Full} duty-ready in {location}; "
                     + "no orders are assigned.",
                 new CampaignNavigationTarget(
                     CampaignNavigationTargetKind.Squad,

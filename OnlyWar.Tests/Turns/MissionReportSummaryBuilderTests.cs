@@ -86,9 +86,8 @@ public class MissionReportSummaryBuilderTests
         Assert.Equal("", MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(null));
     }
 
-    // Design/Reference/SpecialistAttachment.md §8 trap 3: an attached Apothecary is in no BattleSquad,
-    // so he is in no battle report, earns no field XP through the battle path, and would otherwise
-    // leave the debrief with no evidence he was ever sent. This line is the evidence.
+    // Design/Reference/SpecialistAttachment.md §8 trap 3: field-care reporting remains visible for
+    // an attached Apothecary whether he is withheld or enters as a one-person battle element.
     [Fact]
     public void BuildFieldCareLine_NamesTheApothecaryAndWhatHeDid()
     {

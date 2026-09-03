@@ -96,6 +96,10 @@ namespace OnlyWar.Helpers.Missions
             }
 
             IMissionStep step = _next;
+            // This is the campaign-to-stage boundary. A doctrine edit, natural healing, or a
+            // replacement completed since the last stage affects the next engagement, while the
+            // participant set remains frozen for the battle currently being resolved.
+            _execution.State.RefreshDutyReadyParticipants();
             MissionStepResult result = step.ExecuteMissionStep(_execution, _margin, _resume);
 
             if (result.Then != null)

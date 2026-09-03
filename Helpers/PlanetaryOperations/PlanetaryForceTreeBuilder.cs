@@ -192,6 +192,10 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             SquadEligibilityExclusion.EmptyFormation => "Formation has no members",
             SquadEligibilityExclusion.PersonnelPool => "Personnel pool; attach individuals instead",
             SquadEligibilityExclusion.Leaderless => "Formation requires a squad leader",
+            SquadEligibilityExclusion.RequiredLeaderUnavailable => "Required squad leader is withheld or unavailable",
+            SquadEligibilityExclusion.BelowMinimumDutyReadyStrength => "Below the Chapter's minimum duty-ready strength",
+            SquadEligibilityExclusion.NoDutyReadyParticipants => "No duty-ready members are available",
+            SquadEligibilityExclusion.DoctrineWithholding => "Members withheld by Chapter doctrine",
             SquadEligibilityExclusion.ProcedureBlocked => "A member is reserved for a Chapter procedure",
             SquadEligibilityExclusion.AssignedElsewhere => "Committed to another order",
             SquadEligibilityExclusion.MissionUnavailable => "Mission is unavailable from this origin",
@@ -205,11 +209,13 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             IReadOnlySet<int> selectedIds,
             bool collapsed)
         {
-            int effective = items.Sum(item => SoldierPresenceService.DeployableCount(item.Squad));
+            int dutyReady = items.Sum(item => SquadStrengthSnapshotBuilder.Build(
+                item.Squad,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram).DutyReady);
             int selected = items.Count(item => selectedIds.Contains(item.Squad.Id) || item.Assigned);
-            string badge = selected == 0 ? $"{items.Count} sq · {effective} effective"
-                : selected == items.Count ? $"ALL · {effective} effective"
-                : $"{selected}/{items.Count} selected · {effective} effective";
+            string badge = selected == 0 ? $"{items.Count} sq · {dutyReady} duty-ready"
+                : selected == items.Count ? $"ALL · {dutyReady} duty-ready"
+                : $"{selected}/{items.Count} selected · {dutyReady} duty-ready";
             string token = grouping == ForceTreeGrouping.Ship
                 ? $"ship={items.First().Ship?.Id ?? -1}"
                 : $"company={items.First().Squad.ParentUnit?.Id ?? -1}";
@@ -235,12 +241,14 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             IReadOnlySet<int> selectedIds)
         {
             Squad squad = item.Squad;
-            int present = SoldierPresenceService.PresentCount(squad);
-            int effective = SoldierPresenceService.DeployableCount(squad);
+            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(
+                squad,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            int dutyReady = strengthSnapshot.DutyReady;
             string commitment = squad.CurrentOrders == null ? "Unassigned"
                 : MissionAvailability.GetOrderLabel(squad.CurrentOrders.Mission);
-            string tooltip = BuildSquadTooltip(item, effective, present, commitment);
-            string strength = $"{effective}/{present}";
+            string tooltip = BuildSquadTooltip(item, dutyReady, strengthSnapshot.Full, commitment);
+            string strength = $"{dutyReady}/{strengthSnapshot.Full}";
             string assignment = BuildAssignedSquadText(item);
             string badge = assignment
                 ?? (item.Exclusion == SquadEligibilityExclusion.None
@@ -297,8 +305,11 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Squad squad = item?.Squad;
             if (squad == null) return string.Empty;
 
-            int healthy = SoldierPresenceService.DeployableCount(squad);
-            int total = SoldierPresenceService.PresentCount(squad);
+            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(
+                squad,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            int healthy = strengthSnapshot.DutyReady;
+            int total = strengthSnapshot.Full;
             string commitment = squad.CurrentOrders == null ? "Unassigned"
                 : MissionAvailability.GetOrderLabel(squad.CurrentOrders.Mission);
             return BuildSquadTooltip(item, healthy, total, commitment);

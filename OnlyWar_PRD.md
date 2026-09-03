@@ -221,6 +221,15 @@ Each feature is described as a behavioral specification: what the system does, a
 - The player can view and set the loadout for a squad, choosing from available weapon options defined by the squad's template.
 - Double-clicking a marine opens the Soldier Screen for that individual.
 
+**Chapter operational doctrine (Phase 2 — Implemented).** The Chapter Loadouts dialog has a
+**Doctrine** mode beside Squad Types and Characters. It edits one persisted Chapter policy: the
+inclusive worst-wound threshold (**Incapacitated**, Critical, Major, Moderate, Minor, or
+Negligible), whether a squad's leader must be duty-ready, and the minimum duty-ready squad
+strength. New Chapters default to Major, leader required, and five. The dialog previews the
+current number of withheld brothers and structurally blocked squads; these settings have no
+planetary override. Physical incapacity, untreated severance, procedure reservations, and fewer
+than two functioning arm/hand groups remain unconditional exclusions under every threshold.
+
 **Character Equipment & Bespoke Loadouts (0.8)**
 - Replace the current fixed-column weapon-set assumption with itemized equipment-kit definitions and persistent character loadouts. Squad templates continue to provide role defaults, eligibility, and formation constraints; named kits remain presets and pooled squad selections, while each individually-equipped character can review and edit the resulting composition before deployment.
 - A character loadout contains worn **armor**, a quantity-bearing collection of **carried equipment** (weapons, grenades, tools, ammunition packages, relics, and faction-specific gear), and an **initial-ready preference**. Carried equipment is distinct from battle hand state: a two-handed weapon occupies two functioning hand groups while readied but does not prevent its carrier from also bringing a sidearm or melee weapon.
@@ -243,6 +252,10 @@ Each feature is described as a behavioral specification: what the system does, a
 - Displays the squad's current orders.
 - Injured members are visually distinguished from healthy ones.
 - Members who cannot be deployed due to injury are indicated.
+- Shared squad rows show **Duty-ready / Full** strength, the secondary combat-effective count,
+  physical versus doctrine withholding, leader state, and the structural reason a squad cannot
+  begin a new deployment. Doctrine withholding is labelled **WITHHELD** or **UNFIT BY DOCTRINE**,
+  never the physical **OUT** label.
 - Double-clicking a member opens the Soldier Screen for that individual.
 
 ---
@@ -462,7 +475,18 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 - A location that reaches its sever threshold is severed: weapon-holding locations lose the equipped item.
 - Any location that reaches a vital-critical threshold incapacitates or kills the marine.
 - **Motive damage is graded, not a switch.** Each damaged leg or foot costs a share of the marine's movement, and the losses compound; total immobility is simply what happens when nothing is left, rather than a separate rule. A marine slowed by a leg wound keeps fighting. **A foot wound never fells him** — a man on a shattered foot cannot run, but he can still shoot, and being taken out of a battle entirely by a foot hit was the least believable outcome in the old model.
-- **Deployability follows combat effectiveness, not injury.** An impaired-but-mobile marine may deploy; a marine who cannot move, cannot hold a weapon, or has a crippled vital location may not. *(This replaces the former rule that any crippled motive location barred deployment, which would have grounded exactly the limping-but-able brother that graded impairment exists to keep in the line.)*
+- **Physical deployability follows combat effectiveness, not injury alone.** An impaired-but-mobile
+  marine may deploy physically; a marine who cannot move, cannot hold a weapon, has a crippled
+  vital location, has fewer than two functioning arm/hand groups, has an untreated severance, or
+  is reserved for a procedure may not. *(This replaces the former rule that any crippled motive
+  location barred deployment, which would have grounded exactly the limping-but-able brother that
+  graded impairment exists to keep in the line.)*
+- **Chapter duty readiness is a separate operational policy.** A physically deployable player
+  brother is withheld when his worst active wound is at or above the configured inclusive Chapter
+  threshold. The explicit **Incapacitated** setting means no additional wound threshold; it does
+  not waive the physical or procedure exclusions. Wounds on separate locations are not summed.
+  Healing below the threshold returns a brother to duty at the next boundary without creating a
+  history event.
 - **Player casualty states are distinct.** An impaired brother remains in the fight at reduced speed; an incapacitated brother is alive but removed from the engagement and recorded separately from killed brothers; a killed brother follows the existing fallen-brother, geneseed, and casualty-record path.
 - **Battlefield control determines recovery.** Holding the field returns incapacitated brothers to the ordinary wound-recovery pipeline. Losing the field presumes them dead with geneseed lost; a mutually broken-off engagement counts as recovery. Power-armor biostasis prevents a downed player brother from dying while awaiting treatment, so there is no bleed-out clock. Enemies without that protection retain the existing finish-off behavior.
 
@@ -499,14 +523,27 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 - The player can assign a squad to one of the following mission types: Recon, Advance (assault), Ambush, Assassination, Sabotage, Extermination, Defense, Patrol, Construction, or Diversion.
 - The player sets the target and aggression level (Avoid, Cautious, Normal, Attritional, or Aggressive). Every public hostile presence is offered as its own `Attack (Faction)` option, including enemies sharing the squads' current region; hidden factions cannot be selected directly.
 - Multiple squads can be assigned to the same mission, combining their force for resolution.
+- **Duty readiness is checked at both issue and execution.** A squad must have at least the
+  Chapter minimum duty-ready strength and, when enabled, a duty-ready required leader. Individual
+  characters use only their own physical and injury-doctrine result and ignore squad minimum and
+  leader rules. Tightening doctrine leaves existing orders assigned, but an ineligible squad
+  contributes no force to the next stage and the turn report states the typed blocker.
 - **Individual specialists attach to an operation (Implemented).** An Apothecary, Techmarine, Champion or Chaplain joins an operation as an individual rather than requiring his whole formation to deploy — which is how the fiction has always worked and how the chapter's specialist formations are actually used. He is attached to the *operation*, not to a particular squad, so his contribution applies force-wide rather than needing rules to leak it from one squad to the others.
   - **Formations that lend specialists do not themselves manoeuvre.** The four HQ squads and the four chapter offices (Armory, Librarius, Apothecarion, Reclusium) are **personnel pools**: they no longer appear as assignable units, and their members reach the field only by attachment. A line squad's strength is its cohesion, so it stays all-or-nothing. This rule exists to prevent the incoherent middle state where an HQ squad is deployed on one operation while its members are scattered across others.
   - **One man, one operation**, validated when the order is issued. He must be fit and co-located with the staging force, and he cannot be attached while reserved for a procedure such as a Black Carapace implantation.
   - **An order still requires at least one squad** — a specialist attaches to an operation, he does not constitute one.
   - **Attachment lasts as long as the order**, releasing when the operation resolves, when the player unassigns it, or on the man's death. He remains on his home squad's roll throughout, counting toward its headcount but not its available strength, and can be recalled early from the Chapter screen.
-  - **No battlefield presence yet.** An attached specialist is with the force but abstracted out of the engagement itself: he cannot be targeted or become a casualty, and only his between-battles effect is modeled. Giving specialists real battlefield presence is §5.7's characters-as-units-of-one item.
+  - **Battlefield presence (Implemented).** An attached specialist who is individually duty-ready
+    is materialized as a one-person battle element. He keeps his home-squad identity and stored
+    equipment, but does not inherit that squad's minimum-strength or leader gate. A withheld or
+    physically unavailable specialist remains attached to the order and is reported as withheld.
 
 **Mission Execution**
+- At each mission-stage or engagement boundary, player participants are rebuilt from the canonical
+  duty-ready service. A current battle freezes its participant identities: a non-severing wound
+  that crosses the Chapter threshold does not withdraw a brother from that battle, but withholds
+  him from the next one. Mission-owned squad identity, loadout, ammunition, history, and order
+  relationships remain intact while its next-stage participant set is empty or reduced.
 - If the squad is not already in the target region, an infiltration phase occurs first. Infiltration success depends on the squad's stealth skills relative to how hard the defenders are *looking* for it. Detection is a property of the region, not of the mission's chosen target — an intruder is seen by whoever watches the ground it crosses, so every enemy faction present contributes. Each of them makes the crossing harder in three ways: **surveillance** (its own regional intel, fed by listening posts and past patrols), **active search** (the forces it currently has out on Patrol or Recon orders), and a small, hard-capped amount for **sheer presence**. The presence term saturates deliberately: past a point, more bodies standing around do not find one scout team any faster, because a stationary crowd covers the same ground more thickly rather than covering more of it. The practical consequence is that a *dormant* horde — however enormous — is meaningfully easier to slip past than a smaller force actively sweeping, so a region's security is a decision its controller makes each turn rather than a fixed property of how many enemies live there. A larger intruding force is easier to spot; the intruder's own knowledge of the region makes it easier to find a covered route.
 - If infiltration fails, the squad may be ambushed or forced into a meeting engagement before reaching the objective.
 - Each mission type has a distinct execution sequence with skill-based checks and possible combat encounters along the way.
@@ -838,6 +875,10 @@ Example ranges for reference:
 - All game state is preserved across save/load: sector state, all faction populations and garrisons, all marines (attributes, skills, wounds, history, kill records), all squad assignments, fleet positions, loaded squads, active orders, active governor requests, game date, and chapter battle history.
 - Loading a save produces a game state identical to the state at the time of saving.
 
+The current save format is **19**. It persists the singleton Chapter operational doctrine alongside
+the Chapter and character loadout doctrines; absent doctrine rows resolve to the defaults for a
+new-format campaign, while older formats are rejected by the exact-version compatibility guard.
+
 **Acceptance Criteria (Implemented — 0.7.1 Release Confidence):**
 - The save UI exposes named manual slots and a visible chooser showing campaign/chapter name, campaign date, last-write time, and compatibility state. “Load” must not silently mean “load whichever compatible file is newest.”
 - The game maintains several rolling autosaves, including a protected pre-turn autosave immediately before turn resolution mutates campaign state. Autosaves are distinct from and never overwrite named manual slots.
@@ -1059,8 +1100,9 @@ existing Promised-World objective and victory/lapse loop, records the canonical 
 briefing, and leaves feral survivors indelible after victory. No live enemy fleet object is required.
 
 **Persistence and boundaries**
-- ✅ Save format 18 persists scenario invader identity and the existing Ork regional, ghost-source,
-Waaagh!, command-squad, and transit state. Exact-version compatibility remains enforced.
+- ✅ Save format 19 persists Chapter operational doctrine alongside scenario invader identity and
+  the existing Ork regional, ghost-source, Waaagh!, command-squad, and transit state. Exact-version
+  compatibility remains enforced.
 - ✅ Persisted threat scope, beacon suppression, visible ghost-world materialization, non-player
 reinforcement fleets, natural feral migration, Ork vehicles, and Ork-on-Ork tactical wars remain
 outside this feature.
@@ -1224,7 +1266,7 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 
 **Acceptance Criteria (Implemented — 0.8, squad rows):**
 - A single shared squad-row component serves the Chapter, Recruiter, Region, and Fleet screens. Per-screen row implementations are replaced, not supplemented; the Recruiter's Scout rows are brought up from bare text buttons in the same pass.
-- The row answers "can this squad be sent somewhere right now?" without a drill-down. Beyond the current name, type, and headcount, it must show effective versus full strength, wounded or otherwise unavailable members, whether the squad has a leader, and its current commitment (in transit, deployed on an order, training, or free).
+- The row answers "can this squad be sent somewhere right now?" without a drill-down. Beyond the current name, type, and headcount, it shows **duty-ready versus full** strength, the secondary combat-effective count, wounded or otherwise unavailable members with physical/doctrine reasons, whether the squad has a leader, and its current commitment (in transit, deployed on an order, training, or free).
 - Strength, casualty, and readiness are expressed with the same vocabulary, color hierarchy, and iconography the tactical-map redesign establishes. Approve the map's visual baseline first and derive the row from it.
 - Squad-level intel gating does not apply — these are the player's own forces — but the row must not imply certainty about an enemy or a mission outcome it cannot know.
 - The row remains readable at the supported minimum UI scale, truncates gracefully in the narrowest panel that hosts it, and keeps the existing selection and double-click-to-drill behavior.
@@ -1352,12 +1394,16 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 - ✅ **Faction Relationships & Inter-Faction Intelligence** — the cross-faction substrate, sequenced first because Orks cannot be built without it and because Revolt (§4.20) and future Chaos content benefit independently: the binary enemy rule is replaced by a persisted symmetric stance ledger (default Hostile; player↔Imperial seeded Allied), `Faction` behavior is authored through `[Flags] FactionBehavior`, regional awareness is target-agnostic, and sparse observer/target/region beliefs provide graded intelligence, estimates, false positives, Allied sharing, belief-backed planning, governor evidence, and no-contact searches. §4.21; TDD §§5.2.1, 6.1–6.3.
 - ✅ **Equipment & Ammunition Foundation / bespoke character loadouts** — itemized rules catalog, globally identified kits, explicit personal-equipment roles, complete armor/item/ready-order loadouts, capacity and restriction validation, shared chapter-role/live-soldier editor, format-10 doctrine persistence, mission-lifetime equipment instances, and casualty reallocation. Delivered within it: **live ammunition tracking and reloads** (bursts spend the full commitment, finite authored mission reserves, weapon-owned loaded/reserve state and reload progress, no reload creating ammunition, scarcity-aware planner behavior) and **equipment-aware tactical Battle Value** (signature-cached effective value after allocation drives target selection, expected friendly-value loss, and threat math, while strategic force generation, mission sizing, and casualty accounting retain intrinsic value). §§4.5, 4.14; TDD §§4.1.2, 4.2–4.3, 6.6. *(The pooled standard-issue/specialist-count menu survives behind a narrow `WeaponSet` compatibility surface pending migration; it is not the authoritative model. Armory inventory and strategic ammunition remain deferred — §5.7.)*
 - ✅ **Force Legibility — planet tactical map and squad rows** — canonical effective/full strength, typed unavailable reasons, leadership/readiness/commitment facts, mutation-level leaderless deployment gates, shared live/projected/historical squad-row presentation, cross-screen consumer migration, and map aggregation from the same snapshots. §4.26; TDD §7.6.
+- ✅ **Chapter Operational Doctrine — Unfit for Duty** — persisted Chapter injury threshold,
+  required-leader and minimum-strength policy; canonical typed duty-readiness enforcement across
+  orders, missions, loadouts, and operational presentation; live battle-boundary re-evaluation;
+  and inclusive **WITHHELD** status distinct from physical incapacity. §§4.5, 4.12, 4.13, 4.26;
+  TDD §§4.2, 5.3, 6.6.2, 7.6.
 
 **Remaining in 0.8.**
 
 - ⬜ **Founding myth** — a short generated chapter history at new-game start. §4.19.
 - ⬜ **Wider-Imperium dispatches (initial)** — voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing. §4.19.
-- ⬜ **Chapter Doctrine — Unfit For Duty Injury Level** — a Chapter Doctrine control on the loadout screens, initially carrying only this setting: default **Major**, adjustable across the injury-severity range from **None** through **Critical**. §4.5.
 - ⬜ **Techmarines & the Mars pipeline** — replace the placeholder (aspirants leave for ~2 years and return immediately) with a deferred-cohort pipeline: the chapter starts with no Techmarines, the founding cohort returns after ~18 in-game years, and the player sends further drafts on an ongoing basis. Adds between-mission vehicle maintenance and a Techmarine **Cybernetic Repair** procedure. **Prerequisite for Vehicles** (§5.7). §4.28; open questions §§6.15–6.17.
 - ⬜ **Engineering follow-through** — split the remaining large `PlanetTurnProcessor` by domain and retire transitional `TurnController` compatibility shims and unused prototypes as callers migrate. Enabling work, not a separate player-facing feature. TDD §8.
 
@@ -1435,7 +1481,14 @@ tracked here rather than kept as an active design document.
 
 **Stance & prone combat.** *(Moved here from 0.7.3, where it was a dependency of the Leg Wound item — §5.4.)* The `Stance` enum and a per-stance `HitProbabilityMap` exist in the codebase, but nothing ever assigns a stance other than Standing: stance is spec, not behavior. Delivering it means both a felled-but-armed soldier firing prone at a penalty after a short delay, and prone's melee consequences (doubled crouch offense penalty, far easier to hit). Deferred on two independent grounds, both still binding. **First, sequencing:** stance's real payoff is prone *behind* something, and there is no terrain, cover, or line-of-sight system yet — building voluntary stance before Battle Visuals Phase 3 (above) means building it twice, since prone in open ground is a thin decision. **Second, risk:** stance is fundamentally a trade of exposure against mobility and accuracy — a *defensive* term — and the squad planner scores primarily outgoing effect, with its ranged and melee metrics not yet commensurable (`Design/Reference/BattleLogic.md`). Adding a defensive axis to a scorer whose offensive terms are still being reconciled is the exact shape of change that produced the last regression. Note the asymmetry: *involuntary* prone (a felled soldier makes no choices) is materially safer than voluntary stance, since it adds no decision axis — it is a subtraction from the planner, needing a squad member excluded from cohesion/formation/movement planning while still included in targeting and morale.
 
-**Characters as units of one in battle.** A one-man battle entity that can attach itself to a squad and leave for another mid-fight, tolerated by formation, cohesion, morale, and the planner. Order-level specialist attachment (§4.13) ships without this: an attached specialist is *with* the force but abstracted out of the engagement, which is why an attached Apothecary cannot currently become a casualty. This is the unlock for every *battlefield* specialist effect — a Champion's presence, a Chaplain's morale aura, a Techmarine's field repairs — and the point at which an attached specialist's capacity must stop the day he goes down. Deliberately unscheduled: adding entity kinds to the squad planner is a change to take on deliberately rather than incidentally, and the open question is what governs join/leave decisions (player order, squad planner, or a specialist-specific heuristic). Design record: `Design/Reference/SpecialistAttachment.md` §4.
+**Characters as units of one in battle.** The Phase 2 boundary slice now materializes each
+individually duty-ready attached specialist as a one-person battle element. The campaign squad
+remains the identity, equipment, aftermath, and history anchor, and the current engagement freezes
+the participant set; a later boundary can withhold the character without cancelling the order.
+Mid-fight join/leave and specialist battlefield effects — a Champion's presence, a Chaplain's
+morale aura, or a Techmarine's field repairs — remain deferred because they require the planner to
+support dynamic unit membership and new effect channels. Design record:
+`Design/Reference/SpecialistAttachment.md` §4 and `Design/Reference/CasualtyRealism.md` §3.1.
 
 **Battlefield recovery missions.** A follow-up mission type that returns to a field the chapter did not hold, to recover what was left there. Motivated by the incapacitation rules (§4.12): a brother whose wounds took him out of a fight the chapter then lost is currently presumed dead with his gene-seed lost, and there is no way to contest that outcome. A recovery mission should be able to retrieve some subset of — in descending order of luck — the brother himself (his armor's biostasis having kept him alive), his body and gene-seed, or merely his power armor and wargear. Deliberately deferred rather than scheduled: recovering *materiel* only means something once the Armory tracks wargear as inventory (§4.23 / §6.9), and a recovery operation into hostile territory wants transport, which lands with Vehicles. Design questions left open: how the chapter learns a recovery is possible and how long the window stays open; whether the enemy faction degrades or removes the prize over time; and whether this is a distinct mission type or an objective variant of the existing raid/recon types.
 

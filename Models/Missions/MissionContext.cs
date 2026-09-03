@@ -1,5 +1,6 @@
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -80,6 +81,23 @@ namespace OnlyWar.Models.Missions
         // three-argument construction keeps compiling and keeps meaning what it meant.
         int PlayerIncapacitated = 0);
 
+    public enum MissionAvailabilityStatus
+    {
+        Ready = 0,
+        NoDutyReadyParticipants,
+        SquadStructuralBlocker
+    }
+
+    public sealed record MissionSquadReadinessIssue(
+        Squad CampaignSquad,
+        MissionAvailabilityStatus Status,
+        IReadOnlyList<SquadReadinessBlocker> Blockers,
+        string Message)
+    {
+        public int SquadId => CampaignSquad?.Id ?? 0;
+        public string SquadName => CampaignSquad?.Name ?? "Unknown squad";
+    }
+
     public class MissionContext
     {
         // A strategic turn is one week, so a mission plays out over at most this many days. Looping
@@ -119,6 +137,10 @@ namespace OnlyWar.Models.Missions
 
         public Order Order { get; }
         public long? StrategicInvasionForceId => Order?.StrategicInvasionForceId;
+        public ChapterOperationalDoctrine OperationalDoctrine { get; }
+        public MissionAvailabilityStatus AvailabilityStatus { get; private set; }
+        public IReadOnlyList<SquadReadinessBlocker> AvailabilityBlockers { get; private set; }
+        public List<MissionSquadReadinessIssue> ReadinessIssues { get; } = [];
 
         public List<BattleSquad> MissionSquads { get; }
         public IReadOnlyList<PlayerSoldier> StartingPlayerParticipants { get; }
@@ -218,11 +240,10 @@ namespace OnlyWar.Models.Missions
         /// What the Apothecary attached to this order did over the operation
         /// (Design/Reference/CasualtyRealism.md §2.6, Phase 2b). Null when the order had none.
         ///
-        /// This exists because of SpecialistAttachment.md §8 trap 3: an attached specialist is in no
-        /// BattleSquad, so <see cref="StartingPlayerParticipants"/> excludes him, he earns no field
-        /// XP through the battle path, and he would appear in NO debrief at all. That is consistent
-        /// with having no battlefield presence, and it would still read as a bug the first time a
-        /// player sends an Apothecary out and sees no trace of him.
+        /// This exists because of SpecialistAttachment.md §8 trap 3: field-care reporting must remain
+        /// visible whether an attached specialist is withheld or materialized as a one-person battle
+        /// element. <see cref="StartingPlayerParticipants"/> is an engagement participant set, so it
+        /// is not the source for order-wide field-care reporting.
         ///
         /// Order-wide, not element-wide: one order can produce several MissionContexts, and all of
         /// them carry the same report. The treatment itself ran exactly once.
@@ -279,12 +300,18 @@ namespace OnlyWar.Models.Missions
         public int? AssassinationTargetSoldierId { get; set; }
         public bool TargetEliminated { get; set; }
 
-        public MissionContext(Order order, List<BattleSquad> playerSquads, List<BattleSquad> opposingForces)
+        public MissionContext(
+            Order order,
+            List<BattleSquad> playerSquads,
+            List<BattleSquad> opposingForces,
+            ChapterOperationalDoctrine operationalDoctrine = null)
         {
             Order = order;
             MissionSquads = playerSquads;
+            OperationalDoctrine = operationalDoctrine;
+            RefreshDutyReadyParticipants();
             StartingPlayerParticipants = playerSquads
-                .SelectMany(squad => squad.Soldiers)
+                .SelectMany(squad => squad.AbleSoldiers)
                 .Select(battleSoldier => battleSoldier.Soldier)
                 .OfType<PlayerSoldier>()
                 .Distinct()
@@ -299,6 +326,46 @@ namespace OnlyWar.Models.Missions
             Impact = 0.0f;
             EnemiesKilled = 0;
             EnemyKillCredits = 0;
+            AvailabilityStatus = MissionAvailabilityStatus.Ready;
+            AvailabilityBlockers = Array.Empty<SquadReadinessBlocker>();
+        }
+
+        /// <summary>
+        /// Re-evaluates player participants at a mission-stage/engagement boundary. The wrappers
+        /// remain mission-owned so equipment, history, and aftermath state survive; only the set
+        /// allowed into the next engagement changes.
+        /// </summary>
+        public void RefreshDutyReadyParticipants()
+        {
+            foreach (BattleSquad squad in MissionSquads
+                .Where(squad => squad?.IsPlayerSquad == true
+                    // A null participant set identifies the legacy in-memory battle wrapper
+                    // used by callers that have already selected the engagement roster. The
+                    // campaign boundary uses BattleSquadFactory, which always supplies an
+                    // explicit (possibly empty) frozen set. Preserve the former direct-wrapper
+                    // semantics while ensuring real mission stages are re-evaluated.
+                    && (squad.EngagementParticipantIds != null || OperationalDoctrine != null)))
+            {
+                squad.RefreshDutyReadyParticipants(OperationalDoctrine);
+            }
+        }
+
+        public void MarkAvailabilityBlocked(
+            MissionAvailabilityStatus status,
+            IEnumerable<SquadReadinessBlocker> blockers = null)
+        {
+            AvailabilityStatus = status;
+            AvailabilityBlockers = (blockers ?? Array.Empty<SquadReadinessBlocker>())
+                .Where(blocker => blocker != SquadReadinessBlocker.None)
+                .Distinct()
+                .ToList();
+        }
+
+        public void RecordReadinessIssue(MissionSquadReadinessIssue issue)
+        {
+            if (issue == null || issue.CampaignSquad == null) return;
+            if (ReadinessIssues.Any(existing => existing.SquadId == issue.SquadId)) return;
+            ReadinessIssues.Add(issue);
         }
 
         private static long SumBattleValue(IEnumerable<BattleSquad> squads) =>

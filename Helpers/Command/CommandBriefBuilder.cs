@@ -332,7 +332,10 @@ namespace OnlyWar.Helpers.Command
 
             List<PlayerSoldier> wounded = force?.Army?.OrderOfBattle?.GetAllMembers()
                 .OfType<PlayerSoldier>()
-                .Where(soldier => !soldier.IsCombatEffective)
+                .Where(soldier => !DutyReadinessService.Evaluate(
+                    soldier,
+                    force?.Army?.ChapterOperationalDoctrine,
+                    force?.RecruitmentProgram).IsDutyReady)
                 .OrderBy(soldier => soldier.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(soldier => soldier.Id)
                 .ToList() ?? [];
@@ -344,7 +347,7 @@ namespace OnlyWar.Helpers.Command
                     CommandBriefPriority.Monitor,
                     "Wounded brothers require review",
                     $"{wounded.Count} active brother{(wounded.Count == 1 ? " is" : "s are")} "
-                        + "not combat-effective. The Apothecarium shows the authoritative recovery state.",
+                        + "not duty-ready. The Apothecarium shows the authoritative recovery state.",
                     "Current readiness",
                     "medical",
                     false,

@@ -50,6 +50,7 @@ namespace OnlyWar.Helpers.Database.GameState
         // saves; reattached to Sector.Scenario by the load path.
         public CampaignScenario Scenario { get; set; }
         public LoadoutDoctrine ChapterLoadoutDoctrine { get; set; }
+        public ChapterOperationalDoctrine ChapterOperationalDoctrine { get; set; }
         public CharacterLoadoutDoctrine CharacterLoadoutDoctrine { get; set; }
         public EquipmentLoadoutDoctrine EquipmentLoadoutDoctrine { get; set; }
         public LastTurnReportSnapshot LastTurnReportSnapshot { get; set; }
@@ -76,6 +77,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly PledgeDataAccess _pledgeDataAccess;
         private readonly RecruitmentDataAccess _recruitmentDataAccess;
         private readonly LoadoutDoctrineDataAccess _loadoutDoctrineDataAccess;
+        private readonly ChapterOperationalDoctrineDataAccess _chapterOperationalDoctrineDataAccess;
         private readonly LastTurnReportDataAccess _lastTurnReportDataAccess;
         private readonly CampaignEventDataAccess _campaignEventDataAccess;
         private readonly ChapterChronicleDataAccess _chapterChronicleDataAccess;
@@ -107,6 +109,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _pledgeDataAccess = new PledgeDataAccess();
             _recruitmentDataAccess = new RecruitmentDataAccess();
             _loadoutDoctrineDataAccess = new LoadoutDoctrineDataAccess();
+            _chapterOperationalDoctrineDataAccess = new ChapterOperationalDoctrineDataAccess();
             _lastTurnReportDataAccess = new LastTurnReportDataAccess();
             _campaignEventDataAccess = new CampaignEventDataAccess();
             _chapterChronicleDataAccess = new ChapterChronicleDataAccess();
@@ -148,6 +151,7 @@ namespace OnlyWar.Helpers.Database.GameState
             var planetMap = planets.ToDictionary(planet => planet.Id);
             _loadoutDoctrineDataAccess.PopulatePlanetDoctrines(dbCon, planetMap, weaponSets);
             var chapterLoadoutDoctrine = _loadoutDoctrineDataAccess.GetChapterDoctrine(dbCon, weaponSets);
+            var chapterOperationalDoctrine = _chapterOperationalDoctrineDataAccess.GetDoctrine(dbCon);
             var characterLoadoutDoctrine = _loadoutDoctrineDataAccess.GetCharacterDoctrine(dbCon, weaponSets);
             var equipmentLoadoutDoctrine = equipmentTemplates != null && equipmentKits != null
                 ? _loadoutDoctrineDataAccess.GetEquipmentDoctrine(dbCon, equipmentTemplates, equipmentKits)
@@ -235,6 +239,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 FallenBrothers = fallenBrothers,
                 Scenario = global?.Scenario,
                 ChapterLoadoutDoctrine = chapterLoadoutDoctrine,
+                ChapterOperationalDoctrine = chapterOperationalDoctrine,
                 CharacterLoadoutDoctrine = characterLoadoutDoctrine,
                 EquipmentLoadoutDoctrine = equipmentLoadoutDoctrine,
                 LastTurnReportSnapshot = lastTurnReportSnapshot,
@@ -278,7 +283,8 @@ namespace OnlyWar.Helpers.Database.GameState
                              IEnumerable<WorldControlEpisodeState> worldControlEpisodes = null,
                              IEnumerable<Order> additionalOrders = null,
                              IEnumerable<GhostPopulationSource> ghostPopulationSources = null,
-                             IEnumerable<StrategicInvasionForce> strategicInvasionForces = null)
+                              IEnumerable<StrategicInvasionForce> strategicInvasionForces = null,
+                              ChapterOperationalDoctrine chapterOperationalDoctrine = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -312,7 +318,8 @@ namespace OnlyWar.Helpers.Database.GameState
                               homeWorldPlanetId, recruitment, lastTurnReportSnapshot,
                               campaignEventLedger, chapterChronicle, campaignIdentity,
                               relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
-                              additionalOrders, ghostPopulationSources, strategicInvasionForces);
+                              additionalOrders, ghostPopulationSources, strategicInvasionForces,
+                              chapterOperationalDoctrine);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -366,7 +373,8 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IEnumerable<WorldControlEpisodeState> worldControlEpisodes,
                                    IEnumerable<Order> additionalOrders,
                                    IEnumerable<GhostPopulationSource> ghostPopulationSources,
-                                   IEnumerable<StrategicInvasionForce> strategicInvasionForces)
+                                    IEnumerable<StrategicInvasionForce> strategicInvasionForces,
+                                    ChapterOperationalDoctrine chapterOperationalDoctrine)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -391,6 +399,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     SaveFactionRelationships(transaction, relationshipLedger);
 
                     _loadoutDoctrineDataAccess.SaveChapterDoctrine(transaction, chapterLoadoutDoctrine);
+                    _chapterOperationalDoctrineDataAccess.SaveDoctrine(
+                        transaction, chapterOperationalDoctrine);
 
                     foreach(IRequest request in requests)
                     {

@@ -37,8 +37,10 @@ namespace OnlyWar.Helpers.Battles.Resolutions
         {
             if (!wound.HitLocation.IsSevered)
             {
+                bool wasCombatEffective = wound.Suffererer.IsCombatEffective;
                 bool wasCrippled = wound.HitLocation.IsCrippled;
                 bool wasFunctionallyDisabled = wound.HitLocation.IsSevered || wasCrippled;
+                bool hadUntreatedSeveredLimb = wound.Suffererer.HasUntreatedSeveredLimb;
                 float totalDamage = wound.Damage;
                 WoundLevel woundLevel;
                 // check wound.HitLocation for natural armor
@@ -86,8 +88,16 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                 wound.Suffererer.BattleSquad?.InvalidateAbleSoldiers();
                 wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}\n";
 
-                // see if wound.HitLocation is now severed
-                if (!wasFunctionallyDisabled && (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled))
+                // See whether this hit crossed a battlefield incapacity boundary. A severed limb
+                // is a distinct boundary from a crippled location: a foot or already-crippled
+                // hand group can leave a brother combat-effective until the next hit severs it.
+                // The body query keeps this anatomy-driven and also ensures a replacement, once
+                // complete, is no longer treated as an untreated severance.
+                bool newlyUntreatedSeveredLimb = !hadUntreatedSeveredLimb
+                    && wound.Suffererer.HasUntreatedSeveredLimb;
+                if ((!wasFunctionallyDisabled
+                        && (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled))
+                    || newlyUntreatedSeveredLimb)
                 {
                     // OnSoldierFall is the "out of the fight, alive" hook -- what
                     // Design/Reference/CasualtyRealism.md §2.3 names Incapacitated. The predicate for
@@ -98,17 +108,17 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     // stands, and there is no prone fire to let him (§2.2 cuts stance), so it
                     // would report a fall the engine does not actually perform.
                     //
-                    // Phase 3 broke the equivalence the motive branch used to rely on. A crippled
-                    // motive location is no longer the same thing as !CanMove: a crippled or
-                    // severed FOOT floors at a fraction of speed and never zero, and a leg is only
-                    // load-bearing enough to zero him at Massive. So the branch tests
-                    // IsCombatEffective explicitly, exactly as the hand branch below does.
-                    // RefreshInjuryState() above has already re-read the body, so this is current.
+                    // A crippled motive location is not necessarily the same thing as !CanMove:
+                    // graded impairment keeps a crippled foot mobile. Untreated severance is an
+                    // explicit exception, so the branch tests IsCombatEffective after the body
+                    // refresh rather than inferring the result from this one location.
                     if (wound.HitLocation.Template.IsMotive)
                     {
-                        if (!wound.Suffererer.IsCombatEffective)
+                        if (wasCombatEffective && !wound.Suffererer.IsCombatEffective)
                         {
-                            wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
+                            wound.Description += newlyUntreatedSeveredLimb
+                                ? $"{wound.Suffererer.Soldier.Name} is incapacitated by limb severance\n"
+                                : $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
                             OnSoldierFall.Invoke(wound, woundLevel);
                         }
                     }
@@ -116,7 +126,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     {
                         wound.Suffererer.DropWeaponsUsingHandGroup(
                             wound.HitLocation.Template.HandGroupId.Value);
-                        if (!wound.Suffererer.IsCombatEffective)
+                        if (wasCombatEffective && !wound.Suffererer.IsCombatEffective)
                         {
                             wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer fight\n";
                             OnSoldierFall.Invoke(wound, woundLevel);

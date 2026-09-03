@@ -59,6 +59,10 @@ public class SaveLoadRoundTripTests
         Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
 
         sector.PlayerForce.Army.Requisition = 777;
+        sector.PlayerForce.Army.ChapterOperationalDoctrine.Set(
+            WoundLevel.Critical,
+            requireDutyReadySquadLeader: false,
+            minimumDutyReadySquadStrength: 6);
         sector.PlayerForce.GeneseedStockpile = 13;
         sector.PlayerForce.GeneseedPurity = 0.83f;
         LastTurnReportSnapshot expectedReport = new(
@@ -170,9 +174,19 @@ public class SaveLoadRoundTripTests
         Assert.NotEmpty(promisedTyranidFactions);
         Assert.All(promisedTyranidFactions, rf => rf.GrowthMultiplier = testMultiplier);
 
-        PlayerSoldier procedureSubject = armyRoot.GetAllMembers().OfType<PlayerSoldier>().First();
+        PlayerSoldier eventSoldier = armyRoot.GetAllSquads()
+            .SelectMany(s => s.Members)
+            .OfType<PlayerSoldier>()
+            .First();
+        PlayerSoldier procedureSubject = armyRoot.GetAllMembers().OfType<PlayerSoldier>()
+            .First(soldier => soldier.Id != eventSoldier.Id);
         MedicalProcedure procedure = new(procedureSubject.Id, 4, MedicalProcedureType.Cybernetic, 5, 40);
         sector.PlayerForce.Army.MedicalProcedures.Add(procedure);
+        HitLocation severedFoot = procedureSubject.Body.HitLocations
+            .Single(location => location.Template.Name == "Right Foot");
+        severedFoot.Wounds.AddWound(WoundLevel.Critical);
+        Assert.True(procedureSubject.HasUntreatedSeveredLimb);
+        Assert.False(procedureSubject.IsDeployable);
 
         Planet intelPlanet = sector.Planets.Values
             .First(p => p.PlanetFactionMap.Count > 0 && p.Regions.Any(r => r != null));
@@ -278,10 +292,6 @@ public class SaveLoadRoundTripTests
         sector.PlayerForce.Army.CharacterLoadoutDoctrine.SetPersonalLoadout(
             characterSoldier.Id, personalSet);
 
-        PlayerSoldier eventSoldier = armyRoot.GetAllSquads()
-            .SelectMany(s => s.Members)
-            .OfType<PlayerSoldier>()
-            .First();
         eventSoldier.GeneticCompatibility = 0.93f;
         eventSoldier.RecruitmentBirthDate = new Date(39, 486, 12);
         SoldierEvent battleEvent = new(_date, SoldierEventType.BattleParticipation,
@@ -296,7 +306,9 @@ public class SaveLoadRoundTripTests
         // here - the derived state after a round trip, and the untouched brother still reading
         // healthy, which is what "absent state = healthy" means when there is no migration.
         PlayerSoldier incapacitated = sector.PlayerForce.Army.PlayerSoldierMap.Values
-            .First(s => s.AssignedSquad != null && s.Id != eventSoldier.Id);
+            .First(s => s.AssignedSquad != null
+                && s.Id != eventSoldier.Id
+                && s.Id != procedureSubject.Id);
         int incapacitatedId = incapacitated.Id;
         int incapacitatedSquadId = incapacitated.AssignedSquad.Id;
         HitLocation crippledVital = incapacitated.Body.HitLocations
@@ -336,6 +348,9 @@ public class SaveLoadRoundTripTests
 
             Assert.Equal(_date, loaded.CurrentDate);
             Assert.Equal(777, loaded.Requisition);
+            Assert.Equal(WoundLevel.Critical, loaded.ChapterOperationalDoctrine.InjuryThreshold);
+            Assert.False(loaded.ChapterOperationalDoctrine.RequireDutyReadySquadLeader);
+            Assert.Equal(6, loaded.ChapterOperationalDoctrine.MinimumDutyReadySquadStrength);
             Assert.Equal(13, loaded.GeneseedStockpile);
             Assert.Equal(0.83f, loaded.GeneseedPurity, 3);
             Assert.Equal(expectedReport.ResolvedDate, loaded.LastTurnReportSnapshot.ResolvedDate);
@@ -456,6 +471,15 @@ public class SaveLoadRoundTripTests
             Assert.Equal(MedicalProcedureType.Cybernetic, loadedProcedure.ProcedureType);
             Assert.Equal(5, loadedProcedure.WeeksRemaining);
             Assert.Equal(40, loadedProcedure.RequisitionCost);
+            PlayerSoldier loadedProcedureSubject = loaded.Units
+                .SelectMany(unit => unit.GetAllSquads())
+                .SelectMany(squad => squad.Members)
+                .OfType<PlayerSoldier>()
+                .Single(soldier => soldier.Id == procedureSubject.Id);
+            Assert.True(loadedProcedureSubject.HasUntreatedSeveredLimb);
+            Assert.True(loadedProcedureSubject.Body.HitLocations
+                .Single(location => location.Template.Name == "Right Foot").IsSevered);
+            Assert.False(loadedProcedureSubject.IsDeployable);
 
             Planet loadedIntelPlanet = loaded.Planets.Single(p => p.Id == intelPlanet.Id);
             PlanetFaction loadedIntelFaction = loadedIntelPlanet.PlanetFactionMap[intelFaction.Faction.Id];

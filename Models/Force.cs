@@ -51,6 +51,9 @@ namespace OnlyWar.Models
         public Unit OrderOfBattle { get; }
         public Dictionary<int, PlayerSoldier> PlayerSoldierMap { get; }
         public Dictionary<int, Squad> SquadMap { get; private set; }
+        public ChapterOperationalDoctrine ChapterOperationalDoctrine { get; } = new();
+        // Short alias for callers that describe the aggregate as simply "doctrine".
+        public ChapterOperationalDoctrine OperationalDoctrine => ChapterOperationalDoctrine;
         public LoadoutDoctrine LoadoutDoctrine { get; } = new();
         // Command staff and specialists are equipped by role and by individual rather than by
         // squad type, so their kit lives outside the squad doctrine hierarchy.

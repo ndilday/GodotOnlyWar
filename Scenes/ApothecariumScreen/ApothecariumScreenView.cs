@@ -145,7 +145,10 @@ public partial class ApothecariumScreenView : MainScreenView
         bool hasCyberneticDamage = summary.Wounds.Any(w =>
             w.IsCybernetic && w.Severity > MedicalSeverity.None);
         PopulateMetrics(_soldierMetrics, [
-            ("Status", summary.IsCombatEffective ? "Ready" : "Out", summary.IsCombatEffective ? MedicalSeverity.Stable : MedicalSeverity.Critical),
+            ("Status", summary.IsDutyReady
+                ? "Duty-ready"
+                : summary.IsWithheldByDoctrine ? "WITHHELD" : "Physically unavailable",
+                summary.IsDutyReady ? MedicalSeverity.Stable : MedicalSeverity.Critical),
             ("Recovery (without treatment)", summary.ReplacementOptions.Count > 0
                 ? "Replacement"
                 : hasCyberneticDamage ? "Techmarine repair" : $"{summary.MaxRecoveryWeeks} wk",

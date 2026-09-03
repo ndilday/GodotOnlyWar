@@ -23,6 +23,10 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         EmptyFormation,
         PersonnelPool,
         Leaderless,
+        RequiredLeaderUnavailable,
+        BelowMinimumDutyReadyStrength,
+        NoDutyReadyParticipants,
+        DoctrineWithholding,
         ProcedureBlocked,
         AssignedElsewhere,
         MissionUnavailable
@@ -177,20 +181,29 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             {
                 return SquadEligibilityExclusion.PersonnelPool;
             }
-            if (SquadReadinessService.Evaluate(
-                    squad,
-                    program: program).PrimaryBlocker
-                == SquadReadinessBlocker.Leaderless)
+            ChapterOperationalDoctrine doctrine = SquadStrengthSnapshotBuilder.ResolveDoctrine(squad);
+            SquadReadinessSnapshot readiness = SquadReadinessService.Evaluate(
+                squad, program: program, doctrine: doctrine);
+            if (readiness.StructuralBlockers.Contains(SquadReadinessBlocker.Leaderless))
             {
                 return SquadEligibilityExclusion.Leaderless;
             }
-            if (squad.Members.Any(member =>
-                    member is PlayerSoldier player
-                    && (player.IsUndergoingMedicalProcedure
-                        || RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
-                            program, player.Id))))
+            if (readiness.StructuralBlockers.Contains(
+                    SquadReadinessBlocker.RequiredLeaderUnavailable))
             {
-                return SquadEligibilityExclusion.ProcedureBlocked;
+                return SquadEligibilityExclusion.RequiredLeaderUnavailable;
+            }
+            if (readiness.Strength.DutyReady == 0)
+            {
+                return readiness.Strength.DoctrineWithholdingCount > 0
+                    && readiness.Strength.Effective > 0
+                    ? SquadEligibilityExclusion.DoctrineWithholding
+                    : SquadEligibilityExclusion.NoDutyReadyParticipants;
+            }
+            if (readiness.StructuralBlockers.Contains(
+                    SquadReadinessBlocker.BelowMinimumDutyReadyStrength))
+            {
+                return SquadEligibilityExclusion.BelowMinimumDutyReadyStrength;
             }
             if (squad.CurrentOrders != null
                 && !ReferenceEquals(squad.CurrentOrders, contextOrder))

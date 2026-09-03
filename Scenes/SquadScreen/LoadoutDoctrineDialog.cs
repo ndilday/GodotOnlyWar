@@ -5,6 +5,8 @@ using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Recruitment;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,6 +33,7 @@ public partial class LoadoutDoctrineDialog : Control
     private HBoxContainer _modeRow;
     private Button _squadModeButton;
     private Button _characterModeButton;
+    private Button _doctrineModeButton;
     private EquipmentLoadoutEditorView _equipmentEditor;
     private PanelContainer _listPanel;
     private VBoxContainer _squadEditorStack;
@@ -43,6 +46,13 @@ public partial class LoadoutDoctrineDialog : Control
     // instead of a row in the squad-template list. Chapter scope only: there is no theater tier
     // for characters (see CharacterLoadoutDoctrine).
     private bool _charactersMode;
+    private bool _doctrineMode;
+    private ChapterOperationalDoctrine _operationalDoctrine;
+    private VBoxContainer _doctrineEditorStack;
+    private OptionButton _injuryThresholdButton;
+    private CheckButton _requireLeaderButton;
+    private SpinBox _minimumStrengthSpinBox;
+    private Label _doctrineSummary;
 
     public event EventHandler DoctrineChanged;
 
@@ -102,10 +112,13 @@ public partial class LoadoutDoctrineDialog : Control
         _modeRow.AddThemeConstantOverride("separation", 8);
         _squadModeButton = new Button { Text = "Squad Types", CustomMinimumSize = new Vector2(150, 34) };
         _characterModeButton = new Button { Text = "Characters", CustomMinimumSize = new Vector2(150, 34) };
-        _squadModeButton.Pressed += () => SetMode(false);
-        _characterModeButton.Pressed += () => SetMode(true);
+        _doctrineModeButton = new Button { Text = "Doctrine", CustomMinimumSize = new Vector2(150, 34) };
+        _squadModeButton.Pressed += () => SetMode(false, false);
+        _characterModeButton.Pressed += () => SetMode(true, false);
+        _doctrineModeButton.Pressed += () => SetMode(false, true);
         _modeRow.AddChild(_squadModeButton);
         _modeRow.AddChild(_characterModeButton);
+        _modeRow.AddChild(_doctrineModeButton);
         outer.AddChild(_modeRow);
 
         HBoxContainer content = new() { SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -173,6 +186,9 @@ public partial class LoadoutDoctrineDialog : Control
         _characterScroll = characterScroll;
         content.AddChild(editorPanel);
 
+        _doctrineEditorStack = BuildOperationalDoctrineEditor();
+        editorRoot.AddChild(_doctrineEditorStack);
+
         HBoxContainer footer = new() { Alignment = BoxContainer.AlignmentMode.End };
         _footer = footer;
         footer.AddThemeConstantOverride("separation", 8);
@@ -210,22 +226,34 @@ public partial class LoadoutDoctrineDialog : Control
         _force = force;
         _planet = planet;
         _doctrine = doctrine;
+        _operationalDoctrine = force?.Army?.ChapterOperationalDoctrine?.DeepCopy()
+            ?? new ChapterOperationalDoctrine();
         _saveButton.Text = planet == null ? "Save Chapter Default" : "Save Theater Override";
         _inheritButton.Visible = planet != null;
         // Characters have no theater tier, so the mode switch only appears at chapter scope.
         _modeRow.Visible = planet == null;
-        SetMode(_charactersMode && planet == null);
+        SetMode(_charactersMode && planet == null, _doctrineMode && planet == null);
         Visible = true;
     }
 
-    private void SetMode(bool charactersMode)
+    private void SetMode(bool charactersMode, bool doctrineMode)
     {
         _charactersMode = charactersMode;
+        _doctrineMode = doctrineMode && _planet == null;
+        _saveButton.Text = _doctrineMode
+            ? "Save Operational Doctrine"
+            : _planet == null ? "Save Chapter Default" : "Save Theater Override";
         OnlyWarStyle.ApplyListRow(_squadModeButton, !charactersMode);
         OnlyWarStyle.ApplyListRow(_characterModeButton, charactersMode);
+        OnlyWarStyle.ApplyListRow(_doctrineModeButton, _doctrineMode);
 
         _title.Text = _planet == null ? "Chapter Loadouts" : $"{_planet.Name} Theater Loadouts";
-        if (charactersMode)
+        if (_doctrineMode)
+        {
+            _subtitle.Text = "Choose the Chapter's operational standard. Physical incapacity, untreated severance, "
+                + "procedure reservations, and fewer than two functioning arms remain unconditional exclusions.";
+        }
+        else if (charactersMode)
         {
             _subtitle.Text = "Set the chapter-wide kit for each command and specialist role. "
                 + "Individuals equipped from their squad screen keep their personal loadout.";
@@ -237,13 +265,18 @@ public partial class LoadoutDoctrineDialog : Control
                 : "Create only the overrides this theater needs. Unmodified squad types continue to inherit chapter doctrine.";
         }
 
-        _listPanel.Visible = !charactersMode;
-        _squadEditorStack.Visible = !charactersMode;
-        _characterScroll.Visible = charactersMode;
-        // Character picks apply on selection; only the squad editor stages an edit to be saved.
+        _listPanel.Visible = !charactersMode && !_doctrineMode;
+        _squadEditorStack.Visible = !charactersMode && !_doctrineMode;
+        _characterScroll.Visible = charactersMode && !_doctrineMode;
+        _doctrineEditorStack.Visible = _doctrineMode;
+        // Character picks apply on selection; squad and Doctrine modes stage an edit to be saved.
         _footer.Visible = !charactersMode;
-
-        if (charactersMode)
+        _inheritButton.Visible = !_doctrineMode && _planet != null;
+        if (_doctrineMode)
+        {
+            PopulateDoctrineEditor();
+        }
+        else if (charactersMode)
         {
             PopulateCharacterRoles();
         }
@@ -251,6 +284,134 @@ public partial class LoadoutDoctrineDialog : Control
         {
             PopulateTemplateList();
         }
+    }
+
+    private VBoxContainer BuildOperationalDoctrineEditor()
+    {
+        VBoxContainer stack = new()
+        {
+            Visible = false,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        stack.AddThemeConstantOverride("separation", 12);
+
+        Label heading = new Label
+        {
+            Text = "UNFIT FOR DUTY",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        heading.AddThemeFontOverride("font", GetThemeFont("display"));
+        heading.AddThemeFontSizeOverride("font_size", 20);
+        stack.AddChild(heading);
+
+        Label explanation = new Label
+        {
+            Text = "The threshold is inclusive and uses the soldier's worst active wound band. "
+                + "Incapacitated removes only the extra wound restriction; incapacitated soldiers, "
+                + "procedure reservations, untreated severances, and fewer than two functioning arms "
+                + "remain unavailable.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        explanation.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        stack.AddChild(explanation);
+
+        _injuryThresholdButton = new OptionButton
+        {
+            TooltipText = "Withhold soldiers at or above this inclusive worst-wound band."
+        };
+        foreach (WoundLevel? threshold in ChapterOperationalDoctrine.InjuryThresholdOptions)
+        {
+            _injuryThresholdButton.AddItem(ChapterOperationalDoctrine.DescribeThreshold(threshold));
+        }
+        _injuryThresholdButton.ItemSelected += index =>
+        {
+            if (_operationalDoctrine == null) return;
+            int selected = (int)Math.Clamp(
+                index, 0L, (long)ChapterOperationalDoctrine.InjuryThresholdOptions.Count - 1);
+            _operationalDoctrine.InjuryThreshold = ChapterOperationalDoctrine.InjuryThresholdOptions[selected];
+            RefreshDoctrineSummary();
+        };
+        stack.AddChild(LabeledControl("Injury threshold", _injuryThresholdButton));
+
+        _requireLeaderButton = new CheckButton
+        {
+            Text = "Require a duty-ready squad leader",
+            TooltipText = "A squad without its required duty-ready leader cannot deploy."
+        };
+        _requireLeaderButton.Toggled += enabled =>
+        {
+            if (_operationalDoctrine == null) return;
+            _operationalDoctrine.RequireDutyReadySquadLeader = enabled;
+            RefreshDoctrineSummary();
+        };
+        stack.AddChild(_requireLeaderButton);
+
+        _minimumStrengthSpinBox = new SpinBox
+        {
+            MinValue = 1,
+            MaxValue = 100,
+            Step = 1,
+            AllowLesser = false,
+            TooltipText = "A squad needs this many duty-ready members. The leader counts toward the total."
+        };
+        _minimumStrengthSpinBox.ValueChanged += value =>
+        {
+            if (_operationalDoctrine == null) return;
+            _operationalDoctrine.MinimumDutyReadySquadStrength = (int)value;
+            RefreshDoctrineSummary();
+        };
+        stack.AddChild(LabeledControl("Minimum squad strength", _minimumStrengthSpinBox));
+
+        _doctrineSummary = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _doctrineSummary.AddThemeColorOverride("font_color", OnlyWarStyle.PlayerAccent);
+        stack.AddChild(_doctrineSummary);
+        return stack;
+    }
+
+    private static HBoxContainer LabeledControl(string labelText, Control control)
+    {
+        HBoxContainer row = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        row.AddThemeConstantOverride("separation", 12);
+        Label label = new()
+        {
+            Text = labelText,
+            CustomMinimumSize = new Vector2(220, 0),
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
+        };
+        row.AddChild(label);
+        row.AddChild(control);
+        return row;
+    }
+
+    private void PopulateDoctrineEditor()
+    {
+        if (_operationalDoctrine == null) return;
+        int selected = ChapterOperationalDoctrine.InjuryThresholdOptions
+            .Select((threshold, index) => (threshold, index))
+            .FirstOrDefault(item => item.threshold == _operationalDoctrine.InjuryThreshold).index;
+        _injuryThresholdButton.Select(selected);
+        _requireLeaderButton.ButtonPressed = _operationalDoctrine.RequireDutyReadySquadLeader;
+        _minimumStrengthSpinBox.Value = _operationalDoctrine.MinimumDutyReadySquadStrength;
+        RefreshDoctrineSummary();
+    }
+
+    private void RefreshDoctrineSummary()
+    {
+        if (_doctrineSummary == null || _operationalDoctrine == null || _force?.Army == null) return;
+        RecruitmentProgram recruitment = _force.RecruitmentProgram;
+        List<Squad> squads = _force.Army.OrderOfBattle?.GetAllSquads()
+            .Where(squad => squad?.Faction?.IsPlayerFaction == true
+                && squad.IsPresentOperationalForce)
+            .ToList() ?? [];
+        int withheld = squads.Sum(squad =>
+            SquadStrengthSnapshotBuilder.Build(squad, recruitment, _operationalDoctrine)
+                .DoctrineWithholdingCount);
+        int unable = squads.Count(squad =>
+            SquadReadinessService.Evaluate(squad, doctrine: _operationalDoctrine)
+                .StructuralBlockers.Count > 0);
+        _doctrineSummary.Text = $"Current roster consequence: {withheld} soldier(s) withheld by injury doctrine; "
+            + $"{unable} squad(s) unable to deploy under these structural rules."
+            + $"\nOperational fractions use duty-ready members and the leader counts toward the minimum.";
     }
 
     // Every personal-equipment role the chapter actually fields, gathered from the order of
@@ -504,6 +665,14 @@ public partial class LoadoutDoctrineDialog : Control
 
     private void OnSavePressed()
     {
+        if (_doctrineMode)
+        {
+            if (_force?.Army?.ChapterOperationalDoctrine == null || _operationalDoctrine == null) return;
+            _force.Army.ChapterOperationalDoctrine.ReplaceWith(_operationalDoctrine);
+            DoctrineChanged?.Invoke(this, EventArgs.Empty);
+            PopulateDoctrineEditor();
+            return;
+        }
         if (_selectedTemplate == null) return;
         _doctrine.SetLoadout(_selectedTemplate.Id, _editor.WorkingLoadout);
         DoctrineChanged?.Invoke(this, EventArgs.Empty);

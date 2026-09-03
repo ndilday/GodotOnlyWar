@@ -25,9 +25,12 @@ the final word:
   reasoning does **not** extend to the reader. The later format-13 posting redesign replaced the
   historical `OrderSoldier` table; see PRD §4.18 / TDD §4.2.
 
-Scope: attachment as a purely **organizational** concept. An attached specialist is *with* the force,
-not *in* the engagement — no battlefield presence, no battle-time squad binding, cannot become a
-casualty. That defers the whole "characters as units of one" problem (Phase 2c).
+Scope: attachment as an **organizational** concept whose battle entry is now handled at the Phase 2
+engagement boundary. An individually duty-ready attached specialist is materialized as a one-person
+battle element without changing his home squad, equipment, or order relationship; a withheld or
+physically unavailable specialist remains attached but contributes no battle element. Mid-fight
+join/leave and specialist battlefield effects remain deferred. The original 2a-only record below
+retains the rationale for why attachment itself does not encode a standing squad binding.
 
 ---
 
@@ -155,7 +158,7 @@ public bool PermitsIndividualDetachment =>
 -- The flag is two-sided: a formation that may give up individuals is ALSO a formation that never
 -- deploys as a unit (see §3.3). These eight become personnel pools; their people reach the field
 -- only by attachment. This is a behavior change for the four chapter offices and the four HQ
--- squads, all of which are ordinary deployable squads today.
+-- squads, all of which were ordinary deployable squads before this detachment rule shipped.
 --
 -- Carried as SquadTypes.PermitsIndividualDetachment = 0x80 inside the existing SquadType bitfield
 -- rather than a new column: every consumer of SquadType is a bit test (verified), the positional
@@ -225,12 +228,14 @@ Run before any mutation; the method returns `null` and creates nothing on failur
 2. **Not already attached elsewhere** — `soldier.AttachedOrder == null || ReferenceEquals(soldier.AttachedOrder, targetOrder)`
 3. ~~His home squad is not itself deployed~~ — **vacuous, removed.** Under §3.3 a detachable
    formation is never orderable, so its members' home squad can never be under orders.
-4. **Fit to march** — `soldier.IsCombatEffective` (`ISoldier.cs:31`, from CasualtyRealism Phase 0)
+4. **Fit to march** — the canonical `DutyReadinessService` result: physical deployment checks
+   plus the Chapter's inclusive injury doctrine. Individual attachment does not import the home
+   squad's minimum-strength or leader gate.
 5. **Co-located with the operation's staging point** — his squad's `CurrentRegion` equals the origin
    region, or its `BoardedLocation` matches. Reuse the shape of `MedicalProcedureService.SameLocation`
    (`Helpers/MedicalProcedureService.cs:85-100`) rather than reinventing it.
-6. **Not reserved for a procedure** — extend the Black Carapace check at `OrderAssignment.cs:48-53`
-   to cover attached soldiers, and add `RecruitmentPromotionService`'s Apothecary reservation
+6. **Not reserved for a procedure** — this is part of the same typed duty-readiness result, which
+   covers medical procedures and `RecruitmentPromotionService`'s Apothecary reservation
    (`Helpers/Recruitment/RecruitmentPromotionService.cs:223-231` — a staff Apothecary assigned to an
    implantation is not free this week).
 
@@ -323,7 +328,7 @@ Audited via `AssignedSquads` across the repo.
 | `Helpers/Orders/OrderAssignment.cs:114-119` | `IsPlayerOrder` gate | No change — squads still decide ownership |
 | `Helpers/Turns/MissionAftermathProcessor.cs:142-159` | `CleanupResolvedPlayerOrders` releases squads at turn end | Also release attachments — **primary release path** |
 | `Helpers/Orders/InboundOrders.cs:24-31,80-88` | Dossier summary label / origin | Append "+N attached" to `SummaryLabel` |
-| `Helpers/Turns/MissionTurnProcessor.cs:128-131` | Builds `BattleSquad`s from `AssignedSquads` | **No change** — no battlefield presence this pass |
+| `Helpers/Turns/MissionTurnProcessor.cs` | Builds battle elements from `AssignedSquads` and attachments | **Phase 2 boundary** — `BattleSquadFactory` freezes duty-ready attached characters as one-person elements |
 | `Helpers/Turns/MissionTurnProcessor.cs:309-311` | Sums `EngineeringFortification` over members | **No change in 2a.** An attached Techmarine *should* contribute to a fortification order, but that is a rules change, not plumbing. Noted, not done. |
 | `Models/Squads/Squad.cs:22-58` | `IsAdministrative` setter clears orders/berth/region | Must also release its members' attachments |
 | `Helpers/Battles/Aftermath/PlayerBattleAftermathSink.cs:34-37` | Death path | Call `OrderAttachment.Detach(soldier)` |
@@ -520,13 +525,13 @@ is forward. Exclude squads with attached members. **C#-testable**
    attached Apothecary's home squad may sit on the ship while he is forward, so garrison care would
    believe he is in two places and surgery gating would accept him at a site he has left. 2b must
    route `HasCoLocatedStaff` through `EffectiveRegion` (§1.2).
-3. **The attached specialist is in no `BattleSquad`,** so `MissionContext.StartingPlayerParticipants`
-   (`:241-246`, built from `playerSquads.SelectMany(squad => squad.Soldiers)`) excludes him. He earns
-   no field XP (`MissionFieldExperienceLog`, `MissionTurnProcessor.cs:159,182`) and appears in no
-   debrief (`Scenes/MissionDebriefDialogController.cs`). That is *consistent* with the
-   no-battlefield-presence rule, but it will read as a bug the first time a player sends an Apothecary
-   out and sees no trace of him. 2b should add him explicitly to the mission report; CasualtyRealism
-   §3.2's "does the Apothecary earn Medical XP" question lands here.
+3. **The attached specialist is represented by a one-person `BattleSquad` when duty-ready,** so
+   `MissionContext.StartingPlayerParticipants` retains the engagement participant set for casualty,
+   equipment, and history handling. A withheld specialist contributes no battle element, but remains
+   attached and is reported by the typed readiness status. The field-care report still names the
+   medical work done by an attached Apothecary, independently of whether that specialist entered the
+   engagement. The original 2a-only debrief concern is therefore resolved by the Phase 2 boundary
+   model.
 
 ---
 

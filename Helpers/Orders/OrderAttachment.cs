@@ -11,9 +11,10 @@ using System.Linq;
 namespace OnlyWar.Helpers.Orders
 {
     // Order-level attachment of individual specialists (Design/Reference/SpecialistAttachment.md,
-    // Phase 2a). An attached specialist is WITH the force but not IN the engagement: he has no
-    // BattleSquad binding, takes no battle-time effects, and cannot become a casualty. That is
-    // deliberately deferred (Phase 2c).
+    // Phase 2a). An attached specialist remains WITH the force at the campaign/order layer. When
+    // individually duty-ready, the Phase 2 battle boundary materializes him as a one-person
+    // BattleSquad; the attachment itself still does not bind him to a standing squad or add
+    // specialist battlefield effects.
     //
     // This type owns BOTH halves of the pointer pair -- Order.AttachedSoldiers and
     // PlayerSoldier.AttachedOrder -- so nothing anywhere can leave a soldier half-attached.
@@ -28,7 +29,10 @@ namespace OnlyWar.Helpers.Orders
         private static readonly IndividualPostingService PostingService = new();
         // Attaches an individual to an operation. Idempotent for the same order; re-attaching
         // a soldier who is on a different order moves him.
-        public static void Attach(PlayerSoldier soldier, Order order)
+        public static void Attach(
+            PlayerSoldier soldier,
+            Order order,
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (soldier == null || order == null)
             {
@@ -54,6 +58,19 @@ namespace OnlyWar.Helpers.Orders
                 return;
             }
 
+            // Do not mutate the old order until the new attachment has passed every guard. This
+            // preserves the all-or-nothing contract when a doctrine edit has withheld the
+            // specialist since the previous operation was issued.
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                soldier,
+                doctrine ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army
+                    ?.ChapterOperationalDoctrine,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            if (!duty.IsDutyReady)
+            {
+                return;
+            }
+
             if (soldier.CurrentOrder != null && !ReferenceEquals(soldier.CurrentOrder, order))
             {
                 Detach(soldier);
@@ -61,7 +78,7 @@ namespace OnlyWar.Helpers.Orders
 
             if (soldier.AssignedSquad.PermitsIndividualDeployment)
             {
-                OrderForceService.AssignCharacter(order, soldier);
+                OrderForceService.AssignCharacter(order, soldier, doctrine);
                 return;
             }
 
@@ -71,7 +88,8 @@ namespace OnlyWar.Helpers.Orders
                 CampaignLocation.Landed(order.Mission?.RegionFaction?.Region)
                     ?? CampaignLocationService.ForSquad(soldier.AssignedSquad),
                 GameDataSingleton.Instance?.Date ?? new Date(1),
-                order);
+                order,
+                doctrine);
         }
 
         // Releases one individual from whatever operation he is on. Safe on an unattached man.
@@ -145,7 +163,8 @@ namespace OnlyWar.Helpers.Orders
             Region originRegion,
             out string reason)
         {
-            return CanAttach(soldier, order, order?.AssignedSquads, originRegion, out reason);
+            return CanAttach(
+                soldier, order, order?.AssignedSquads, originRegion, out reason, null);
         }
 
         /// <summary>
@@ -157,7 +176,8 @@ namespace OnlyWar.Helpers.Orders
             Order order,
             IReadOnlyList<Squad> stagingSquads,
             Region originRegion,
-            out string reason)
+            out string reason,
+            ChapterOperationalDoctrine doctrine = null)
         {
             reason = null;
             if (soldier == null)
@@ -190,10 +210,15 @@ namespace OnlyWar.Helpers.Orders
             // vacuous: a detachable formation is never orderable, so its members' home squad
             // can never be under orders.)
 
-            // 4. Fit to march.
-            if (!soldier.IsCombatEffective)
+            // 4. Fit to march under the same physical and Chapter policy used by order selection.
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                soldier,
+                doctrine ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army
+                    ?.ChapterOperationalDoctrine,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            if (!duty.IsDutyReady)
             {
-                reason = $"{soldier.Name} is not fit for field duty.";
+                reason = duty.Reason ?? $"{soldier.Name} is not fit for field duty.";
                 return false;
             }
 
@@ -205,14 +230,6 @@ namespace OnlyWar.Helpers.Orders
             }
 
             // 6. Not reserved for a procedure this week.
-            if (RecruitmentPromotionService.IsReservedForProcedure(
-                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram,
-                    soldier.Id))
-            {
-                reason = $"{soldier.Name} is committed to a Chapter procedure this week.";
-                return false;
-            }
-
             return true;
         }
 

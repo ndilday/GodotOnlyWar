@@ -23,6 +23,9 @@ namespace OnlyWar.Helpers
         MissingLocation,
         NotCombatEffective,
         ReservedForProcedure,
+        UntreatedSeverance,
+        InsufficientFunctioningArms,
+        ChapterInjuryThreshold,
         NotAtOrigin,
         AlreadyAtDestination,
         ContinuousTaskCommitment
@@ -31,7 +34,8 @@ namespace OnlyWar.Helpers
     public sealed record CharacterAvailabilityEvaluation(
         bool IsAllowed,
         CharacterAvailabilityReasonCode ReasonCode,
-        string Reason)
+        string Reason,
+        DutyReadinessEvaluation DutyReadiness = null)
     {
         public static CharacterAvailabilityEvaluation Allowed { get; } =
             new(true, CharacterAvailabilityReasonCode.None, null);
@@ -45,7 +49,8 @@ namespace OnlyWar.Helpers
     {
         public CharacterAvailabilityEvaluation EvaluateMovement(
             PlayerSoldier character,
-            CampaignLocation destination)
+            CampaignLocation destination,
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (character == null)
             {
@@ -62,6 +67,16 @@ namespace OnlyWar.Helpers
                 return Reject(
                     CharacterAvailabilityReasonCode.AssignedElsewhere,
                     $"{character.Name} is assigned to an order.");
+            }
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                character,
+                doctrine ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army
+                    ?.ChapterOperationalDoctrine,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            if (!duty.IsDutyReady)
+            {
+                return Reject(MapDutyReason(duty.ReasonCode),
+                    duty.Reason ?? $"{character.Name} is not fit for field duty.", duty);
             }
             if (destination == null || destination.IsShip == destination.IsRegion)
             {
@@ -84,7 +99,8 @@ namespace OnlyWar.Helpers
             PlayerSoldier character,
             Order order,
             Region origin = null,
-            IReadOnlyList<Squad> stagingSquads = null)
+            IReadOnlyList<Squad> stagingSquads = null,
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (character == null)
             {
@@ -102,17 +118,15 @@ namespace OnlyWar.Helpers
                     CharacterAvailabilityReasonCode.AssignedElsewhere,
                     $"{character.Name} is already assigned to another order.");
             }
-            if (!character.IsCombatEffective)
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                character,
+                doctrine ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army
+                    ?.ChapterOperationalDoctrine,
+                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            if (!duty.IsDutyReady)
             {
-                return Reject(
-                    CharacterAvailabilityReasonCode.NotCombatEffective,
-                    $"{character.Name} is not fit for field duty.");
-            }
-            if (IsReservedForProcedure(character))
-            {
-                return Reject(
-                    CharacterAvailabilityReasonCode.ReservedForProcedure,
-                    $"{character.Name} is reserved for a Chapter procedure.");
+                return Reject(MapDutyReason(duty.ReasonCode),
+                    duty.Reason ?? $"{character.Name} is not fit for field duty.", duty);
             }
 
             CampaignLocation location = CampaignLocationService.ForSoldier(character);
@@ -208,14 +222,21 @@ namespace OnlyWar.Helpers
                 && (location.Region == target || target.GetAdjacentRegions().Contains(location.Region));
         }
 
+        private static CharacterAvailabilityReasonCode MapDutyReason(
+            DutyReadinessReasonCode reasonCode) => reasonCode switch
+        {
+            DutyReadinessReasonCode.UntreatedSeverance => CharacterAvailabilityReasonCode.UntreatedSeverance,
+            DutyReadinessReasonCode.InsufficientFunctioningArms => CharacterAvailabilityReasonCode.InsufficientFunctioningArms,
+            DutyReadinessReasonCode.ProcedureReservation => CharacterAvailabilityReasonCode.ReservedForProcedure,
+            DutyReadinessReasonCode.ChapterInjuryThreshold => CharacterAvailabilityReasonCode.ChapterInjuryThreshold,
+            _ => CharacterAvailabilityReasonCode.NotCombatEffective
+        };
+
         private static CharacterAvailabilityEvaluation Reject(
             CharacterAvailabilityReasonCode code,
-            string reason) => new(false, code, reason);
+            string reason,
+            DutyReadinessEvaluation dutyReadiness = null) =>
+            new(false, code, reason, dutyReadiness);
 
-        private static bool IsReservedForProcedure(PlayerSoldier character)
-        {
-            RecruitmentProgram program = GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram;
-            return RecruitmentPromotionService.IsReservedForProcedure(program, character.Id);
-        }
     }
 }

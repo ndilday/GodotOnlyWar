@@ -25,12 +25,12 @@ namespace OnlyWar.Models.Soldiers
     /// either leg alone felling him. Immobility is not a separate concept: it is simply the
     /// product reaching zero, which is what <see cref="ISoldier.CanMove"/> now tests.
     ///
-    /// FEET NEVER FELL A SOLDIER. An extremity's contribution is clamped to
+    /// FEET NEVER ZERO LOCOMOTION. An extremity's contribution is clamped to
     /// <see cref="ExtremitySpeedFloor"/>, so a shattered or missing foot is a severe, permanent
-    /// slow and never a zero. This is the load-bearing rule of the whole phase: since stance and
-    /// prone fire are cut (§2.2), a location that immobilizes removes the soldier from the battle
-    /// outright, and "shot in the foot, out of the fight entirely" is the least believable
-    /// outcome the old binary model produced.
+    /// slow and never a zero. Physical battlefield eligibility is separate: an untreated
+    /// severed foot still incapacitates the soldier, even though the motive multiplier remains
+    /// positive. This preserves the distinction between movement math and the immediate loss of
+    /// a limb.
     /// </summary>
     public static class CasualtyConstants
     {

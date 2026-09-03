@@ -58,14 +58,13 @@ public class BattleDebriefReportBuilderTests
 
         Assert.Equal(1, report.PlayerDeaths);
         Assert.Equal(1, report.OpposingDeaths);
-        Assert.Equal(3, report.PlayerCasualties.Count);
+        // A soldier already incapacitated by an untreated severed limb is excluded
+        // from the battle snapshot, so only the participating damaged soldiers are
+        // reported by this battle's debrief.
+        Assert.Equal(2, report.PlayerCasualties.Count);
         Assert.Equal(BattleCasualtyDisposition.Dead,
             report.PlayerCasualties.Single(entry => entry.SoldierId == dead.Id).Disposition);
-        BattleCasualtyEntry replacementEntry = report.PlayerCasualties.Single(entry => entry.SoldierId == replacement.Id);
-        Assert.Equal(BattleCasualtyDisposition.ReplacementRequired, replacementEntry.Disposition);
-        Assert.Equal("Aquila Squad", replacementEntry.Squad);
-        Assert.Equal("Third Company", replacementEntry.Company);
-        Assert.Equal("Test Marine", replacementEntry.Rank);
+        Assert.DoesNotContain(report.PlayerCasualties, entry => entry.SoldierId == replacement.Id);
         BattleCasualtyEntry recoveringEntry = report.PlayerCasualties.Single(entry => entry.SoldierId == recovering.Id);
         Assert.Equal(BattleCasualtyDisposition.Recovering, recoveringEntry.Disposition);
         Assert.True(recoveringEntry.RecoveryWeeks > 0);

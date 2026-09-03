@@ -27,7 +27,8 @@ namespace OnlyWar.Helpers.Database.GameState
         // 16: indelible dormant-population state, latent ghost sources, and persistent invasion-force identities.
         // 17: successor invasion-force transit battle-value payload.
         // 18: explicit scenario invader identity and removal of the inert invasion beacon flag.
-        internal const int CurrentVersion = 18;
+        // 19: singleton player-Chapter operational doctrine.
+        internal const int CurrentVersion = 19;
         internal const int MinimumSupportedVersion = CurrentVersion;
     }
 }

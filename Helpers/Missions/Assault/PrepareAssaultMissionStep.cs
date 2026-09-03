@@ -178,7 +178,13 @@ namespace OnlyWar.Helpers.Missions.Assault
             var defendingSquads = GetRegionalDefensiveSquads(defendingRegionFaction);
 
             List<BattleSquad> landedDefenders = defendingSquads
-                .Select(s => new BattleSquad(s.Faction?.IsPlayerFaction == true, s))
+                .Select(s => BattleSquadFactory.Create(
+                    s.Faction?.IsPlayerFaction == true,
+                    s,
+                    s.Faction?.IsPlayerFaction == true
+                        ? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine
+                        : null))
+                .Where(squad => squad.AbleSoldiers.Count > 0)
                 .ToList();
 
             // 1a. A patrol fights only if it saw this coming. Everything else here - a Defense order, an

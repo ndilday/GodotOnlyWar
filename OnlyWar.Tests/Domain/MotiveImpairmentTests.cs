@@ -11,7 +11,8 @@ namespace OnlyWar.Tests.Domain;
 //
 //   * each wound band maps to a fixed multiplier (1.0 / 0.85 / 0.6 / 0)
 //   * the two legs COMPOUND MULTIPLICATIVELY -- two bad legs are worse than one
-//   * a foot NEVER reaches zero, crippled or severed; it floors
+//   * a foot NEVER reaches zero, crippled or severed; it floors, while untreated severance still
+//     removes the soldier from battlefield combat effectiveness
 //   * only a leg at Massive (its new cripple/sever threshold) fells a soldier
 //   * CanMove is exactly "the product is above zero", not "nothing is crippled"
 //
@@ -120,7 +121,7 @@ public class MotiveImpairmentTests
     }
 
     [Fact]
-    public void SeveredFoot_StillFloorsRatherThanZeroing()
+    public void SeveredFoot_FloorsMovementButIncapacitatesTheSoldier()
     {
         Soldier soldier = TestModelFactory.CreateSoldier();
         HitLocation foot = Find(soldier, "Right Foot");
@@ -129,13 +130,14 @@ public class MotiveImpairmentTests
         Assert.True(foot.IsSevered);
         Assert.Equal(CasualtyConstants.ExtremitySpeedFloor, soldier.MotiveSpeedMultiplier);
         Assert.True(soldier.CanMove);
-        Assert.True(soldier.IsCombatEffective);
+        Assert.True(soldier.HasUntreatedSeveredLimb);
+        Assert.False(soldier.IsCombatEffective);
     }
 
-    // Both feet gone is a crawl, and still not a zero -- the floor is per location and the
-    // product of two floors is a smaller positive number, never zero.
+    // Both feet retain a positive motive speed, but either untreated severance is enough to
+    // incapacitate the soldier for battlefield purposes.
     [Fact]
-    public void BothFeetSevered_NeverFellsTheSoldier()
+    public void BothFeetSevered_RetainSpeedButIncapacitateTheSoldier()
     {
         Soldier soldier = TestModelFactory.CreateSoldier();
         foreach (string name in new[] { "Left Foot", "Right Foot" })
@@ -148,7 +150,8 @@ public class MotiveImpairmentTests
         Assert.Equal(floor * floor, soldier.MotiveSpeedMultiplier, 5);
         Assert.True(soldier.MotiveSpeedMultiplier > 0f);
         Assert.True(soldier.CanMove);
-        Assert.True(soldier.IsCombatEffective);
+        Assert.True(soldier.HasUntreatedSeveredLimb);
+        Assert.False(soldier.IsCombatEffective);
     }
 
     // An unsurvivable-magnitude wound to a foot is still a foot. Nothing about the extremity

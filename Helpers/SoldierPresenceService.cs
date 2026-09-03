@@ -19,8 +19,10 @@ namespace OnlyWar.Helpers
 
         public static IReadOnlyList<ISoldier> DeployableMembers(Squad squad) =>
             PresentMembers(squad)
-                .Where(member => SquadStrengthSnapshotBuilder.IsCombatEffectiveMember(
-                    member, CurrentProgram))
+                .Where(member => DutyReadinessService.Evaluate(
+                    member,
+                    SquadStrengthSnapshotBuilder.ResolveDoctrine(squad),
+                    CurrentProgram).IsDutyReady)
                 .ToList();
 
         public static IReadOnlyList<PlayerSoldier> OrderParticipants(Order order)
@@ -36,7 +38,7 @@ namespace OnlyWar.Helpers
             SquadStrengthSnapshotBuilder.Build(squad, CurrentProgram).Present;
 
         public static int DeployableCount(Squad squad) =>
-            SquadStrengthSnapshotBuilder.Build(squad, CurrentProgram).Effective;
+            SquadStrengthSnapshotBuilder.Build(squad, CurrentProgram).DutyReady;
 
         private static OnlyWar.Models.Recruitment.RecruitmentProgram CurrentProgram =>
             GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram;

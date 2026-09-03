@@ -8,6 +8,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Battles;
+using OnlyWar.Helpers.UI;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -18,6 +19,11 @@ namespace OnlyWar.Helpers.Battles
         internal static int AbleSoldiersGeneration =>
             System.Threading.Volatile.Read(ref _globalAbleSoldiersVersion);
         private List<BattleSoldier> _ableSoldiers;
+        // A player formation's eligible bodies are frozen at the campaign-to-engagement boundary.
+        // Combat wounds may still remove a body during the engagement, but a non-incapacitating
+        // wound crossing the Chapter threshold must not withdraw him from the battle already under
+        // way. A null set preserves the legacy unrestricted behaviour for NPC formations.
+        private HashSet<int> _engagementParticipantIds;
         private int _ableSoldiersSourceCount = -1;
         private int _cachedGlobalAbleSoldiersVersion = -1;
         private int _ableSoldiersVersion;
@@ -39,6 +45,7 @@ namespace OnlyWar.Helpers.Battles
         public int Id { get; private set; }
         public string Name { get; private set; }
         public List<BattleSoldier> Soldiers { get; private set; }
+        public IReadOnlyCollection<int> EngagementParticipantIds => _engagementParticipantIds;
         public float CoverModifier { get; private set; }
         public bool IsPlayerSquad { get; private set; }
         // Presentation-side affiliation for battle reports. The Chapter and the Imperial PDF
@@ -76,7 +83,11 @@ namespace OnlyWar.Helpers.Battles
                     || _ableSoldiersSourceCount != Soldiers.Count
                     || _cachedGlobalAbleSoldiersVersion != globalVersion)
                 {
-                    _ableSoldiers = Soldiers.Where(s => s.IsCombatEffective).ToList();
+                    _ableSoldiers = Soldiers
+                        .Where(s => s.IsCombatEffective
+                            && (_engagementParticipantIds == null
+                                || _engagementParticipantIds.Contains(s.Soldier.Id)))
+                        .ToList();
                     _ableSoldiersSourceCount = Soldiers.Count;
                     _cachedGlobalAbleSoldiersVersion = globalVersion;
                     _ableSoldiersVersion++;
@@ -179,7 +190,10 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        public BattleSquad(bool isPlayerSquad, Squad squad)
+        public BattleSquad(
+            bool isPlayerSquad,
+            Squad squad,
+            IEnumerable<ISoldier> engagementParticipants = null)
         {
             Id = squad.Id;
             Name = squad.Name;
@@ -187,6 +201,7 @@ namespace OnlyWar.Helpers.Battles
             Faction = squad.Faction;
             Soldiers = SoldierPresenceService.PresentMembers(squad)
                 .Select(s => new BattleSoldier(s, this)).ToList();
+            _engagementParticipantIds = engagementParticipants?.Select(soldier => soldier.Id).ToHashSet();
             _missionStartingAbleSoldierCount = AbleSoldiers.Count;
             IsPlayerSquad = isPlayerSquad;
             Traits = new BattleElementTraits(
@@ -289,6 +304,54 @@ namespace OnlyWar.Helpers.Battles
             Soldiers = original.Soldiers
                 .Select(s => new BattleSoldier(s, this, rangedWeaponCopies, meleeWeaponCopies))
                 .ToList();
+            _engagementParticipantIds = original._engagementParticipantIds == null
+                ? null
+                : original._engagementParticipantIds.ToHashSet();
+        }
+
+        /// <summary>
+        /// Replaces the frozen participant set for the next engagement boundary. This is intentionally
+        /// not called from wound resolution: doctrine withholding affects the next battle, while
+        /// physical combat incapacity still removes a body immediately through IsCombatEffective.
+        /// </summary>
+        public void RefreshEngagementParticipants(IEnumerable<ISoldier> participants)
+        {
+            _engagementParticipantIds = participants?.Select(soldier => soldier.Id).ToHashSet()
+                ?? new HashSet<int>();
+            InvalidateAbleSoldiers();
+        }
+
+        /// <summary>
+        /// Applies the current Chapter policy to a player battle wrapper immediately before a
+        /// stage/engagement. Independently deployed characters bypass squad structural gates.
+        /// </summary>
+        public void RefreshDutyReadyParticipants(ChapterOperationalDoctrine doctrine = null)
+        {
+            if (!IsPlayerSquad) return;
+            ChapterOperationalDoctrine resolvedDoctrine =
+                SquadStrengthSnapshotBuilder.ResolveDoctrine(Squad, doctrine);
+            // A factory-built wrapper with an explicit participant set may be used by a detached
+            // inspection/test model that has no live Chapter policy. In that case the factory has
+            // already selected the participants; do not let the generic leader/minimum snapshot
+            // reinterpret that set as a policy failure.
+            if (resolvedDoctrine == null) return;
+            if (CampaignCharacter != null)
+            {
+                RefreshEngagementParticipants(
+                    DutyReadinessService.Evaluate(CampaignCharacter, resolvedDoctrine).IsDutyReady
+                        ? new[] { CampaignCharacter }
+                        : Array.Empty<ISoldier>());
+                return;
+            }
+
+            SquadReadinessSnapshot readiness = SquadReadinessService.Evaluate(
+                Squad, doctrine: resolvedDoctrine);
+            RefreshEngagementParticipants(
+                readiness.StructuralBlockers.Count == 0
+                    ? DutyReadinessService.GetDutyReadyMembers(Squad, resolvedDoctrine)
+                        .Where(member => member is not PlayerSoldier player
+                            || player.IndividualPosting == null)
+                    : Array.Empty<ISoldier>());
         }
 
         private static AmmunitionReservePool CopyReservePool(

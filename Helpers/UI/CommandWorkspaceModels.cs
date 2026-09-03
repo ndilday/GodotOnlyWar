@@ -74,7 +74,7 @@ namespace OnlyWar.Helpers.UI
             SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(
                 squad,
                 GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
-            string strength = $"{strengthSnapshot.Effective}/{strengthSnapshot.Full}";
+            string strength = $"{strengthSnapshot.DutyReady}/{strengthSnapshot.Full}";
             string order = squad.CurrentOrders != null ? squad.CurrentOrders.Mission.MissionType.ToString() : "Unassigned";
             return $"{squad.Name} | {strength} | {order}";
         }

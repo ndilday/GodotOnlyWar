@@ -73,6 +73,7 @@ namespace OnlyWar.Models.Soldiers
         public IReadOnlyList<int> FunctioningHandGroupIds => _soldier.FunctioningHandGroupIds;
         public int FunctioningHands => _soldier.FunctioningHands;
         public bool CanUseTwoHandedWeapon => _soldier.CanUseTwoHandedWeapon;
+        public bool HasUntreatedSeveredLimb => _soldier.HasUntreatedSeveredLimb;
 
         public IReadOnlyCollection<Skill> Skills => _soldier.Skills;
 
@@ -123,19 +124,21 @@ namespace OnlyWar.Models.Soldiers
         }
 
         /// <summary>
-        /// May the player send this brother out with a squad? Resolved in Phase 3 of
-        /// Design/Reference/CasualtyRealism.md (§3.3 "Deployability"): a brother is deployable
-        /// exactly when he is still combat effective -- he can bring a weapon to bear AND his
-        /// motive wounds have not taken his speed to zero.
+        /// May the player send this brother out with a squad? Physical deployment additionally
+        /// requires both functional arm/hand groups. That is deliberately stricter than
+        /// battlefield combat effectiveness: a crippled attached arm can leave a brother in the
+        /// current fight one-handed, but he cannot enter a later engagement that way.
         ///
         /// This deliberately replaces the old inline motive-vs-vital split, which barred anyone
         /// with a crippled motive location. Under graded impairment that rule would bar a marine
         /// limping at 0.6 speed who can genuinely still fight, which is the exact outcome this
         /// phase exists to stop producing. The vital half is unchanged in effect (a crippled
-        /// vital already clears <see cref="CanFight"/>), and the new form additionally bars a
-        /// brother with no functioning hand -- which the old check missed.
+        /// vital already clears <see cref="CanFight"/>), while untreated severance is an
+        /// unconditional physical and battlefield exclusion.
         /// </summary>
-        public bool IsDeployable => IsCombatEffective;
+        public bool IsDeployable => IsCombatEffective
+            && FunctioningHands >= 2
+            && !HasUntreatedSeveredLimb;
 
         /// <summary>
         /// The operation this brother has been attached to as an individual, without his home

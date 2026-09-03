@@ -665,7 +665,7 @@ public partial class ChapterController : MainScreenController
                 soldier.Id,
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template.Name} {soldier.Name}",
-                soldier.IsCombatEffective ? "Available" : "Wounded or impaired",
+                 DutyStatus(soldier),
                 true,
                 selectedSoldier?.Id == soldier.Id,
                 "i"))
@@ -696,7 +696,7 @@ public partial class ChapterController : MainScreenController
                 squadMember.Id,
                 GetSoldierIconKey(squadMember),
                 $"{squadMember.Template.Name} {squadMember.Name}",
-                squadMember.IsCombatEffective ? "Available" : "Wounded or impaired",
+                 DutyStatus(squadMember),
                 true,
                 squadMember.Id == soldier.Id,
                 "i"))
@@ -813,7 +813,7 @@ public partial class ChapterController : MainScreenController
                 soldier.Id,
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template.Name} {soldier.Name}",
-                soldier.IsCombatEffective ? "Available" : "Wounded or impaired",
+                 DutyStatus(soldier),
                 true,
                 selected?.Id == soldier.Id,
                 "i"))
@@ -1121,7 +1121,7 @@ public partial class ChapterController : MainScreenController
             cards.Insert(0, new ChapterBrowserDetailCard(
                 GetSoldierIconKey(selectedSoldier),
                 $"Selected: {selectedSoldier.Template.Name} {selectedSoldier.Name}",
-                selectedSoldier.IsCombatEffective ? "Available" : "Wounded or impaired",
+                DutyStatus(selectedSoldier),
                 "Select a soldier for preview; use the detail button to open the existing soldier display flow."));
         }
 
@@ -1214,6 +1214,19 @@ public partial class ChapterController : MainScreenController
         bool hasHqSquad = company.Squads.Any(
             squad => (squad.SquadTemplate.SquadType & SquadTypes.HQ) != 0);
         return hasHqSquad ? $"HQ + {nonHqSquads}" : nonHqSquads.ToString();
+    }
+
+    private static string DutyStatus(ISoldier soldier)
+    {
+        DutyReadinessEvaluation evaluation = DutyReadinessService.Evaluate(
+            soldier,
+            GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine,
+            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+        return evaluation.IsDutyReady
+            ? "Duty-ready"
+            : evaluation.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold
+                ? "Withheld by doctrine"
+                : "Physically unavailable";
     }
 
     private static string GetCompanyIconKey(Unit company)
