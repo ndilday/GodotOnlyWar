@@ -19,7 +19,7 @@ namespace OnlyWar.Models
         internal CampaignRecoverabilityTracker Recoverability { get; } = new();
 
         public void InitializeNewGameData(GameRulesData gameRulesData, Date date, string chapterName = null, int seed = 1,
-                                          InvaderFactionSelection invaderSelection = InvaderFactionSelection.Tyranids)
+                                          ScenarioFactionSelection invaderSelection = null)
         {
             GameRulesData = gameRulesData;
             Date = date;

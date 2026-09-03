@@ -6,7 +6,7 @@ using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
-using OnlyWar.Models.Orks;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -15,38 +15,40 @@ using Xunit;
 
 namespace OnlyWar.Tests.Domain;
 
-public sealed class OrkInfestationStateTests
+public sealed class FactionCapabilityStateTests
 {
     [Fact]
     public void ConsolidationAndMobilizationUseTheDesignBounds()
     {
-        Assert.Equal(0.251, OrkInfestationRules.MobilizationFraction(-3.49), 3);
-        Assert.Equal(0.90, OrkInfestationRules.MobilizationFraction(4.0), 3);
-        Assert.Equal(0.501, OrkInfestationRules.UpdateConsolidation(0.5, 0.0), 3);
-        Assert.Equal(0.0, OrkInfestationRules.UpdateConsolidation(0.0, -10.0), 3);
-        Assert.Equal(1.0, OrkInfestationRules.UpdateConsolidation(1.0, 10.0), 3);
+        Assert.Equal(0.251, DormantPopulationRules.MobilizationFraction(-3.49), 3);
+        Assert.Equal(0.90, DormantPopulationRules.MobilizationFraction(4.0), 3);
+        Assert.Equal(0.501, DormantPopulationRules.UpdateConsolidation(0.5, 0.0), 3);
+        Assert.Equal(0.0, DormantPopulationRules.UpdateConsolidation(0.0, -10.0), 3);
+        Assert.Equal(1.0, DormantPopulationRules.UpdateConsolidation(1.0, 10.0), 3);
     }
 
     [Fact]
-    public void RulesResolveTheOrkCompositionAndValidatedCampaignProfile()
+    public void RulesResolveInvasionCapabilityAndValidatedCampaignProfile()
     {
         GameRulesData rules = new();
+        Faction invasionFaction = GetInvasionFaction(rules);
 
-        Assert.NotNull(rules.OrkFaction);
-        Assert.Equal("Orks", rules.OrkFaction.Name);
-        Assert.True(rules.OrkFaction.HasBehavior(FactionBehavior.PopulationIsMilitary));
-        Assert.True(rules.OrkFaction.HasBehavior(FactionBehavior.UniversallyHostile));
-        Assert.True(rules.OrkFaction.HasBehavior(FactionBehavior.Indelible));
-        Assert.Same(rules.OrkCampaignRules, rules.OrkInfestationRulesProfile);
-        rules.OrkCampaignRules.Validate();
+        Assert.NotNull(invasionFaction);
+        Assert.Equal("Orks", invasionFaction.Name);
+        Assert.True(invasionFaction.HasBehavior(FactionBehavior.PopulationIsMilitary));
+        Assert.True(invasionFaction.HasBehavior(FactionBehavior.UniversallyHostile));
+        Assert.True(invasionFaction.HasBehavior(FactionBehavior.Indelible));
+        Assert.Same(rules.FactionBehaviorRules,
+            rules.FactionBehaviorRulesProfiles.Values.Single());
+        rules.FactionBehaviorRules.Validate();
     }
 
     [Fact]
-    public void IndelibleOrkPresenceSurvivesPopulationCulls()
+    public void IndeliblePresenceSurvivesPopulationCulls()
     {
         GameRulesData rules = new();
-        Faction orks = rules.OrkFaction;
-        Assert.NotNull(orks);
+        Faction invasionFaction = GetInvasionFaction(rules);
+        Assert.NotNull(invasionFaction);
         Planet planet = new(
             1,
             "Ork Test World",
@@ -63,13 +65,13 @@ public sealed class OrkInfestationStateTests
             new RegionCoordinate(0, 0),
             0);
         planet.Regions[0] = region;
-        PlanetFaction planetFaction = new(orks) { IsPublic = true };
+        PlanetFaction planetFaction = new(invasionFaction) { IsPublic = true };
         RegionFaction presence = new(planetFaction, region)
         {
             Population = 10,
             IsPublic = true
         };
-        region.RegionFactionMap[orks.Id] = presence;
+        region.RegionFactionMap[invasionFaction.Id] = presence;
 
         presence.Population = 0;
 
@@ -78,7 +80,7 @@ public sealed class OrkInfestationStateTests
     }
 
     [Fact]
-    public void ConfirmedFeralCullingReducesStrengthButLeavesTheIndeliblePresence()
+    public void ConfirmedDormantCullingReducesStrengthButLeavesTheIndeliblePresence()
     {
         GameRulesData rules = new();
         Planet planet = new(
@@ -106,27 +108,28 @@ public sealed class OrkInfestationStateTests
             IsPublic = true
         };
 
-        PlanetFaction orkPlanetFaction = new(rules.OrkFaction) { IsPublic = false };
-        planet.PlanetFactionMap[rules.OrkFaction.Id] = orkPlanetFaction;
-        RegionFaction target = new(orkPlanetFaction, region)
+        Faction invasionFaction = GetInvasionFaction(rules);
+        PlanetFaction invasionPlanetFaction = new(invasionFaction) { IsPublic = false };
+        planet.PlanetFactionMap[invasionFaction.Id] = invasionPlanetFaction;
+        RegionFaction target = new(invasionPlanetFaction, region)
         {
             Population = 1_000_000,
             IsPublic = false,
-            OrkConsolidation = 1.0
+            DormantConsolidation = 1.0
         };
-        region.RegionFactionMap[rules.OrkFaction.Id] = target;
+        region.RegionFactionMap[invasionFaction.Id] = target;
 
         FactionIntelBelief belief = observer.SeedTargetBelief(
             region,
-            rules.OrkFaction,
-            (float)rules.OrkCampaignRules.FeralInitialBeliefEvidence,
+            invasionFaction,
+            (float)rules.FactionBehaviorRules.DormantInitialBeliefEvidence,
             estimatedPopulation: null,
             estimatedMilitaryStrength: null,
             evidenceWeek: 0);
-        OrkFeralCullingResult result = OrkFeralCullingRules.Resolve(
+        DormantPopulationCullingResult result = DormantPopulationCulling.Resolve(
             target,
             belief,
-            rules.OrkCampaignRules,
+            rules.FactionBehaviorRules,
             effectivePdfBattleValue: 100_000);
 
         Assert.True(result.WasBeliefEligible);
@@ -135,12 +138,12 @@ public sealed class OrkInfestationStateTests
         Assert.True(result.ConsolidationRemoved > 0);
 
         target.RemoveMilitaryStrength(result.PopulationRemoved);
-        target.OrkConsolidation = global::System.Math.Clamp(
-            target.OrkConsolidation - result.ConsolidationRemoved,
+        target.DormantConsolidation = global::System.Math.Clamp(
+            target.DormantConsolidation - result.ConsolidationRemoved,
             0.0,
             1.0);
 
-        Assert.Same(target, region.RegionFactionMap[rules.OrkFaction.Id]);
+        Assert.Same(target, region.RegionFactionMap[invasionFaction.Id]);
         Assert.True(target.Population < 1_000_000);
         Assert.True(target.Population > 0);
         Assert.False(target.IsPublic);
@@ -148,76 +151,76 @@ public sealed class OrkInfestationStateTests
     }
 
     [Fact]
-    public void WaaaghFormationLeavesTheGhostSourceEcosystemBehind()
+    public void InvasionFormationLeavesTheGhostSourceEcosystemBehind()
     {
         GameRulesData rules = new();
         Date campaignDate = new(39, 500, 1);
         GameDataSingleton.Instance.LoadGameDataFromBlob(rules, campaignDate, null);
-        Sector sector = SectorBuilder.GenerateSector(1, rules, campaignDate, "Ork Source Test");
+        Sector sector = SectorBuilder.GenerateSector(1, rules, campaignDate, "Invasion Source Test");
         PlanetTemplate template = rules.PlanetTemplateEligibility
-            .GetEligibleTemplateIds(PlanetTemplateEligibilityKeys.OrkGhostSource)
+            .GetEligibleTemplateIds(PlanetTemplateEligibilityKeys.GhostPopulationSource)
             .Select(id => rules.PlanetTemplateMap[id])
             .First();
-        OrkGhostSource source = new(
-            sector.OrkGhostSources.Select(existing => existing.Id).DefaultIfEmpty(0).Max() + 1,
+        GhostPopulationSource source = new(
+            sector.GhostPopulationSources.Select(existing => existing.Id).DefaultIfEmpty(0).Max() + 1,
             new Coordinate(0, 0),
             template,
             100_000,
             100_000,
             1.0);
-        sector.AddOrkGhostSource(source);
+        sector.AddGhostPopulationSource(source);
 
         int populationBefore = (int)source.Population;
-        OrkCampaignProcessor processor = new(
+        FactionCapabilityCampaignProcessor processor = new(
             new GameSession(rules, sector, campaignDate, new FixedRNG()));
         processor.ProcessWeeklyState(sector);
 
-        Assert.Contains(sector.OrkWaaaghs, waaagh => waaagh.IsActive);
-        Assert.Contains(source, sector.OrkGhostSources);
+        Assert.Contains(sector.StrategicInvasionForces, force => force.IsActive);
+        Assert.Contains(source, sector.GhostPopulationSources);
         Assert.True(source.Population < populationBefore);
     }
 
     [Fact]
-    public void PersistentWaaaghRoundTripsWithItsCommandSquadOutsideLandedSquads()
+    public void PersistentInvasionForceRoundTripsWithItsCommandSquadOutsideLandedSquads()
     {
         GameRulesData rules = new();
         Date campaignDate = new(39, 500, 1);
         GameDataSingleton.Instance.LoadGameDataFromBlob(rules, campaignDate, null);
-        Sector sector = SectorBuilder.GenerateSector(1, rules, campaignDate, "Ork Save Test");
-        Faction orks = rules.OrkFaction;
-        Assert.NotNull(orks);
+        Sector sector = SectorBuilder.GenerateSector(1, rules, campaignDate, "Invasion Save Test");
+        Faction invasionFaction = GetInvasionFaction(rules);
+        Assert.NotNull(invasionFaction);
         Planet planet = sector.Planets.Values.First();
         Region region = planet.Regions.First();
-        SquadTemplate hq = orks.SquadTemplates.Values
+        SquadTemplate hq = invasionFaction.SquadTemplates.Values
             .Single(template => template.Name == "'Eavy Warboss");
         Squad command = SquadFactory.GenerateSquad(hq, new FixedRNG(), name: "Persistent Warboss");
-        UnitTemplate unitTemplate = orks.UnitTemplates.Values
+        UnitTemplate unitTemplate = invasionFaction.UnitTemplates.Values
             .FirstOrDefault(template => template.HQSquad == hq)
-            ?? orks.UnitTemplates.Values.First();
+            ?? invasionFaction.UnitTemplates.Values.First();
         Unit unit = new(900000, "Persistent Warband", unitTemplate, [command]);
         command.ParentUnit = unit;
-        orks.Units.Add(unit);
+        invasionFaction.Units.Add(unit);
 
         PlanetFaction planetFaction = planet.PlanetFactionMap.TryGetValue(
-            orks.Id,
+            invasionFaction.Id,
             out PlanetFaction existingPlanetFaction)
             ? existingPlanetFaction
-            : new PlanetFaction(orks) { IsPublic = true };
-        planet.PlanetFactionMap[orks.Id] = planetFaction;
+            : new PlanetFaction(invasionFaction) { IsPublic = true };
+        planet.PlanetFactionMap[invasionFaction.Id] = planetFaction;
         RegionFaction presence = new(planetFaction, region)
         {
             Population = 25000,
             IsPublic = true,
-            OrkWaaaghId = 77,
-            OrkConsolidation = 1.0
+            StrategicInvasionForceId = 77,
+            DormantConsolidation = 1.0
         };
-        region.RegionFactionMap[orks.Id] = presence;
+        region.RegionFactionMap[invasionFaction.Id] = presence;
         command.CurrentRegion = region;
-        OrkWaaagh waaagh = new(77, orks, command, region, planet);
-        waaagh.TrackRegion(presence);
-        sector.AddOrkWaaagh(waaagh);
+        StrategicInvasionForce invasionForce = new(77, invasionFaction, command, region, planet);
+        invasionForce.TrackRegion(presence);
+        sector.AddStrategicInvasionForce(invasionForce);
 
-        string dbPath = GameStateRoundTripFixture.CreateTempDbPath("ork_state");
+        string dbPath = GameStateRoundTripFixture.CreateTempDbPath("invasion_state");
         try
         {
             GameStateRoundTripFixture roundTrip = new(rules, campaignDate);
@@ -225,22 +228,26 @@ public sealed class OrkInfestationStateTests
             roundTrip.Save(sector, dbPath, rules.Factions.SelectMany(faction => faction.Units));
 
             GameStateDataBlob blob = roundTrip.Load(dbPath);
-            Assert.Single(blob.OrkWaaaghs);
-            Assert.Equal(77, blob.OrkWaaaghs[0].Id);
-            Assert.Equal(0, blob.OrkWaaaghs[0].TransitBattleValue);
+            Assert.Single(blob.StrategicInvasionForces);
+            Assert.Equal(77, blob.StrategicInvasionForces[0].Id);
+            Assert.Equal(0, blob.StrategicInvasionForces[0].TransitBattleValue);
 
             GameRulesData loadedRules = new();
             Sector loadedSector = SavedGameLoader.BuildSectorFromBlob(blob, loadedRules);
-            OrkWaaagh loaded = Assert.Single(loadedSector.OrkWaaaghs);
+            StrategicInvasionForce loaded = Assert.Single(loadedSector.StrategicInvasionForces);
             Assert.Equal(77, loaded.Id);
             Assert.Equal(900000, loaded.CommandSquad.ParentUnit.Id);
             Assert.Equal(loadedSector.Planets.Values.First().Regions.First(), loaded.CurrentRegion);
             Assert.DoesNotContain(loaded.CommandSquad,
-                loaded.CurrentRegion.RegionFactionMap[loadedRules.OrkFaction.Id].LandedSquads);
+                loaded.CurrentRegion.RegionFactionMap[GetInvasionFaction(loadedRules).Id].LandedSquads);
         }
         finally
         {
             GameStateRoundTripFixture.CleanupDb(dbPath);
         }
     }
+
+    private static Faction GetInvasionFaction(GameRulesData rules) =>
+        FactionCapabilities.WithCapability(
+            rules.Factions, FactionBehavior.GeneratesInvasions).Single();
 }

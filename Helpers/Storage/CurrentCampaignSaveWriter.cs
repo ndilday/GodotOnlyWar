@@ -52,8 +52,8 @@ namespace OnlyWar.Helpers.Storage
                 additionalOrders: force.RecruitmentProgram?.TaskOrder == null
                     ? []
                     : [force.RecruitmentProgram.TaskOrder],
-                orkGhostSources: game.Sector.GhostPopulationSources,
-                orkWaaaghs: game.Sector.StrategicInvasionForces);
+                ghostPopulationSources: game.Sector.GhostPopulationSources,
+                strategicInvasionForces: game.Sector.StrategicInvasionForces);
             // A current-format save has committed successfully at this point. SaveData is
             // atomic, so reaching this line is the success boundary.
             game.UpgradePending = false;

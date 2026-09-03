@@ -1,5 +1,4 @@
 using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Orks;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -7,7 +6,7 @@ using System.Data;
 namespace OnlyWar.Helpers.Database.GameRules
 {
     /// <summary>
-    /// Loads capability-owned balance profiles. The legacy Ork table is read only as a save/data
+    /// Loads capability-owned balance profiles. The legacy faction table is read only as a save/data
     /// compatibility path; new rules databases use the generic table and vocabulary.
     /// </summary>
     public sealed class FactionBehaviorRulesDataAccess
@@ -23,7 +22,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             {
                 // Keep old shipped databases and old mod databases loadable while the rules
                 // author migrates the table. The returned type is still the generic contract.
-                return new OrkCampaignRulesDataAccess().GetProfiles(connection);
+                return new LegacyFactionBehaviorRulesDataAccess().GetProfiles(connection);
             }
 
             return [];

@@ -9,7 +9,6 @@ using OnlyWar.Models.Squads;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Units;
 using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Orks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,19 +32,6 @@ namespace OnlyWar.Models
         public FactionBehaviorRulesProfile FactionBehaviorRules { get; }
         public IReadOnlyDictionary<string, FactionBehaviorRulesProfile> FactionBehaviorRulesProfiles { get; }
         internal UnitTemplate StrategicCommandUnitTemplate { get; }
-        // Legacy accessors are compatibility projections for old scenario/test content. New
-        // production behavior resolves factions through FactionCapabilities and uses the generic
-        // rules profile above.
-        [Obsolete("Resolve factions through FactionCapabilities.")]
-        public Faction OrkFaction => FactionCapabilities.WithCapability(
-            _factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
-        [Obsolete("Use FactionBehaviorRules.")]
-        public OrkCampaignRulesProfile OrkCampaignRules =>
-            FactionBehaviorRules as OrkCampaignRulesProfile;
-        [Obsolete("Use FactionBehaviorRules.")]
-        public FactionBehaviorRulesProfile OrkInfestationRulesProfile => FactionBehaviorRules;
-        [Obsolete("Use StrategicCommandUnitTemplate.")]
-        internal UnitTemplate OrkCommandUnitTemplate => StrategicCommandUnitTemplate;
         public IReadOnlyDictionary<int, BaseSkill> BaseSkillMap { get => _baseSkillMap; }
         public IReadOnlyList<SkillTemplate> SkillTemplateList { get => _skillTemplateList; }
         public IReadOnlyDictionary<int, List<HitLocationTemplate>> BodyHitLocationTemplateMap { get => _bodyHitLocationTemplateMap; }
@@ -126,9 +112,7 @@ namespace OnlyWar.Models
                 gameBlob.FactionPlanetPresenceRules);
             FactionBehaviorRulesProfiles = ResolveFactionBehaviorRulesProfiles(
                 gameBlob.FactionBehaviorRulesProfiles);
-            FactionBehaviorRules = FactionBehaviorRulesProfiles.Values.First() is OrkCampaignRulesProfile legacyProfile
-                ? legacyProfile
-                : new OrkCampaignRulesProfile(FactionBehaviorRulesProfiles.Values.First());
+            FactionBehaviorRules = FactionBehaviorRulesProfiles.Values.First();
             StrategicCommandUnitTemplate = EnsureStrategicCommandUnitTemplate();
             ValidateFactionGenerationPolicies(gameBlob.ScenarioFactionOptions);
             ValidateRatingDefinitions();

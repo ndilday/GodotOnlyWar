@@ -109,7 +109,7 @@ namespace OnlyWar.Models
         /// <summary>
         /// Registers a code-owned unit template that is part of the faction's runtime model but
         /// was not authored in the rules database. This is used only for persistent campaign
-        /// identities, such as an Ork Waaagh! command unit, so the normal Unit/Squad save shape can
+        /// identities, such as a strategic invasion force command unit, so the normal Unit/Squad save shape can
         /// still be reused when a faction has only tactical squad data.
         /// </summary>
         internal void AddRuntimeUnitTemplate(UnitTemplate template)

@@ -24,9 +24,9 @@ namespace OnlyWar.Helpers.Database.GameState
         //     individual postings. This is a deliberate incompatible save break.
         // 15: scout training options are persisted by stable rules-data key rather than the
         //     former fixed focus bitmask. This is a deliberate incompatible save break.
-        // 16: indelible Ork region state, latent ghost sources, and persistent Waaagh! identities.
-        // 17: successor Waaagh! transit battle-value payload.
-        // 18: explicit scenario invader identity and removal of the inert Waaagh beacon flag.
+        // 16: indelible dormant-population state, latent ghost sources, and persistent invasion-force identities.
+        // 17: successor invasion-force transit battle-value payload.
+        // 18: explicit scenario invader identity and removal of the inert invasion beacon flag.
         internal const int CurrentVersion = 18;
         internal const int MinimumSupportedVersion = CurrentVersion;
     }

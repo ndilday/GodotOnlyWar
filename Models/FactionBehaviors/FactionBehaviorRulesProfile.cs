@@ -5,7 +5,7 @@ namespace OnlyWar.Models.FactionBehaviors
 {
     /// <summary>
     /// Data-owned numeric tuning for the reusable ghost, dormant-population, invasion, and mob
-    /// capabilities. A profile is not an Ork identity; it can be assigned to any faction that has
+    /// capabilities. A profile is not a faction identity; it can be assigned to any faction that has
     /// the corresponding capability flags.
     /// </summary>
     public class FactionBehaviorRulesProfile
@@ -44,21 +44,6 @@ namespace OnlyWar.Models.FactionBehaviors
         public double MoraleMaximumSupport { get; }
         public double DormantInitialBeliefChance { get; }
         public double DormantInitialBeliefEvidence { get; }
-
-        // Compatibility aliases are intentionally confined to the generic profile boundary. Old
-        // saves and older callers can continue to read the old column vocabulary while all new
-        // production consumers use the capability-owned names above.
-        [Obsolete("Use TravelMultiplier.")] public double OrkTravelMultiplier => TravelMultiplier;
-        [Obsolete("Use DormantGrowthMultiplier.")] public double FeralGrowthMultiplier => DormantGrowthMultiplier;
-        [Obsolete("Use DormantEmergenceMinimumPopulation.")] public long FeralEmergenceMinimumPopulation => DormantEmergenceMinimumPopulation;
-        [Obsolete("Use DormantEmergenceChance.")] public double FeralEmergenceChance => DormantEmergenceChance;
-        [Obsolete("Use DormantCullingPopulationReductionFraction.")] public double CullingPopulationReductionFraction => DormantCullingPopulationReductionFraction;
-        [Obsolete("Use DormantCullingConsolidationReductionFraction.")] public double CullingConsolidationReductionFraction => DormantCullingConsolidationReductionFraction;
-        [Obsolete("Use DormantCullingOutsideHelpEffectivePdfFloor.")] public double CullingOutsideHelpEffectivePdfFloor => DormantCullingOutsideHelpEffectivePdfFloor;
-        [Obsolete("Use DormantCullingFalsePositiveCapacityCost.")] public double CullingFalsePositiveCapacityCost => DormantCullingFalsePositiveCapacityCost;
-        [Obsolete("Use MoraleLivingLeaderSupport.")] public double MoraleLivingWarbossSupport => MoraleLivingLeaderSupport;
-        [Obsolete("Use DormantInitialBeliefChance.")] public double FeralInitialBeliefChance => DormantInitialBeliefChance;
-        [Obsolete("Use DormantInitialBeliefEvidence.")] public double FeralInitialBeliefEvidence => DormantInitialBeliefEvidence;
 
         public FactionBehaviorRulesProfile(
             string key,

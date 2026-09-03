@@ -43,8 +43,6 @@ namespace OnlyWar.Helpers.Battles
             float ForceDisadvantage,
             float MobSupport = 0f)
         {
-            [Obsolete("Use MobSupport.")]
-            public float WaaaghSupport => MobSupport;
         }
 
         public sealed record MoraleCheckResult(
@@ -124,7 +122,7 @@ namespace OnlyWar.Helpers.Battles
                 // supplies a positive term. Never a skip, and synapse-covered squads never
                 // reach this function at all, so the two auras cannot interact here.
                 - (MoraleConstants.CommandAuraSupportWeight * input.CommandAuraSupport);
-            // Waaagh support is an internal Ork morale term. A negative value represents command
+            // Mob support is an internal morale term. A negative value represents command
             // loss/separation and therefore raises stress; it is never applied to the enemy side.
             shock -= input.MobSupport;
             shock = Math.Max(0f, shock);

@@ -71,13 +71,6 @@ namespace OnlyWar.Models.Missions
         public bool ControlChanged { get; }
         public long? OriginatingStrategicInvasionForceId { get; internal set; }
 
-        [Obsolete("Use OriginatingStrategicInvasionForceId.")]
-        public long? OriginatingOrkWaaaghId
-        {
-            get => OriginatingStrategicInvasionForceId;
-            internal set => OriginatingStrategicInvasionForceId = value;
-        }
-
         public StrategicCombatResult(
             RegionFaction target,
             Faction attacker,

@@ -120,8 +120,6 @@ namespace OnlyWar.Models.Missions
         public Order Order { get; }
         public long? StrategicInvasionForceId => Order?.StrategicInvasionForceId;
 
-        [Obsolete("Use StrategicInvasionForceId.")]
-        public long? OrkWaaaghId => StrategicInvasionForceId;
         public List<BattleSquad> MissionSquads { get; }
         public IReadOnlyList<PlayerSoldier> StartingPlayerParticipants { get; }
 
@@ -212,7 +210,7 @@ namespace OnlyWar.Models.Missions
         public int FriendlyDeaths { get; private set; }
         public int FriendlyIncapacitated { get; private set; }
         // All confirmed battlefield deaths in this mission, including non-player soldiers. The
-        // Ork campaign uses the stable Warboss soldier identity for deterministic tactical leader
+        // The invasion campaign uses the stable commander soldier identity for deterministic tactical leader
         // death without changing the ordinary aftermath policy.
         public HashSet<int> KilledSoldierIds { get; } = [];
 

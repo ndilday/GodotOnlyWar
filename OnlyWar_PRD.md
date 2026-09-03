@@ -119,7 +119,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - On new game creation, a sector is generated with a configurable or default number of planets distributed across subsectors.
 - Planets begin in a variety of states: some are fully imperial-controlled, some are held entirely by hostile factions, some are actively contested between factions, and some are uninhabited or unknown. Not every planet will have an imperial presence at game start.
 - A portion of imperial-held planets contain hidden Genestealer Cult populations at game start.
-- The setup screen lets the player choose which enemy is invading the pledged **Promised World** (the opening-scenario objective, §5.2): **Tyranids**, **Orks**, or **Random**. Random resolves deterministically from the sector seed, so re-using a seed reproduces the same invader. Ambient Ork sources and feral presences are seeded independently of this choice (§4.22).
+- The setup screen lets the player choose which rules-configured enemy is invading the pledged **Promised World** (the opening-scenario objective, §5.2), plus **Random**. Random resolves deterministically from the sector seed, so re-using a seed reproduces the same invader. Ambient Ork sources and feral presences are seeded independently of this choice (§4.22).
 - A Space Marine chapter of 1,000 brothers is generated, evaluated, and assigned to companies and squads according to the Codex Astartes structure (HQ, 1st through 10th Companies).
 - Brothers are sorted into Tactical, Assault, Devastator, and Scout roles based on their individual aptitudes.
 - Each subsector has a designated capital world determined by an importance score. For 0.7, this score is based on population size. Strategic classification (Hive World, Forge World, etc.) is a post-0.7 addition that will be incorporated into the score when implemented.
@@ -1008,10 +1008,10 @@ Roster, Battle Value, equipment, and training are Ork-owned rules data; a persis
 runtime command-unit template only because no authored Ork unit template is required by the current
 rules database.
 - ✅ Ghost sources are off-map latent ecosystems. They occupy eligible empty sector tiles, use the
-`ambient.ork_ghost_source` eligibility context, grow and consolidate weekly, and launch to existing
+`ambient.ghost_population_source` eligibility context, grow and consolidate weekly, and launch to existing
 planets when ready. They never create visible ghost planets, fleets, beacons, or topology changes.
 - ✅ Configured inhabited worlds may also receive hidden feral Ork `RegionFaction` presences. Feral
-means `OrkWaaaghId == null`; `IsPublic` remains false even when an Imperial observer knows about the
+means `StrategicInvasionForceId == null`; `IsPublic` remains false even when an Imperial observer knows about the
 presence. Observer-specific `FactionIntelBelief` is seeded independently and remains the only source
 for belief-gated presentation and action.
 - ✅ Ork presences are indelible: culling can reduce population to zero and hide the presence, but
@@ -1020,7 +1020,7 @@ Ork-controlled worlds apply the intended civilian decline while remaining reclai
 not migrate without an active Waaagh! attracting them.
 - ✅ Feral consolidation/emergence is population-gated and monotonic: tiny populations do not create
 a Warboss merely because a population-independent accumulator completed. All tunable rates and
-thresholds are supplied by the validated `OrkCampaignProfile`.
+thresholds are supplied by the validated `FactionBehaviorRulesProfile`.
 
 **Waaagh! operations and identity**
 - ✅ Consolidation forms a Waaagh! at an existing planet. Landing allocation ranks defended regions,
@@ -1053,8 +1053,8 @@ no ordinary action, companion casualties are possible, and commitment/attacks/re
 defence, and PDF survival take precedence; outside help is requested only below the configured PDF
 floor. A true positive reduces feral population and consolidation without deleting the presence; a
 false positive is a no-contact search that consumes the operation.
-- ✅ New-game setup offers Tyranids, Orks, and deterministic Random selection. The resolved invader is
-persisted in `CampaignScenario`; the Ork opening preserves naturally rolled cult state, uses the
+- ✅ New-game setup offers the rules-configured Promised World invader candidates and deterministic
+  Random selection. The resolved invader is persisted in `CampaignScenario`; the Ork opening preserves naturally rolled cult state, uses the
 existing Promised-World objective and victory/lapse loop, records the canonical no-reinforcement
 briefing, and leaves feral survivors indelible after victory. No live enemy fleet object is required.
 

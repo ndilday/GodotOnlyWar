@@ -35,6 +35,20 @@ public class FactionGenerationPolicyTests
     }
 
     [Fact]
+    public void ScenarioFactionSelection_DistinguishesDefaultRandomAndExplicitChoices()
+    {
+        Assert.Null(ScenarioFactionSelection.Default.FactionId);
+        Assert.False(ScenarioFactionSelection.Default.IsRandom);
+
+        Assert.Null(ScenarioFactionSelection.Random.FactionId);
+        Assert.True(ScenarioFactionSelection.Random.IsRandom);
+
+        ScenarioFactionSelection explicitChoice = ScenarioFactionSelection.ForFaction(42);
+        Assert.Equal(42, explicitChoice.FactionId);
+        Assert.False(explicitChoice.IsRandom);
+    }
+
+    [Fact]
     public void PlanetPresenceCatalog_PrioritizesTemplateSpecificRules()
     {
         FactionPlanetPresenceRule defaultRule = new(

@@ -14,7 +14,7 @@ namespace OnlyWar.Builders
     internal static class SectorBuilder
     {
         public static Sector GenerateSector(int seed, GameRulesData data, Date currentDate, string chapterName = null,
-                                            InvaderFactionSelection invaderSelection = InvaderFactionSelection.Tyranids)
+                                            ScenarioFactionSelection invaderSelection = null)
         {
             List<Planet> planetList = [];
             List<Character> characterList = [];

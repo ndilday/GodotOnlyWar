@@ -1,15 +1,15 @@
-using OnlyWar.Models.Orks;
+using OnlyWar.Models.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 using System.Data;
 
 namespace OnlyWar.Helpers.Database.GameRules
 {
-    public sealed class OrkCampaignRulesDataAccess
+    public sealed class LegacyFactionBehaviorRulesDataAccess
     {
-        public IReadOnlyList<OrkCampaignRulesProfile> GetProfiles(IDbConnection connection)
+        public IReadOnlyList<FactionBehaviorRulesProfile> GetProfiles(IDbConnection connection)
         {
-            List<OrkCampaignRulesProfile> profiles = [];
+            List<FactionBehaviorRulesProfile> profiles = [];
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = @"
                 SELECT ProfileKey, GhostSourceChancePerEmptyTile, MinimumGhostSourcesPerSector,
@@ -30,7 +30,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
-                profiles.Add(new OrkCampaignRulesProfile(
+                profiles.Add(new FactionBehaviorRulesProfile(
                     reader.GetString(0),
                     Convert.ToDouble(reader.GetValue(1)), reader.GetInt32(2),
                     Convert.ToDouble(reader.GetValue(3)), Convert.ToDouble(reader.GetValue(4)),

@@ -18,7 +18,6 @@ using OnlyWar.Models.Supply;
 using OnlyWar.Models.Reports;
 using OnlyWar.Models.Events;
 using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Orks;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -61,12 +60,6 @@ namespace OnlyWar.Helpers.Database.GameState
         public IReadOnlyList<WorldControlEpisodeState> WorldControlEpisodes { get; set; }
         public List<GhostPopulationSource> GhostPopulationSources { get; set; }
         public List<StrategicInvasionForceSaveData> StrategicInvasionForces { get; set; }
-        // Legacy projections are populated while old save consumers migrate. They intentionally
-        // do not drive new production behavior.
-        [Obsolete("Use GhostPopulationSources.")]
-        public List<OrkGhostSource> OrkGhostSources { get; set; }
-        [Obsolete("Use StrategicInvasionForces.")]
-        public List<OrkWaaaghSaveData> OrkWaaaghs { get; set; }
         public bool UpgradePending { get; set; }
     }
 
@@ -252,8 +245,6 @@ namespace OnlyWar.Helpers.Database.GameState
                 WorldControlEpisodes = worldControlEpisodes,
                 GhostPopulationSources = ghostPopulationSources,
                 StrategicInvasionForces = strategicInvasionForces,
-                OrkGhostSources = ghostPopulationSources.OfType<OrkGhostSource>().ToList(),
-                OrkWaaaghs = strategicInvasionForces.OfType<OrkWaaaghSaveData>().ToList(),
                 UpgradePending = false
             };
         }
@@ -286,8 +277,8 @@ namespace OnlyWar.Helpers.Database.GameState
                              EquipmentLoadoutDoctrine equipmentLoadoutDoctrine = null,
                              IEnumerable<WorldControlEpisodeState> worldControlEpisodes = null,
                              IEnumerable<Order> additionalOrders = null,
-                             IEnumerable<GhostPopulationSource> orkGhostSources = null,
-                             IEnumerable<StrategicInvasionForce> orkWaaaghs = null)
+                             IEnumerable<GhostPopulationSource> ghostPopulationSources = null,
+                             IEnumerable<StrategicInvasionForce> strategicInvasionForces = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -321,7 +312,7 @@ namespace OnlyWar.Helpers.Database.GameState
                               homeWorldPlanetId, recruitment, lastTurnReportSnapshot,
                               campaignEventLedger, chapterChronicle, campaignIdentity,
                               relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
-                              additionalOrders, orkGhostSources, orkWaaaghs);
+                              additionalOrders, ghostPopulationSources, strategicInvasionForces);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -547,7 +538,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 Faction faction = genericTable && !reader.IsDBNull(factionOrdinal)
                     ? factionMap.GetValueOrDefault(reader.GetInt32(factionOrdinal))
                     : null;
-                sources.Add(new OrkGhostSource(
+                sources.Add(new GhostPopulationSource(
                     id,
                     new Coordinate((ushort)reader.GetInt32(xOrdinal), (ushort)reader.GetInt32(yOrdinal)),
                     template,
@@ -574,7 +565,7 @@ namespace OnlyWar.Helpers.Database.GameState
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
-                forces.Add(new OrkWaaaghSaveData
+                forces.Add(new StrategicInvasionForceSaveData
                 {
                     Id = reader.GetInt64(0),
                     FactionId = reader.GetInt32(1),

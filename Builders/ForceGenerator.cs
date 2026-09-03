@@ -437,7 +437,7 @@ namespace OnlyWar.Builders
                                         .Where(st => (st.SquadType & SquadTypes.Scout) != 0).ToList();
 
             // NOTE: a faction with no Scout-typed squad templates fields no ScoutPatrol force at all.
-            // The Ork roster supplies Kommandos as its Scout-flagged patrol formation. The
+            // The mob roster supplies Kommandos as its Scout-flagged patrol formation. The
             // Genestealer Cults are also covered by Acolyte Hybrids, Brood Brother Squad and
             // Neophyte Hybrid Squad, and the Imperial PDF Infantry Squad is Scout-flagged.
             //

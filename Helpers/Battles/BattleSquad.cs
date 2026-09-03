@@ -63,20 +63,6 @@ namespace OnlyWar.Helpers.Battles
         public bool MobSuppressionPending { get; set; }
         public bool MobSuppressionCommitted { get; set; }
 
-        [Obsolete("Use MobSuppressionPending.")]
-        public bool OrkSuppressionPending
-        {
-            get => MobSuppressionPending;
-            set => MobSuppressionPending = value;
-        }
-
-        [Obsolete("Use MobSuppressionCommitted.")]
-        public bool OrkSuppressionCommitted
-        {
-            get => MobSuppressionCommitted;
-            set => MobSuppressionCommitted = value;
-        }
-
         public Squad Squad { get; }
         public List<BattleSoldier> AbleSoldiers
         {

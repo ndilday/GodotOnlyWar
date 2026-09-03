@@ -82,6 +82,30 @@ namespace OnlyWar.Models
         bool IsRequired);
 
     /// <summary>
+    /// The player's opening-scenario choice. A null faction id with IsRandom false means the
+    /// scenario's first stable option; IsRandom true requests weighted
+    /// selection from the scenario's eligible options. The resolved faction id is what belongs in
+    /// persistent campaign state, not this setup-time choice.
+    /// </summary>
+    public sealed record ScenarioFactionSelection
+    {
+        public int? FactionId { get; }
+        public bool IsRandom { get; }
+
+        private ScenarioFactionSelection(int? factionId, bool isRandom)
+        {
+            FactionId = factionId;
+            IsRandom = isRandom;
+        }
+
+        public static ScenarioFactionSelection Default { get; } = new(null, false);
+        public static ScenarioFactionSelection Random { get; } = new(null, true);
+
+        public static ScenarioFactionSelection ForFaction(int factionId) =>
+            new(factionId, false);
+    }
+
+    /// <summary>
     /// Balance and participant inputs for one implemented opening scenario. The scenario algorithm
     /// remains code-owned; these values and its faction candidates are mod-owned data.
     /// </summary>

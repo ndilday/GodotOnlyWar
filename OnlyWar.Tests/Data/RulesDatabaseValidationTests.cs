@@ -135,11 +135,11 @@ public class RulesDatabaseValidationTests
     public void RulesDatabase_PlanetTemplateEligibilityRequiresEachGenerationContext()
     {
         InvalidOperationException exception = AssertRulesDatabaseRejects(
-            "missing-ork-ghost-context",
+            "missing-ghost-population-context",
             "DELETE FROM PlanetTemplateEligibility "
-                + "WHERE ContextKey = 'ambient.ork_ghost_source';");
+                + "WHERE ContextKey = 'ambient.ghost_population_source';");
 
-        Assert.Contains(PlanetTemplateEligibilityKeys.OrkGhostSource, exception.Message);
+        Assert.Contains(PlanetTemplateEligibilityKeys.GhostPopulationSource, exception.Message);
         Assert.Contains("at least one template", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -147,12 +147,12 @@ public class RulesDatabaseValidationTests
     public void RulesDatabase_PlanetTemplateEligibilityRequiresPositiveContextProbability()
     {
         InvalidOperationException exception = AssertRulesDatabaseRejects(
-            "zero-ork-ghost-probabilities",
+            "zero-ghost-population-probabilities",
             "UPDATE PlanetTemplate SET Probability = 0 "
                 + "WHERE Id IN (SELECT PlanetTemplateId FROM PlanetTemplateEligibility "
-                + "WHERE ContextKey = 'ambient.ork_ghost_source');");
+                + "WHERE ContextKey = 'ambient.ghost_population_source');");
 
-        Assert.Contains(PlanetTemplateEligibilityKeys.OrkGhostSource, exception.Message);
+        Assert.Contains(PlanetTemplateEligibilityKeys.GhostPopulationSource, exception.Message);
         Assert.Contains("positive total", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -171,9 +171,9 @@ public class RulesDatabaseValidationTests
                 PlanetTemplateEligibilityKeys.PromisedWorld));
         Assert.Equal(
             original.PlanetTemplateEligibility.GetEligibleTemplateIds(
-                PlanetTemplateEligibilityKeys.OrkGhostSource),
+                PlanetTemplateEligibilityKeys.GhostPopulationSource),
             renamed.PlanetTemplateEligibility.GetEligibleTemplateIds(
-                PlanetTemplateEligibilityKeys.OrkGhostSource));
+                PlanetTemplateEligibilityKeys.GhostPopulationSource));
     }
 
     [Theory]

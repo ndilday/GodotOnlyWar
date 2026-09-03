@@ -62,8 +62,6 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         string FactionActivity = null,
         string FactionActivityIconKey = null)
     {
-        [Obsolete("Use FactionActivity.")]
-        public string OrkActivity => FactionActivity;
     }
 
     public sealed record RegionEnemyForceEstimate(

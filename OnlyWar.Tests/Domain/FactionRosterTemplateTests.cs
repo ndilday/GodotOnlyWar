@@ -10,12 +10,12 @@ using Xunit;
 
 namespace OnlyWar.Tests.Domain;
 
-public class OrkSquadTemplateTests
+public class FactionRosterTemplateTests
 {
     [Fact]
-    public void OrkSquadRosterMatchesAuthoredComposition()
+    public void MobSquadRosterMatchesAuthoredComposition()
     {
-        Faction orks = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+        Faction mobFaction = Fixtures.RulesDatabaseFixture.LoadRules().Factions
             .Single(faction => faction.Name == "Orks");
 
         string[] expectedSquads =
@@ -23,31 +23,31 @@ public class OrkSquadTemplateTests
          "Nobz", "'Eavy Nobz", "Meganobz", "'Eavy Warboss", "Megaboss", "Flash Gitz", "Lootas"];
         Assert.Equal(
             expectedSquads.OrderBy(name => name),
-            orks.SquadTemplates.Values
+            mobFaction.SquadTemplates.Values
                 .Where(template => expectedSquads.Contains(template.Name))
                 .Select(template => template.Name)
                 .OrderBy(name => name));
 
-        AssertMob(orks, "Shoota Boyz", "Ork Boy", 9, 29, "Shoota", "Orkish Skin");
-        AssertMob(orks, "Slugga Boyz", "Ork Boy", 9, 29, "Slugga", "Orkish Skin");
-        AssertMob(orks, "'Eavy Shoota Boyz", "Ork Boy", 9, 29, "Shoota", "'Eavy Armor");
-        AssertMob(orks, "'Eavy Slugga Boyz", "Ork Boy", 9, 29, "Slugga", "'Eavy Armor");
-        AssertEliteMob(orks, "Nobz", "Orkish Skin", "Slugga + Choppa + Frag Grenade");
-        AssertEliteMob(orks, "'Eavy Nobz", "'Eavy Armor", "Slugga + Choppa + Frag Grenade");
-        AssertEliteMob(orks, "Meganobz", "Mega Armor", "Big Shoota + Power Klaw + Frag Grenade");
-        AssertHqVariant(orks, "'Eavy Warboss", "'Eavy Armor", "Slugga + Choppa");
-        AssertHqVariant(orks, "Megaboss", "Mega Armor", "Big Shoota + Power Klaw");
-        AssertHeavyMob(orks, "Flash Gitz", 5, 10, "Snazzgun + Frag Grenade");
-        AssertHeavyMob(orks, "Lootas", 5, 15, "Deffgun + Frag Grenade");
+        AssertMob(mobFaction, "Shoota Boyz", "Ork Boy", 9, 29, "Shoota", "Orkish Skin");
+        AssertMob(mobFaction, "Slugga Boyz", "Ork Boy", 9, 29, "Slugga", "Orkish Skin");
+        AssertMob(mobFaction, "'Eavy Shoota Boyz", "Ork Boy", 9, 29, "Shoota", "'Eavy Armor");
+        AssertMob(mobFaction, "'Eavy Slugga Boyz", "Ork Boy", 9, 29, "Slugga", "'Eavy Armor");
+        AssertEliteMob(mobFaction, "Nobz", "Orkish Skin", "Slugga + Choppa + Frag Grenade");
+        AssertEliteMob(mobFaction, "'Eavy Nobz", "'Eavy Armor", "Slugga + Choppa + Frag Grenade");
+        AssertEliteMob(mobFaction, "Meganobz", "Mega Armor", "Big Shoota + Power Klaw + Frag Grenade");
+        AssertHqVariant(mobFaction, "'Eavy Warboss", "'Eavy Armor", "Slugga + Choppa");
+        AssertHqVariant(mobFaction, "Megaboss", "Mega Armor", "Big Shoota + Power Klaw");
+        AssertHeavyMob(mobFaction, "Flash Gitz", 5, 10, "Snazzgun + Frag Grenade");
+        AssertHeavyMob(mobFaction, "Lootas", 5, 15, "Deffgun + Frag Grenade");
 
-        SquadTemplate gretchin = orks.SquadTemplates.Values.Single(template => template.Name == "Gretchin");
+        SquadTemplate gretchin = mobFaction.SquadTemplates.Values.Single(template => template.Name == "Gretchin");
         Assert.Equal("No Armor", gretchin.Armor.Name);
         AssertElement(gretchin, "Gretchin", 10, 30, "Grot Blasta");
         SquadTemplateElement runtherd = gretchin.Elements.Single(element => element.SoldierTemplate.Name == "Runtherd");
         Assert.Equal("Grabba Stikk + Slugga + Frag Grenade", runtherd.DefaultWeapons.Name);
         Assert.Equal("Orkish Skin", runtherd.DefaultArmor.Name);
 
-        SquadTemplate kommandos = orks.SquadTemplates.Values.Single(template => template.Name == "Kommandos");
+        SquadTemplate kommandos = mobFaction.SquadTemplates.Values.Single(template => template.Name == "Kommandos");
         Assert.Equal(SquadTypes.Scout, kommandos.SquadType);
         Assert.Equal(4, kommandos.Elements.Where(element => !element.SoldierTemplate.IsSquadLeader)
             .Sum(element => element.MinimumNumber));
@@ -59,7 +59,7 @@ public class OrkSquadTemplateTests
             kommandos.Elements,
             element => element.SoldierTemplate.Name is "Kommando Rokkit" or "Kommando Big Shoota");
         Assert.DoesNotContain(
-            orks.SoldierTemplates.Values,
+            mobFaction.SoldierTemplates.Values,
             template => template.Name is "Kommando Rokkit" or "Kommando Big Shoota");
 
         SquadTemplateElement kommando = kommandos.Elements
@@ -76,16 +76,16 @@ public class OrkSquadTemplateTests
     }
 
     [Fact]
-    public void OrkRolesUseRequestedBaselineSkills()
+    public void MobRolesUseRequestedBaselineSkills()
     {
-        Faction orks = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+        Faction mobFaction = Fixtures.RulesDatabaseFixture.LoadRules().Factions
             .Single(faction => faction.Name == "Orks");
         string[] meleeRoles =
         ["Ork Boy", "Ork Nob", "Runtherd", "Kommando", "Kommando Nob"];
 
         foreach (string roleName in meleeRoles)
         {
-            SoldierTemplate role = orks.SoldierTemplates.Values.Single(template => template.Name == roleName);
+            SoldierTemplate role = mobFaction.SoldierTemplates.Values.Single(template => template.Name == roleName);
             AssertSkillPoints(role, "generic_melee", 1);
             Assert.DoesNotContain(role.MosTraining, training => training.Item1.SkillKey == "generic_ranged");
 
@@ -95,7 +95,7 @@ public class OrkSquadTemplateTests
             }
         }
 
-        SoldierTemplate gretchin = orks.SoldierTemplates.Values.Single(template => template.Name == "Gretchin");
+        SoldierTemplate gretchin = mobFaction.SoldierTemplates.Values.Single(template => template.Name == "Gretchin");
         AssertSkillPoints(gretchin, "generic_ranged", 1);
         Assert.DoesNotContain(gretchin.MosTraining, training => training.Item1.SkillKey == "generic_melee");
     }
@@ -103,14 +103,14 @@ public class OrkSquadTemplateTests
     [Fact]
     public void BoyzHeavyWeaponQuotaCountsTheNobAndSharesBothWeaponChoices()
     {
-        Faction orks = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+        Faction mobFaction = Fixtures.RulesDatabaseFixture.LoadRules().Factions
             .Single(faction => faction.Name == "Orks");
         string[] boyzSquads =
         ["Shoota Boyz", "Slugga Boyz", "'Eavy Shoota Boyz", "'Eavy Slugga Boyz"];
 
         foreach (string squadName in boyzSquads)
         {
-            SquadTemplate squad = orks.SquadTemplates.Values
+            SquadTemplate squad = mobFaction.SquadTemplates.Values
                 .Single(template => template.Name == squadName);
             SquadTemplateElement boyz = squad.Elements
                 .Single(element => element.SoldierTemplate.Name == "Ork Boy");
@@ -137,14 +137,14 @@ public class OrkSquadTemplateTests
     [Fact]
     public void GeneratedNpcBoyzFillTheirResolvedHeavyWeaponAllowance()
     {
-        Faction orks = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+        Faction mobFaction = Fixtures.RulesDatabaseFixture.LoadRules().Factions
             .Single(faction => faction.Name == "Orks");
         string[] boyzSquads =
         ["Shoota Boyz", "Slugga Boyz", "'Eavy Shoota Boyz", "'Eavy Slugga Boyz"];
 
         foreach (string squadName in boyzSquads)
         {
-            SquadTemplate template = orks.SquadTemplates.Values
+            SquadTemplate template = mobFaction.SquadTemplates.Values
                 .Single(candidate => candidate.Name == squadName);
             SquadTemplateElement boyz = template.Elements
                 .Single(element => element.SoldierTemplate.Name == "Ork Boy");
@@ -167,9 +167,9 @@ public class OrkSquadTemplateTests
     [Fact]
     public void GeneratedKommandosUseTheSharedRoleAndBothFixedSpecialWeapons()
     {
-        Faction orks = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+        Faction mobFaction = Fixtures.RulesDatabaseFixture.LoadRules().Factions
             .Single(faction => faction.Name == "Orks");
-        SquadTemplate template = orks.SquadTemplates.Values
+        SquadTemplate template = mobFaction.SquadTemplates.Values
             .Single(candidate => candidate.Name == "Kommandos");
 
         Squad generated = SquadFactory.GenerateSquad(template, new Fixtures.FixedRNG());

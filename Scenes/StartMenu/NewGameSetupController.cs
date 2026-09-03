@@ -1,17 +1,22 @@
 using Godot;
 using OnlyWar.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 public class NewGameSettings
 {
     public string ChapterName { get; set; }
     public int Seed { get; set; }
-    public InvaderFactionSelection InvaderSelection { get; set; } = InvaderFactionSelection.Tyranids;
+    public ScenarioFactionSelection InvaderSelection { get; set; } = ScenarioFactionSelection.Default;
 }
 
 public partial class NewGameSetupController : Control
 {
     private const int MaxChapterNameLength = 40;
+    private const int RandomSelectionId = int.MinValue;
+
+    private IReadOnlyList<Faction> _invaderFactions = Array.Empty<Faction>();
 
     private Panel _formPanel;
     private Panel _summaryPanel;
@@ -31,10 +36,7 @@ public partial class NewGameSetupController : Control
         _chapterNameEdit = GetNode<LineEdit>("FormPanel/VBox/ChapterNameEdit");
         _seedEdit = GetNode<LineEdit>("FormPanel/VBox/SeedRow/SeedEdit");
         _invaderSelection = GetNode<OptionButton>("FormPanel/VBox/InvaderSelection");
-        _invaderSelection.AddItem("Tyranids", (int)InvaderFactionSelection.Tyranids);
-        _invaderSelection.AddItem("Orks", (int)InvaderFactionSelection.Orks);
-        _invaderSelection.AddItem("Random", (int)InvaderFactionSelection.Random);
-        _invaderSelection.Selected = 0;
+        PopulateInvaderSelection();
         _validationLabel = GetNode<Label>("FormPanel/VBox/ValidationLabel");
         _summaryLabel = GetNode<RichTextLabel>("SummaryPanel/VBox/SummaryLabel");
 
@@ -50,6 +52,22 @@ public partial class NewGameSetupController : Control
         _seedEdit.Text = GD.RandRange(0, int.MaxValue).ToString();
         _validationLabel.Text = "";
         ShowForm();
+    }
+
+    /// <summary>
+    /// Supplies the invader candidates from the active scenario profile before this screen enters
+    /// the tree. The controller only needs display identity and stable faction ids; scenario rules
+    /// stay in the rules-loading and generation layers.
+    /// </summary>
+    public void ConfigureInvaderFactions(IReadOnlyList<Faction> invaderFactions)
+    {
+        _invaderFactions = (invaderFactions ?? Array.Empty<Faction>())
+            .Where(faction => faction != null)
+            .ToList();
+        if (_invaderSelection != null)
+        {
+            PopulateInvaderSelection();
+        }
     }
 
     private void OnRandomizePressed()
@@ -111,14 +129,57 @@ public partial class NewGameSetupController : Control
             return false;
         }
 
+        if (_invaderSelection.Selected < 0)
+        {
+            error = "No opening invader is configured.";
+            return false;
+        }
+
+        int selectedId = _invaderSelection.GetItemId(_invaderSelection.Selected);
+        ScenarioFactionSelection invaderSelection;
+        if (selectedId == RandomSelectionId)
+        {
+            invaderSelection = ScenarioFactionSelection.Random;
+        }
+        else if (_invaderFactions.Any(faction => faction.Id == selectedId))
+        {
+            invaderSelection = ScenarioFactionSelection.ForFaction(selectedId);
+        }
+        else
+        {
+            error = "Select a valid opening invader.";
+            return false;
+        }
+
         settings = new NewGameSettings
         {
             ChapterName = name,
             Seed = seed,
-            InvaderSelection = (InvaderFactionSelection)_invaderSelection.Selected
+            InvaderSelection = invaderSelection
         };
         error = "";
         return true;
+    }
+
+    private void PopulateInvaderSelection()
+    {
+        _invaderSelection.Clear();
+        foreach (Faction faction in _invaderFactions)
+        {
+            _invaderSelection.AddItem(faction.Name, faction.Id);
+        }
+
+        if (_invaderFactions.Count > 0)
+        {
+            _invaderSelection.AddItem("Random", RandomSelectionId);
+            _invaderSelection.Selected = 0;
+            _invaderSelection.Disabled = false;
+        }
+        else
+        {
+            _invaderSelection.Selected = -1;
+            _invaderSelection.Disabled = true;
+        }
     }
 
     private void ShowForm()

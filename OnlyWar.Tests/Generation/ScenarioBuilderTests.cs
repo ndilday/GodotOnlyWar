@@ -185,6 +185,25 @@ public class ScenarioBuilderTests
         Assert.Equal(before, RegionFactionPopulations(other));
     }
 
+    [Trait("Category", "Slow")]
+    [Fact]
+    public void GenerateSector_WithExplicitInvaderFactionUsesScenarioProfileOption()
+    {
+        Faction orks = _data.Factions.Single(faction => faction.Name == "Orks");
+
+        Sector sector = SectorBuilder.GenerateSector(
+            1,
+            _data,
+            _date,
+            "Ork Chapter",
+            ScenarioFactionSelection.ForFaction(orks.Id));
+
+        Assert.Equal(orks.Id, sector.Scenario.InvaderFactionId);
+        Assert.Contains(
+            sector.GetPlanet(sector.Scenario.PromisedPlanetId).Regions,
+            region => region.RegionFactionMap.ContainsKey(orks.Id));
+    }
+
     private (GameRulesData Data, Sector Sector) GenerateFreshSector(int seed)
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);

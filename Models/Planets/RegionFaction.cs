@@ -133,7 +133,7 @@ namespace OnlyWar.Models.Planets
         public long? AssignedDefensiveBattleValue { get; set; }
 
         /// <summary>
-        /// Whether this presence is openly active on the ground. For feral Orks this remains
+        /// Whether this presence is openly active on the ground. For dormant populations this remains
         /// false even when an observer has a confirmed belief; observer knowledge lives in the
         /// PlanetFaction target-intelligence store instead of duplicating visibility state.
         /// </summary>
@@ -146,18 +146,6 @@ namespace OnlyWar.Models.Planets
         public long? StrategicInvasionForceId { get; set; }
         /// <summary>Consolidation of commandless dormant population.</summary>
         public double DormantConsolidation { get; set; }
-        [System.Obsolete("Use StrategicInvasionForceId.")]
-        public long? OrkWaaaghId
-        {
-            get => StrategicInvasionForceId;
-            set => StrategicInvasionForceId = value;
-        }
-        [System.Obsolete("Use DormantConsolidation.")]
-        public double OrkConsolidation
-        {
-            get => DormantConsolidation;
-            set => DormantConsolidation = value;
-        }
         // The first offensive after a hidden presence reveals is planned as an Ambush. Persisting
         // the marker prevents a save between revelation and planning from losing that advantage.
         public bool HasEmergenceAdvantage { get; set; }
@@ -196,7 +184,7 @@ namespace OnlyWar.Models.Planets
         // Multiplier (default 1.0) applied to this faction's organic population growth in the
         // turn loop. A general primitive, not scenario-specific: the Opening Scenario sets it
         // < 1.0 on stamped Tyranid regions to throttle them below the default curve, and the
-        // post-0.7 Ork/revolt tuning will reuse the same lever (Design/Reference/OpeningScenario.md).
+        // post-0.7 faction/revolt tuning will reuse the same lever (Design/Reference/OpeningScenario.md).
         public float GrowthMultiplier { get; set; } = 1.0f;
 
         // Transient, within-DAY state: search effort this faction has committed to looking at

@@ -8,7 +8,6 @@ using OnlyWar.Models.Events;
 using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Orks;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Helpers
@@ -26,7 +25,7 @@ namespace OnlyWar.Helpers
             // The loaded root units are not registered on their faction by the data access
             // layer, but both the Army construction below and the in-game save path
             // (MainGameScene enumerates units via Faction.Units) expect root units to live on their
-            // owning faction. This includes persistent Ork Warband units; registering only the
+            // owning faction. This includes persistent invasion units; registering only the
             // Chapter roots would make the first save after loading silently drop a Warboss unit.
             Dictionary<int, Faction> factionsById = gameRulesData.Factions
                 .ToDictionary(faction => faction.Id);
@@ -133,9 +132,7 @@ namespace OnlyWar.Helpers
             GameStateDataBlob gameState,
             GameRulesData gameRulesData)
         {
-            foreach (GhostPopulationSource source in gameState.GhostPopulationSources
-                ?? gameState.OrkGhostSources?.Cast<GhostPopulationSource>()
-                ?? [])
+            foreach (GhostPopulationSource source in gameState.GhostPopulationSources ?? [])
             {
                 sector.AddGhostPopulationSource(source);
             }
@@ -146,9 +143,7 @@ namespace OnlyWar.Helpers
             Dictionary<int, Squad> squads = gameState.Units
                 .SelectMany(unit => unit.GetAllSquads())
                 .ToDictionary(squad => squad.Id);
-            foreach (StrategicInvasionForceSaveData saved in gameState.StrategicInvasionForces
-                ?? gameState.OrkWaaaghs?.Cast<StrategicInvasionForceSaveData>()
-                ?? [])
+            foreach (StrategicInvasionForceSaveData saved in gameState.StrategicInvasionForces ?? [])
             {
                 if (!gameRulesData.Factions.Any(faction => faction.Id == saved.FactionId))
                 {
@@ -172,10 +167,7 @@ namespace OnlyWar.Helpers
                 Planet destinationPlanet = saved.DestinationPlanetId.HasValue
                     ? sector.Planets.GetValueOrDefault(saved.DestinationPlanetId.Value)
                     : null;
-                // The legacy subtype is retained at this boundary so old save/test callers that
-                // inspect OrkWaaaghs continue to see the same object; the sector registers it
-                // through the capability-neutral StrategicInvasionForce collection.
-                OrkWaaagh force = new(
+                StrategicInvasionForce force = new(
                     saved.Id,
                     faction,
                     commandSquad,

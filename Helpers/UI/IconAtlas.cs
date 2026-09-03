@@ -162,7 +162,7 @@ namespace OnlyWar.Helpers.UI
 			if (name.Contains("genestealer")) return "map_genestealer_cult";
 			if (name.Contains("ork")) return "map_orks";
 			// Faction art is required content. Returning no key makes the missing-art path loud in
-			// RegionMapCardView instead of falsely representing a new faction as Orks.
+			// RegionMapCardView instead of falsely representing a new faction as an existing faction.
 			return null;
 		}
 

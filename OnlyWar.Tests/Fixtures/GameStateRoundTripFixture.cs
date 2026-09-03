@@ -98,8 +98,8 @@ internal sealed class GameStateRoundTripFixture
             relationshipLedger: sector.RelationshipLedger,
             equipmentLoadoutDoctrine: sector.PlayerForce.Army.EquipmentLoadoutDoctrine,
             worldControlEpisodes: sector.PlayerForce.WorldControlEpisodes.States,
-            orkGhostSources: sector.OrkGhostSources,
-            orkWaaaghs: sector.OrkWaaaghs);
+            ghostPopulationSources: sector.GhostPopulationSources,
+            strategicInvasionForces: sector.StrategicInvasionForces);
     }
 
     public GameStateDataBlob Load(string dbPath)

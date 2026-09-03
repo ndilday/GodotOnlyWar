@@ -9,8 +9,6 @@ namespace OnlyWar.Models
     // turn-loop step; Pending until the promised world is liberated (Won) or overrun (Lapsed).
     public enum ObjectiveState { Pending = 0, Won = 1, Lapsed = 2 }
 
-    public enum InvaderFactionSelection { Tyranids = 0, Orks = 1, Random = 2 }
-
     // Persistent objective state carried through the campaign and across save/load
     // (Design/Reference/OpeningScenario.md). Attached to Sector as a nullable property and
     // persisted on the extended GlobalData row (§7). BriefingText is composed once at

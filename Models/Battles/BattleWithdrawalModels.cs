@@ -158,13 +158,7 @@ namespace OnlyWar.Models.Battles
         ForceDisengaged = 7,
         MobMoraleApplied = 8,
         MobLeaderSuppressionCommitted = 9,
-        MobLeaderSuppressionAttack = 10,
-        [System.Obsolete("Use MobMoraleApplied.")]
-        WaaaghMoraleApplied = MobMoraleApplied,
-        [System.Obsolete("Use MobLeaderSuppressionCommitted.")]
-        OrkLeaderSuppressionCommitted = MobLeaderSuppressionCommitted,
-        [System.Obsolete("Use MobLeaderSuppressionAttack.")]
-        OrkLeaderSuppressionAttack = MobLeaderSuppressionAttack
+        MobLeaderSuppressionAttack = 10
     }
 
     public sealed class BattleEvent
@@ -175,7 +169,7 @@ namespace OnlyWar.Models.Battles
         public int? PrimarySquadId { get; }
         public IReadOnlyList<int> RelatedSquadIds { get; }
         public string Description { get; }
-        public float? RealizedWaaaghSupport { get; }
+        public float? RealizedMobSupport { get; }
 
         public BattleEvent(
             BattleEventType type,
@@ -184,7 +178,7 @@ namespace OnlyWar.Models.Battles
             int? primarySquadId,
             IEnumerable<int> relatedSquadIds,
             string description,
-            float? realizedWaaaghSupport = null)
+            float? realizedMobSupport = null)
         {
             Type = type;
             TurnNumber = turnNumber;
@@ -192,7 +186,7 @@ namespace OnlyWar.Models.Battles
             PrimarySquadId = primarySquadId;
             RelatedSquadIds = (relatedSquadIds ?? Enumerable.Empty<int>()).ToArray();
             Description = description ?? string.Empty;
-            RealizedWaaaghSupport = realizedWaaaghSupport;
+            RealizedMobSupport = realizedMobSupport;
         }
     }
 }

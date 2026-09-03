@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Models;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 public partial class StartMenu : Control
@@ -12,6 +13,7 @@ public partial class StartMenu : Control
 	private Button _loadGameButton;
 	private Label _loadStatusLabel;
 	private bool _isTransitioning;
+	private GameRulesData _newGameRulesData;
 
 	public override void _Ready()
 	{
@@ -54,18 +56,41 @@ public partial class StartMenu : Control
 
     private void ShowNewGameSetup()
     {
-        SetMenuButtonsVisible(false);
-        PackedScene setupScene = GD.Load<PackedScene>("res://Scenes/StartMenu/new_game_setup.tscn");
-        _setupScreen = setupScene.Instantiate<NewGameSetupController>();
-        _setupScreen.CampaignConfirmed += OnCampaignConfirmed;
-        _setupScreen.Cancelled += OnSetupCancelled;
-        AddChild(_setupScreen);
+        try
+        {
+            // Load once when the setup screen opens so its choices come from the same immutable
+            // rules snapshot that will generate the campaign.
+            _newGameRulesData = new GameRulesData(GameStorage.RulesDatabasePath);
+            ScenarioProfile profile = _newGameRulesData.ScenarioProfiles.GetRequired(
+                ScenarioKeys.PromisedWorld);
+            IReadOnlyList<Faction> invaderFactions = profile
+                .GetFactionOptions(ScenarioFactionSlotKeys.Invader)
+                .Select(option => _newGameRulesData.Factions.Single(
+                    faction => faction.Id == option.FactionId))
+                .ToList();
+
+            SetMenuButtonsVisible(false);
+            PackedScene setupScene = GD.Load<PackedScene>("res://Scenes/StartMenu/new_game_setup.tscn");
+            _setupScreen = setupScene.Instantiate<NewGameSetupController>();
+            _setupScreen.ConfigureInvaderFactions(invaderFactions);
+            _setupScreen.CampaignConfirmed += OnCampaignConfirmed;
+            _setupScreen.Cancelled += OnSetupCancelled;
+            AddChild(_setupScreen);
+        }
+        catch (Exception exception)
+        {
+            _newGameRulesData = null;
+            GD.PushError($"Could not load new-game rules: {exception}");
+            _loadStatusLabel.Text = "Game rules are unavailable. See the game log for details.";
+            SetMenuButtonsVisible(true);
+        }
     }
 
     private void OnSetupCancelled(object sender, EventArgs e)
     {
         _setupScreen.QueueFree();
         _setupScreen = null;
+        _newGameRulesData = null;
         SetMenuButtonsVisible(true);
     }
 
@@ -86,11 +111,12 @@ public partial class StartMenu : Control
         try
         {
             GameDataSingleton.Instance.InitializeNewGameData(
-                new GameRulesData(GameStorage.RulesDatabasePath),
+                _newGameRulesData ?? new GameRulesData(GameStorage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 settings.ChapterName,
                 settings.Seed,
                 settings.InvaderSelection);
+            _newGameRulesData = null;
             string startupWarning = TryCreateInitialAutosave(settings.ChapterName);
             LaunchMainGameScene(startupWarning);
         }

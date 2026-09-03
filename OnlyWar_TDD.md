@@ -468,8 +468,8 @@ leave the original body untouched.
 Sector
   ├─ Planets : Dictionary<int, Planet>
   ├─ Subsectors : List<Subsector>
-  ├─ OrkGhostSources : IReadOnlyList<OrkGhostSource>
-  ├─ OrkWaaaghs : IReadOnlyList<OrkWaaagh>
+  ├─ GhostPopulationSources : IReadOnlyList<GhostPopulationSource>
+  ├─ StrategicInvasionForces : IReadOnlyList<StrategicInvasionForce>
   ├─ RelationshipLedger : FactionRelationshipLedger
   └─ PlayerForce : PlayerForce
 
@@ -496,8 +496,8 @@ RegionFaction
   ├─ Entrenchment : int
   ├─ AntiAir : int
   ├─ LandedSquads : List<Squad>            (squads of this RegionFaction's faction currently in this region)
-  ├─ OrkWaaaghId : long?                   (active Waaagh! affiliation, if any)
-  ├─ OrkConsolidation : double             (local indelible Ork consolidation)
+  ├─ StrategicInvasionForceId : long?      (active invasion-force affiliation, if any)
+  ├─ DormantConsolidation : double         (local indelible dormant-population consolidation)
   └─ IsPublic : bool
 
 PlanetFaction
@@ -1514,8 +1514,9 @@ indelible presence; false positives resolve as no-contact searches that consume 
 cards, dossiers, tooltips, mission availability, and command attention use the same observer belief
 gate and never reveal hidden ground truth.
 
-**Promised World.** `NewGameSettings` resolves Tyranids, Orks, or deterministic Random and persists
-the selected result in `CampaignScenario.InvaderFactionId`. The Ork opening reuses the existing
+**Promised World.** `NewGameSettings` carries a setup-time `ScenarioFactionSelection` resolved from
+the rules database's `ScenarioFactionOption` rows, with a deterministic Random choice, and persists
+the resolved result in `CampaignScenario.InvaderFactionId`. The Ork opening reuses the existing
 Promised-World objective, victory/lapse, and Home World reward loop, preserves a naturally rolled
 Genestealer Cult, records the canonical destroyed-fleet/no-reinforcement briefing, and incorporates
 local feral Orks into one opening Waaagh!. No live enemy fleet is required; feral survivors remain
@@ -2068,7 +2069,7 @@ Coverage for the promoted Alpha 0.8 slice includes:
 - `EndTurnPreflightTests`: shared attention-fact identity, preference-only suppression, and Command Brief retention.
 - `SaveLoadRoundTripTests` plus the data-access tests: current format-18 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, itemized equipment, squad-lineage, station, character-order, physical-posting, scenario-invader, and Ork source/Waaagh! persistence; compatibility tests verify that older formats are rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
 - `EquipmentFoundationTests`, `RulesDatabaseValidationTests`, and the focused battle coverage: global equipment identity, requirements/capacity, kit validation, shared mission reserves, ammunition behavior, reload/recovery, initial-ready priority, effective tactical Battle Value, and carrier reassignment.
-- `SquadLineageTests`, `FleetCapacityPlanServiceTests`, `IndividualPostingServiceTests`, `DeploymentStorageTests`, and `OrkInfestationStateTests`: line identity/history retention, whole-squad capacity planning, individual posting invariants, format-18 persistence, and persistent Ork source/Waaagh! state. `PlanetaryOperationsServiceTests` and the Recovery/Planetary icon tests cover mission-scoped eligibility, atomic mixed-participant land/embark behavior, and required UI registrations.
+- `SquadLineageTests`, `FleetCapacityPlanServiceTests`, `IndividualPostingServiceTests`, `DeploymentStorageTests`, and `FactionCapabilityStateTests`: line identity/history retention, whole-squad capacity planning, individual posting invariants, format-18 persistence, and persistent dormant-population/invasion-force state. `PlanetaryOperationsServiceTests` and the Recovery/Planetary icon tests cover mission-scoped eligibility, atomic mixed-participant land/embark behavior, and required UI registrations.
 - `Scenes/Debug/release_scene_wiring_smoke.tscn` plus the stable headless main-scene smoke: shallow scene wiring.
 
 ### 9.3 Regression Risk Areas

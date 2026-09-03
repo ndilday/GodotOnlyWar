@@ -33,13 +33,14 @@ namespace OnlyWar.Builders
         internal static CampaignScenario StampPromisedWorld(
             Sector sector, GameRulesData data, Date currentDate,
             PlayerForce playerForce, List<Planet> planetList, List<Character> characterList,
-            InvaderFactionSelection invaderSelection = InvaderFactionSelection.Tyranids)
+            ScenarioFactionSelection invaderSelection = null)
         {
             ScenarioProfile profile = data.ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
-            Faction infiltrator = invaderSelection == InvaderFactionSelection.Orks
+            invaderSelection ??= ScenarioFactionSelection.Default;
+            Faction invader = SelectInvaderFaction(profile, data, invaderSelection);
+            Faction infiltrator = FactionCapabilities.GeneratesInvasions(invader)
                 ? null
                 : SelectScenarioFaction(profile, ScenarioFactionSlotKeys.Infiltrator, data);
-            Faction invader = SelectInvaderFaction(profile, data, invaderSelection);
 
             // The opening plays out as a timed sequence during generation rather than being stamped
             // as a static board (Design/Reference/OpeningScenario.md): the
@@ -120,25 +121,34 @@ namespace OnlyWar.Builders
         private static Faction SelectInvaderFaction(
             ScenarioProfile profile,
             GameRulesData data,
-            InvaderFactionSelection selection)
+            ScenarioFactionSelection selection)
         {
-            if (selection == InvaderFactionSelection.Orks)
+            IReadOnlyList<ScenarioFactionOption> options = profile.GetFactionOptions(
+                ScenarioFactionSlotKeys.Invader);
+            if (options.Count == 0)
             {
-                Faction faction = FactionCapabilities.WithCapability(
-                    data.Factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
-                if (faction == null)
-                    throw new InvalidOperationException("The invasion opening was selected but no invasion-generating faction is configured.");
-                return faction;
+                throw new InvalidOperationException(
+                    $"Scenario profile '{profile.Key}' has no eligible invader.");
             }
 
-            IReadOnlyList<ScenarioFactionOption> options = profile.GetFactionOptions(ScenarioFactionSlotKeys.Invader)
-                .Where(option => selection != InvaderFactionSelection.Tyranids
-                    || !FactionCapabilities.GeneratesInvasions(
-                        data.Factions.FirstOrDefault(faction => faction.Id == option.FactionId)))
-                .ToList();
-            if (options.Count == 0)
-                throw new InvalidOperationException($"Scenario profile '{profile.Key}' has no eligible non-invasion invader.");
-            return SelectScenarioFaction(profile, ScenarioFactionSlotKeys.Invader, data, options);
+            if (selection.FactionId.HasValue)
+            {
+                ScenarioFactionOption selected = options.FirstOrDefault(option =>
+                    option.FactionId == selection.FactionId.Value);
+                if (selected == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Faction id {selection.FactionId.Value} is not eligible for the "
+                        + $"'{profile.Key}' invader slot.");
+                }
+                return ResolveScenarioFaction(selected, data);
+            }
+
+            // The first stable option is the default. Random is the only path that consumes a
+            // weighted selection roll.
+            return selection.IsRandom
+                ? SelectScenarioFaction(profile, ScenarioFactionSlotKeys.Invader, data, options)
+                : ResolveScenarioFaction(options[0], data);
         }
 
         // Weeks the stranded invader force feeds after planetfall before the player arrives:
@@ -181,8 +191,13 @@ namespace OnlyWar.Builders
                 }
             }
 
-            return data.Factions.First(faction => faction.Id == selected.FactionId);
+            return ResolveScenarioFaction(selected, data);
         }
+
+        private static Faction ResolveScenarioFaction(
+            ScenarioFactionOption option,
+            GameRulesData data) =>
+            data.Factions.First(faction => faction.Id == option.FactionId);
 
         // Pulls the promised world's infiltrator up to landing-site strength: in each region the
         // infiltrator takes the profile's strength fraction of the combined

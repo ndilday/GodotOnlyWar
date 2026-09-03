@@ -38,7 +38,7 @@ namespace OnlyWar.Helpers.Turns
         {
             foreach (MissionContext context in missionContexts)
             {
-                // A belief-only feral Ork Extermination is a strategic culling search. It has a
+                // A belief-only dormant-population extermination is a strategic culling search. It has a
                 // mission context for reporting, but no tactical target/presence to attrit.
                 if (context?.Order?.Mission?.RegionFaction == null)
                 {

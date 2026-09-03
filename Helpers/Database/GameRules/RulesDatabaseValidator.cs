@@ -50,7 +50,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             RequireNotEmpty(rules.SectorGenerationProfiles, "SectorGenerationProfile", errors);
             RequireNotEmpty(
                 rules.FactionBehaviorRulesProfiles,
-                "FactionBehaviorRulesProfile (or legacy OrkCampaignProfile)",
+                "FactionBehaviorRulesProfile (or the legacy faction behavior table)",
                 errors);
 
             ValidateSectorGenerationProfiles(rules.SectorGenerationProfiles, errors);
@@ -218,8 +218,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             foreach (string requiredContext in new[]
             {
                 PlanetTemplateEligibilityKeys.PromisedWorld,
-                PlanetTemplateEligibilityKeys.GhostPopulationSource,
-                PlanetTemplateEligibilityKeys.OrkGhostSource
+                PlanetTemplateEligibilityKeys.GhostPopulationSource
             })
             {
                 List<PlanetTemplateEligibilityAssignment> contextAssignments = assignments

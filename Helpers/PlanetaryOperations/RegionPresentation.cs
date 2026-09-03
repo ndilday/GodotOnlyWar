@@ -123,15 +123,6 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         public static string GetIconKey(Region region) => BuildDetails(region)?.IconKey;
     }
 
-    [System.Obsolete("Use FactionActivityPresentation.")]
-    public static class OrkActivityPresentation
-    {
-        public static string Build(Region region) => FactionActivityPresentation.Build(region);
-
-        public static bool IsOrkFaction(Faction faction) =>
-            FactionCapabilities.HasDormantPopulations(faction);
-    }
-
     public static class RegionTerrainPresentation
     {
         public const int VariantCount = 6;
