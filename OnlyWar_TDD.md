@@ -1144,6 +1144,50 @@ All checks: `zAdvantage = (skillValue − difficulty) / 5.0`, then `GaussianCalc
 | `BattleTurnResolver` | Drives one full battle turn; fires `OnBattleComplete` when done |
 | `BattleHistory` | Stores `List<BattleTurn>`, each with a state snapshot and `List<IAction>` |
 
+**Orchestration boundaries and lifetimes:**
+
+`BattleTurnResolver` owns the single live `BattleState`, turn sequencing, action/wound execution,
+casualty cleanup, history, completion, and `BattleHistory.Outcome`. Its battle-scoped collaborators
+share that state and grid; none accepts a resolver callback or keeps a second authoritative roster.
+
+| Owner | Responsibility |
+|---|---|
+| `BattleMoraleService` | Starting strength/leader bookkeeping, turn-start morale snapshots, checks and squad effects, mob coercion decisions, and ever-routed IDs |
+| `BattleRoundMetrics` | Recent value/damage histories and force-metric construction |
+| `BattleWithdrawalService` | Continuation, withdrawal/pursuit transitions, role constraints, rear guards, contact/escape handling, and current-turn pursuit pairings |
+| `BattleActionPlanningCoordinator` | Warm live views, create pass data and frames, initialize horizons, schedule indexed decisions, then declare and build actions serially |
+| `SquadEngagementPolicy` / `SoldierActionPlanner` | Select legal squad options and root-action descriptors without action emission or battle RNG access |
+| `SquadActionBuilder` / `MeleeActionBuilder` | Serial declaration and materialization, including deferred charge intent; receive the shared battle RNG explicitly |
+| `RangedTargetSelector` / `RangedShotEvaluator` / `BlastThrowEvaluator` | Target ranking and sticky aim, shot estimates, and blast selection respectively |
+| `SoldierMovementProjector` / `SoldierMovementPlanner` | Movement calculation versus serial reservations, action construction, and speed commitment |
+
+`BattleSquadPlanner` is a compatibility/composition facade, including ambush aim seeding and
+existing test entry points. Its policy, builders, and targeting/movement collaborators live for
+one planning pass. Both side planners share one fresh `BattlePlanningContext`; workers have indexed
+result slots, not private caches. `SquadPlanningServices` exposes rules, live state, tracing, and
+that memo but no RNG or action sink. `RangedTargetingServices` narrows this further. These are
+capability boundaries, not deeply immutable model snapshots. Execution and aftermath retain the
+same battle RNG stream through `BattleExecutionContext`.
+
+The resolver preserves this phase order: reset/advance/recovery; morale snapshot; planning;
+pending mob suppression; shooting; movement; melee; wounds; casualty cleanup; metrics;
+escape/contact; morale; continuation; history; completion. Terminal casualties precede contact
+resolution. Both sides' force metrics are captured before the first morale check; each returned
+side-routed transition is handled immediately, with a terminal guard before the second side.
+Withdrawal returns a typed terminal request; only the resolver constructs and assigns the outcome.
+
+Planning prepares role constraints serially, warms live views, builds paired frames and the shared
+horizon, then evaluates every choice before any declaration. Worker jobs receive the engagement
+policy. Pairings replace the lifecycle service's prior-turn pairings before all decisions are
+declared serially; only after every declaration are actions built serially. Stable side, squad,
+soldier, target, and action ordering preserves ties and RNG consumption. Declaration changes
+speeds; construction reserves destinations and can change speeds again. Memo use must respect
+these barriers. Candidate movement cannot commit through its projection API; construction
+revalidates against current reservations. Deferred charges re-project after ordinary reservations
+are cleared. Materialization preserves the selected root descriptor and its readiness/ammo rules.
+Trace formatting stays lazy when disabled. Fixed-seed resolver characterization and the battle
+tests cover outcomes, action state, and real degree-1 versus degree-4 planning equivalence.
+
 **Loadout allocation (`BattleSquad.AllocateEquipment`):**
 - Iterates members, allocating weapons from the squad `Loadout` (weapon sets).
 - One-hand weapons allow dual-wielding; two-hand weapons consume both slots.

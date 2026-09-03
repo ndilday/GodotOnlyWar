@@ -6,41 +6,48 @@ using OnlyWar.Models.Battles;
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// Turns a movement intent -- a direction line and a speed budget -- into an actual destination
-    /// and a <see cref="MoveAction"/>: how far a tier lets a soldier travel, where along that line
-    /// it lands, which way it ends up facing, and how the grid squeezes the footprint when the
-    /// intended square will not fit.
+    /// Commits a previously calculated movement intent -- a direction line and a speed budget --
+    /// into a reserved destination and a <see cref="MoveAction"/>. Calculation belongs to
+    /// <see cref="SoldierMovementProjector"/>; this class is the serial mutation boundary.
     ///
-    /// <para>The only planning collaborator that holds an <see cref="ActionSink"/> as well as a
-    /// <see cref="SquadPlanningServices"/>: placing a move IS emitting an action, and it also
-    /// reserves the destination on the grid so later movers in the same pass see it taken. That
-    /// makes it order-dependent, and safe only on the resolver's serial action-building phase.</para>
+    /// <para>Placing a move emits an action and reserves the destination on the grid so later movers
+    /// in the same pass see it taken. That makes commitment order-dependent, and safe only on the
+    /// resolver's serial action-building phase.</para>
     /// </summary>
     internal sealed class SoldierMovementPlanner
     {
-        // THE canonical tier speeds. Internal because the planner's posture scoring and the
-        // resolver's pursuit projections must both predict the speed this class will actually move
-        // at -- they disagreed (0.66 vs 0.5) until 2026-07-30, and the posture decision was
-        // predicting a jog a third faster than the one it got. Do not re-declare these elsewhere.
-        internal const float WalkSpeedMultiplier = 0.2f;
-        internal const float JogSpeedMultiplier = 0.5f;
-        // How much of a weapon's Bulk penalty a soldier eats at each movement tier. Canonical home:
-        // the engagement scorer, the posture-bulk mapping and the ranged selector all read these,
-        // and they must not drift apart.
-        internal const float WalkBulkMultiplier = 0.5f;
-        internal const float FullBulkMultiplier = 1f;
+        // Compatibility aliases. SoldierMovementProjector is the canonical home so decision code
+        // can receive it without an action sink or a mutation-capable planner.
+        internal const float WalkSpeedMultiplier = SoldierMovementProjector.WalkSpeedMultiplier;
+        internal const float JogSpeedMultiplier = SoldierMovementProjector.JogSpeedMultiplier;
+        internal const float WalkBulkMultiplier = SoldierMovementProjector.WalkBulkMultiplier;
+        internal const float FullBulkMultiplier = SoldierMovementProjector.FullBulkMultiplier;
 
-        private readonly SquadPlanningServices _services;
+        private readonly SoldierMovementProjector _projector;
         private readonly ActionSink _actions;
         private readonly BattleGridManager _grid;
         private readonly Action<string> _log;
 
-        internal SoldierMovementPlanner(SquadPlanningServices services, ActionSink actions)
+        internal SoldierMovementPlanner(
+            SoldierMovementProjector projector,
+            ActionSink actions,
+            Action<string> log = null)
         {
-            _services = services ?? throw new ArgumentNullException(nameof(services));
+            _projector = projector ?? throw new ArgumentNullException(nameof(projector));
             _actions = actions ?? throw new ArgumentNullException(nameof(actions));
-            _grid = _services.Grid;
-            _log = _services.Log;
+            _grid = projector.Grid;
+            _log = log;
+        }
+
+        // Compatibility constructor for callers that still construct the commit boundary from the
+        // broad planning bundle. The planner retains only the grid and log it needs.
+        internal SoldierMovementPlanner(SquadPlanningServices services, ActionSink actions)
+            : this(
+                new SoldierMovementProjector(services?.Grid
+                    ?? throw new ArgumentNullException(nameof(services))),
+                actions,
+                services.Log)
+        {
         }
 
         internal static float GetTierSpeed(BattleSoldier soldier, SquadMovementTier tier)
@@ -48,22 +55,12 @@ namespace OnlyWar.Helpers.Battles
             // A caller may still hold a precomputed Run intent from before armor was resolved.
             // Treat it as the fastest legal movement tier for this soldier rather than allowing
             // restrictive armor to receive full Run speed through a stale decision.
-            if (tier == SquadMovementTier.Run && !soldier.CanRun)
-            {
-                tier = SquadMovementTier.Jog;
-            }
-            return tier switch
-            {
-                SquadMovementTier.Walk => soldier.GetMoveSpeed() * WalkSpeedMultiplier,
-                SquadMovementTier.Jog => soldier.GetMoveSpeed() * JogSpeedMultiplier,
-                SquadMovementTier.Run or SquadMovementTier.InMelee => soldier.GetMoveSpeed(),
-                _ => 0
-            };
+            return SoldierMovementProjector.GetTierSpeed(soldier, tier);
         }
 
         internal static float GetMovementBudget(BattleSoldier soldier, SquadMovementTier tier)
         {
-            return GetTierSpeed(soldier, tier) + soldier.LeftoverMovement;
+            return SoldierMovementProjector.GetMovementBudget(soldier, tier);
         }
 
         internal ValueTuple<int, int> AddMoveAction(
@@ -72,33 +69,43 @@ namespace OnlyWar.Helpers.Battles
             ValueTuple<int, int> line,
             SquadMovementTier? tier = null)
         {
-            ValueTuple<int, int> desiredMove = CalculateMovementAlongLine(line, moveSpeed);
-            ValueTuple<int, int> newLocation = new ValueTuple<int, int>(soldier.TopLeft.Value.Item1 + desiredMove.Item1, soldier.TopLeft.Value.Item2 + desiredMove.Item2);
-            SquadMovementTier movementTier = tier ?? soldier.BattleSquad.MovementTier;
-            SquadMovementTier effectiveTier = movementTier == SquadMovementTier.Run
-                && !soldier.CanRun
-                    ? SquadMovementTier.Jog
-                    : movementTier;
-            ushort orientation = CalculateOrientationFromVector(line, soldier, effectiveTier);
-            newLocation = FindBestLocation(
+            SoldierMovementProjection projection = _projector.ProjectMove(
                 soldier,
-                soldier.TopLeft.Value,
-                newLocation,
                 moveSpeed,
-                orientation);
-            _grid.ReserveMoveDestination(soldier, newLocation, orientation);
-            _actions.Move.Add(new MoveAction(
+                line,
+                tier);
+            CommitProjectedMove(soldier, projection);
+            return projection.ReportedDirection;
+        }
+
+        /// <summary>
+        /// Serially commits a speculative result: reserve the full rotated footprint, construct
+        /// the action, and update the declared soldier state in the same order as the old planner.
+        /// </summary>
+        internal MoveAction CommitProjectedMove(
+            BattleSoldier soldier,
+            SoldierMovementProjection projection,
+            bool addToActionSink = true)
+        {
+            _grid.ReserveMoveDestination(
+                soldier,
+                projection.Destination,
+                projection.Orientation);
+            MoveAction action = new(
                 soldier,
                 _grid,
-                soldier.TopLeft.Value,
-                newLocation,
-                orientation,
-                moveSpeed));
-            ValueTuple<int, int> actualDirection = new(
-                newLocation.Item1 - soldier.TopLeft.Value.Item1,
-                newLocation.Item2 - soldier.TopLeft.Value.Item2);
+                projection.StartingPoint,
+                projection.Destination,
+                projection.Orientation,
+                projection.MovementBudget);
+            if (addToActionSink)
+            {
+                _actions.Move.Add(action);
+            }
+
+            ValueTuple<int, int> actualDirection = projection.ActualDirection;
             soldier.CurrentSpeed = Math.Min(
-                GetTierSpeed(soldier, movementTier),
+                GetTierSpeed(soldier, projection.DeclaredTier),
                 (float)Math.Sqrt(
                     actualDirection.Item1 * actualDirection.Item1
                     + actualDirection.Item2 * actualDirection.Item2));
@@ -106,15 +113,77 @@ namespace OnlyWar.Helpers.Battles
             {
                 soldier.IsRunning = false;
             }
-            if (effectiveTier != SquadMovementTier.Run)
+            if (projection.EffectiveTier != SquadMovementTier.Run)
             {
                 soldier.IsRunning = false;
             }
-            LogMove(soldier, effectiveTier, moveSpeed, desiredMove, actualDirection);
-            return actualDirection.Item1 == 0 && actualDirection.Item2 == 0
-                ? line
-                : actualDirection;
+            LogMove(
+                soldier,
+                projection.EffectiveTier,
+                projection.MovementBudget,
+                projection.DesiredMove,
+                actualDirection);
+            return action;
         }
+
+        /// <summary>
+        /// Commits the fixed adjacency destination used by the pre-movement charge declaration.
+        /// This retains that path's historical one-cell reservation and declared InMelee speed;
+        /// the projection itself still comes from SoldierMovementProjector.
+        /// </summary>
+        internal MoveAction CommitChargeDestination(
+            BattleSoldier soldier,
+            ValueTuple<int, int> currentPosition,
+            ValueTuple<int, int> destination,
+            ushort orientation,
+            float movementBudget)
+        {
+            _grid.ReserveSpace(destination);
+            MoveAction action = new(
+                soldier,
+                _grid,
+                currentPosition,
+                destination,
+                orientation,
+                movementBudget);
+            _actions.Move.Add(action);
+            soldier.CurrentSpeed = GetTierSpeed(soldier, SquadMovementTier.InMelee);
+            return action;
+        }
+
+        /// <summary>
+        /// Creates the immediate charge move used after ordinary movement reservations are cleared.
+        /// The MoveAction itself performs the live-grid placement immediately; reserving a stale
+        /// endpoint here would change which later charger sees the target squad's live position.
+        /// </summary>
+        internal MoveAction CreateImmediateChargeMove(
+            BattleSoldier soldier,
+            SoldierMovementProjection projection)
+        {
+            soldier.CurrentSpeed = GetTierSpeed(soldier, SquadMovementTier.InMelee);
+            return new MoveAction(
+                soldier,
+                _grid,
+                projection.StartingPoint,
+                projection.Destination,
+                projection.Orientation,
+                projection.MovementBudget);
+        }
+
+        internal SoldierMovementProjection ProjectMove(
+            BattleSoldier soldier,
+            float moveSpeed,
+            ValueTuple<int, int> line,
+            SquadMovementTier? tier = null,
+            BattleGridManager grid = null,
+            ValueTuple<int, int>? targetPointOverride = null) =>
+            _projector.ProjectMove(
+                soldier,
+                moveSpeed,
+                line,
+                tier,
+                grid,
+                targetPointOverride);
 
         /// <summary>
         /// Per-soldier movement trace: what the tier allowed, what the soldier asked for, and what
@@ -162,167 +231,16 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        internal ValueTuple<int, int> CalculateMovementAlongLine(ValueTuple<int, int> line, float moveSpeed)
-        {
-            ValueTuple<int, int> targetLocation;
-            if (moveSpeed <= 0) return new ValueTuple<int, int>(0, 0);   // this shouldn't happen
-            else if(line.Item1 == 0)
-            {
-                targetLocation = new ValueTuple<int, int>(0, line.Item2 < 0 ? -(int)moveSpeed : (int)moveSpeed);
-                if (_grid.IsSpaceAvailable(targetLocation)) return targetLocation;
-            }
-            else if(line.Item2 == 0)
-            {
-                targetLocation = new ValueTuple<int, int>(line.Item1 < 0 ? -(int)moveSpeed : (int)moveSpeed, 0);
-                if (_grid.IsSpaceAvailable(targetLocation)) return targetLocation;
-            }
-
-            // multiply line by the square root of moveSpeed^2/line^2
-            int lineLengthSq = (line.Item1 * line.Item1) + (line.Item2 * line.Item2);
-            float speedSq = moveSpeed * moveSpeed;
-            float multiplier = (float)Math.Sqrt(speedSq / lineLengthSq);
-
-            // if we're fast enough to get to the destination, just go there
-            if (multiplier >= 1.0f) return line;
-
-            float xDistance = line.Item1 * multiplier;
-            float yDistance = line.Item2 * multiplier;
-
-            // should always move a minimum of one space
-            if (xDistance == 0 && yDistance == 0)
-            {
-                if (line.Item1 > line.Item2)
-                {
-                    return new ValueTuple<int, int>(1, 0);
-                }
-                else
-                {
-                    return new ValueTuple<int, int>(0, 1);
-                }
-            }
-            else
-            {
-                // if there's movement in both dimensions and "Wasted" movement in the longer direction
-                // determine if the excess is enough to finish the movement along the smaller leg
-                float xLeftover = xDistance % 1;
-                float yLeftover = yDistance % 1;
-
-                if (line.Item2 != 0 && xLeftover != 0 && Math.Abs(xDistance) > Math.Abs(yDistance))
-                {
-                    int x = (int)xDistance;
-                    int y = yDistance < 0 ? (int)yDistance -1 : (int)yDistance + 1;
-                    if((x * x) + (y * y) < speedSq)
-                    {
-                        return new ValueTuple<int, int>(x, y);
-                    }
-                }
-                else if (line.Item2 != 0 && yLeftover != 0)
-                {
-                    int x = xDistance < 0 ? (int)xDistance - 1: (int)xDistance + 1;
-                    int y = (int)yDistance;
-                    if ((x * x) + (y * y) < speedSq)
-                    {
-                        return new ValueTuple<int, int>(x, y);
-                    }
-                }
-            }
-            return new ValueTuple<int, int> ((int)xDistance, (int)yDistance);
-        }
+        // Charge construction shares the projector's geometry without duplicating its rules.
+        internal ValueTuple<int, int> CalculateMovementAlongLine(
+            ValueTuple<int, int> line,
+            float moveSpeed) =>
+            _projector.CalculateMovementAlongLine(line, moveSpeed);
 
         internal ushort CalculateOrientationFromVector(
             ValueTuple<int, int> vector,
             BattleSoldier soldier = null,
-            SquadMovementTier tier = SquadMovementTier.Stationary)
-        {
-            if (vector.Item1 == 0 && vector.Item2 == 0)
-            {
-                return soldier?.Orientation ?? 0;
-            }
-
-            double angle = Math.Atan2(vector.Item1, vector.Item2);
-            int desired = (int)Math.Round(angle / (Math.PI / 4.0));
-            desired = (desired % BattleOrientation.HeadingCount
-                + BattleOrientation.HeadingCount)
-                % BattleOrientation.HeadingCount;
-
-            if (soldier == null
-                || (tier != SquadMovementTier.Run && tier != SquadMovementTier.InMelee))
-            {
-                return (ushort)desired;
-            }
-
-            int current = soldier.Orientation % BattleOrientation.HeadingCount;
-            int difference = desired - current;
-            if (difference > BattleOrientation.HeadingCount / 2)
-            {
-                difference -= BattleOrientation.HeadingCount;
-            }
-            else if (difference < -(BattleOrientation.HeadingCount / 2))
-            {
-                difference += BattleOrientation.HeadingCount;
-            }
-
-            int limited = Math.Clamp(difference, -1, 1);
-            return (ushort)((current + limited + BattleOrientation.HeadingCount)
-                % BattleOrientation.HeadingCount);
-        }
-
-        internal ValueTuple<int, int> FindBestLocation(
-            BattleSoldier soldier,
-            ValueTuple<int, int> startingPoint,
-            ValueTuple<int, int> targetPoint,
-            float speed,
-            ushort orientation,
-            BattleGridManager grid = null)
-        {
-            grid ??= _grid;
-            float speedSq = speed * speed;
-            int xMove = targetPoint.Item1 - startingPoint.Item1;
-            int yMove = targetPoint.Item2 - startingPoint.Item2;
-            // Shift around the shorter axis first: the major axis carries the intent of the move,
-            // so give ground on the minor one.
-            bool majorIsX = xMove * xMove > yMove * yMove;
-            int major = majorIsX ? xMove : yMove;
-            int minor = majorIsX ? yMove : xMove;
-            // Which side of the intended lateral offset gets probed first. Outward (away from the
-            // line of travel) matches the pre-existing bias.
-            int leadSide = minor < 0 ? -1 : 1;
-
-            while (major * major > 0)
-            {
-                float lateralBudgetSq = speedSq - (major * major);
-                // Probe the intended offset first and then alternate outward from it — 0, +1, -1,
-                // +2, -2, … A side that has left the movement budget is skipped rather than ending
-                // the search, because when the intended offset is nonzero the two sides run out at
-                // different magnitudes and the nearer one still has usable squares.
-                for (int magnitude = 0; ; magnitude++)
-                {
-                    bool anyWithinBudget = false;
-                    int sides = magnitude == 0 ? 1 : 2;
-                    for (int side = 0; side < sides; side++)
-                    {
-                        int lateral = minor
-                            + (magnitude * (side == 0 ? leadSide : -leadSide));
-                        if (lateral * lateral > lateralBudgetSq) continue;
-                        anyWithinBudget = true;
-                        ValueTuple<int, int> newTarget = majorIsX
-                            ? new ValueTuple<int, int>(
-                                startingPoint.Item1 + major,
-                                startingPoint.Item2 + lateral)
-                            : new ValueTuple<int, int>(
-                                startingPoint.Item1 + lateral,
-                                startingPoint.Item2 + major);
-                        if (grid.IsMoveDestinationAvailable(soldier, newTarget, orientation))
-                        {
-                            return newTarget;
-                        }
-                    }
-                    if (!anyWithinBudget) break;
-                }
-                // if we can't find a lateral move that works, start over with the main axis reduced by 1
-                major -= major > 0 ? 1 : -1;
-            }
-            return startingPoint;
-        }
+            SquadMovementTier tier = SquadMovementTier.Stationary) =>
+            _projector.CalculateOrientationFromVector(vector, soldier, tier);
     }
 }

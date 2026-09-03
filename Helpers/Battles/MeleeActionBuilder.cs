@@ -30,7 +30,7 @@ namespace OnlyWar.Helpers.Battles
         private readonly MeleeStrikeEstimator _melee;
         private readonly SoldierMovementPlanner _movement;
         // Equip/reload housekeeping a soldier may do while closing. Cross-cutting rather than melee,
-        // so it stays on the planner and arrives here as a callback.
+        // so it arrives through the narrow run-utility builder operation.
         private readonly Action<BattleSoldier> _addRunUtility;
 
         private readonly BattleGridManager _grid;
@@ -42,6 +42,7 @@ namespace OnlyWar.Helpers.Battles
         internal MeleeActionBuilder(
             SquadPlanningServices services,
             ActionSink actions,
+            IRNG random,
             RangedTargetSelector ranged,
             MeleeStrikeEstimator melee,
             SoldierMovementPlanner movement,
@@ -56,7 +57,7 @@ namespace OnlyWar.Helpers.Battles
             _grid = _services.Grid;
             _soldierMap = _services.SoldierMap;
             _meleeWeaponTemplates = _services.MeleeWeaponTemplates;
-            _random = _services.Random;
+            _random = random ?? throw new ArgumentNullException(nameof(random));
             _log = _services.Log;
         }
 
@@ -444,23 +445,13 @@ namespace OnlyWar.Helpers.Battles
                         charger.TopLeft.Value.Item2 + desired.Item2);
                 }
 
-                ushort orientation = _movement.CalculateOrientationFromVector(
-                    line, charger, SquadMovementTier.InMelee);
-                destination = _movement.FindBestLocation(
+                SoldierMovementProjection projection = _movement.ProjectMove(
                     charger,
-                    charger.TopLeft.Value,
-                    destination,
                     budget,
-                    orientation);
-                MoveAction move = new(
-                    charger,
-                    _grid,
-                    charger.TopLeft.Value,
-                    destination,
-                    orientation,
-                    budget);
-                charger.CurrentSpeed = SoldierMovementPlanner.GetTierSpeed(
-                    charger, SquadMovementTier.InMelee);
+                    line,
+                    SquadMovementTier.InMelee,
+                    targetPointOverride: destination);
+                MoveAction move = _movement.CreateImmediateChargeMove(charger, projection);
                 move.Execute(state);
                 if (move.Succeeded) resolvedMovement.Add(move);
 
@@ -506,25 +497,20 @@ namespace OnlyWar.Helpers.Battles
                 // we can't make it to an enemy in one move
                 // soldier can't get there in one move, advance as far as possible
 
-                ValueTuple<int, int> realMove = _movement.CalculateMovementAlongLine(move, moveSpeed);
-                _movement.AddMoveAction(soldier, moveSpeed, realMove, SquadMovementTier.InMelee);
+                _movement.AddMoveAction(soldier, moveSpeed, move, SquadMovementTier.InMelee);
                 _addRunUtility(soldier);
             }
             else
             {
                 //Debug.Log(soldier.Soldier.Name + " charging " + moveSpeed.ToString("F0"));
-                soldier.CurrentSpeed = SoldierMovementPlanner.GetTierSpeed(
-                    soldier, SquadMovementTier.InMelee);
-                _grid.ReserveSpace(newPos);
                 ushort orientation = _movement.CalculateOrientationFromVector(
                     move, soldier, SquadMovementTier.InMelee);
-                _actions.Move.Add(new MoveAction(
+                _movement.CommitChargeDestination(
                     soldier,
-                    _grid,
                     currentPosition,
                     newPos,
                     orientation,
-                    moveSpeed));
+                    moveSpeed);
                 MeleeWeapon meleeWeaponToReady =
                     MeleeStrikeEstimator.GetFirstUsableMeleeWeapon(soldier);
                 if (soldier.EquippedMeleeWeapons.Count == 0 && meleeWeaponToReady != null)

@@ -279,7 +279,7 @@ namespace OnlyWar.Helpers.Battles
                     ? RemovalMath.BuildTakeOutLocationTerms(
                         victim, armor * template.ArmorMultiplier, template.WoundMultiplier)
                     : null;
-            (float takeOut, float progress) = RangedTargetSelector.CalculateRangedHitRemoval(
+            (float takeOut, float progress) = RangedShotEvaluator.CalculateRangedHitRemoval(
                 victim, weapon, victimRange, armor);
             return new PairRemovalTerm(
                 shooter.Soldier.Id,

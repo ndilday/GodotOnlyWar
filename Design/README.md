@@ -53,9 +53,6 @@ distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is
 `VisualBaselines/PlanetaryOperations/`. Active design work currently retained here is:
 
 - `RangedCombatFollowUps.md` — narrow ranged-combat backlog described below.
-- [BattleOrchestratorDecomposition.md](Active/BattleOrchestratorDecomposition.md) — phased,
-  behavior-preserving extraction of battle morale, withdrawal/pursuit, and action planning into
-  focused collaborators, with bounded agent assignments and validation gates.
 - `PlanetaryOperationsRework.md` — implemented 2026-08-25; retained temporarily as its phase-by-phase
   acceptance record. The shipped architecture is summarized in `OnlyWar_TDD.md` §7.5.
 

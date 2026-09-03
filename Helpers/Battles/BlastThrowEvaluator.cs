@@ -41,7 +41,7 @@ namespace OnlyWar.Helpers.Battles
         private static readonly (float Z, float Weight)[] BlastDeliveryQuadrature =
             BuildStandardNormalQuadrature();
 
-        private readonly SquadPlanningServices _services;
+        private readonly RangedTargetingServices _services;
         // The planner's nearest-enemies-within-range scan: (shooter, range, movementDirection).
         // Only consulted on the no-candidates fallback path.
         private readonly Func<BattleSoldier, float, ValueTuple<int, int>?, IEnumerable<BattleSoldier>>
@@ -51,7 +51,7 @@ namespace OnlyWar.Helpers.Battles
         private IReadOnlyDictionary<int, BattleSoldier> SoldierMap => _services.SoldierMap;
 
         internal BlastThrowEvaluator(
-            SquadPlanningServices services,
+            RangedTargetingServices services,
             Func<BattleSoldier, float, ValueTuple<int, int>?, IEnumerable<BattleSoldier>>
                 findEnemiesWithinRange)
         {

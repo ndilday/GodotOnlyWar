@@ -6,24 +6,16 @@ using OnlyWar.Models.Equippables;
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// The read-side context every squad-planning collaborator needs: the frozen battle state to
-    /// reason over, the rules it resolves weapons against, the random stream, the log sink, and the
-    /// shared per-turn memo.
-    ///
-    /// <para>Bundled so an extracted scorer takes ONE constructor parameter instead of six, and so
-    /// the planner and its collaborators demonstrably read the same state. Nothing here is mutated
-    /// during planning -- <see cref="BattlePlanningContext"/> is a memo whose own thread-safety
-    /// invariant is documented on that type, which matters because the resolver runs
-    /// <c>ChooseEngagementOption</c> across squads in parallel on a shared planner. Actions are
-    /// written through <see cref="ActionSink"/>, which is deliberately NOT part of this bundle:
-    /// the decision half of planning must not be able to emit an action.</para>
+    /// Shared planning-pass read capabilities: live grid/model references, rules, lazy tracing,
+    /// and the shared memo. No RNG or action sink is available to decision collaborators.
+    /// Inputs are warmed and stable during worker evaluation, not deeply immutable; declaration
+    /// and construction mutate them only after every decision completes.
     /// </summary>
     internal sealed class SquadPlanningServices
     {
         internal BattleGridManager Grid { get; }
         internal IReadOnlyDictionary<int, BattleSoldier> SoldierMap { get; }
         internal IReadOnlyDictionary<int, MeleeWeaponTemplate> MeleeWeaponTemplates { get; }
-        internal IRNG Random { get; }
         /// <summary>Null when nothing is listening; every caller must null-check before formatting
         /// a trace, so the no-logging hot path stays free.</summary>
         internal Action<string> Log { get; }
@@ -33,7 +25,6 @@ namespace OnlyWar.Helpers.Battles
             BattleGridManager grid,
             IReadOnlyDictionary<int, BattleSoldier> soldierMap,
             IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates,
-            IRNG random,
             Action<string> log,
             BattlePlanningContext context)
         {
@@ -41,7 +32,6 @@ namespace OnlyWar.Helpers.Battles
             SoldierMap = soldierMap ?? throw new ArgumentNullException(nameof(soldierMap));
             MeleeWeaponTemplates = meleeWeaponTemplates
                 ?? throw new ArgumentNullException(nameof(meleeWeaponTemplates));
-            Random = random ?? throw new ArgumentNullException(nameof(random));
             Log = log;
             Context = context ?? throw new ArgumentNullException(nameof(context));
         }
@@ -60,6 +50,38 @@ namespace OnlyWar.Helpers.Battles
         /// </summary>
         internal static float BattleValueOf(BattleSoldier soldier) =>
             Math.Max(0, soldier?.EffectiveBattleValue ?? soldier?.Soldier?.Template?.BattleValue ?? 0);
+    }
+
+    /// <summary>
+    /// The narrow read-side capability used by ranged targeting and shot evaluation.
+    ///
+    /// <para>This deliberately omits the battle RNG, melee-template map, and action sink from the
+    /// targeting dependency graph. The model references remain live -- this is a capability
+    /// boundary, not a deep immutable snapshot -- but the supplied operations are limited to the
+    /// frozen layout, soldier state, trace sink, and per-pass memo that ranged scoring already
+    /// requires.</para>
+    /// </summary>
+    internal sealed class RangedTargetingServices
+    {
+        internal BattleGridManager Grid { get; }
+        internal IReadOnlyDictionary<int, BattleSoldier> SoldierMap { get; }
+        internal Action<string> Log { get; }
+        internal BattlePlanningContext Context { get; }
+
+        internal RangedTargetingServices(SquadPlanningServices services)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            Grid = services.Grid;
+            SoldierMap = services.SoldierMap;
+            Log = services.Log;
+            Context = services.Context;
+        }
+
+        internal bool IsPlaced(BattleSoldier soldier) =>
+            soldier != null && Grid.IsSoldierPlaced(soldier.Soldier.Id);
+
+        internal static float BattleValueOf(BattleSoldier soldier) =>
+            SquadPlanningServices.BattleValueOf(soldier);
     }
 
     /// <summary>

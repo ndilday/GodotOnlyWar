@@ -18,8 +18,6 @@ namespace OnlyWar.Helpers.Battles
     /// </summary>
     internal sealed class RangedTargetSelector
     {
-        // Shot count targets the same take-out confidence melee strike planning uses.
-        private const float TargetTakeOutConfidenceThreshold = MeleeMath.TakeOutConfidenceTarget;
         private const int RangedTargetSquadCandidateCount = 3;
         private const float FullBulkMultiplier = SoldierMovementPlanner.FullBulkMultiplier;
         // Shared ranged-candidate cap: rifle, cone, and blast all score against the same top
@@ -48,70 +46,34 @@ namespace OnlyWar.Helpers.Battles
         // rather than its current one -- see IsExistingAimStillViable.
         internal const int FullAimBonusTurns = 3;
 
-        private readonly SquadPlanningServices _services;
+        private readonly RangedTargetingServices _services;
         // Aliases onto the bundle, named as the planner named them so the moved bodies read
         // unchanged against their original form.
         private readonly BattleGridManager _grid;
         private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
         private readonly BattlePlanningContext _context;
+        private readonly RangedShotEvaluator _shotEvaluator;
 
-        internal RangedTargetSelector(SquadPlanningServices services)
+        internal RangedTargetSelector(RangedTargetingServices services)
         {
             _services = services ?? throw new ArgumentNullException(nameof(services));
             _grid = _services.Grid;
             _soldierMap = _services.SoldierMap;
             _context = _services.Context;
+            _shotEvaluator = new RangedShotEvaluator(_services);
+        }
+
+        // Compatibility constructor for focused targeting callers that still start from the
+        // complete planning bundle. The selector itself retains only the narrow read capability.
+        internal RangedTargetSelector(SquadPlanningServices services)
+            : this(new RangedTargetingServices(services))
+        {
         }
 
         private bool IsPlaced(BattleSoldier soldier) => _services.IsPlaced(soldier);
 
         private static float GetBattleValue(BattleSoldier soldier) =>
-            SquadPlanningServices.BattleValueOf(soldier);
-
-        private readonly struct RangedHitEstimateContext
-        {
-            private readonly float _weaponSkill;
-            private readonly float _rangeModifier;
-            private readonly float _sizeModifier;
-            private readonly float _moveAndAimModifier;
-            private readonly float _meleeModifier;
-            private readonly float _targetEvasion;
-
-            public RangedHitEstimateContext(
-                BattleSoldier soldier,
-                BattleSoldier target,
-                RangedWeapon weapon,
-                float range,
-                float moveAndAimModifier,
-                bool firingIntoMelee,
-                float? targetSpeed = null)
-            {
-                _weaponSkill = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-                _rangeModifier = BattleModifiersUtil.CalculateRangeModifier(
-                    range, targetSpeed ?? target.CurrentSpeed);
-                _sizeModifier = BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
-                _moveAndAimModifier = moveAndAimModifier;
-                _meleeModifier = firingIntoMelee
-                    ? RangedFriendlyFireRules.FiringIntoMeleePenalty
-                    : 0;
-                _targetEvasion = target.Soldier.Template.Species.RangedEvasion;
-            }
-
-            public float CalculatePreRollHitTotal(int numberOfShots)
-            {
-                // Preserve the original left-to-right floating-point expression exactly. These
-                // values guide target and ammunition decisions, so even rounding-level changes can
-                // alter a seeded battle at a threshold.
-                float rateOfFireModifier = BattleModifiersUtil.CalculateRateOfFireModifier(numberOfShots);
-                return _weaponSkill
-                    + rateOfFireModifier
-                    + _rangeModifier
-                    + _sizeModifier
-                    + _moveAndAimModifier
-                    + _meleeModifier
-                    - _targetEvasion;
-            }
-        }
+            RangedTargetingServices.BattleValueOf(soldier);
 
         internal IReadOnlyList<BattleSoldier> BuildRankedRangedCandidates(
             BattleSoldier soldier,
@@ -192,7 +154,7 @@ namespace OnlyWar.Helpers.Battles
             // matches what the >= 3 branch will actually fire with (Accuracy + 3 + 1), so a shot
             // that will be worthwhile once lined up is allowed to mature, while one that is
             // hopeless even fully aimed is still dropped.
-            RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+            RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
                 soldier,
                 target,
                 weapon,
@@ -258,7 +220,7 @@ namespace OnlyWar.Helpers.Battles
                 }
 
                 float toHitModifier = -weapon.Template.Bulk * bulkMultiplier;
-                RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
                     soldier,
                     target,
                     weapon,
@@ -520,7 +482,7 @@ namespace OnlyWar.Helpers.Battles
                             toHitModifier += weapon.Template.Accuracy + soldier.Aim.Value.Item3 + 1;
                         }
 
-                        RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                        RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
                             soldier,
                             target,
                             weapon,
@@ -616,7 +578,7 @@ namespace OnlyWar.Helpers.Battles
                         float armor = victim.Armor?.Template.ArmorProvided ?? 0;
                         // Phase 5 graded fraction, matching the conventional ranged path so a cone
                         // burst and a rifle shot are quoted in the same currency.
-                        float removalFraction = CalculateRangedRemovalFraction(
+                        float removalFraction = RangedShotEvaluator.CalculateRangedRemovalFraction(
                             victim, weapon, victimRange, armor);
                         float expectedBattleValueRemoval =
                             removalFraction * GetBattleValue(victim);
@@ -659,71 +621,13 @@ namespace OnlyWar.Helpers.Battles
             float range,
             float additionalToHitModifier,
             float? targetSpeed = null)
-        {
-            float evaluatedTargetSpeed = targetSpeed ?? target.CurrentSpeed;
-            var cacheKey = (
-                soldier.Soldier.Id,
-                target.Soldier.Id,
-                weapon.Template.Id,
-                BitConverter.SingleToInt32Bits(range),
-                BitConverter.SingleToInt32Bits(additionalToHitModifier),
-                BitConverter.SingleToInt32Bits(evaluatedTargetSpeed),
-                (int)weapon.LoadedAmmo);
-            if (_context.RangedEvaluations.TryGetValue(cacheKey, out RangedTargetEvaluation cached))
-            {
-                return cached;
-            }
-
-            ValueTuple<float, float, int, float, float> attackEstimate = EstimatePlannedRangedAttack(
+            => _shotEvaluator.EvaluateRangedTarget(
                 soldier,
                 target,
                 weapon,
                 range,
                 additionalToHitModifier,
-                evaluatedTargetSpeed);
-            float takeOutProbability = Math.Clamp(attackEstimate.Item2, 0, 1);
-            // CONTRACT: the expected battle value this shot removes THIS TURN -- hit probability x
-            // take-out probability x the target's battle value. It is deliberately undiscounted:
-            // Phase 3 (Design/Reference/BattleLogic.md) removed the old
-            // 1/(1 + turnsUntilTargetReachesUs) factor, which scaled a fired bolt's worth by when
-            // its target would reach us. Arrival time does not affect whether a bolt lands, and the
-            // temporal preference it was standing in for is already carried by
-            // EngagementFutureDiscount. Distance enters through CalculateRangeModifier, not here.
-            // Phase 5: the multiplier is the GRADED removal fraction, not the bare take-out
-            // probability -- a hit that softens a target it cannot yet kill has now done something.
-            // At lambda = 0 RemovalMath.CombineRemovalFraction is the clamp this line already applied.
-            // The burst, not one hit: RemovalMath.ExpectedBurstRemovalFraction integrates the recoil loop
-            // ShootAction actually resolves, so a nine-round bolt burst is no longer priced as a
-            // single bolt. Unchanged for a one-shot weapon.
-            float enemyBattleValueRemoved = RemovalMath.ExpectedBurstRemovalFraction(
-                    attackEstimate.Item4,
-                    attackEstimate.Item3,
-                    weapon.Template.Recoil,
-                    RemovalMath.CombineRemovalFraction(attackEstimate.Item2, attackEstimate.Item5))
-                * GetBattleValue(target);
-            float friendlyBattleValueLost = CalculateExpectedFriendlyStrayCost(
-                soldier,
-                target,
-                weapon,
-                range,
-                additionalToHitModifier,
-                attackEstimate.Item3);
-
-            RangedTargetEvaluation result = new RangedTargetEvaluation(
-                target,
-                weapon,
-                range,
-                attackEstimate.Item3,
-                attackEstimate.Item1,
-                attackEstimate.Item2,
-                enemyBattleValueRemoved,
-                friendlyBattleValueLost,
-                attackEstimate.Item4,
-                evaluatedTargetSpeed,
-                attackEstimate.Item5);
-            _context.RangedEvaluations[cacheKey] = result;
-            return result;
-        }
+                targetSpeed);
 
         private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(
             BattleSoldier shooter,
@@ -859,56 +763,6 @@ namespace OnlyWar.Helpers.Battles
                 : leftSquadId.CompareTo(rightSquadId);
         }
 
-        private float CalculateExpectedFriendlyStrayCost(
-            BattleSoldier shooter,
-            BattleSoldier nominalTarget,
-            RangedWeapon weapon,
-            float range,
-            float additionalToHitModifier,
-            int numberOfShots)
-        {
-            if (!_grid.IsTargetEngagedWithShootersAllies(
-                shooter.Soldier.Id,
-                nominalTarget.Soldier.Id))
-            {
-                return 0;
-            }
-
-            List<BattleSoldier> scrumParticipants = _grid
-                .GetMeleeScrumParticipants(nominalTarget.Soldier.Id)
-                .Where(_soldierMap.ContainsKey)
-                .Select(id => _soldierMap[id])
-                .ToList();
-            bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
-            float expectedFriendlyLossOnStray = scrumParticipants
-                .Where(participant => _grid.GetSoldierSide(participant.Soldier.Id) == shooterSide)
-                .Sum(participant =>
-                {
-                    float victimProbability = RangedFriendlyFireRules.CalculateStrayTargetProbability(
-                        participant,
-                        scrumParticipants);
-                    float armor = participant.Armor?.Template.ArmorProvided ?? 0;
-                    // Phase 5 graded fraction: the friendly cost of a stray must be priced in the
-                    // same currency as the enemy value the shot buys, or the trade is rigged.
-                    float removalFraction = CalculateRangedRemovalFraction(
-                        participant, weapon, range, armor);
-                    return victimProbability
-                        * removalFraction
-                        * GetBattleValue(participant);
-                });
-
-            float preRollHitTotal = CalculateRangedPreRollHitTotal(
-                shooter,
-                nominalTarget,
-                weapon,
-                range,
-                additionalToHitModifier,
-                numberOfShots,
-                firingIntoMelee: true);
-            return RangedFriendlyFireRules.CalculateNearMissProbability(preRollHitTotal)
-                * expectedFriendlyLossOnStray;
-        }
-
         internal RangedTargetEvaluation GetBestWeaponForSituation(
             BattleSoldier soldier,
             BattleSoldier target,
@@ -937,7 +791,7 @@ namespace OnlyWar.Helpers.Battles
                 bulkAndAccMod += useAccuracy
                     ? (weapon.Template.Accuracy + 1) * aimMultiplier
                     : 0;
-                RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
                     soldier,
                     target,
                     weapon,
@@ -995,142 +849,14 @@ namespace OnlyWar.Helpers.Battles
             return ordered;
         }
 
-        // (HitProbability, TakeOutProbabilityOnHit, ShotsToFire, PreRollHitTotal, WoundProgressOnHit)
-        private ValueTuple<float, float, int, float, float> EstimatePlannedRangedAttack(
-            BattleSoldier soldier,
-            BattleSoldier target,
-            RangedWeapon weapon,
-            float range,
-            float moveAndAimMod,
-            float? targetSpeed = null)
-        {
-            int shotsToFire = Math.Max(
-                1,
-                Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
-            float armor = target.Armor?.Template.ArmorProvided ?? 0;
-            (float takeOutProbability, float woundProgress) =
-                CalculateRangedHitRemoval(target, weapon, range, armor);
-            bool firingIntoMelee = _grid.IsTargetEngagedWithShootersAllies(
-                soldier.Soldier.Id,
-                target.Soldier.Id);
-            RangedHitEstimateContext hitContext = new(
-                soldier,
-                target,
-                weapon,
-                range,
-                moveAndAimMod,
-                firingIntoMelee,
-                targetSpeed);
-            ValueTuple<float, float, float> estimate = new(0, 0, 0);
-            for (int iteration = 0; iteration < 4; iteration++)
-            {
-                estimate = EstimateHitAndDamage(
-                    hitContext,
-                    takeOutProbability,
-                    shotsToFire);
-                int revisedShots = CalculateShotsToFire(
-                    weapon,
-                    estimate.Item1,
-                    estimate.Item2);
-                if (revisedShots == shotsToFire)
-                {
-                    return new ValueTuple<float, float, int, float, float>(
-                        estimate.Item1,
-                        estimate.Item2,
-                        shotsToFire,
-                        estimate.Item3,
-                        woundProgress);
-                }
-
-                shotsToFire = revisedShots;
-            }
-
-            // Recalculate once with the final shot count so the returned probability is exactly
-            // the one ShootAction will resolve, even if a future rule introduces oscillation.
-            estimate = EstimateHitAndDamage(
-                hitContext,
-                takeOutProbability,
-                shotsToFire);
-            return new ValueTuple<float, float, int, float, float>(
-                estimate.Item1, estimate.Item2, shotsToFire, estimate.Item3, woundProgress);
-        }
-
         internal int CalculateShotsToFire(
             RangedWeapon weapon,
             float toHitAtPlannedRateOfFire,
             float takeOutProbabilityOnHit)
-        {
-            int minRoF = 1;
-            int maxRof = Math.Max(
-                1,
-                Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
-            // assume all machine guns have to fire at at least 1/4 their max
-            if(weapon.Template.RateOfFire > 10)
-            {
-                minRoF = Math.Min(weapon.Template.RateOfFire / 4, maxRof);
-            }
-
-            if (toHitAtPlannedRateOfFire < .1f)
-            {
-                // don't waste ammo on impossible shots
-                return minRoF;
-            }
-
-            if (takeOutProbabilityOnHit <= 0)
-            {
-                return minRoF;
-            }
-
-            // Fire enough independent shots to reach the same take-out confidence used by melee
-            // strike planning. This quantity is now a probability, not a linear damage fraction.
-            float perShotTakeOut = Math.Clamp(
-                toHitAtPlannedRateOfFire * takeOutProbabilityOnHit,
-                0f,
-                1f);
-            if (perShotTakeOut <= 0f)
-            {
-                return minRoF;
-            }
-            int killRof = perShotTakeOut >= 1f
-                ? 1
-                : (int)Math.Ceiling(
-                    Math.Log(1f - TargetTakeOutConfidenceThreshold)
-                    / Math.Log(1f - perShotTakeOut));
-
-            return Math.Clamp(killRof, minRoF, maxRof);
-
-        }
-
-        private static ValueTuple<float, float, float> EstimateHitAndDamage(
-            RangedHitEstimateContext hitContext,
-            float expectedDamage,
-            int numberOfShots)
-        {
-            float preRollHitTotal = hitContext.CalculatePreRollHitTotal(numberOfShots);
-            float probability = GaussianCalculator.ApproximateNormalCDF(
-                (preRollHitTotal - RemovalMath.HitRollMean) / RemovalMath.HitRollStdDev);
-            return new ValueTuple<float, float, float>(
-                probability, expectedDamage, preRollHitTotal);
-        }
-
-        private static float CalculateRangedPreRollHitTotal(
-            BattleSoldier soldier,
-            BattleSoldier target,
-            RangedWeapon weapon,
-            float range,
-            float moveAndAimMod,
-            int numberOfShots,
-            bool firingIntoMelee)
-        {
-            RangedHitEstimateContext hitContext = new(
-                soldier,
-                target,
+            => _shotEvaluator.CalculateShotsToFire(
                 weapon,
-                range,
-                moveAndAimMod,
-                firingIntoMelee);
-            return hitContext.CalculatePreRollHitTotal(numberOfShots);
-        }
+                toHitAtPlannedRateOfFire,
+                takeOutProbabilityOnHit);
 
         // A jogging soldier may only fire into the forward hemisphere of its own movement. Both
         // helpers are pure geometry, shared by the targeting scans and by the planner's move path.
@@ -1154,39 +880,29 @@ namespace OnlyWar.Helpers.Battles
             return dotProduct >= 0;
         }
 
-        // Phase 5: the graded fraction. Every site that turns a landed hit into expected BATTLE
-        // VALUE removed reads this; CalculateShotsToFire and the Phase 4 table's ReferenceTakeOut
-        // go straight to RemovalMath for the raw take-out probability instead, because a shot count
-        // is a question about kills, not about accumulated wounds.
+        // Compatibility forwarders. RangedShotEvaluator owns these calculations; keeping the
+        // narrow seams here avoids forcing the legacy removal-rate and test callers to understand
+        // the new collaborator in the same packet.
         internal static float CalculateRangedRemovalFraction(
             BattleSoldier target,
             RangedWeapon weapon,
             float range,
             float armor)
-        {
-            (float takeOut, float progress) =
-                CalculateRangedHitRemoval(target, weapon, range, armor);
-            return RemovalMath.CombineRemovalFraction(takeOut, progress);
-        }
+            => RangedShotEvaluator.CalculateRangedRemovalFraction(
+                target,
+                weapon,
+                range,
+                armor);
 
-        // Both halves from ONE hit-location walk, for the path that needs the raw take-out
-        // probability (shot count) and the graded fraction (battle value) from the same shot.
         internal static (float TakeOut, float WoundProgress) CalculateRangedHitRemoval(
             BattleSoldier target,
             RangedWeapon weapon,
             float range,
             float armor)
-        {
-            float damageCoefficient = BattleModifiersUtil.CalculateDamageAtRange(weapon, range);
-            if (damageCoefficient <= 0)
-            {
-                return (0f, 0f);
-            }
-            return RemovalMath.CalculateRemovalTermsOnHit(
+            => RangedShotEvaluator.CalculateRangedHitRemoval(
                 target,
-                damageCoefficient,
-                armor * weapon.Template.ArmorMultiplier,
-                weapon.Template.WoundMultiplier);
-        }
+                weapon,
+                range,
+                armor);
     }
 }
