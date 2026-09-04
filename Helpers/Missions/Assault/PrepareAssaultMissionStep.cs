@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.Strategy;
 
 namespace OnlyWar.Helpers.Missions.Assault
 {
@@ -207,7 +208,7 @@ namespace OnlyWar.Helpers.Missions.Assault
                 random);
 
             // 2. Materialise each allied defender's RESERVE - the battle value its controller held back
-            // to defend this ground (FactionStrategyController.CalculateRequiredDefensiveBattleValue).
+            // to defend this ground (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue).
             //
             // This used to read raw RegionFaction.Garrison, which was wrong for almost every defender in
             // the game. Garrison is Imperial-specific: MilitaryStrength resolves to Population for a
@@ -317,7 +318,7 @@ namespace OnlyWar.Helpers.Missions.Assault
 
             return Math.Min(
                 defender.GetDeployedStrength(),
-                FactionStrategyController.CalculateRequiredDefensiveBattleValue(defender));
+                FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(defender));
         }
 
         /// <summary>

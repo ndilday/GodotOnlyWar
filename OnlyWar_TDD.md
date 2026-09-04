@@ -946,6 +946,10 @@ founding generation and ordinary transfers do not emit it.
 `TurnController` is the single entry point for end-of-turn processing, called by `MainGameScene.OnEndTurnButtonPressed`. It is an orchestration facade: phase behavior lives in focused processors under `Helpers/Turns`. Two context objects separate lifetime and responsibility:
 
 - `GameSession` is the stable dependency set for simulations belonging to one loaded game: rules, sector, mutable campaign date, and `IRNG`. The production constructors build it once from `GameDataSingleton` plus `StaticRNG`; an internal constructor accepts an explicit session for isolated tests and future alternate simulations.
+- `TurnController` constructs `FactionStrategyController` with `_session.Random` and
+  `_session.Rules.FactionBehaviorRules`, so campaign planning uses the session's stream and
+  behavior profile. The facade's parameterless compatibility constructor resolves
+  `StaticRNG.Instance` and the current singleton behavior profile at each planning call.
 - `SimulationContext` is per-run state: the session, `TurnResolutionResult`, `TurnIntelligenceLedger`, separate player/all-order lists, and an optional planet scope for generation-time forward simulation.
 
 `ProcessTurn(Sector)` returns the run's `TurnResolutionResult`; the retained sector parameter must be the same object owned by the session, preventing rules/date/RNG from one game being combined with another sector. The controller's `MissionContexts`, `SpecialMissions`, `StrategicCombatResults`, and `ScenarioNotification` properties remain as compatibility views for existing tests.
@@ -973,13 +977,70 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 
 ### 6.2 Faction Strategy
 
-`FactionStrategyController.GenerateFactionOrders(Faction, Sector)` runs per non-player, non-default faction per turn. For each planet where the faction has a public presence:
+`FactionStrategyController.GenerateFactionOrders(Faction, Sector)` remains the public planning facade.
+`TurnOrderPlanner` invokes it for hostile factions and invokes the same facade with `defensiveOnly`
+for the default/PDF faction. For each selected planet where the faction has a public presence:
 
-1. **Force assessment:** Compute `RequiredGarrison` per region from the observer's confirmed target beliefs and stored estimated military strengths, scaled by regional awareness; then derive `SpareTroops` from the concrete organized pool. The planner never rounds a real unknown `RegionFaction` into an estimate.
-2. **Offensive planning:** Enumerate the faction's `Confirmed`/`Located` `FactionIntelBelief` entries through `IntelligenceTargetService`. If adjacent committed force exceeds the stored estimate × 1.5, generate an `Advance`, raid, or recon order. A current `RegionFaction` is attached to the `StrategicTarget` only so execution can resolve contact; it is not used to discover an unknown target or size the force.
-3. **Construction:** Convert remaining `SpareTroops / 100` to build points. Reorganization transfers `ReorganizationBattleValuePerEffort` BV from the disorganized pool to the organized pool per effort point; other construction improves Entrenchment, Detection, or Anti-Air (costs scale as `2^currentLevel`).
-4. **Patrol:** Any remaining `SpareTroops × 10` become a `ScoutPatrol` order.
+The facade now composes concrete policy collaborators under `Helpers/Strategy`: `FactionThreatAssessment`
+owns belief/public-hostility queries, reserve sizing, and strategy-side defender estimates;
+`FactionReinforcementPlanner` owns garrison and front relocation; `FactionDevelopmentPlanner` owns
+projected organization/defense development, construction affordability, cost bands, and the defensive
+border-listening-post posture; and `FactionConsumptionPlanner` owns budgeted spread followed by
+squad-less feed orders. The facade retains the per-planet state construction and phase order, so one
+`RegionForceState` reference and its `SpareTroops` budget survive across all collaborators in that pass.
+`PrepareAssaultMissionStep` reads `FactionThreatAssessment.CalculateRequiredDefensiveBattleValue`
+directly; this remains the planning want, while `RegionFaction.AssignedDefensiveBattleValue` is the
+clamped commitment materialized by assault preparation.
+`FactionReconPatrolPlanner` now owns recon issuance, recon aggression, patrol fractions and order
+creation, plus the whole-sector cleanup of transient Patrol/Recon squads. `FactionStagingPlanner`
+holds the shared opportunity-cost staging order and deliberately preserves its null-state fallback
+for defensive recon. `FactionOffensiveEvaluator` owns confirmed-target enumeration, belief-backed
+defender estimates, rewards, risk/viability scoring, candidate construction, stable selection, and
+the region-plus-target-faction deduplication key. It is constructed per planning call with the
+resolved `FactionBehaviorRulesProfile`, so the parameterless facade does not freeze singleton rules.
+`FactionOffensiveOrderBuilder` owns assault and lightning-raid issuance, strategic-versus-tactical
+routing, contribution accounting, generated-force staging, and the existing failure and shortfall
+return paths. It accepts a narrow force-generation delegate for isolated failure-path tests and
+defaults to `ForceGenerator.GenerateForce`; production receives the same planning `IRNG` that the
+facade resolved for the current call.
+
+1. **Force assessment:** Compute `CalculateRequiredDefensiveBattleValue` per region from visible/believed
+   adjacent threats and the minimum reserve floor, then derive `SpareTroops` from the concrete organized
+   pool. The requirement is an unbounded want; `AssignedDefensiveBattleValue` is capped at deployed
+   strength and is persisted for assault preparation. Detached fixtures retain the direct hostile-value
+   fallback when no relationship ledger exists.
+2. **Offensive planning:** `FactionOffensiveEvaluator` enumerates `Confirmed` intelligence targets
+   through `IntelligenceTargetService`, preserving local-first and stable enumeration order. The
+   facade keeps the bounded issue loop and rebuilds candidates after each issued mission, while
+   `FactionOffensiveOrderBuilder` creates the selected assault or raid; recon, assault, raid
+   eligibility, and invasion ratios use the current shared planning state and stored
+   target estimate where available. A current `RegionFaction` is attached to the target so execution
+   can resolve contact; it is not a substitute for candidate discovery.
+3. **Construction:** Development consumes the residual battle-value budget. Organization is purchased
+   in whole points only when its `orgCost × 100` price is affordable; fractional Entrenchment,
+   ListeningPost, and AntiAir use `2 × 10^currentLevel` per whole level, charge the fractional amount
+   with the existing ceiling rule, and use projected levels for stable marginal-benefit ties. This
+   section records ownership, not a second formula source.
+4. **Patrol:** A policy-selected fraction of remaining `SpareTroops` (with policing, works, local-threat,
+   and adjacent-threat tiers) becomes a generated `ScoutPatrol` order when the faction's minimum force
+   request is affordable. Generated squad BV is deducted from the planning budget; no separate military
+   pool debit is made for patrol/recon tasking.
 5. **Swarm operations (`GrowthType.Consumption` only):** Spread, then feed, from what is left.
+
+Two compatibility asymmetries are intentional and covered by `FactionOffensiveOrderBuilderTests`:
+defensive recon uses the null-state staging overload, so it does not debit the shared planning budget;
+and tactical force-generation failure returns the committed live military BV without restoring the
+already-consumed `SpareTroops`. A tactical shortfall returns only the excess to the largest
+contributor and leaves the planning debit/contribution amount unchanged. These are current behavior,
+not transactional guarantees or balance changes.
+
+Phase 1 extracted the shared planning data types to `Helpers/Strategy/FactionPlanningModels.cs`:
+`RegionForceState`, `PotentialOffensive`, `OffensivePlan`, and `MissionCandidate`. Their mutable
+reference and collection semantics are unchanged. The runtime planning path uses those shared types
+directly; no duplicate nested strategy models or facade policy forwarders remain. Its internal
+explicit construction path is `FactionStrategyController(IRNG, FactionBehaviorRulesProfile)`, with
+a nullable profile preserving the existing `DefendedLandingRatio` fallback. Recon, tactical
+assault/raid generation, and patrol generation all receive the resolved planning `IRNG`.
 
 Transient AI forces — patrol screens and recon parties — are generated from nothing each pass and cleared at the top of the next one (`ClearStaleTransientSquads`). Recon was previously omitted from that sweep, and a party that survived its week was landed in its home region by `ExfiltrateMissionStep` and never removed, so every completed NPC recon left a permanent ghost squad inflating the region's search difficulty.
 
@@ -1000,7 +1061,7 @@ Both were previously side effects of `PlanetTurnProcessor.UpdatePlanet` that re-
 - **Belief-backed opportunities** are budgeted from the player/default observer's stored estimates. Confirmed beliefs can create targeted special opportunities even when no current `RegionFaction` exists; a phantom search consumes the assigned force allocation and records negative evidence on no contact.
 - **Strength display** uses the intel ladder and stored estimates (`FactionIntelBelief`) rather than awareness-based rounding of live truth. Rumor/Suspected entries show no exact numbers; Confirmed/Located entries use the estimate stored by the observer. The same belief query feeds the target-faction dropdown, the planet/region detail panes, and NPC target enumeration.
 
-`RegionFaction.GetDeployedStrength()` (`MilitaryStrength × Organization / 100`) is the shared "troops actually fielded here" figure behind garrison sizing, the opportunity budget, and the stealth model's ambient term; `MilitaryStrength` resolves the horde-vs-civilian split, so it is correct for a `PopulationIsMilitary` faction with no garrison at all.
+`RegionFaction.GetDeployedStrength()` (`MilitaryStrength × Organization / 100`) is the shared "troops actually fielded here" figure behind garrison sizing, the opportunity budget, and the stealth model's ambient term; `MilitaryStrength` resolves the horde-vs-civilian split, so it is correct for a `PopulationIsMilitary` faction with no garrison at all. During strategy planning, `FactionThreatAssessment` computes the unbounded requirement, while the facade seeds one shared `RegionForceState` per public presence and passes that same mutable state through reinforcement, development, patrol, and Consumption policies. Reinforcement moves live military BV and updates only the documented source/destination budget fields; development and feed consume the planning budget without applying construction or feeding immediately.
 
 **Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when either side exceeds `MaxTacticalActors` (120), generated forces would exceed `MaxGeneratedSquads` (24), or committed strength exceeds `MassCombatBattleValueFloor` (1,500 BV). Named/player squads always remain tactical. Strategic resolution works directly in conserved BV pools: only organized BV deploys and takes ordinary battle casualties; effective strength combines committed BV, aggression, faction quality, entrenchment, and awareness-derived surprise. A Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Every participating faction receives reciprocal `BattleContact` observations at Located level with estimates based on the engaged force, not planetary totals. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Equations and rejected alternatives are retained in `Design/Reference/BattleLogic.md`.
 
@@ -1024,7 +1085,7 @@ Both were previously side effects of `PlanetTurnProcessor.UpdatePlanet` that re-
 
 **Intelligence pipeline.** Each planet's intelligence pass first decays sparse `RegionAwareness` and target beliefs, then applies listening-post awareness and accumulated recon evidence. It next generates target observations from public activity, successful patrol contact, directed recon, and battle contact, applies them in stable faction/region/target order, and fans each new report once to currently Allied observers. Positive observations blend supplied estimates; negative observations affect only the named target. The ledger exposes counters for materialized awareness rows, belief rows, observations applied, and Allied copies.
 
-Recon and patrol have distinct products: recon always changes target-agnostic regional awareness and directed recon also submits target evidence; patrol is an active search whose successful sweep submits `PatrolContact`; a listening post raises awareness and improves the quality of later observations rather than creating a belief by itself. Public activity gives observers with planetary presence or existing awareness at least Confirmed evidence. Strategic and tactical encounters record contact from the forces that actually participated. Governor Investigation and Paranoia use the same observation boundary, and scenario setup may seed explicit beliefs.
+Recon and patrol have distinct products: recon always changes target-agnostic regional awareness and directed recon also submits target evidence; a player patrol is an active search whose successful sweep submits `PatrolContact`, while a generated NPC patrol is a standing screen that participates in interception and is skipped by mission execution. A listening post raises awareness and improves the quality of later observations rather than creating a belief by itself. Public activity gives observers with planetary presence or existing awareness at least Confirmed evidence. Strategic and tactical encounters record contact from the forces that actually participated. Governor Investigation and Paranoia use the same observation boundary, and scenario setup may seed explicit beliefs.
 
 **Fog of War (UI gating).** Enemy visibility on the planet-tactical and region screens comes from the Chapter/default observer's `FactionIntelBelief` records, not from `RegionFaction.IsPublic` or `Region.IntelligenceLevel`. None is omitted; Rumor and Suspected are attributed reports without exact numbers; Confirmed and Located display the observer's stored population/force estimates. Own Chapter forces remain exact. A belief can be stale, false-positive, or absent while a real presence exists; explicit no-contact searches submit negative evidence and never create an operational phantom.
 
@@ -1112,7 +1173,7 @@ Skill is compared against difficulty, normalized to a z-score: `(skill − diffi
 
 `GetPatrolStrength()` counts squads on `Patrol` or `Recon` orders only — the two orders whose whole content is "cover ground and report what you find". Every other mission type counts as static: a squad fortifying, assaulting, or holding an objective is an obstacle in the region, not a sweep of it.
 
-**Units.** `GetPatrolStrength()` and `GetDeployedStrength()` are both **battle value**, not headcount, because they are subtracted from each other. `Garrison`/`Population` are BV pools (`RegionFaction.AddMilitaryStrength`: *"forces are raised, lost, and returned in the same currency"*), and `FactionStrategyController` seeds `SpareTroops` from `GetDeployedStrength()` then decrements it by `SquadBattleValue`. Summing `Members.Count` for the patrol term would subtract headcount from battle value and compute the patrol term one to two orders of magnitude below its calibrated scale. BV also reads correctly on its own terms: a patrol's worth as a search is not only how many pairs of eyes it has, but how well equipped and trained they are to use them.
+**Units.** `GetPatrolStrength()` and `GetDeployedStrength()` are both **battle value**, not headcount, because they are subtracted from each other. `Garrison`/`Population` are BV pools (`RegionFaction.AddMilitaryStrength`: *"forces are raised, lost, and returned in the same currency"*), and the faction-strategy facade seeds `SpareTroops` from `GetDeployedStrength()` then decrements it by `SquadBattleValue`. Summing `Members.Count` for the patrol term would subtract headcount from battle value and compute the patrol term one to two orders of magnitude below its calibrated scale. BV also reads correctly on its own terms: a patrol's worth as a search is not only how many pairs of eyes it has, but how well equipped and trained they are to use them.
 
 **Why `1 + x` inside every log.** It makes every term ≥ 0 by construction. Zero maps to exactly 0 rather than `−∞`, so an empty region yields difficulty 0, and there is no path by which a difficulty of `−∞` becomes a margin of `+∞` and hands an intruder an automatic success. That failure mode was patched in one mission step after another (via `Max(1, …)` guards) before being fixed in the shape of the formula instead. `MissionStealthDifficulty.TroopMagnitude` retains the older unshifted `log10(max(1, x))` form, which is used **only** for order-of-magnitude mission-size banding in `PlanetTurnProcessor` (where 1,000,000 must band to exactly 6), never for difficulty.
 
@@ -1988,7 +2049,7 @@ A separate `Date.CompareTo` bug (used reference equality, so it returned non-zer
 
 Mutated from multiple controllers without coordination. Acceptable in a single-threaded context, but makes unit testing difficult because any test touching a logic system that reads from the singleton must set up the full singleton first.
 
-**Mitigation:** Pure-logic systems accept their inputs rather than reading global state. `TurnController` creates or accepts a `GameSession` containing rules, sector, date, and `IRNG`, and injects it into every processor under `Helpers/Turns`; `SimulationContext` owns each run's result, intel ledger, orders, and optional planet scope. Tactical execution continues that seam through two bounded contexts rather than exposing `GameSession` as a service locator: `MissionExecutionContext` carries mission state, projected mission rules, the injected RNG, a mission-local temporary-ID allocator, and a separate `BattleExecutionContext`; the battle context carries rules, the same RNG instance, and explicit aftermath dependencies. Mission checks, spotting, force generation, placement, planning, actions, hit-location rolls, and gene-seed rolls all consume the injected stream. `IPlayerBattleAftermathSink` makes roster removal, fallen-brother registration, recovered gene-seed, and chapter battle-history writes explicit campaign effects.
+**Mitigation:** Pure-logic systems accept their inputs rather than reading global state. `TurnController` creates or accepts a `GameSession` containing rules, sector, date, and `IRNG`, and injects it into every processor under `Helpers/Turns`; `SimulationContext` owns each run's result, intel ledger, orders, and optional planet scope. `FactionStrategyController` now has the same explicit `(IRNG, FactionBehaviorRulesProfile)` planning seam, and `TurnController` supplies those values from `GameSession`; its parameterless compatibility adapter resolves the legacy defaults at planning-call time. Within strategy, the facade composes concrete `Helpers/Strategy` collaborators for assessment, reinforcement, development, Consumption, recon/patrol lifecycle, shared staging, offensive evaluation, and offensive order creation; those collaborators receive faction, planet, shared planning states, and orders explicitly and do not call back through the facade. Tactical execution continues that seam through two bounded contexts rather than exposing `GameSession` as a service locator: `MissionExecutionContext` carries mission state, projected mission rules, the injected RNG, a mission-local temporary-ID allocator, and a separate `BattleExecutionContext`; the battle context carries rules, the same RNG instance, and explicit aftermath dependencies. Mission checks, spotting, force generation, placement, planning, actions, hit-location rolls, and gene-seed rolls all consume the injected stream. `IPlayerBattleAftermathSink` makes roster removal, fallen-brother registration, recovered gene-seed, and chapter battle-history writes explicit campaign effects.
 
 The simulation risk is now concentrated at the outer compatibility boundaries: most scene controllers still use the singleton, production still supplies the process-global `StaticRNG` adapter, persistent entity creation retains the campaign-wide positive ID counters, and older end-to-end tests intentionally seed `GameDataSingleton`. Tactical missions and battles themselves no longer read `GameDataSingleton` or static `RNG`.
 
@@ -2134,7 +2195,7 @@ All of the targets below are now implemented; they are retained as a record of t
 4. **`IMissionCheck` implementations** — Requires a minimal `BattleSquad` mock with a soldier list. No game state needed.
 5. **`ForceGenerator`** — Requires a `Faction` object with squad templates. No Godot dependencies.
 6. **`SubsectorBuilder`** — Pure spatial algorithm. Provide a list of positioned planets and assert subsector membership.
-7. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. *(Implemented — `FactionStrategyControllerTests`; the controller takes `(faction, sector)` and reads no `GameDataSingleton` state, so no refactor was needed — see §9.2.1 #4.)*
+7. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. *(Implemented — `FactionStrategyControllerTests`, `PatrolAndReconPlanningTests`, and `FactionStrategyCharacterizationTests`; the public facade takes `(faction, sector)`, while the internal explicit path accepts `IRNG` and a nullable `FactionBehaviorRulesProfile`. The legacy parameterless path reads the singleton profile at planning-call time — see §9.2.1 #4.)*
 8. **`BattleSoldier` clone round-trip** — Construct a fully populated `BattleSoldier`, clone it, and assert field-by-field equality. Catches 8.4 above. *(Implemented — `BattleSoldierCloneTests`.)*
 
 ### 9.2.1 Next Test Targets
@@ -2144,7 +2205,7 @@ Initial coverage now exists for wounds, skill math, Gaussian math, mission check
 1. **Save/load round-trip tests** — *(Implemented — `SaveLoadRoundTripTests`.)* Generates a real new-game sector via `SectorBuilder.GenerateSector`, saves it through `GameStateDataAccess.SaveData` to a temporary SQLite file, reads it back through `GetData`, and asserts high-level state survives (date, planet/character/request/ship/squad/soldier counts, total population, and the bounded latest-turn report). This also serves as the new-game smoke test (target #9 below) and is the regression guard for schema drift: any schema change not propagated to both `SaveData` and `GetData` fails here. Surfacing and fixing the provider-compatibility cluster in §8.5.1 was driven entirely by getting this test to pass.
 2. **Mission save duplication regression** — *(Implemented — `MissionSaveTests`.)* Drives `PlanetDataAccess.SavePlanet` against a freshly created save schema and asserts the `Mission` table holds exactly one row for a region with one special mission, plus field round-trip and null-`DefenseType` cases. Covers §8.1.
 3. **Rules DB schema and policy validation** — *(Implemented — `RulesDatabaseValidationTests`.)* The suite constructs `GameRulesData` against the shipped database and exercises fail-fast validation for required-table existence, nonempty content, positive planet probability totals, relational references, optional extension behavior, per-faction fleet prerequisites, rating/training tables, and validated registries. The remaining rules-policy work is tracked in [RulesDatabasePolicyCleanup.md](Design/Active/RulesDatabasePolicyCleanup.md).
-4. **`FactionStrategyController`** — *(Implemented — `FactionStrategyControllerTests`.)* The controller already takes `(faction, sector)` and reads no `GameDataSingleton` state, so no refactor was needed; tests build `Planet`/`Region`/`RegionFaction` graphs and cover the empty-result cases (faction absent, hidden regions, no spare troops) and the development-construction path (spare troops spent on `ConstructionMission` orders).
+4. **Faction strategy** — *(Implemented — `FactionStrategyControllerTests`, `PatrolAndReconPlanningTests`, `FactionStrategyCharacterizationTests`, and `FactionOffensiveOrderBuilderTests`.)* Tests build `Planet`/`Region`/`RegionFaction` graphs and cover empty-result cases, defensive construction, multi-target order/budget behavior, transient cleanup, feeding, explicit dependency use, and tactical generation failure/shortfall semantics. The runtime facade retains a parameterless compatibility boundary, but `TurnController` wires session RNG and behavior rules explicitly. `Helpers/Strategy/FactionPlanningModels.cs` owns the shared planning types; `FactionThreatAssessment`, `FactionReinforcementPlanner`, `FactionDevelopmentPlanner`, `FactionConsumptionPlanner`, `FactionReconPatrolPlanner`, `FactionStagingPlanner`, `FactionOffensiveEvaluator`, and `FactionOffensiveOrderBuilder` own the extracted strategy policies. No nested duplicate models or legacy policy forwarders remain.
 5. **`SectorEntityLogic`** — *(Implemented — `SectorEntityLogicTests`, `SessionSimulationContextPrimitiveTests`, `GameSessionTurnControllerTests`.)* The end-of-turn domain logic lives in the `Helpers/Turns` processors and is driven through the `TurnController.ProcessTurn` orchestration facade over a compact hand-built sector (`SectorSimulationFixture`). Existing seeded tests protect turn behavior and random draw order; session/context tests cover dependency identity, per-run order isolation, null contracts, and a controller run whose date and RNG differ from `GameDataSingleton`. Domain coverage includes logistic growth, conversion growth (one default member converted per week), intelligence decay (×0.75/turn), stale special-mission expiration, and governor request generation against a public threat. Surfaced and fixed three latent bugs (see §8.12).
 6. **`BattleGridManager` and `WoundResolver`** — *(Implemented — `BattleGridAndPlacementTests`, `WoundResolverTests`.)* Grid tests cover placement/occupancy/reservation conflicts, movement (free-old/occupy-new and collision), removal, nearest-enemy/distance queries, open-adjacency selection, and clone fidelity. Wound tests cover the damage-ratio severity ladder, natural-armor subtraction, wound-multiplier scaling, already-severed short-circuit, and the vital-location-death / motive-location-fall event paths.
 7. **Rating formula evaluator** — *(Implemented — `RatingCalculatorTests`, `RatingDefinitionDataTests`.)* Rating formulas and award thresholds are data-driven (§4.1.1); tests assert the evaluator's aggregation/normalization structure with a fixed `IRNG`, that the migrated definitions match the documented formulas, and that award tiers fire correctly (highest-tier-only, best-skill-in-category name interpolation, history flags).

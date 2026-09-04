@@ -114,7 +114,7 @@ namespace OnlyWar.Models.Planets
 
         // The battle value this faction's controller actually COMMITTED to holding this region in its
         // last planning pass — the assignment, as opposed to the demand.
-        // FactionStrategyController.CalculateRequiredDefensiveBattleValue answers "how much defence
+        // FactionThreatAssessment.CalculateRequiredDefensiveBattleValue answers "how much defence
         // does this ground want, given what is massing next door", and is deliberately unbounded: it
         // is a want, and the planner needs the raw want to compute a shortfall it can reinforce
         // against. What it is NOT is a promise that the troops exist. The planner clamps it to

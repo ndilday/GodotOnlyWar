@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Strategy;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
@@ -33,10 +34,10 @@ public class PatrolAndReconPlanningTests
         Planet planet = CreatePlanet();
         RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 10_000);
 
-        double fraction = new FactionStrategyController()
+        double fraction = new FactionReconPatrolPlanner()
             .CalculatePatrolFraction(faction, planet, State(rf));
 
-        Assert.Equal(FactionStrategyController.PolicingPatrolFraction, fraction);
+        Assert.Equal(FactionReconPatrolPlanner.PolicingPatrolFraction, fraction);
         Assert.True(fraction > 0.0, "a quiet world must not be free to cross");
     }
 
@@ -46,8 +47,8 @@ public class PatrolAndReconPlanningTests
     public void PatrolFraction_PolicingFloor_IsFarBelowTheThreatenedTiers()
     {
         Assert.True(
-            FactionStrategyController.PolicingPatrolFraction
-                < FactionStrategyController.PatrolForceFraction,
+            FactionReconPatrolPlanner.PolicingPatrolFraction
+                < FactionReconPatrolPlanner.PatrolForceFraction,
             "the policing floor must be lighter than a works-based screen");
     }
 
@@ -59,12 +60,12 @@ public class PatrolAndReconPlanningTests
         Faction faction = CreateFaction(2, "Test Cult");
         Planet planet = CreatePlanet();
         RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 10_000);
-        rf.ListeningPost = FactionStrategyController.WorthScreeningWorksLevel;
+        rf.ListeningPost = FactionReconPatrolPlanner.WorthScreeningWorksLevel;
 
-        double fraction = new FactionStrategyController()
+        double fraction = new FactionReconPatrolPlanner()
             .CalculatePatrolFraction(faction, planet, State(rf));
 
-        Assert.Equal(FactionStrategyController.PatrolForceFraction, fraction);
+        Assert.Equal(FactionReconPatrolPlanner.PatrolForceFraction, fraction);
     }
 
     // ----- Q5: recon aggression as a decision -----
@@ -78,7 +79,7 @@ public class PatrolAndReconPlanningTests
 
         Assert.Equal(
             Aggression.Cautious,
-            FactionStrategyController.ChooseReconAggression(faction, region));
+            FactionReconPatrolPlanner.ChooseReconAggression(faction, region));
     }
 
     // Ground it has scouted before: press in. This is the half the old default got wrong - defaulting
@@ -88,11 +89,11 @@ public class PatrolAndReconPlanningTests
     public void ReconAggression_WellKnownRegion_PressesIn()
     {
         (Faction faction, Region region) = ReconTarget(
-            intel: FactionStrategyController.GarrisonFullSightIntel);
+            intel: FactionThreatAssessment.GarrisonFullSightIntel);
 
         Assert.Equal(
             Aggression.Attritional,
-            FactionStrategyController.ChooseReconAggression(faction, region));
+            FactionReconPatrolPlanner.ChooseReconAggression(faction, region));
     }
 
     // The band between the two, so the progression is graded rather than a single cliff.
@@ -100,11 +101,11 @@ public class PatrolAndReconPlanningTests
     public void ReconAggression_PartiallyKnownRegion_IsNormal()
     {
         (Faction faction, Region region) = ReconTarget(
-            intel: FactionStrategyController.UnfamiliarGroundIntel);
+            intel: FactionReconPatrolPlanner.UnfamiliarGroundIntel);
 
         Assert.Equal(
             Aggression.Normal,
-            FactionStrategyController.ChooseReconAggression(faction, region));
+            FactionReconPatrolPlanner.ChooseReconAggression(faction, region));
     }
 
     // The property that matters more than any individual band: knowing more never makes the AI scout
@@ -116,7 +117,7 @@ public class PatrolAndReconPlanningTests
         foreach (float intel in new[] { 0f, 0.5f, 1f, 1.5f, 2f, 4f })
         {
             (Faction faction, Region region) = ReconTarget(intel);
-            Aggression chosen = FactionStrategyController.ChooseReconAggression(faction, region);
+            Aggression chosen = FactionReconPatrolPlanner.ChooseReconAggression(faction, region);
             Assert.True(
                 chosen >= previous,
                 $"intel {intel} chose {chosen}, timider than the {previous} chosen at less intel");
@@ -143,7 +144,7 @@ public class PatrolAndReconPlanningTests
         return (scout, region);
     }
 
-    private static FactionStrategyController.RegionForceState State(RegionFaction rf) =>
+    private static RegionForceState State(RegionFaction rf) =>
         new(rf, requiredDefensiveBattleValue: 0, assignedDefensiveBattleValue: 0,
             spareTroops: 10_000, defensiveShortfall: 0);
 

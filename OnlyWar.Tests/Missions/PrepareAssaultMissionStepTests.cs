@@ -6,6 +6,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.Strategy;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -81,7 +82,7 @@ public class PrepareAssaultMissionStepTests
     }
 
     // The defence mobilises the region's RESERVE - the battle value its controller held back to hold the
-    // ground (FactionStrategyController.CalculateRequiredDefensiveBattleValue) - and reads it in battle
+    // ground (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue) - and reads it in battle
     // value directly. The budget is what changed here: it used to be raw RegionFaction.Garrison, which is
     // zero for every revealed non-Imperial faction. The original guard this test carries is still the
     // point of it, though: the generated force must not exceed its budget. An x10 conversion once lived
@@ -102,7 +103,7 @@ public class PrepareAssaultMissionStepTests
         // worth and mobilise nothing at all - which is correct behaviour, but tests nothing here.
         target.Garrison = StrategicCombatRules.PdfTrooperBattleValue * 200;
 
-        long reserve = FactionStrategyController.CalculateRequiredDefensiveBattleValue(target);
+        long reserve = FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(target);
 
         List<BattleSquad> defenders = new PrepareAssaultMissionStep()
             .AssembleDefendingForce(

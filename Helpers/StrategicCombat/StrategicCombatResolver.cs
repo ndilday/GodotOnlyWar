@@ -97,7 +97,7 @@ namespace OnlyWar.Helpers.StrategicCombat
 
             // Reactive awareness: a defender that survives the assault learns which regions the enemy
             // staged from, so a previously-blind neighbour can be garrisoned next turn even without a
-            // deliberate recon (FactionStrategyController.CalculateRequiredDefensiveBattleValue).
+            // deliberate recon (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue).
             if (!controlChanged && mission.Contributions != null)
             {
                 foreach (StrategicCombatContribution contribution in mission.Contributions)

@@ -517,6 +517,10 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 
 **Description.** The rules governing how player-issued and AI-generated orders are executed each turn.
 
+Implementation review (2026-09-03): the Phase 4 recon/patrol lifecycle extraction was reviewed
+against the recon, patrol, interception, staging, and transient-squad contracts below; no product
+behavior changed.
+
 **Acceptance Criteria:**
 
 **Order Assignment**
@@ -1009,6 +1013,13 @@ This is the implemented Alpha 0.8 substrate for Orks (§4.22) and the later Tyra
 is shared by the Revolt and governor systems, so those systems use the same relationship and
 observer-belief contracts without faction-specific hostility shortcuts.
 
+Implementation review (2026-09-03): the Phase 5 offensive-evaluation extraction was reviewed against
+the intelligence, target-discovery, and belief-backed planning contracts below; no product behavior
+changed.
+
+Implementation review (2026-09-03): the Phase 2–3 strategy extraction was reviewed against this
+relationship and intelligence contract; no product behavior changed.
+
 **Acceptance Criteria:**
 
 **Faction Relationships**
@@ -1042,6 +1053,13 @@ observer-belief contracts without faction-specific hostility shortcuts.
 **Status: Implemented — Alpha 0.8 Ork rules completion.** Orks are ambient sector content and use
 the ordinary population, force-generation, mission, strategic-combat, casualty, morale, intelligence,
 opening-scenario, and save/load systems. The architecture is recorded in `OnlyWar_TDD.md` §6.12.
+
+Implementation review (2026-09-03): the Phase 5 offensive-evaluation extraction was reviewed against
+the Ork target-selection and intelligence contracts; no product behavior changed.
+
+Implementation review (2026-09-03): the Phase 6 offensive-issuance extraction was reviewed against
+the strategic/tactical routing, staging, contribution, and generated-force contracts; no product
+behavior changed.
 
 **Faction, ecology, and knowledge**
 - ✅ Orks are `GrowthType.Logistic` with `PopulationIsMilitary | UniversallyHostile | Indelible`.
@@ -1166,6 +1184,14 @@ This is deliberately **not** a survival economy. Consistent with the relevance/l
 
 This is a behavioral specification. It depends on §4.21 (behavior flags, growth types, intelligence-as-belief), which now ships in 0.8, and is scheduled in §5.6. The current `ScenarioBuilder.StampPromisedWorld` static stamp (§4.1) is the shipped subset this enhances.
 
+Implementation review (2026-09-03): the Phase 2–5 strategy extraction was reviewed against the
+single-budget, defensive-actor, construction, expansion, feeding, recon, patrol, intelligence, and
+target-evaluation contracts below; no product behavior changed.
+
+Implementation review (2026-09-03): the Phase 6–7 strategy closeout was reviewed against the
+offensive routing, contribution, failure/shortfall, and public-facade contracts below; no product
+behavior changed.
+
 **Acceptance Criteria:**
 
 **Faction Definition & Growth Type**
@@ -1216,7 +1242,7 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 - Emigration is **not** clamped to destination capacity: overfilling a refuge is intended. The crowding term (§4.15) then models the resulting deprivation die-off, and the swollen population makes that region a worse massacre if the swarm reaches it next — a deliberate grimdark feedback loop.
 
 **PDF as a Defensive Actor**
-- For the pre-arrival and invasion simulation to produce believable outcomes (regions where a dug-in PDF drives the Cult back), the default-Imperial faction must become a strategic actor, resolving the standing TODO in `UpdateRegionFactionForces` — today only non-player, non-default factions run through `FactionStrategyController`, so PDFs cannot build defenses.
+- For the pre-arrival and invasion simulation to produce believable outcomes (regions where a dug-in PDF drives the Cult back), the default-Imperial faction acts as a defensive strategic actor through `FactionStrategyController`: it can develop threatened regions while launching no offensives.
 - First cut is **defensive only**: the PDF fortifies (Entrenchment), builds `ListeningPost` sensor infrastructure, and holds — it runs the development/construction slice of `FactionStrategyController` but launches no offensives. It is deliberately **less effective than the Imperial Guard** forces specified later (§6.4): the PDF holds the line and buys time; it does not maneuver or counterattack.
 
 **Strategic Combat Model**

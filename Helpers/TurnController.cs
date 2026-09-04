@@ -47,7 +47,9 @@ namespace OnlyWar.Helpers
             ISoldierTrainingService trainingService = null)
         {
             _session = session ?? throw new System.ArgumentNullException(nameof(session));
-            _orderPlanner = new TurnOrderPlanner(_session, new FactionStrategyController());
+            _orderPlanner = new TurnOrderPlanner(
+                _session,
+                new FactionStrategyController(_session.Random, _session.Rules.FactionBehaviorRules));
             _chapterUpkeepProcessor = new ChapterUpkeepProcessor(_session, trainingService);
             _fleetTurnProcessor = new FleetTurnProcessor(_chapterUpkeepProcessor);
             _lastResult = new TurnResolutionResult();

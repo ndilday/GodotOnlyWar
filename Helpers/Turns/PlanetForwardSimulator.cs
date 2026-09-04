@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.Strategy;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -111,7 +112,7 @@ namespace OnlyWar.Helpers.Turns
         /// </summary>
         /// <remarks>
         /// A patrol screen or recon party is conjured for one week and discarded at the top of the
-        /// planner's next pass (FactionStrategyController.ClearStaleTransientSquads). Generation has
+        /// planner's next pass (FactionReconPatrolPlanner.ClearStaleTransientSquads). Generation has
         /// no next pass, so without this the final week's forces are still landed in their regions
         /// when the world is handed to the player - squads belonging to no army, on a board the
         /// opening state is supposed to hand over with nothing landed on it.
@@ -124,7 +125,7 @@ namespace OnlyWar.Helpers.Turns
                 foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                 {
                     if (regionFaction.PlanetFaction.Faction.IsPlayerFaction) continue;
-                    regionFaction.LandedSquads.RemoveAll(FactionStrategyController.IsTransientAiSquad);
+                    regionFaction.LandedSquads.RemoveAll(FactionReconPatrolPlanner.IsTransientAiSquad);
                 }
             }
         }

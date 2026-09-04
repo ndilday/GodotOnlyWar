@@ -6,6 +6,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Raid;
+using OnlyWar.Helpers.Strategy;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
@@ -18,6 +19,7 @@ using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
+using PlanningPotentialOffensive = OnlyWar.Helpers.Strategy.PotentialOffensive;
 
 namespace OnlyWar.Tests.Domain;
 
@@ -126,7 +128,7 @@ public class FactionStrategyControllerTests
         Region enemyRegion = pdfRegion.GetAdjacentRegions().First();
         AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 2_000);
         AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
-        planet.PlanetFactionMap[pdf.Id].SetRegionAwareness(enemyRegion, FactionStrategyController.GarrisonFullSightIntel);
+        planet.PlanetFactionMap[pdf.Id].SetRegionAwareness(enemyRegion, FactionThreatAssessment.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController()
@@ -172,7 +174,7 @@ public class FactionStrategyControllerTests
             IsPublic = true
         };
         adjacentRegion.RegionFactionMap[imperial.Id] = adjacentTarget;
-        attackerPlanetFaction.SetRegionAwareness(localRegion, FactionStrategyController.ReconIntelThreshold);
+        attackerPlanetFaction.SetRegionAwareness(localRegion, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -228,14 +230,14 @@ public class FactionStrategyControllerTests
     {
         // With no intel (sigma 0.5) the AI plans against ~1 sigma above the truth, not the truth
         // itself — it hedges against what it cannot see rather than betting on a lucky-low draw.
-        Assert.Equal(1500L, FactionStrategyController.CautiousDefenderEstimate(1000, intelLevel: 0f));
+        Assert.Equal(1500L, FactionOffensiveEvaluator.CautiousDefenderEstimate(1000, intelLevel: 0f));
     }
 
     [Fact]
     public void CautiousDefenderEstimate_BetterIntelConvergesTowardTheTruth()
     {
-        long blindGuess = FactionStrategyController.CautiousDefenderEstimate(1000, intelLevel: 0f);   // sigma 0.5 -> 1500
-        long scoutedGuess = FactionStrategyController.CautiousDefenderEstimate(1000, intelLevel: 4f); // sigma 0.1 -> 1100
+        long blindGuess = FactionOffensiveEvaluator.CautiousDefenderEstimate(1000, intelLevel: 0f);   // sigma 0.5 -> 1500
+        long scoutedGuess = FactionOffensiveEvaluator.CautiousDefenderEstimate(1000, intelLevel: 4f); // sigma 0.1 -> 1100
 
         Assert.Equal(1500L, blindGuess);
         Assert.Equal(1100L, scoutedGuess);
@@ -253,7 +255,7 @@ public class FactionStrategyControllerTests
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate),
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate)));
 
-        Assert.Equal(56L, FactionStrategyController.CalculateDefenderBattleValue(rf));
+        Assert.Equal(56L, FactionThreatAssessment.CalculateDefenderBattleValue(rf));
     }
 
     [Fact]
@@ -262,7 +264,7 @@ public class FactionStrategyControllerTests
         Faction defender = CreateNonPlayerFaction();
         RegionFaction rf = CreateTargetRegionFaction(defender, population: 1_000, garrison: 200);
 
-        Assert.Equal(1_000L, FactionStrategyController.CalculateDefenderBattleValue(rf));
+        Assert.Equal(1_000L, FactionThreatAssessment.CalculateDefenderBattleValue(rf));
     }
 
     [Fact]
@@ -278,7 +280,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, staging, attacker, population: 50_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 10_000, organization: 100, garrison: 10_000);
         RegionFaction targetFaction = target.RegionFactionMap[defender.Id];
-        planet.PlanetFactionMap[attacker.Id].AddRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].AddRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -356,7 +358,7 @@ public class FactionStrategyControllerTests
 
         AddRegionFaction(planet, staging, attacker, population: 1_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 10, organization: 100, garrison: 2);
-        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -406,8 +408,8 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, stagingB, attacker, population: 50_000, organization: 100);
         AddRegionFaction(planet, targetA, defender, population: 10_000, organization: 100, garrison: 10_000);
         AddRegionFaction(planet, targetB, defender, population: 10_000, organization: 100, garrison: 10_000);
-        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetA, FactionStrategyController.ReconIntelThreshold);
-        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetB, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetA, FactionStrategyPlanningConstants.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetB, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -434,7 +436,7 @@ public class FactionStrategyControllerTests
 
         AddRegionFaction(planet, staging, attacker, population: 10_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 10_000);
-        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -463,7 +465,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, flexibleSource, attacker, population: 50_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 10_000, organization: 100, garrison: 10_000);
         AddRegionFaction(planet, extraTarget, defender, population: 1_000, organization: 100, garrison: 100);
-        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -515,7 +517,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, enemyFront, defender, population: 100_000, organization: 100, garrison: 5_000);
         // The attacker must see the enemy front to perceive the threat that sizes needy's garrison.
         planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(
-            enemyFront, FactionStrategyController.GarrisonFullSightIntel);
+            enemyFront, FactionThreatAssessment.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -533,7 +535,7 @@ public class FactionStrategyControllerTests
         RegionFaction target = CreateTargetRegionFaction(player, population: 1_000, garrison: 100);
         var offensive = Offensive(target, attackForce: 100_000, estimatedDefenderBv: 100, reward: 1_000);
 
-        Assert.False(FactionStrategyController.ShouldUseStrategicCombat(attacker, offensive, committedBattleValue: 100_000));
+        Assert.False(FactionOffensiveOrderBuilder.ShouldUseStrategicCombat(attacker, offensive, committedBattleValue: 100_000));
     }
 
     [Fact]
@@ -544,8 +546,8 @@ public class FactionStrategyControllerTests
         RegionFaction target = CreateTargetRegionFaction(raider, population: 1000, carryingCapacity: 5000);
 
         // A devouring swarm counts the carrying capacity it will eat; a non-consumer only the population.
-        Assert.Equal(6000.0, FactionStrategyController.CalculateOffensiveReward(target, consumer, 1, 1));
-        Assert.Equal(1000.0, FactionStrategyController.CalculateOffensiveReward(target, raider, 1, 1));
+        Assert.Equal(6000.0, FactionOffensiveEvaluator.CalculateOffensiveReward(target, consumer, 1, 1));
+        Assert.Equal(1000.0, FactionOffensiveEvaluator.CalculateOffensiveReward(target, raider, 1, 1));
     }
 
     [Fact]
@@ -557,7 +559,7 @@ public class FactionStrategyControllerTests
         // Richer: also winnable, far better reward-to-risk despite a tougher defender.
         var rich = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 200, reward: 5000);
 
-        var chosen = FactionStrategyController.ChooseBestOffensive([easy, rich]);
+        var chosen = FactionOffensiveEvaluator.ChooseBestOffensive([easy, rich]);
 
         Assert.Same(rich, chosen);
     }
@@ -571,7 +573,7 @@ public class FactionStrategyControllerTests
         var unwinnable = Offensive(CreateTargetRegionFaction(attacker), attackForce: 100, estimatedDefenderBv: 1000, reward: 1_000_000_000);
         var winnable = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 500);
 
-        var chosen = FactionStrategyController.ChooseBestOffensive([unwinnable, winnable]);
+        var chosen = FactionOffensiveEvaluator.ChooseBestOffensive([unwinnable, winnable]);
 
         Assert.Same(winnable, chosen);
     }
@@ -582,7 +584,7 @@ public class FactionStrategyControllerTests
         Faction attacker = CreateNonPlayerFaction();
         var unwinnable = Offensive(CreateTargetRegionFaction(attacker), attackForce: 100, estimatedDefenderBv: 1000, reward: 5000);
 
-        Assert.Null(FactionStrategyController.ChooseBestOffensive([unwinnable]));
+        Assert.Null(FactionOffensiveEvaluator.ChooseBestOffensive([unwinnable]));
     }
 
     // Removed with the mechanic: IsWinnable_ProvocationLowersTheRequiredForceRatio covered
@@ -598,7 +600,7 @@ public class FactionStrategyControllerTests
         var open = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 1000);
         var dugIn = Offensive(CreateTargetRegionFaction(attacker, entrenchment: 4), attackForce: 1000, estimatedDefenderBv: 100, reward: 1000);
 
-        Assert.True(FactionStrategyController.RewardRiskScore(open) > FactionStrategyController.RewardRiskScore(dugIn));
+        Assert.True(FactionOffensiveEvaluator.RewardRiskScore(open) > FactionOffensiveEvaluator.RewardRiskScore(dugIn));
     }
 
     // ----- Recon-before-invade: DecideOffensivePlan (PRD §4.24) -----
@@ -610,7 +612,7 @@ public class FactionStrategyControllerTests
         var poor = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 500);
         var rich = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 9000);
 
-        Assert.Same(rich, FactionStrategyController.ChooseReconTarget([poor, rich]));
+        Assert.Same(rich, FactionOffensiveEvaluator.ChooseReconTarget([poor, rich]));
     }
 
     [Fact]
@@ -620,9 +622,9 @@ public class FactionStrategyControllerTests
         RegionFaction rf = CreateTargetRegionFaction(attacker);
         var offensive = Offensive(rf, attackForce: 1, estimatedDefenderBv: 1, reward: 1);
 
-        Assert.False(FactionStrategyController.IsWellReconnoitred(offensive, attacker.Id));
-        rf.PlanetFaction.AddRegionAwareness(rf.Region, FactionStrategyController.ReconIntelThreshold);
-        Assert.True(FactionStrategyController.IsWellReconnoitred(offensive, attacker.Id));
+        Assert.False(FactionOffensiveEvaluator.IsWellReconnoitred(offensive, attacker.Id));
+        rf.PlanetFaction.AddRegionAwareness(rf.Region, FactionStrategyPlanningConstants.ReconIntelThreshold);
+        Assert.True(FactionOffensiveEvaluator.IsWellReconnoitred(offensive, attacker.Id));
     }
 
     [Fact]
@@ -763,7 +765,7 @@ public class FactionStrategyControllerTests
         Assert.Equal(0, horde.Garrison);
         Assert.True(horde.GetDeployedStrength() > 0, "a horde's strength lives in Population");
         Assert.True(
-            FactionStrategyController.CalculateRequiredDefensiveBattleValue(horde) > 0,
+            FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(horde) > 0,
             "a region with fielded troops must hold some of them back to defend itself");
     }
 
@@ -775,9 +777,9 @@ public class FactionStrategyControllerTests
         RegionFaction quiet = CreateTargetRegionFaction(CreateNonPlayerFaction(), population: 10_000);
 
         long expected = (long)(quiet.GetDeployedStrength()
-            * FactionStrategyController.MinimumDefensiveReserveFraction);
+            * FactionThreatAssessment.MinimumDefensiveReserveFraction);
 
-        Assert.Equal(expected, FactionStrategyController.CalculateRequiredDefensiveBattleValue(quiet));
+        Assert.Equal(expected, FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(quiet));
     }
 
     // --- Feeding as a planned tasking (Design/Reference/ConsumptionFeedingAsMission.md) ---
@@ -805,7 +807,7 @@ public class FactionStrategyControllerTests
         // With no enemy visible the defensive reserve is exactly the minimum floor, so feeding gets
         // what is left of the deployed strength and nothing more.
         long reserve = (long)(regionFaction.GetDeployedStrength()
-            * FactionStrategyController.MinimumDefensiveReserveFraction);
+            * FactionThreatAssessment.MinimumDefensiveReserveFraction);
         Assert.Equal(regionFaction.GetDeployedStrength() - reserve, mission.CommittedBattleValue);
         Assert.True(mission.CommittedBattleValue < regionFaction.GetDeployedStrength(),
             "the swarm must never commit its whole deployed strength to feeding");
@@ -841,10 +843,10 @@ public class FactionStrategyControllerTests
         };
     }
 
-    private static FactionStrategyController.PotentialOffensive Offensive(
+    private static PlanningPotentialOffensive Offensive(
         RegionFaction target, long attackForce, long estimatedDefenderBv, double reward)
     {
-        return new FactionStrategyController.PotentialOffensive
+        return new PlanningPotentialOffensive
         {
             TargetRegion = target.Region,
             TargetFaction = target,

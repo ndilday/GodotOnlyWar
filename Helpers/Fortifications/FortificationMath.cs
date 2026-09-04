@@ -9,7 +9,7 @@ namespace OnlyWar.Helpers.Fortifications
     /// </summary>
     /// <remarks>
     /// The curve is fixed by the existing build economy, not chosen freely.
-    /// FactionStrategyController.DefenseBuildCost charges base*10^level to raise a stat, so the
+    /// FactionDevelopmentPlanner.DefenseBuildCost charges base*10^level to raise a stat, so the
     /// cumulative investment to reach level L is the repunit sum base*(10^0 + ... + 10^(L-1)):
     ///
     ///     Points(L) = (10^L - 1) / 9      Level(P) = log10(9P + 1)

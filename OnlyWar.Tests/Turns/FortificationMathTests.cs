@@ -5,7 +5,7 @@ using Xunit;
 namespace OnlyWar.Tests.Turns;
 
 // The combining curve is not a free choice: it is the inverse of the build economy's 10x-per-band
-// cost (FactionStrategyController.DefenseBuildCost). These tests pin the properties that make
+// cost (FactionDevelopmentPlanner.DefenseBuildCost). These tests pin the properties that make
 // shared fortifications honest - that allies cannot buy a cheap high level by splitting the work,
 // and that a handover between allies does not change what the side holds.
 public class FortificationMathTests

@@ -133,7 +133,7 @@ namespace OnlyWar.Helpers.Extensions
         // Counted in BATTLE VALUE, not headcount, because that is the currency GetDeployedStrength is
         // denominated in and the two are subtracted from each other. Garrison and Population are BV
         // pools (RegionFaction.AddMilitaryStrength: "forces are raised, lost, and returned in the same
-        // currency"), and FactionStrategyController proves it by seeding SpareTroops from
+        // currency"), and the faction strategy facade proves it by seeding SpareTroops from
         // GetDeployedStrength and then decrementing that same variable by SquadBattleValue. Summing
         // Members.Count here instead would subtract headcount from battle value: the ambient remainder
         // would be under-subtracted, and - far worse - the patrol term would be computed on a number

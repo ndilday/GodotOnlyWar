@@ -8,19 +8,22 @@ The mechanism itself is summarized in `OnlyWar_TDD.md` §6.2 and `OnlyWar_PRD.md
 What shipped, against the plan below:
 
 - `MissionType.Feed` + `FeedMission` (committed battle value), appended to the enum (§1, §3).
-- `FactionStrategyController` PRIORITY 5/6: `PlanConsumptionExpansionOnPlanet` then
-  `PlanFeedMissionsOnPlanet`, both after patrols, both drawing down the same `SpareTroops` (§2).
+- `FactionConsumptionPlanner` (composed by `FactionStrategyController`) owns PRIORITY 5/6:
+  `PlanConsumptionExpansionOnPlanet` then `PlanFeedMissionsOnPlanet`, both after patrols and both
+  drawing down the same `SpareTroops` (§2).
 - `MissionTurnProcessor.ProcessFeedOrders`, dispatched beside squad-less construction from both
   `TurnController.ProcessTurn` and `PlanetForwardSimulator.Simulate` (§3).
 - Consumption expansion and feeding dropped from `UpdatePlanet` in favour of hidden-consumer
   fallbacks (§4 resolved, §5 resolved — see those sections).
-- Line references below are to the pre-change code and are left as written.
+- References below use the current policy owners where this design discusses code ownership; the
+  historical reasoning remains here, while live formulas stay in the implementation and TDD.
 
 One thing the change surfaced rather than caused: `ClearStalePatrolSquads` swept only Patrol squads,
 so every NPC recon party that survived its week — landed home by `ExfiltrateMissionStep` — stayed in
 `LandedSquads` forever, inflating the region's search difficulty. It is now
-`ClearStaleTransientSquads` (Patrol **and** Recon), and `PlanetForwardSimulator` runs the same sweep
-after its last week, since generation has no following planning pass to do it.
+`FactionReconPatrolPlanner.ClearStaleTransientSquads` (Patrol **and** Recon), and
+`PlanetForwardSimulator` runs the same sweep after its last week, since generation has no following
+planning pass to do it.
 
 ## Why
 
@@ -29,10 +32,9 @@ other operations performs — like any other military tasking. It is not impleme
 the entire deployed swarm eats every turn, and the same troops are simultaneously counted as
 defending, patrolling, and attacking.
 
-The Tyranids *do* run the normal AI planning pass. `TurnOrderPlanner.AppendNpcOrders`
-(`Helpers/Turns/TurnOrderPlanner.cs:32`) sweeps every non-Imperial faction through
-`FactionStrategyController.GenerateFactionOrders`, and that pass allocates force exactly as expected
-(`Helpers/FactionStrategyController.cs:174`):
+The Tyranids *do* run the normal AI planning pass. `TurnOrderPlanner.AppendNpcOrders` sweeps every
+non-Imperial faction through `FactionStrategyController.GenerateFactionOrders`, and that pass
+allocates force exactly as expected by the facade's per-planet state construction:
 
 ```
 organizedTroops           = regionFaction.GetDeployedStrength()
@@ -40,15 +42,16 @@ requiredDefensiveBattleValue = CalculateRequiredDefensiveBattleValue(...)   // >
 spareTroops               = max(0, organizedTroops - requiredDefensiveBattleValue)
 ```
 
-`spareTroops` is then drawn down by offensives, and `PlanPatrolMissionsOnPlanet` takes another
+`spareTroops` is then drawn down by offensives in `FactionOffensiveOrderBuilder`, and
+`PlanPatrolMissionsOnPlanet` takes another
 `PatrolForceFraction = 0.1` of the remainder.
 
 Two things break the link to feeding:
 
 1. **The allocation is transient.** `SpareTroops` lives on `RegionForceState`
-   (`Helpers/FactionStrategyController.cs:96`), a local built at the top of planning and discarded
+   (`Helpers/Strategy/FactionPlanningModels.cs`), a local built at the top of planning and discarded
    when the method returns. The only field mirrored back onto the `RegionFaction` is
-   `AssignedDefensiveBattleValue` (`Helpers/FactionStrategyController.cs:185`) — which exists
+   `AssignedDefensiveBattleValue` (set during the facade's state construction) — which exists
    *precisely because* a downstream consumer was re-deriving force instead of reading the
    commitment. Same class of bug, different consumer.
 2. **Feeding recomputed from scratch.** The former planet-turn feeding path used
@@ -96,8 +99,8 @@ A `FeedMission : Mission` subclass carrying the committed battle value is the li
 
 ### 2. Planning
 
-New step in `GeneratePlanetOrders`, running **after** `PlanPatrolMissionsOnPlanet` (currently
-PRIORITY 4, `Helpers/FactionStrategyController.cs:255`) so feeding receives the true residual: what
+New step in `GeneratePlanetOrders`, running **after** `PlanPatrolMissionsOnPlanet` (the facade's
+patrol phase) so feeding receives the true residual: what
 survives the defensive reserve, offensives, development, and the patrol screen.
 
 - Gate to `faction.GrowthType == GrowthType.Consumption`.
@@ -132,7 +135,7 @@ still helps itself to the full pool, the double-count is fixed in one place and 
 
 Expansion is conceptually already an `Advance`: the strategy controller has offensive machinery that
 moves force into an adjacent region, and it already carries Consumption-specific reward logic —
-`CalculateOffensiveReward` (`Helpers/FactionStrategyController.cs:1458`) adds the target region's
+`FactionOffensiveEvaluator.CalculateOffensiveReward` adds the target region's
 carrying capacity to the reward for a Consumption attacker.
 
 **Resolved: kept, and taught to draw from the shared budget.** Deleting it in favour of the normal
@@ -150,7 +153,8 @@ strength between regions. Spreading precedes feeding in the planner because a sw
 not grazing. The behaviours that survived unchanged:
 
 - Move target is the adjacent region of highest `RegionBiomass` (prey population + carrying
-  capacity), and only when strictly richer than home (`:345`).
+  capacity), and only when strictly richer than home, as implemented by
+  `FactionConsumptionPlanner`.
 - Movers scale by `RegionDepletion(region)` — home gets emptier as it is stripped — times
   `ConsumptionExpansionShare = 0.5`. The base is now `SpareTroops` instead of `organized`.
 - Movers arrive via `EstablishInvaderPresence`. They no longer feed the destination the same turn:
@@ -164,7 +168,7 @@ budget covers all of it.
 
 ### 5. Edge case to preserve deliberately — RESOLVED: explicit fallback
 
-Planning only sees `IsPublic` region-factions (`Helpers/FactionStrategyController.cs:165`), whereas
+Planning only sees `IsPublic` region-factions during the facade's state construction, whereas
 feeding today runs for any Consumption faction regardless of visibility. Irrelevant on the promised
 world (the opening stamp sets `IsPublic = true`), but a hidden swarm would silently stop eating.
 
