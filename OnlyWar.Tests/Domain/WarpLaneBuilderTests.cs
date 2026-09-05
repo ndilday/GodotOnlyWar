@@ -2,7 +2,7 @@ using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Godot;
+using OnlyWar.Models.Geometry;
 using OnlyWar.Builders;
 using OnlyWar.Models.Planets;
 using Xunit;
@@ -123,7 +123,7 @@ public class WarpLaneBuilderTests
 
     private static Subsector CreateSubsector(ushort id, params Planet[] planets)
     {
-        return new Subsector(id.ToString(), id, planets.ToList(), new List<Vector2I>());
+        return new Subsector(id.ToString(), id, planets.ToList(), new List<GridCell>());
     }
 
     private static Planet CreatePlanet(int id, ushort x, ushort y, int importance)

@@ -20,14 +20,14 @@ public class NewChapterBuilderTests
     public NewChapterBuilderTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = new GameRulesData();
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, new Date(39, 500, 1), null);
     }
 
     [Fact]
     public void CreateChapter_AppliesChapterNameToUnitArmyFleetAndFoundingHistory()
     {
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
 
         Assert.Equal("Crimson Sentinels", chapter.Army.OrderOfBattle.Name);
@@ -44,7 +44,7 @@ public class NewChapterBuilderTests
     [Fact]
     public void CreateChapter_TrimsSurroundingWhitespaceFromChapterName()
     {
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "  Iron Wardens  ");
 
         Assert.Equal("Iron Wardens", chapter.Army.OrderOfBattle.Name);
@@ -57,7 +57,7 @@ public class NewChapterBuilderTests
     [InlineData("   ")]
     public void CreateChapter_FallsBackToDefaultNameWhenNoneProvided(string chapterName)
     {
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), chapterName);
 
         Assert.Equal("Heart of the Emperor", chapter.Army.OrderOfBattle.Name);
@@ -67,7 +67,7 @@ public class NewChapterBuilderTests
     public void CreateChapter_DoesNotLoseSoldiersDuringAssignment()
     {
         const int foundingSoldierCount = 500;
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data,
             CreateTrainingService(),
             new Date(39, 496, 1),
@@ -100,7 +100,7 @@ public class NewChapterBuilderTests
     [Fact]
     public void CreateChapter_NamesScoutSquadsAfterTheirAssignedSergeant()
     {
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
 
         List<Squad> scoutSquads = chapter.Army.OrderOfBattle.GetAllSquads()
@@ -116,7 +116,7 @@ public class NewChapterBuilderTests
     [Fact]
     public void CreateChapter_VeteranLineSquadsAreLedByVeteranSergeantsNotCaptains()
     {
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, new VeteranCandidateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
@@ -157,7 +157,7 @@ public class NewChapterBuilderTests
     [Fact]
     public void CreateChapter_AssignsCompanyChaplainsToCaptainedCompaniesAndReclusiumJudiciars()
     {
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
@@ -245,7 +245,7 @@ public class NewChapterBuilderTests
         // chapters founded a leaderless, all-Lexicanium Librarius even though the squad
         // template requires a Master of the Librarium. Rank is relative to the psykers rolled.
         RNG.Reset(20260716);
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
@@ -279,7 +279,7 @@ public class NewChapterBuilderTests
     [Fact]
     public void CreateChapter_VeteransRequireTacticalBaselineAndAdamantiumCombatSpike()
     {
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, new VeteranCandidateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
@@ -314,7 +314,7 @@ public class NewChapterBuilderTests
         // founding cohort forces several companies to run out of line marines.
         RNG.Reset(20260717);
         const int foundingSoldierCount = 300;
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data,
             CreateTrainingService(),
             new Date(39, 496, 1),
@@ -347,7 +347,7 @@ public class NewChapterBuilderTests
         // capped chapter-wide, so the surplus must spill into vacant devastator seats
         // as Devastator Marines (ranged > 80) rather than fall through to the scouts.
         RNG.Reset(20260718);
-        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+        PlayerForce chapter = TestGeneration.CreateChapter(
             _data, new AssaultHeavyTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1),
             "Crimson Sentinels", foundingSoldierCount: 300);
         Unit oob = chapter.Army.OrderOfBattle;
@@ -378,7 +378,7 @@ public class NewChapterBuilderTests
     [Fact]
     public void GenerateSector_ThreadsSeedAndChapterNameThroughToAGeneratedSector()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, new Date(39, 500, 1), "Storm Knights");
+        Sector sector = TestGeneration.GenerateSector(1, _data, new Date(39, 500, 1), "Storm Knights");
 
         Assert.NotEmpty(sector.Planets);
         Assert.Equal("Storm Knights", sector.PlayerForce.Army.OrderOfBattle.Name);

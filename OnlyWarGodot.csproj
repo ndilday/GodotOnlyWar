@@ -5,20 +5,22 @@
     <RootNamespace>OnlyWar</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="Modules\**\*.cs" />
+    <Compile Remove="OnlyWar.HeadlessTests\**\*.cs" />
     <Compile Remove="OnlyWar.Tests\**\*.cs" />
+    <None Remove="OnlyWar.HeadlessTests\**\*" />
     <None Remove="OnlyWar.Tests\**\*" />
     <Compile Remove="Tools\**\*.cs" />
     <None Remove="Tools\**\*" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Models\Soldiers\Names\given_names.txt">
-      <LogicalName>OnlyWar.SoldierNames.Given</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Models\Soldiers\Names\surnames.txt">
-      <LogicalName>OnlyWar.SoldierNames.Surnames</LogicalName>
-    </EmbeddedResource>
+    <ProjectReference Include="Modules/OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Engine/OnlyWar.Engine.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Battles/OnlyWar.Battles.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Medical/OnlyWar.Medical.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
   </ItemGroup>
 </Project>
+

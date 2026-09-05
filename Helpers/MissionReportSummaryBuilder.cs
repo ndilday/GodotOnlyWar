@@ -229,9 +229,9 @@ namespace OnlyWar.Helpers
             }
 
             double levelAfter = classification.SabotageLevelBefore - classification.SabotageDamage;
-            string bandBefore = RegionFactionExtensions.GetDefenseLevelDescription(
+            string bandBefore = RegionFactionDescriptionExtensions.GetDefenseLevelDescription(
                 classification.SabotageLevelBefore);
-            string bandAfter = RegionFactionExtensions.GetDefenseLevelDescription(levelAfter);
+            string bandAfter = RegionFactionDescriptionExtensions.GetDefenseLevelDescription(levelAfter);
 
             if (bandAfter == bandBefore)
             {

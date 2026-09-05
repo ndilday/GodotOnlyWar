@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.UI;
@@ -165,10 +166,7 @@ public partial class SquadScreenController : MainScreenController
         EffectiveLoadout effective = LoadoutDoctrineService.Resolve(_squad);
         ChapterOperationalDoctrine operationalDoctrine = GameDataSingleton.Instance?.Sector
             ?.PlayerForce?.Army?.ChapterOperationalDoctrine;
-        int dutyReady = SquadStrengthSnapshotBuilder.Build(
-            _squad,
-            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram,
-            operationalDoctrine).DutyReady;
+        int dutyReady = SquadStrengthSnapshotBuilder.Build(_squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: operationalDoctrine).DutyReady;
         string location = _squad.CurrentRegion?.Planet?.Name
             ?? _squad.BoardedLocation?.Fleet?.Planet?.Name
             ?? "No active theater";
@@ -186,7 +184,7 @@ public partial class SquadScreenController : MainScreenController
                 element => _squad.Members.Count(
                     member => member.Template == element.SoldierTemplate
                         && (member is not PlayerSoldier player || player.IndividualPosting == null)
-                        && DutyReadinessService.Evaluate(member, operationalDoctrine).IsDutyReady),
+                        && DutyReadinessService.Evaluate(member, doctrine: operationalDoctrine, recruitmentProgram: CurrentCampaignReadinessContext.ResolveProgram((member)?.AssignedSquad)).IsDutyReady),
                 _squad.Members.Count));
     }
 

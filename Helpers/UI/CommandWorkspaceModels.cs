@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;
 using OnlyWar.Models.Squads;
 using System;
@@ -71,9 +72,7 @@ namespace OnlyWar.Helpers.UI
     {
         public static string SquadLabel(Squad squad)
         {
-            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(
-                squad,
-                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad));
             string strength = $"{strengthSnapshot.DutyReady}/{strengthSnapshot.Full}";
             string order = squad.CurrentOrders != null ? squad.CurrentOrders.Mission.MissionType.ToString() : "Unassigned";
             return $"{squad.Name} | {strength} | {order}";
@@ -84,9 +83,7 @@ namespace OnlyWar.Helpers.UI
             return filterKey switch
             {
                 "unassigned" => squad.CurrentOrders == null,
-                "injured" => SquadStrengthSnapshotBuilder.Build(
-                    squad,
-                    GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram)
+                "injured" => SquadStrengthSnapshotBuilder.Build(squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad))
                     .Unavailable > 0,
                 _ => true
             };

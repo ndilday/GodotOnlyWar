@@ -43,7 +43,7 @@ public partial class StartMenu
 		_titleDiagnosticsDialog.CancelRequested += OnTitleDiagnosticsCancelled;
 		_titleDiagnosticsDialog.ExportRequested += OnTitleDiagnosticsExportRequested;
 
-		_titleWarningRepository = EndTurnWarningPreferencesRepository.CreateDefault();
+		_titleWarningRepository = OnlyWar.Composition.GodotHostPaths.CreateWarningPreferences();
 		_titleWarningPreferences = _titleWarningRepository.Load();
 		ApplyTitleWarningPreferences();
 	}

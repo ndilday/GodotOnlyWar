@@ -38,7 +38,7 @@ public class SaveLoadRoundTripTests
     public SaveLoadRoundTripTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = new GameRulesData();
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         // These tests exercise the save/load schema, not sector generation at scale: a
         // handful of planets stresses every persisted feature just as well as the full
         // 200x200 production sector and generates far faster. The 20x20 grid stays within
@@ -53,7 +53,7 @@ public class SaveLoadRoundTripTests
     [Fact]
     public void SaveThenLoad_MutatedGeneratedSector_PreservesRoundTripFeatures()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Round Trip Chapter");
+        Sector sector = TestGeneration.GenerateSector(1, _data, _date, "Round Trip Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
         Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
@@ -618,7 +618,7 @@ public class SaveLoadRoundTripTests
         // PlayerFaction.Units is empty, relying on the loaded blob to supply the order of
         // battle. Unlike the other round-trip tests, this deliberately does NOT pre-seed the
         // reconstruction faction, reproducing the real load path.
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Load Reconstruct Chapter");
+        Sector sector = TestGeneration.GenerateSector(1, _data, _date, "Load Reconstruct Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
         sector.PlayerForce.LastTurnReportSnapshot = new LastTurnReportSnapshot(
@@ -648,7 +648,7 @@ public class SaveLoadRoundTripTests
 
             // A fresh rules-data instance, exactly as the real load path constructs. Its
             // player faction starts with no units; the loader must populate them from the blob.
-            GameRulesData freshRules = new();
+            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             Assert.Empty(freshRules.PlayerFaction.Units);
 
             Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(loaded, freshRules);
@@ -679,7 +679,7 @@ public class SaveLoadRoundTripTests
         // so BuildSectorFromBlob must re-register them with Sector.Orders - the authoritative list
         // that turn processing (TurnController) and the region/planet inbound-orders views read.
         // Without the rebuild a reloaded game processes and displays no standing orders.
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Load Orders Chapter");
+        Sector sector = TestGeneration.GenerateSector(1, _data, _date, "Load Orders Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
         Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
@@ -710,7 +710,7 @@ public class SaveLoadRoundTripTests
             GameStateDataBlob loaded = _roundTrip.Load(dbPath);
 
             // A fresh rules-data instance, exactly as the real StartMenu load path constructs.
-            GameRulesData freshRules = new();
+            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(loaded, freshRules);
 
             Squad rebuiltSquad = rebuilt.PlayerForce.Army.OrderOfBattle.GetAllSquads()

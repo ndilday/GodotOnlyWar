@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
@@ -17,10 +18,7 @@ public class SoldierDetailBuilder
 
         if (soldier is PlayerSoldier playerSoldier)
         {
-            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
-                playerSoldier,
-                GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine,
-                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(playerSoldier, doctrine: GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine, recruitmentProgram: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
             SoldierDossier dossier = _dossierService.BuildDossier(
                 playerSoldier,
                 richTextInjury: false,
@@ -55,10 +53,7 @@ public class SoldierDetailBuilder
         }
 
         Squad squad = soldier.AssignedSquad;
-        DutyReadinessEvaluation readiness = DutyReadinessService.Evaluate(
-            soldier,
-            GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine,
-            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+        DutyReadinessEvaluation readiness = DutyReadinessService.Evaluate(soldier, doctrine: GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine, recruitmentProgram: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
         string status = readiness.IsDutyReady
             ? "Available for duty"
             : readiness.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold

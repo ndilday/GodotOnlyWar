@@ -14,7 +14,7 @@ public partial class MainGamePreviewBootstrap : Node
         if (!GameDataSingleton.Instance.IsInitialized)
         {
             GameDataSingleton.Instance.InitializeNewGameData(
-                new GameRulesData(),
+                OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 ChapterName,
                 Seed);

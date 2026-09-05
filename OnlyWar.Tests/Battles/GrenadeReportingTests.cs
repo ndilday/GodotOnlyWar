@@ -77,7 +77,7 @@ public class GrenadeReportingTests
     [Fact]
     public void TurnResolver_QueuesBlastWoundsSoTheyAreApplied()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date battleDate = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try

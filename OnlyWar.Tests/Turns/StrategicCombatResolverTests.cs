@@ -5,6 +5,7 @@ using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
+using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -28,6 +29,30 @@ public class StrategicCombatResolverTests
 
         Assert.Equal(horde.MilitaryStrength, battleValue);
         Assert.Equal(1_000, battleValue);
+    }
+
+    // SB-05b: the persistent invasion forces a defender can call on are an explicit input. The
+    // resolver, the NPC planner and the mission steps each supply the campaign they are resolving
+    // for, so nothing here consults an installed session.
+    [Fact]
+    public void CalculateDefenderBattleValue_CountsOnlyTheSuppliedInvasionForces()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction defender = fixture.DefaultRegionFaction(1);
+        defender.Garrison = 0;
+        Squad commandSquad = TestModelFactory.CreateSquad(
+            "Warlord's Retinue", TestModelFactory.CreateSoldier());
+        long commandBattleValue = commandSquad.Members
+            .Sum(member => (long)member.Template.BattleValue);
+        Assert.True(commandBattleValue > 0);
+        StrategicInvasionForce invasion = new(
+            1, defender.PlanetFaction.Faction, commandSquad, defender.Region, fixture.Planet);
+
+        long withoutForces = StrategicCombatResolver.CalculateDefenderBattleValue(defender);
+        long withForces = StrategicCombatResolver.CalculateDefenderBattleValue(
+            defender, [invasion]);
+
+        Assert.Equal(commandBattleValue, withForces - withoutForces);
     }
 
     [Fact]

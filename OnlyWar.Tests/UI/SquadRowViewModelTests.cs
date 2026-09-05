@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Squads;

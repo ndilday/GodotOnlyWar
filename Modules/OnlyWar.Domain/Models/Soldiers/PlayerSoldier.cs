@@ -1,0 +1,391 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using OnlyWar.Models.Events;
+using OnlyWar.Models.Squads;
+
+namespace OnlyWar.Models.Soldiers
+{
+    // PlayerSoldier uses the decorator pattern to extend the Soldier class
+    // with features we're only interested in for the player's troops
+    public class PlayerSoldier : ISoldier
+    {
+        private readonly Soldier _soldier;
+        private readonly List<SoldierEvent> _soldierEvents;
+        private readonly List<SoldierEvaluation> _soldierEvaluationHistory;
+        private readonly List<SoldierAward> _soldierAwards;
+        private readonly Dictionary<int, ushort> _rangedWeaponCasualtyCountMap;
+        private readonly Dictionary<int, ushort> _meleeWeaponCasualtyCountMap;
+        private readonly Dictionary<int, ushort> _factionCasualtyCountMap;
+        private Squad _assignedSquad;
+        private Action<SoldierEvent> _legacyEventRecorder;
+
+        public Date ProgenoidImplantDate { get; set; }
+        // Null identifies a founding-era brother whose implantation decisions were
+        // made before the campaign began. Recruited neophytes retain the exact score
+        // rolled as aspirants so their Phase 13 risk can be resolved later.
+        public float? GeneticCompatibility { get; set; }
+        public Date RecruitmentBirthDate { get; set; }
+        public IReadOnlyList<SoldierEvent> SoldierEvents { get => _soldierEvents; }
+        public IReadOnlyDictionary<int, ushort> RangedWeaponCasualtyCountMap { get => _rangedWeaponCasualtyCountMap; }
+        public IReadOnlyDictionary<int, ushort> MeleeWeaponCasualtyCountMap { get => _meleeWeaponCasualtyCountMap; }
+        public IReadOnlyDictionary<int, ushort> FactionCasualtyCountMap { get => _factionCasualtyCountMap; }
+        public IReadOnlyList<SoldierEvaluation> SoldierEvaluationHistory { get => _soldierEvaluationHistory; }
+        public IReadOnlyList<SoldierAward> SoldierAwards { get => _soldierAwards; }
+
+        // A brother whose replacement procedure is in progress is not available for field duty,
+        // even if the underlying wound leaves him technically mobile. The Army owns the
+        // procedure records; this flag is synchronized from those records on assignment, load,
+        // and weekly resolution so all existing deployability callers see the same reservation.
+        public bool IsUndergoingMedicalProcedure { get; set; }
+
+        #region ISoldier passthrough
+        public int Id => _soldier.Id;
+
+        public string Name => _soldier.Name;
+
+        public SoldierTemplate Template { get => _soldier.Template; set => _soldier.Template = value; }
+
+        public float Strength => _soldier.Strength;
+
+        public float Dexterity => _soldier.Dexterity;
+
+        public float Constitution => _soldier.Constitution;
+
+        public float Perception => _soldier.Perception;
+
+        public float Intelligence => _soldier.Intelligence;
+
+        public float Ego => _soldier.Ego;
+
+        public float Charisma => _soldier.Charisma;
+
+        public float PsychicPower => _soldier.PsychicPower;
+
+        public float AttackSpeed => _soldier.AttackSpeed;
+
+        public float Size => _soldier.Size;
+
+        public float MoveSpeed => _soldier.MoveSpeed;
+
+        public Body Body => _soldier.Body;
+
+        public IReadOnlyList<int> FunctioningHandGroupIds => _soldier.FunctioningHandGroupIds;
+        public int FunctioningHands => _soldier.FunctioningHands;
+        public bool CanUseTwoHandedWeapon => _soldier.CanUseTwoHandedWeapon;
+        public bool HasUntreatedSeveredLimb => _soldier.HasUntreatedSeveredLimb;
+
+        public IReadOnlyCollection<Skill> Skills => _soldier.Skills;
+
+        public Squad AssignedSquad
+        {
+            get { return _assignedSquad; }
+            set { _assignedSquad = value; }
+        }
+
+        public bool CanFight
+        {
+            get
+            {
+                return _soldier.CanFight;
+            }
+        }
+
+        public bool CanMove
+        {
+            get
+            {
+                return _soldier.CanMove;
+            }
+        }
+
+        public float MotiveSpeedMultiplier
+        {
+            get
+            {
+                return _soldier.MotiveSpeedMultiplier;
+            }
+        }
+
+        public bool IsCombatEffective
+        {
+            get
+            {
+                return !IsUndergoingMedicalProcedure && _soldier.IsCombatEffective;
+            }
+        }
+
+        public bool IsWounded
+        {
+            get
+            {
+                return _soldier.Body.HitLocations.Any(hl => hl.Wounds.WoundTotal > 0);
+            }
+        }
+
+        /// <summary>
+        /// May the player send this brother out with a squad? Physical deployment additionally
+        /// requires both functional arm/hand groups. That is deliberately stricter than
+        /// battlefield combat effectiveness: a crippled attached arm can leave a brother in the
+        /// current fight one-handed, but he cannot enter a later engagement that way.
+        ///
+        /// This deliberately replaces the old inline motive-vs-vital split, which barred anyone
+        /// with a crippled motive location. Under graded impairment that rule would bar a marine
+        /// limping at 0.6 speed who can genuinely still fight, which is the exact outcome this
+        /// phase exists to stop producing. The vital half is unchanged in effect (a crippled
+        /// vital already clears <see cref="CanFight"/>), while untreated severance is an
+        /// unconditional physical and battlefield exclusion.
+        /// </summary>
+        public bool IsDeployable => IsCombatEffective
+            && FunctioningHands >= 2
+            && !HasUntreatedSeveredLimb;
+
+        /// <summary>
+        /// The operation this brother has been attached to as an individual, without his home
+        /// squad (Design/Reference/SpecialistAttachment.md). Null for the overwhelming majority of
+        /// the roster. He remains in <see cref="AssignedSquad"/>'s Members throughout --
+        /// removing him would make him load back as a fallen brother.
+        ///
+        /// Deliberately NOT on ISoldier: attachment is a player-chapter concept, and ISoldier is
+        /// also implemented by plain Soldier and by test doubles.
+        ///
+        /// Set only through Helpers/Orders/OrderAttachment, which owns both halves of the
+        /// pointer pair (Order.AssignedCharacters is the other).
+        /// </summary>
+        public IndividualPosting IndividualPosting { get; set; }
+
+        /// <summary>
+        /// The operational order this character is assigned to. This is deliberately independent
+        /// from IndividualPosting: an order assignment does not teleport a character or encode a
+        /// commitment in his physical-location record.
+        /// </summary>
+        public Orders.Order CurrentOrder { get; set; }
+
+        // Compatibility projection for consumers still phrased in terms of an order attachment.
+        [Obsolete("Use CurrentOrder.")]
+        public Orders.Order AttachedOrder
+        {
+            get => CurrentOrder;
+            set
+            {
+                // Compatibility setter for older tests and migration-only callers. New feature
+                // code uses OrderForceService so both sides of the participant relationship stay
+                // paired.
+                if (value == null)
+                {
+                    CurrentOrder = null;
+                    IndividualPosting = null;
+                    return;
+                }
+                CurrentOrder = value;
+                IndividualPosting = new IndividualPosting(
+                    IndividualPostingKind.OperationalAttachment,
+                    CampaignLocation.Landed(value.Mission?.RegionFaction?.Region)
+                        ?? PhysicalPresence.ForSquad(AssignedSquad),
+                    new Date(1),
+                    value);
+            }
+        }
+
+        /// <summary>
+        /// Where this brother physically is for campaign purposes: with the operation he is
+        /// attached to if he is attached, otherwise wherever his squad is. An attached
+        /// Apothecary's home squad may sit aboard ship while he is forward, so anything asking
+        /// "where is this man" must go through here rather than AssignedSquad.CurrentRegion.
+        /// </summary>
+        public CampaignLocation EffectiveLocation =>
+            PhysicalPresence.ForSoldier(this);
+
+        public Planets.Region EffectiveRegion => EffectiveLocation?.Region;
+
+        /// <summary>Unlinks the bidirectional assignment and normalizes an independent reunion.</summary>
+        public void ReleaseOperationalAssignment()
+        {
+            var order = CurrentOrder;
+            if (order == null) return;
+            order.AssignedCharacters.Remove(this);
+            CurrentOrder = null;
+            if (IndividualPosting?.Location == null) return;
+            if (IndividualPosting.Kind == IndividualPostingKind.OperationalAttachment)
+            {
+                IndividualPosting.Location.Ship?.DisembarkIndividual(this);
+                IndividualPosting.Kind = IndividualPostingKind.IndependentDeployment;
+                IndividualPosting.Order = null;
+            }
+            else if (order.Force.IsEmpty && order.Mission?.MissionType != Missions.MissionType.Recruitment)
+            {
+                order.RegisteredSector?.RemoveOrder(order);
+            }
+            if (IndividualPosting.Purpose == IndividualPostingPurpose.Independent
+                && PhysicalPresence.ForSoldier(this)?.IsSamePlace(PhysicalPresence.ForSquad(AssignedSquad)) == true)
+            {
+                IndividualPosting.Location.Ship?.DisembarkIndividual(this);
+                IndividualPosting = null;
+            }
+        }
+
+        public void AddSkillPoints(BaseSkill skill, float points)
+        {
+            _soldier.AddSkillPoints(skill, points);
+        }
+
+        public void AddAttributePoints(Attribute attribute, float points)
+        {
+            _soldier.AddAttributePoints(attribute, points);
+        }
+
+        public float GetTotalSkillValue(BaseSkill skill)
+        {
+            return _soldier.GetTotalSkillValue(skill);
+        }
+
+        public Skill GetBestSkillInCategory(SkillCategory category)
+        {
+            return _soldier.GetBestSkillInCategory(category);
+        }
+
+        #endregion
+
+        public PlayerSoldier(Soldier soldier, string name)
+        {
+            _soldier = soldier;
+            _soldier.Name = name;
+            _soldierEvents = [];
+            _soldierEvaluationHistory = [];
+            _soldierAwards = [];
+            _rangedWeaponCasualtyCountMap = [];
+            _meleeWeaponCasualtyCountMap = [];
+            _factionCasualtyCountMap = [];
+            if (soldier.AssignedSquad != null)
+            {
+                _assignedSquad = soldier.AssignedSquad;
+                soldier.AssignedSquad = null;
+                AssignedSquad.RemoveSquadMember(soldier);
+                AssignedSquad.AddSquadMember(this);
+            }
+        }
+
+        public PlayerSoldier(Soldier soldier, List<SoldierEvaluation> evaluations,
+                             List<SoldierAward> awards, Date implantDate, List<SoldierEvent> events,
+                             Dictionary<int, ushort> rangedWeaponCasualties,
+                             Dictionary<int, ushort> meleeWeaponCasualties,
+                             Dictionary<int, ushort> factionCasualties)
+        {
+            _soldier = soldier;
+            _soldierEvents = events;
+            _soldierEvaluationHistory = evaluations;
+            _soldierAwards = awards;
+            ProgenoidImplantDate = implantDate;
+            _rangedWeaponCasualtyCountMap = rangedWeaponCasualties;
+            _meleeWeaponCasualtyCountMap = meleeWeaponCasualties;
+            _factionCasualtyCountMap = factionCasualties;
+            if(soldier.AssignedSquad != null)
+            {
+                _assignedSquad = soldier.AssignedSquad;
+                soldier.AssignedSquad = null;
+                AssignedSquad.RemoveSquadMember(soldier);
+                AssignedSquad.AddSquadMember(this);
+            }
+        }
+
+        public object Clone()
+        {
+            PlayerSoldier clone = new(
+                                     (Soldier)_soldier.Clone(), _soldierEvaluationHistory.ToList(),
+                                     _soldierAwards.ToList(), ProgenoidImplantDate, _soldierEvents.ToList(),
+                                     _rangedWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                                     _meleeWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                                     _factionCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value))
+            {
+                GeneticCompatibility = GeneticCompatibility,
+                IsUndergoingMedicalProcedure = IsUndergoingMedicalProcedure,
+                RecruitmentBirthDate = RecruitmentBirthDate == null
+                    ? null
+                    : new Date(
+                        RecruitmentBirthDate.Millenium,
+                        RecruitmentBirthDate.Year,
+                        RecruitmentBirthDate.Week)
+            };
+            return clone;
+        }
+
+        public void AddEvent(SoldierEvent soldierEvent)
+        {
+            if (soldierEvent == null) throw new ArgumentNullException(nameof(soldierEvent));
+            if (soldierEvent.CampaignEventId == 0 && _legacyEventRecorder != null)
+            {
+                _legacyEventRecorder(soldierEvent);
+                return;
+            }
+            _soldierEvents.Add(soldierEvent);
+        }
+
+        public void SetLegacyEventRecorder(Action<SoldierEvent> recorder)
+        {
+            _legacyEventRecorder = recorder;
+        }
+
+        public void ReplaceEvents(IEnumerable<SoldierEvent> events)
+        {
+            _soldierEvents.Clear();
+            _soldierEvents.AddRange(events ?? Enumerable.Empty<SoldierEvent>());
+        }
+
+        public void AddEvaluation(SoldierEvaluation evaluation)
+        {
+            _soldierEvaluationHistory.Add(evaluation);
+        }
+
+        public void AddAward(SoldierAward award)
+        {
+            _soldierAwards.Add(award);
+        }
+
+        public void AddRangedKill(int factionId, int weaponTemplateId)
+        {
+            if (_rangedWeaponCasualtyCountMap.ContainsKey(weaponTemplateId))
+            {
+                _rangedWeaponCasualtyCountMap[weaponTemplateId]++;
+            }
+            else
+            {
+                _rangedWeaponCasualtyCountMap[weaponTemplateId] = 1;
+            }
+
+            if (_factionCasualtyCountMap.ContainsKey(factionId))
+            {
+                _factionCasualtyCountMap[factionId]++;
+            }
+            else
+            {
+                _factionCasualtyCountMap[factionId] = 1;
+            }
+        }
+
+        public void AddMeleeKill(int factionId, int weaponTemplateId)
+        {
+            if (_meleeWeaponCasualtyCountMap.ContainsKey(weaponTemplateId))
+            {
+                _meleeWeaponCasualtyCountMap[weaponTemplateId]++;
+            }
+            else
+            {
+                _meleeWeaponCasualtyCountMap[weaponTemplateId] = 1;
+            }
+
+            if (_factionCasualtyCountMap.ContainsKey(factionId))
+            {
+                _factionCasualtyCountMap[factionId]++;
+            }
+            else
+            {
+                _factionCasualtyCountMap[factionId] = 1;
+            }
+        }
+
+        public override string ToString()
+        {
+            return _soldier.ToString();
+        }
+    }
+}

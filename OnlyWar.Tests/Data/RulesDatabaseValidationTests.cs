@@ -18,6 +18,32 @@ namespace OnlyWar.Tests.Data;
 public class RulesDatabaseValidationTests
 {
     [Fact]
+    public void HydratedCatalogRetainsTemplateIdentityAndIsIndependentOfItsSourceFile()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"onlywar-catalog-{Guid.NewGuid():N}.s3db");
+        GameRulesBlob values;
+        try
+        {
+            File.Copy(RulesDatabaseFixture.DatabasePath, path);
+            values = OnlyWar.Helpers.Database.GameRules.GameRulesDataAccess.Instance.GetData(path);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+
+        GameRulesData catalog = new(values);
+
+        Assert.Same(values.Factions.Single(faction => faction.IsPlayerFaction), catalog.PlayerFaction);
+        Assert.Same(values.BaseSkills, catalog.BaseSkillMap);
+        Assert.Same(values.EquipmentCatalog, catalog.EquipmentCatalog);
+        Assert.NotEmpty(catalog.ChapterDoctrines);
+        Assert.NotNull(catalog.Skills);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public void RulesDatabase_MissingRequiredTable_FailsBeforeHydration()
     {
         InvalidOperationException exception = AssertRulesDatabaseRejects(
@@ -159,7 +185,7 @@ public class RulesDatabaseValidationTests
     [Fact]
     public void PlanetTemplateEligibility_UsesStableAssignmentsAfterTemplateRename()
     {
-        GameRulesData original = new(RulesDatabaseFixture.DatabasePath);
+        GameRulesData original = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(RulesDatabaseFixture.DatabasePath);
         GameRulesData renamed = LoadRulesWithMutation(
             "renamed-planet-templates",
             "UPDATE PlanetTemplate SET Name = 'Localized world ' || Id;");
@@ -332,7 +358,7 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
                 command.ExecuteNonQuery();
             }
 
-            GameRulesData rules = new(temporaryDatabasePath);
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(temporaryDatabasePath);
             Assert.StartsWith("Renamed soldier ", rules.ChapterDoctrine.TacticalMarine.Name);
             Assert.StartsWith("Renamed squad ", rules.ChapterDoctrine.TacticalSquad.Name);
             Assert.StartsWith("Renamed unit ", rules.ChapterDoctrine.BattleCompany.Name);
@@ -370,7 +396,7 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
         string databasePath = CreateMutatedRulesDatabase(suffix, mutationSql);
         try
         {
-            return Assert.Throws<InvalidOperationException>(() => new GameRulesData(databasePath));
+            return Assert.Throws<InvalidOperationException>(() => OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(databasePath));
         }
         finally
         {
@@ -387,7 +413,7 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
         string databasePath = CreateMutatedRulesDatabase(suffix, mutationSql);
         try
         {
-            return new GameRulesData(databasePath);
+            return OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(databasePath);
         }
         finally
         {

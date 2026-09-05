@@ -584,7 +584,7 @@ public class BattleTurnResolverWithdrawalTests
         Aggression attackerAggression,
         Aggression defenderAggression)
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date date = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try

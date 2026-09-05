@@ -92,7 +92,7 @@ public partial class MainGameScene
 		_endTurnPreflightDialog.CancelPressed += OnEndTurnPreflightCancelled;
 		_endTurnPreflightDialog.WarningPreferencesChanged += OnPreflightPreferencesChanged;
 
-		_warningPreferencesRepository = EndTurnWarningPreferencesRepository.CreateDefault();
+		_warningPreferencesRepository = OnlyWar.Composition.GodotHostPaths.CreateWarningPreferences();
 		_warningPreferences = _warningPreferencesRepository.Load();
 		ApplyWarningPreferencesToMenu();
 

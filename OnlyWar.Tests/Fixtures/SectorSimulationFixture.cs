@@ -29,6 +29,21 @@ internal sealed class SectorSimulationFixture
     public Planet Planet { get; private set; }
     public Sector Sector { get; private set; }
 
+    /// <summary>The campaign date this fixture's session runs at.</summary>
+    public Date CurrentDate { get; } = new Date(1, 1, 1);
+
+    /// <summary>
+    /// Explicit campaign inputs for order-lifecycle commands, so order tests name the sector they
+    /// mutate rather than depending on whichever campaign is installed in the singleton (SB-05a).
+    /// </summary>
+    public OnlyWar.Contracts.Operations.OrderCommandContext OrderCommands =>
+        new(Sector, CurrentDate);
+
+    /// <summary>Every player soldier the chapter could lend to an operation.</summary>
+    public System.Collections.Generic.IEnumerable<OnlyWar.Models.Soldiers.PlayerSoldier> ChapterRoster =>
+        Sector?.PlayerForce?.Army?.PlayerSoldierMap?.Values
+        ?? System.Linq.Enumerable.Empty<OnlyWar.Models.Soldiers.PlayerSoldier>();
+
     private readonly RegionFaction[] _defaultRegionFactions = new RegionFaction[RegionCount];
 
     public RegionFaction DefaultRegionFaction(int region) => _defaultRegionFactions[region];
@@ -84,13 +99,13 @@ internal sealed class SectorSimulationFixture
         fixture.Sector = new Sector(playerForce, [], [fixture.Planet], []);
         if (loadGlobalGameData)
         {
-            GameRulesData rules = new();
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             // These are single-planet simulations with one governor, so tests force or suppress a
             // request through the governor's traits alone. Pin out the sector-wide throttle (which
             // production sets low enough that a lone governor would almost never petition) so those
             // trait-driven expectations stay deterministic.
             rules.SupplyEconomyRules.RequestGenerationRate = 1m;
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, new Date(1, 1, 1), fixture.Sector);
+            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, fixture.CurrentDate, fixture.Sector);
         }
 
         return fixture;

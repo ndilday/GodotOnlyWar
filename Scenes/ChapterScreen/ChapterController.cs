@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Recruitment;
@@ -1218,10 +1219,7 @@ public partial class ChapterController : MainScreenController
 
     private static string DutyStatus(ISoldier soldier)
     {
-        DutyReadinessEvaluation evaluation = DutyReadinessService.Evaluate(
-            soldier,
-            GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine,
-            GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+        DutyReadinessEvaluation evaluation = DutyReadinessService.Evaluate(soldier, doctrine: GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.ChapterOperationalDoctrine, recruitmentProgram: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
         return evaluation.IsDutyReady
             ? "Duty-ready"
             : evaluation.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold

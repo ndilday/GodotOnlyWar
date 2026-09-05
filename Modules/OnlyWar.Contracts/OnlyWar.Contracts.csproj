@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>OnlyWar</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
+  </ItemGroup>
+</Project>

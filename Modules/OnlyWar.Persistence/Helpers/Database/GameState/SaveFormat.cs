@@ -1,0 +1,34 @@
+namespace OnlyWar.Helpers.Database.GameState
+{
+    public static class SaveFormat
+    {
+        // Bump this whenever SaveStructure.sql changes shape. The writer always recreates the
+        // schema from scratch, so a save/load round-trip inside one build passes regardless -- but
+        // an OLDER save read by a NEWER build will be missing the new tables and fault deep in the
+        // loader. EnsureCompatibleSaveVersion exists to turn that into a clean, early rejection,
+        // and it can only do so if this constant moves with the schema.
+        //
+        // 6: OrderSoldier table (order-level specialist attachment,
+        //    Design/Reference/SpecialistAttachment.md). Added 2026-08-07 after a v5 save crashed with
+        //    "no such table: OrderSoldier" instead of being reported as incompatible.
+        // 7: LastTurnReport table (bounded JSON snapshot of the latest resolved turn report).
+        // 8: canonical CampaignEvent/ChapterChronicle tables and persisted campaign RNG identity.
+        // 9: faction relationships, authored behavior flags, regional-awareness rename, and
+        //    target-specific intelligence beliefs. This is a deliberate save break: v8 is rejected.
+        // 10: itemized equipment role/personal loadout tables and mission equipment foundations.
+        //     This is a deliberate save break: v9 and older saves are rejected.
+        // 11: persisted world-control narrative episode state.
+        // 12: stable line-formation ordinals and durable squad battle-history retention.
+        // 13: IndividualPosting replaces OrderSoldier as the physical-location source of truth.
+        // 14: administrative duty stations, explicit order owners/characters, and physical-only
+        //     individual postings. This is a deliberate incompatible save break.
+        // 15: scout training options are persisted by stable rules-data key rather than the
+        //     former fixed focus bitmask. This is a deliberate incompatible save break.
+        // 16: indelible dormant-population state, latent ghost sources, and persistent invasion-force identities.
+        // 17: successor invasion-force transit battle-value payload.
+        // 18: explicit scenario invader identity and removal of the inert invasion beacon flag.
+        // 19: singleton player-Chapter operational doctrine.
+        public const int CurrentVersion = 19;
+        public const int MinimumSupportedVersion = CurrentVersion;
+    }
+}

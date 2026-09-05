@@ -24,7 +24,7 @@ public class BattleTurnResolverTests
     [Fact]
     public void ProcessNextTurn_UsesImmutableCompactSnapshotsAcrossMutableSimulationTurns()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date battleDate = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try
@@ -67,7 +67,7 @@ public class BattleTurnResolverTests
     [Fact]
     public void AssassinationAttacker_OpensWithAimedFire()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date battleDate = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try

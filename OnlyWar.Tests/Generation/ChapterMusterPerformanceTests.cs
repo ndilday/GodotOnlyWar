@@ -22,7 +22,7 @@ public class ChapterMusterPerformanceTests
     {
         _output = output;
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = new GameRulesData();
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, new Date(39, 500, 1), null);
     }
 
@@ -33,7 +33,7 @@ public class ChapterMusterPerformanceTests
         RNG.Reset(20260821);
         Stopwatch timer = Stopwatch.StartNew();
 
-        PlayerForce force = NewChapterBuilder.CreateChapter(
+        PlayerForce force = TestGeneration.CreateChapter(
             _data,
             CreateTrainingService(),
             new Date(39, 496, 1),

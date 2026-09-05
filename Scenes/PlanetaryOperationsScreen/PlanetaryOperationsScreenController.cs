@@ -149,6 +149,15 @@ public partial class PlanetaryOperationsScreenController : DialogController
 
     private Sector Sector => GameDataSingleton.Instance?.Sector;
 
+    // Host-side resolution of the campaign an operations command runs against. Operations policy
+    // takes these explicitly; the screen is the compatibility adapter until SB-11a migrates it to
+    // the application command boundary.
+    private Date CurrentDate => GameDataSingleton.Instance?.Date;
+
+    private IEnumerable<PlayerSoldier> ChapterRoster =>
+        Sector?.PlayerForce?.Army?.PlayerSoldierMap?.Values
+        ?? Enumerable.Empty<PlayerSoldier>();
+
     private void RefreshWorkspace()
     {
         if (_view == null || _planet == null || _selectedRegion == null) return;
@@ -336,7 +345,8 @@ public partial class PlanetaryOperationsScreenController : DialogController
                 : OrderMutationService.CreateOrAdd(
                     Sector, _selectedRegion, _selectedMission, [], characters,
                     ResolveTargetFactionId(_selectedMission),
-                    _selectedOrder?.LevelOfAggression ?? Aggression.Normal);
+                    _selectedOrder?.LevelOfAggression ?? Aggression.Normal,
+                    CurrentDate);
             if (characterResult.Succeeded)
             {
                 _selectedOrder = characterResult.Order;
@@ -357,7 +367,8 @@ public partial class PlanetaryOperationsScreenController : DialogController
         OrderMutationResult result = OrderMutationService.CreateOrAdd(
             Sector, _selectedRegion, _selectedMission, squads,
             ResolveTargetFactionId(_selectedMission),
-            _selectedOrder?.LevelOfAggression ?? Aggression.Normal);
+            _selectedOrder?.LevelOfAggression ?? Aggression.Normal,
+            CurrentDate);
         if (result.Succeeded)
         {
             _selectedOrder = result.Order;
@@ -415,7 +426,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
         OrderMutationResult result = OrderMutationService.RemoveSquad(Sector, order, squad);
         if (result.Succeeded)
         {
-            SetUndo("squad removal", () => OrderMutationService.RestoreSquad(Sector, order, squad));
+            SetUndo("squad removal", () => OrderMutationService.RestoreSquad(Sector, order, squad, CurrentDate));
             if (order.Force.IsEmpty) _selectedOrder = null;
             Changed(result.Message);
         }
@@ -432,11 +443,12 @@ public partial class PlanetaryOperationsScreenController : DialogController
         Confirm($"Cancel {MissionAvailability.GetOrderLabel(order.Mission)}?\n\n"
             + $"{squads.Count} squads will be released; {specialists.Count} specialists will return.", () =>
         {
+            OrderRestoreToken undo = OrderMutationService.CaptureCancellationUndo(Sector, order);
             OrderMutationResult result = OrderMutationService.Cancel(Sector, order);
             if (result.Succeeded)
             {
                 _selectedOrder = null;
-                SetUndo("order cancellation", () => RestoreOrder(order, squads, specialists));
+                SetUndo("order cancellation", () => OrderMutationService.Restore(Sector, undo, CurrentDate));
                 Changed(result.Message);
             }
             else ShowFeedback(result.Message);
@@ -465,12 +477,12 @@ public partial class PlanetaryOperationsScreenController : DialogController
         bool attached = ReferenceEquals(soldier?.CurrentOrder, _selectedOrder);
         OrderMutationResult result = attached
             ? OrderMutationService.DetachSpecialist(Sector, _selectedOrder, soldier)
-            : OrderMutationService.AttachSpecialist(Sector, _selectedOrder, soldier);
+            : OrderMutationService.AttachSpecialist(Sector, _selectedOrder, soldier, CurrentDate);
         if (result.Succeeded)
         {
             Order order = _selectedOrder;
             SetUndo(attached ? "specialist detachment" : "specialist attachment", () => attached
-                ? OrderMutationService.AttachSpecialist(Sector, order, soldier)
+                ? OrderMutationService.AttachSpecialist(Sector, order, soldier, CurrentDate)
                 : OrderMutationService.DetachSpecialist(Sector, order, soldier));
             Changed(result.Message);
         }
@@ -496,7 +508,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
             .Select(option => option.Soldier).ToList();
         FinishMovement(PlanetForceMovementService.Land(
             Sector, _planet, _selectedRegion,
-            new MovementParty(squads, characters)));
+            new MovementParty(squads, characters), CurrentDate));
     }
 
     private void CommitEmbarkation()
@@ -509,7 +521,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
             .Select(option => option.Soldier).ToList();
         FinishMovement(PlanetForceMovementService.Embark(
             Sector, _planet, _selectedRegion, ship,
-            new MovementParty(squads, characters)));
+            new MovementParty(squads, characters), CurrentDate));
     }
 
     private void CommitDetach()
@@ -543,15 +555,15 @@ public partial class PlanetaryOperationsScreenController : DialogController
     {
         if (_selectedRegion == null) return [];
 
-        // SpecialistAvailability also consults the global soldier map. Build the roster from
-        // every valid origin so locally staged characters are included, then apply the same
-        // target-or-adjacent region boundary used by the squad roster. Characters outside that
-        // operational area should not appear in Order mode at all, even as unavailable rows.
+        // SpecialistAvailability is also given the chapter roster. Build it from every valid origin
+        // so locally staged characters are included, then apply the same target-or-adjacent region
+        // boundary used by the squad roster. Characters outside that operational area should not
+        // appear in Order mode at all, even as unavailable rows.
         return _selectedRegion.GetSelfAndAdjacentRegions()
             .Select(GetPlayerPresence)
             .Where(presence => presence != null)
             .SelectMany(presence => SpecialistAvailability.EnumerateRoster(
-                presence, _selectedRegion, _selectedOrder))
+                presence, _selectedRegion, ChapterRoster, _selectedOrder))
             .Where(option => IsInOrderArea(option?.Soldier, _selectedRegion))
             .GroupBy(option => option.Soldier.Id)
             .Select(group => group.First())
@@ -660,23 +672,6 @@ public partial class PlanetaryOperationsScreenController : DialogController
         foreach (Squad squad in squads.Where(squad => ReferenceEquals(squad.CurrentOrders, order)).ToList())
             last = OrderMutationService.RemoveSquad(Sector, order, squad);
         return last;
-    }
-
-    private OrderMutationResult RestoreOrder(Order order, IReadOnlyList<Squad> squads,
-        IReadOnlyList<PlayerSoldier> specialists)
-    {
-        OrderMutationResult result = null;
-        foreach (Squad squad in squads)
-        {
-            result = OrderMutationService.RestoreSquad(Sector, order, squad);
-            if (!result.Succeeded) return result;
-        }
-        foreach (PlayerSoldier specialist in specialists)
-        {
-            result = OrderMutationService.AttachSpecialist(Sector, order, specialist);
-            if (!result.Succeeded) return result;
-        }
-        return result ?? new OrderMutationResult(false, "The order could not be restored.");
     }
 
     private void SetUndo(string description, Func<OrderMutationResult> action)

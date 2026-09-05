@@ -30,7 +30,7 @@ public sealed class FactionCapabilityStateTests
     [Fact]
     public void RulesResolveInvasionCapabilityAndValidatedCampaignProfile()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Faction invasionFaction = GetInvasionFaction(rules);
 
         Assert.NotNull(invasionFaction);
@@ -46,7 +46,7 @@ public sealed class FactionCapabilityStateTests
     [Fact]
     public void IndeliblePresenceSurvivesPopulationCulls()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Faction invasionFaction = GetInvasionFaction(rules);
         Assert.NotNull(invasionFaction);
         Planet planet = new(
@@ -82,7 +82,7 @@ public sealed class FactionCapabilityStateTests
     [Fact]
     public void ConfirmedDormantCullingReducesStrengthButLeavesTheIndeliblePresence()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Planet planet = new(
             2,
             "Feral Test World",
@@ -153,10 +153,10 @@ public sealed class FactionCapabilityStateTests
     [Fact]
     public void InvasionFormationLeavesTheGhostSourceEcosystemBehind()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date campaignDate = new(39, 500, 1);
         GameDataSingleton.Instance.LoadGameDataFromBlob(rules, campaignDate, null);
-        Sector sector = SectorBuilder.GenerateSector(1, rules, campaignDate, "Invasion Source Test");
+        Sector sector = TestGeneration.GenerateSector(1, rules, campaignDate, "Invasion Source Test");
         PlanetTemplate template = rules.PlanetTemplateEligibility
             .GetEligibleTemplateIds(PlanetTemplateEligibilityKeys.GhostPopulationSource)
             .Select(id => rules.PlanetTemplateMap[id])
@@ -183,10 +183,10 @@ public sealed class FactionCapabilityStateTests
     [Fact]
     public void PersistentInvasionForceRoundTripsWithItsCommandSquadOutsideLandedSquads()
     {
-        GameRulesData rules = new();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date campaignDate = new(39, 500, 1);
         GameDataSingleton.Instance.LoadGameDataFromBlob(rules, campaignDate, null);
-        Sector sector = SectorBuilder.GenerateSector(1, rules, campaignDate, "Invasion Save Test");
+        Sector sector = TestGeneration.GenerateSector(1, rules, campaignDate, "Invasion Save Test");
         Faction invasionFaction = GetInvasionFaction(rules);
         Assert.NotNull(invasionFaction);
         Planet planet = sector.Planets.Values.First();
@@ -232,7 +232,7 @@ public sealed class FactionCapabilityStateTests
             Assert.Equal(77, blob.StrategicInvasionForces[0].Id);
             Assert.Equal(0, blob.StrategicInvasionForces[0].TransitBattleValue);
 
-            GameRulesData loadedRules = new();
+            GameRulesData loadedRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             Sector loadedSector = SavedGameLoader.BuildSectorFromBlob(blob, loadedRules);
             StrategicInvasionForce loaded = Assert.Single(loadedSector.StrategicInvasionForces);
             Assert.Equal(77, loaded.Id);

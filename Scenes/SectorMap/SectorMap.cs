@@ -168,11 +168,11 @@ public partial class SectorMap : Node2D
 		RefreshFleets();
         _subsectors = SubsectorBuilder.BuildSubsectors(
             GameDataSingleton.Instance.Sector.Planets.Values,
-            GridDimensions,
+            new OnlyWar.Models.Geometry.GridCell(GridDimensions.X, GridDimensions.Y),
             GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.MaxSubsectorDiameter);
         foreach(Subsector subsector in _subsectors)
         {
-            foreach (Vector2I cell in subsector.Cells)
+            foreach (Vector2I cell in subsector.Cells.Select(cell => new Vector2I(cell.X, cell.Y)))
             {
                 SectorIds[GridPositionToIndex(cell)] = subsector.Id;
             }
@@ -189,9 +189,11 @@ public partial class SectorMap : Node2D
                 _subsectors.ToDictionary(subsector => subsector.Id, subsector => subsector.Planets);
             var voronoiBorders = OnlyWar.Helpers.VoronoiSubsectorMapper.BuildSubsectorLoops(
                 subsectorPlanetMap,
-                GridDimensions,
+                new OnlyWar.Models.Geometry.GridCell(GridDimensions.X, GridDimensions.Y),
                 GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.MaxSubsectorDiameter);
-            _voronoiSubsectorLoops = voronoiBorders.Loops;
+            _voronoiSubsectorLoops = voronoiBorders.Loops.ToDictionary(
+                pair => pair.Key, pair => pair.Value.Select(loop =>
+                    loop.Select(point => new Vector2(point.X, point.Y)).ToArray()).ToList());
 
             // Recolor from the Voronoi adjacency (shared border edges) so that
             // neighboring subsectors never share a palette color.
@@ -584,7 +586,7 @@ public partial class SectorMap : Node2D
             float maxX = float.MinValue;
             float maxY = float.MinValue;
             Vector2 sum = Vector2.Zero;
-            foreach (Vector2I cell in subsector.Cells)
+            foreach (Vector2I cell in subsector.Cells.Select(cell => new Vector2I(cell.X, cell.Y)))
             {
                 Vector2 center = CalculateMapPosition(cell);
                 sum += center;
@@ -1666,7 +1668,7 @@ public partial class SectorMap : Node2D
             List<Vector2I> vertexList = [];
             subsectorVertexListMap[subsector.Id] = vertexList;
             // the first cell should be the top left of the subsector
-            Vector2I gridPosition = subsector.Cells[0];
+            Vector2I gridPosition = new(subsector.Cells[0].X, subsector.Cells[0].Y);
             Vector2I cellCenterPosition = CalculateMapPosition(gridPosition);
             Vector2I topLeft = cellCenterPosition - HalfCellSize;
             Vector2I topRight = new Vector2I(topLeft.X + CellSize.X, topLeft.Y);

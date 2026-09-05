@@ -2,7 +2,7 @@
 
 **Version:** Alpha 0.8
 
-**Last Updated:** September 1, 2026
+**Last Updated:** September 4, 2026
 
 **Author:** Nathan Dilday
 
@@ -64,9 +64,56 @@
 | RNG | Custom `RNG` static class wrapping `System.Random` |
 | Statistical math | Custom `GaussianCalculator` static class |
 
+The simulation foundation builds with the ordinary .NET 8 SDK. Godot.NET.Sdk/4.7.0
+is confined to the root `OnlyWarGodot` host project. SQLite file/catalog/format adapters
+are owned by `OnlyWar.Persistence`; model-specific campaign readers remain in the temporary
+`OnlyWar.Engine` bridge until the Campaign/Application persistence migration.
+
 ---
 
 ## 2. Project Structure
+
+Production sources are split between the Domain, Contracts, Medical, Persistence, Runtime,
+and temporary Engine headless projects under `Modules/`, plus the root Godot host. Namespaces
+retain the `OnlyWar` root. The exhaustive source
+ownership manifest is `Modules/source-ownership.json`: module entries are relative to their
+respective `Modules/OnlyWar.<owner>/` directories;
+Host entries are repository-relative presentation helpers. Scenes, Composition, and
+the host's assembly metadata also remain in the root project.
+
+| Project | Direct production references | Current responsibility |
+|---|---|---|
+| `OnlyWar.Domain` | None | Coordinates/date, body/wound and equipment primitives, independent soldier/planet/fleet templates, doctrine and rating values. |
+| `OnlyWar.Contracts` | Domain | RNG/ID allocation interfaces and typed Medical, Battles, Operations, Persistence, and Runtime boundary inputs/results. |
+| `OnlyWar.Battles` | Domain, Contracts | Tactical state, planning, actions, wounds, morale, withdrawal, battle-local aftermath and replay over explicit equipment/participant/rules inputs. |
+| `OnlyWar.Medical` | Domain, Contracts | Headless readiness, health, procedure, facility and care policies over explicit medical facts. |
+| `OnlyWar.Persistence` | Domain, Contracts | Atomic campaign files, save catalog/retention/metadata and save-format constants; SQLite-owned adapter surface. |
+| `OnlyWar.Runtime` | Domain, Contracts | Runtime soldier/squad/force factories, names, RNG adapters, explicit persistent/tactical ID allocators, and the deterministic sector topology/governance rebuild shared by new game and load. |
+| `OnlyWar.Generation` | Domain, Contracts, Runtime | Initial sector/chapter/planet/character construction and the authored opening-scenario stamp, over explicit generation ports. |
+| `OnlyWar.Engine` | Domain, Contracts, Battles, Generation, Medical, Persistence, Runtime | Remaining portable simulation, campaign entities, operations/missions, turn processing, rules compilation, model-specific database adapters, application adapters and compatibility façades. |
+| `OnlyWarGodot` | Domain, Contracts, Battles, Generation, Medical, Persistence, Runtime, Engine | Scenes, presentation helpers, Godot geometry/path/logging adapters and startup composition. |
+
+The host excludes `Modules/**/*.cs` and both test projects from compilation, including
+nested generated `obj` sources. Each moved source compiles in exactly one project.
+The name provider and both embedded soldier-name pools belong to Runtime; their logical
+names remain `OnlyWar.SoldierNames.Given` and `OnlyWar.SoldierNames.Surnames`, resolved
+through the owning provider assembly. Engine retains a temporary root compatibility façade.
+No production friend-assembly grants are used.
+Internal access is granted only to the two test assemblies. Existing host-facing APIs
+are public during migration; this does not yet enforce the final scene command boundary.
+
+Service-dependent models remain in Engine: Faction/Unit/Squad/PlayerSoldier and the
+planet graph still contain campaign policy, posting/order calls and global-ID behavior;
+mission/battle contexts still reference their implementations. `GameRulesData` and
+`GameRulesBlob` also remain there because their faction graph includes live units.
+The feature extraction that first needs each shared signature must separate those
+members before moving the entity to Domain/Contracts; Domain never references Engine.
+Intrinsic health/equipment operations moved down; soldier-dependent casualty evaluation
+stays with the battle implementation. This is an intermediate build seam, not completion
+of the subsystem or shared-mutation boundaries.
+
+The directory families below describe logical organization inside their owning project;
+consult the manifest for an exact source location.
 
 ```
 /Assets                   Textures, icons, audio
@@ -110,6 +157,15 @@
 ## 3. Architectural Patterns
 
 ### 3.1 View / Controller Separation
+
+Engine code has no Godot references. `GridCell` carries signed integer grid dimensions
+and cells; `PlanePoint` carries single-precision geometry. The subsector algorithms retain
+their enumeration, scalar arithmetic and rounding; SectorMap converts these values into
+Godot vectors at rendering entry. `GodotHostPaths` resolves `user://` paths and configures
+the save directory from the existing `GodotLogBridge` autoload before scene startup.
+Headless callers configure ordinary save paths explicitly. Preferences receive a file
+path and use the existing `GameLog` sink for warnings. Report/row rendering stays in the
+host, including the last-turn snapshot presentation builder that calls the end-turn dialog.
 
 Every Godot scene that has meaningful logic is split into two C# classes:
 
@@ -164,7 +220,14 @@ reads snapshot battle fields and the action log rather than an independent campa
 
 ### 4.1 Game Rules Database
 
-Read-only SQLite file loaded once at application start. Accessed via `GameRulesDataAccess` (singleton). Contains:
+Read-only SQLite content is hydrated explicitly by `GameRulesLoader.Load(databasePath)`
+through the current Engine model adapter. `GameRulesData(GameRulesBlob)` constructs and validates an
+in-memory catalog without a path, SQL, storage reference, or current-session selection.
+The loader retains schema/reference/hydrated-data checks and the catalog retains semantic
+registry validation. Template references and lookup ordering are preserved. Equipment SQL
+hydration belongs to `EquipmentCatalogLoader`; legacy fixture conversion belongs to
+`LegacyEquipmentCatalogBuilder`. `EquipmentRulesCatalog` itself accepts dictionaries.
+Contains:
 
 At runtime, `GameStorage` locates the immutable install root and supplies the ordinary filesystem path `Database/OnlyWar.s3db`; the database is deliberately shipped loose beside the exported executable because `Microsoft.Data.Sqlite` cannot open a database inside Godot's virtual PCK filesystem. Editor and test runs locate the same install root by walking up from the process/assembly directories, so no code depends on the current working directory.
 
@@ -218,7 +281,15 @@ planet spawn probability, and maximum subsector diameter used by new-sector gene
 topology reconstruction. The loader requires exactly one default profile and validates its ranges.
 Sector-map and battle-replay pixel metrics remain code-owned presentation settings.
 
-The rules database is loaded as an immutable rules profile for a campaign. Campaign compatibility should identify the rules/mod version used to generate the save so incompatible rules changes cannot silently alter an ongoing campaign. Current saves persist the random-algorithm version but not a rules-profile identity or content hash; adding that metadata remains a compatibility follow-up.
+The installed rules database is read-only, but the hydrated object graph is not deeply
+immutable. `Faction.Units` is campaign force state populated by generation/runtime force
+owners, and faction runtime templates/fire discipline and mutable supply-profile settings
+remain reachable through the catalog. A catalog is campaign-owned and must not be shared
+as immutable state between independent campaigns. Separating those runtime members belongs
+to the Runtime/Generation/Campaign migrations. Campaign compatibility should identify the
+rules/mod version used to generate the save so incompatible rules changes cannot silently
+alter an ongoing campaign. Current saves persist the random-algorithm version but not a
+rules-profile identity or content hash; adding that metadata remains a compatibility follow-up.
 
 The rules loader is the single boundary for resolving stable keys, semantic flags, and validated registries into runtime objects. Consumers should use those resolved identities rather than rediscovering rules rows by display name.
 
@@ -281,7 +352,7 @@ Three properties of this design are easy to break and worth stating. The compone
 
 ### 4.2 Save State Database
 
-Written in full on each save (file is deleted and recreated from scratch using the loose, read-only `Database/SaveStructure.sql`). Read on load via `GameStateDataAccess` (singleton). All writes are wrapped in a single transaction; exceptions trigger rollback. Player saves live under `user://saves` (`%APPDATA%\OnlyWar\saves` on Windows), never in the install directory. `SaveGameCatalog` discovers `*.s3db` files and inspects only their metadata for the start menu.
+Written in full on each save (file is deleted and recreated from scratch using the loose, read-only `Database/SaveStructure.sql`). Read on load via the current Engine model adapter; the application still owns active-session selection/publication. `OnlyWar.Persistence` owns the explicit atomic file primitive, save catalog, metadata, retention and format compatibility surface. All writes are wrapped in a single transaction; exceptions trigger rollback. Player saves live under `user://saves` (`%APPDATA%\OnlyWar\saves` on Windows), never in the install directory. `SaveGameCatalog` discovers `*.s3db` files and inspects only their metadata for the start menu.
 
 **Current Alpha 0.8 behavior:** `SaveFormat.CurrentVersion` is 19 and is written to `GlobalData.SaveVersion`. Format 12 adds stable line-formation ordinals and durable squad battle-history retention; format 13 adds persisted individual postings; format 14 adds administrative formation stations, explicit order ownership, character participants, and physical-only postings; format 15 adds stable-key Scout training options; format 16 adds indelible Ork region state, latent ghost sources, and persistent Waaagh! identities; format 17 adds successor Waaagh! transit Battle Value; format 18 adds the resolved Promised-World invader faction; format 19 adds the singleton Chapter operational doctrine. Only format 19 is currently accepted; older and newer versions are rejected before campaign-table loading. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
 
@@ -1401,10 +1472,13 @@ incapacitation, gene-seed, or achievement facts.
 
 ### 6.6.1 Medical & Gene-Seed
 
-`MedicalTurnProcessor` runs as the `ProcessMedical` step of `TurnController.ProcessTurn` and has two halves.
+`OnlyWar.Medical` owns the headless medical transitions. `MedicalTurnProcessor` remains the
+Engine/Application cadence adapter invoked by the `ProcessMedical` step of
+`TurnController.ProcessTurn`; it supplies bodies and campaign maps to the module and applies
+returned completion facts to roster/posting/event state. The module has two policy halves.
 
-- **Natural healing.** Applies `Wounds.ApplyWeekOfHealing()` to every wounded player-soldier hit location regardless of deployment, *except* severed non-vital locations that require a replacement procedure. Crippled locations do not require replacement for now. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree. Cadence and the daily Astartes pass are specified in §5.3.
-- **Procedure resolution.** `ResolveProcedures` decrements weeks-remaining and, on completion, clears the location's wounds and removes the procedure. Cybernetic completion sets `HitLocation.IsCybernetic`; vat-grown leaves it clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag.
+- **Natural healing.** `MedicalHealthPolicy` applies `Wounds.ApplyWeekOfHealing()` to every wounded hit location regardless of deployment, *except* severed non-vital locations that require a replacement procedure. Crippled locations do not require replacement for now. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree. Cadence and the daily Astartes pass are specified in §5.3.
+- **Procedure resolution.** `MedicalHealthPolicy.AdvanceProcedure` decrements weeks-remaining and, on completion, clears the location's wounds and returns a typed completion transition. The Engine adapter removes the persisted procedure and synchronizes reservation flags. Cybernetic completion sets `HitLocation.IsCybernetic`; vat-grown leaves it clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag.
 
 Medical completion returns a bounded list of `CompletedMedicalProcedure` facts. Each successful
 primary target emits one `BodyPartReplacement` event, recording the method, prior cybernetic state,
@@ -1416,9 +1490,15 @@ healing, and procedure order, then emits exactly one `NearDeathRecovery` when a 
 brother becomes deployable. Natural/field care, cybernetic, and vat-grown recovery are distinguished
 without scanning full career histories; a missing or fallen soldier closes no fictional recovery.
 
-`MedicalProcedure` (soldier id, hit-location template id, `MedicalProcedureType { Cybernetic, VatGrown }`, weeks remaining, Requisition cost paid up front) lives on `Army` beside the Requisition pool and roster, and persists to a `MedicalProcedure` table keyed to `Soldier`. `MedicalProcedureService.TryAssign` validates eligibility, surgery site, co-located staff, and affordability, then deducts cost and creates the procedure; `EvaluateRequisites` returns the per-requisite breakdown the UI renders green/red. Durations and costs live in `MedicalProcedureRules`, never in UI literals. The gates are a co-located Apothecary **and** Techmarine (same ship or same region, checked only at procedure start) plus a valid surgery site — aboard a ship, or an Imperial/player-controlled Hive/Forge/Civilised region. No fortress-monastery is modeled, so a player-held region serves as the de-facto base.
+`MedicalProcedure` (soldier id, hit-location template id, `MedicalProcedureType { Cybernetic, VatGrown }`, weeks remaining, Requisition cost paid up front) is a Domain health primitive. `MedicalProcedureService` remains the Engine campaign adapter while typed duration/cost and facility rules live in `OnlyWar.Medical`; recruitment reservations and staffing/capacity are supplied as facts at the boundary. The adapter validates eligibility, surgery site, co-located staff, and affordability, then deducts cost and creates the procedure; `EvaluateRequisites` returns the per-requisite breakdown the UI renders green/red. Durations and costs live in `MedicalProcedureRules`, never in UI literals. The gates are a co-located Apothecary **and** Techmarine (same ship or same region, checked only at procedure start) plus a valid surgery site — aboard a ship, or an Imperial/player-controlled Hive/Forge/Civilised region. No fortress-monastery is modeled, so a player-held region serves as the de-facto base.
 
-**Apothecary field care.** `FieldCareService` converts an Apothecary's **Medical** rating into a daily wound capacity spent on the wounded he can reach. Treatment is a **forced wound-band demotion applied the day it happens**, not a credit settled at turn end — a brother hit in a day-2 assault and treated that evening enters the day-3 battle at reduced severity, which is the whole point, since battles read live wound state. All tunables live in `FieldCareConstants`, never the rules DB.
+**Apothecary field care.** `OnlyWar.Medical.Treatment.FieldCarePolicy` converts explicit provider
+capacity into wound demotions for explicit patient bodies. Engine's `FieldCareService` remains the
+campaign adapter that resolves an Apothecary's **Medical** rating, reach and location, then records
+the returned facts and grants experience. Treatment is a **forced wound-band demotion applied the
+day it happens**, not a credit settled at turn end — a brother hit in a day-2 assault and treated
+that evening enters the day-3 battle at reduced severity, which is the whole point, since battles
+read live wound state. All tunables live in `FieldCareConstants`, never the rules DB.
 
 - **Reach** is the order: every wounded soldier in its assigned squads plus its attached soldiers. This is what makes order-level attachment the right shape (§5.6).
 - **Capacity** is mildly superlinear in Medical rating and clamped, so a Master of the Apothecarion outworks an ordinary brother without replacing several of them.
@@ -1427,11 +1507,26 @@ without scanning full career histories; a missing or fallen soldier closes no fi
 - **Greedy, no per-soldier cap, use-it-or-lose-it.** Re-triage self-levels: once the worst case drops below the next man, the queue reorders on its own.
 - **Ceiling.** `IsReplacementEligible` is true for severed non-vital locations only. Crippled locations remain eligible for natural and field healing; a brother who has actually lost a non-vital part is a surgical case.
 
-Two seams, deliberately deduped. The mission pass runs on `MissionDayScheduler`'s scheduler-level `onDayEnd`, iterating **distinct `Order`s** — never mission elements, because `BuildMissionElements` fans one order into several single-squad drivers for `IndependentSquads` and a per-driver pass would make an Apothecary silently worth 3×. Garrison care runs the identical routine in `ChapterUpkeepProcessor.ProcessMedical` before the weekly cascade. **Field beats garrison by construction, not by rule:** an Apothecary under an order fails the "not on a mission" test defining the garrison pool, so the pools are disjoint and no man spends a day twice. Co-location resolves through `PlayerSoldier.EffectiveRegion`, since an attached Apothecary's home squad may sit on the ship while he is forward — `MedicalProcedureService.HasCoLocatedStaff` routes through it for the same reason.
+Two seams, deliberately deduped. The mission pass runs on `MissionDayScheduler`'s scheduler-level `onDayEnd`, iterating **distinct `Order`s** — never mission elements, because `BuildMissionElements` fans one order into several single-squad drivers for `IndependentSquads` and a per-driver pass would make an Apothecary silently worth 3×. Garrison care runs the same `FieldCarePolicy` routine through `ChapterUpkeepProcessor.ProcessMedical` before the weekly cascade. **Field beats garrison by construction, not by rule:** an Apothecary under an order fails the "not on a mission" test defining the garrison pool, so the pools are disjoint and no man spends a day twice. Co-location resolves through `PlayerSoldier.EffectiveRegion`, since an attached Apothecary's home squad may sit on the ship while he is forward — `MedicalProcedureService.HasCoLocatedStaff` routes through it for the same reason.
 
 Gene-seed recovery resolves once per confirmed-dead brother in `BattleTurnResolver.RemoveSoldiersKilledInBattle` (`ResolveGeneseedRecovery`), folding any recovered gland's purity into the chapter aggregate and writing a structured `SoldierEventType.GeneseedRecovery` event onto the preserved fallen-brother dossier; the battle log reads that recorded outcome rather than recomputing it. `PlayerForce` carries a count-weighted aggregate `GeneseedPurity` float alongside `GeneseedStockpile` — seeded pristine at founding, each recovered gland contributing a purity rolled around a baseline with small downward drift (`GeneseedRules`). Both persist on the extended `GlobalData` row. Stockpile drawdown happens in the recruitment pipeline (one unit consumed on Phase 0 → Phase 1; PRD §4.9).
 
 ### 6.6.2 Chapter Operational Doctrine & Duty Readiness
+
+Individual/squad policy lives in the headless `OnlyWar.Medical` assembly, with typed facts and
+reasons in `OnlyWar.Contracts/Medical`. It consumes supplied doctrine, personnel, posting and
+recruitment-reservation facts; null inputs do not select a campaign. Presentation row context
+adapts the neutral `SquadDeploymentContext`, and labels/colors stay separate from policy
+decisions. Engine's `DutyReadinessService` and `SquadReadinessService` are compatibility
+adapters for the live campaign model. Mission materialization and engagement refresh pass the
+session's doctrine and reservations into the battle factory, preserving frozen in-battle
+participants.
+
+Legacy application/host callers explicitly use `CurrentCampaignReadinessContext` at
+execution. This temporary application adapter is physically in Engine and accepts the
+active force only when the squad shares that exact faction instance; a reused numeric ID
+in another campaign cannot inherit its reservations or doctrine. Its removal belongs to
+the Medical/Application/UI migrations. It is not invoked inside core readiness policy.
 
 `Army.ChapterOperationalDoctrine` is mutable campaign state, distinct from rules-data loadout
 doctrine. `ChapterOperationalDoctrine.InjuryThreshold` is nullable: null is the explicit
@@ -1474,6 +1569,12 @@ do not enter the near-death/recovery event path.
 
 ### 6.7 Force Generation
 
+The lower-level runtime construction API lives in `OnlyWar.Runtime`. `RuntimeSoldierFactory`,
+`RuntimeSquadFactory`, and `RuntimeForceGenerator` receive detached templates, an `IRNG`, and an
+`IEntityIdAllocator`, and return portable runtime values. The Runtime assembly has no reference
+to Generation, Engine, Godot, SQLite, or campaign/session state. Name pools and the negative
+tactical allocator are Runtime-owned; the positive allocator is supplied by the caller.
+
 `ForceGenerator.GenerateForce(ForceGenerationRequest, IRNG, IEntityIdAllocator)` dispatches by `ForceCompositionProfile`. The allocator is optional at persistent-campaign call sites; tactical missions supply a mission-local `TacticalEntityIdAllocator`, which issues negative IDs and therefore does not advance or collide with the positive campaign counters:
 
 The irregular-strength path is opt-in through `SquadTemplateElement.RollsStrength`; `Min < Max` alone never enables it. This protects establishment formations such as Tactical Squads and chapter offices, whose minimum is an understrength floor rather than a random muster. For a rolling element, the template's Battle Value uses `ExpectedNumber` (the midpoint), while the generated force charges the budget for the actual rolled count. The roll consumes the shared tactical RNG; non-rolling elements remain exact no-ops. If a faction has no squad-template map, force generation normalizes the null map to empty and returns no force instead of dereferencing it.
@@ -1482,7 +1583,13 @@ The irregular-strength path is opt-in through `SquadTemplateElement.RollsStrengt
 - **SpecialHQTarget:** Selects an HQ template by tier index from sorted HQ templates. Adds a bodyguard squad if `TargetBattleValue ≤ 0` and a `BodyguardSquadTemplate` is defined.
 - **ScoutPatrol:** Randomly selects from Scout-flagged templates, generating `Tier` squads.
 
-`SquadFactory.GenerateSquad(...)` populates a squad from template elements via `SoldierFactory.Instance.GenerateNewSoldiers(...)`, then resolves random weapon selections from `WeaponOptions`. Both randomness and temporary entity IDs are explicit dependencies on the tactical path; legacy persistent callers retain the campaign counters.
+`SquadFactory.GenerateSquad(...)` remains the Engine campaign-materialization adapter for the
+legacy `Squad`/loadout graph. Its soldier stat/body/skill construction delegates to the Runtime
+soldier factory, then materializes the returned portable value and applies campaign assignment and
+equipment state. Both randomness and temporary entity IDs are explicit dependencies on the tactical
+path; legacy persistent callers retain the campaign counters. The compatibility force façade and
+the Runtime force policy are intentionally tracked for the later model materialization migration;
+the Runtime module itself is already independent of the top-level generator.
 
 ### 6.8 Chapter Generation
 
@@ -1510,6 +1617,12 @@ All role lists share the `unassignedSoldierMap` as the single consumption author
 subsector diameter; the shipped profile is 200×200 light years with a 2% spawn probability and a
 20-light-year maximum diameter. Each grid unit represents 1×1 light year. A subsector typically
 contains 2–8 star systems.
+
+Generation lives in `OnlyWar.Generation` and references only Domain, Contracts and Runtime. It builds a candidate campaign and publishes nothing. `SectorBuilder.GenerateSector` constructs the worlds and the founding chapter, rebuilds topology and governance through `OnlyWar.Runtime`'s `SectorTopologyBuilder`, seeds ghost populations, then hands the candidate to `ScenarioBuilder.StampPromisedWorld`. `GameDataSingleton.InitializeNewGameData` installs the rules, date and sector together only once generation returns, so a failure during generation or warm-up leaves the campaign already in play untouched. Warm-up does not advance the campaign date or run player upkeep, fleet travel or scenario resolution.
+
+Every campaign capability generation needs arrives as a `GenerationSupport` bundle of ports declared in `OnlyWar.Contracts.Generation`: seeding (ghost populations, faction reveal, opening invasion), narrative (authority title, briefing composition, event recorder, founding record, chronicle reconcile), fleet (initial flagship, administrative stationing), founding-role ranking, training/rating policy, and `ICandidateWarmupSimulator`. `CandidateGenerationSupport` composes the implementations; the warm-up simulator opens one turn controller over a `GameSession` for the candidate sector and drives both the pre- and post-landing planet passes with it, so the two passes share planning and intelligence state as they did when the generator built the controller itself. Because the simulator is a port, the generator holds no reference to turn simulation and the two remain acyclic.
+
+The same `SectorTopologyBuilder` rebuild runs on load, so restoring a save no longer calls the new-game generator for its derived subsectors, warp lanes and governance seats.
 
 Subsectors, warp lanes, and governance designations are derived runtime structures, not rules-database entities; they are reconstructed from the saved sector and rules profile. The topology algorithm remains code-owned. Sector dimensions, density, and subsector scale are data-owned through `SectorGenerationProfile`; pixel metrics for the sector map and battle replay remain code-owned presentation settings. Independent adjacency and travel tuning remain future configuration candidates.
 
@@ -1562,6 +1675,17 @@ surface regions, includes squads already assigned to the selected order, and exc
 otherwise ineligible formations. `OrderMutationService` owns typed create, assign, add, remove, and cancel
 operations. `PlanetForceMovementService` performs atomic landing and whole-squad embarkation with
 capacity checks and order cleanup for `MovementParty` selections containing squads and/or characters.
+
+Every one of these commands names the campaign it mutates. `OrderAssignment` takes an explicit
+`OrderCommandContext(Sector, Date)` from which it reads the order index, player faction and
+recruitment reservations; `OrderMutationService`, `PlanetForceMovementService`, `OrderAttachment` and
+`IndividualPostingService.AttachToOrder` take the campaign date as a parameter so operational
+postings are stamped without consulting the current session. An order that loses its last
+participant is retired through `Order.RegisteredSector`, the registration `Sector.AddNewOrder`
+already recorded on it. `InboundOrders.ForRegion` takes the sector to scan and
+`SpecialistAvailability.EnumerateRoster/EnumerateCandidates` take the chapter roster to offer.
+`PlanetaryOperationsScreenController` resolves those inputs from the installed campaign; it is the
+host-side adapter for this boundary, not a fallback inside the policy.
 `AdministrativeStationService` owns duty-station seating and relocation, while `FlagshipService` owns
 the unique flagship and deterministic succession. `RecruitmentStaffService` maintains the 10th Company
 continuous task from physically present assigned characters. `PlanetRegionMapViewModelBuilder` and the shared
@@ -1879,11 +2003,24 @@ evidence age, and deterministic decay. The force tree is collapsed and summarize
 administrative character group, supports parent selection and filtering, and retains excluded formations
 with their typed reason.
 
+Cancellation undo is owned by `OrderMutationService`. Its opaque `OrderRestoreToken` captures
+the cancelled participant set and originating sector instance. Restore rejects tokens after
+campaign replacement and validates every participant's current commitment, readiness and staging
+before changing any assignment or registering the order. Single-squad restore uses the same
+validation path; the controller does not implement a multi-step partial restore.
+
 These workspaces are covered primarily by pure domain/view-model tests and shallow scene-wiring smoke;
 supported-resolution visual layout remains release QA. The orphaned Planet Detail and Region Detail
 surfaces were removed after their remaining specialist and tree behavior was ported.
 
 ### 7.6 Force Legibility & Shared Squad Rows
+
+Strength/readiness snapshots and their evaluations no longer belong to
+`Helpers/UI/SquadRowViewModels.cs`. The host retains row composition, context/selection,
+labels and colors. `SquadRowViewModelBuilder.Build` accepts explicit doctrine and reservation
+inputs, including for leader tooltip explanations; its legacy default obtains matching
+campaign context through the named application adapter. UI, order participant validation,
+and battle materialization share the same readiness facts for the same supplied inputs.
 
 Live squad strength has one source of truth: `SquadStrengthSnapshotBuilder` produces a
 `SquadStrengthSnapshot` with `Full`, `Rostered`, `Present`, combat-effective `Effective`,
@@ -2051,15 +2188,25 @@ Mutated from multiple controllers without coordination. Acceptable in a single-t
 
 **Mitigation:** Pure-logic systems accept their inputs rather than reading global state. `TurnController` creates or accepts a `GameSession` containing rules, sector, date, and `IRNG`, and injects it into every processor under `Helpers/Turns`; `SimulationContext` owns each run's result, intel ledger, orders, and optional planet scope. `FactionStrategyController` now has the same explicit `(IRNG, FactionBehaviorRulesProfile)` planning seam, and `TurnController` supplies those values from `GameSession`; its parameterless compatibility adapter resolves the legacy defaults at planning-call time. Within strategy, the facade composes concrete `Helpers/Strategy` collaborators for assessment, reinforcement, development, Consumption, recon/patrol lifecycle, shared staging, offensive evaluation, and offensive order creation; those collaborators receive faction, planet, shared planning states, and orders explicitly and do not call back through the facade. Tactical execution continues that seam through two bounded contexts rather than exposing `GameSession` as a service locator: `MissionExecutionContext` carries mission state, projected mission rules, the injected RNG, a mission-local temporary-ID allocator, and a separate `BattleExecutionContext`; the battle context carries rules, the same RNG instance, and explicit aftermath dependencies. Mission checks, spotting, force generation, placement, planning, actions, hit-location rolls, and gene-seed rolls all consume the injected stream. `IPlayerBattleAftermathSink` makes roster removal, fallen-brother registration, recovered gene-seed, and chapter battle-history writes explicit campaign effects.
 
-The simulation risk is now concentrated at the outer compatibility boundaries: most scene controllers still use the singleton, production still supplies the process-global `StaticRNG` adapter, persistent entity creation retains the campaign-wide positive ID counters, and older end-to-end tests intentionally seed `GameDataSingleton`. Tactical missions and battles themselves no longer read `GameDataSingleton` or static `RNG`.
+The simulation risk is now concentrated at the outer compatibility boundaries: most scene controllers still use the singleton, production still supplies the process-global `StaticRNG` adapter, persistent entity creation retains the campaign-wide positive ID counters, and older end-to-end tests intentionally seed `GameDataSingleton`. `OnlyWar.Medical`, `OnlyWar.Persistence`, `OnlyWar.Runtime`, and `OnlyWar.Battles` accept explicit facts, paths, RNG, and ID allocators and do not read the singleton.
 
-### 8.7 IdGenerator Is Not Thread-Safe — Low
+Operational and generation code has now joined them. Order lifecycle policy takes an explicit `OrderCommandContext(Sector, Date)`; `OrderAttachment`, `PlanetForceMovementService`, `OrderMutationService` and `IndividualPostingService.AttachToOrder` take the campaign date as an argument; `InboundOrders` takes the sector and `SpecialistAvailability` takes the chapter roster. An order that empties out is retired through `Order.RegisteredSector` — the registration the order already carries — rather than through the current campaign. `StrategicCombatResolver` receives the campaign's persistent invasion forces from its caller, so the mission processors, the invasion lifecycle processor and the NPC offensive evaluator all price a defender against the campaign they are resolving for. Sector generation and the opening-scenario warm-up run against a `GameSession` built for the *candidate* sector: nothing is published mid-generation, and `GameDataSingleton.InitializeNewGameData` installs rules, date and sector together only after generation returns, so a failed new game leaves the loaded campaign untouched.
 
-**Location:** `Builders/IdGenerator.cs`
+Generation is now also structurally unable to reach the singleton: `OnlyWar.Generation` references only Domain, Contracts and Runtime, so the compiler enforces what was previously a convention.
 
-Flagged in a TODO comment. Static fields `_nextOrderId` and `_nextMissionId` are incremented non-atomically. No issue in the current single-threaded model.
+The remaining singleton readers in Engine are the campaign/loadout/recruitment/medical policies (`PresenceRequest`, `LoadoutDoctrineService`, `CharacterLoadoutService`, `CareDestinationService`, `RecoveryPlanService`, `RecruitmentStaffService`), the session and storage entry points (`CampaignLoader`, `CurrentCampaignSaveWriter`, `TurnController`'s current-session constructors), and the two named compatibility adapters `CurrentCampaignReadinessContext` and the parameterless `FactionStrategyController`. Scene controllers such as `PlanetaryOperationsScreenController` are the host-side adapters that resolve the sector, date and roster for the explicit APIs above.
 
-**Fix:** If async turn processing is ever introduced, switch to `Interlocked.Increment`. Until then, no action.
+### 8.7 IdGenerator Global Compatibility State — Low
+
+**Location:** `Modules/OnlyWar.Runtime/Builders/IdGenerator.Legacy.cs` and the Engine namespace façade.
+
+The campaign order/mission identity service remains process-global for compatibility with the
+existing save readers and model constructors, but it is now owned by Runtime and exposed to Engine
+through a façade. Static fields `_nextOrderId` and `_nextMissionId` are updated atomically.
+
+**Remaining work:** pass an explicit persistent allocator through the remaining Campaign/Application
+model constructors and remove the façade in SB-10/SB-12. Tactical IDs already use a separate
+Runtime-owned negative allocator.
 
 ### 8.8 Dead Code: BattleMissionTemplate and OrbitalRaidMission — RESOLVED
 
@@ -2181,7 +2328,24 @@ The `OnlyWar.Tests` xUnit project covers the pure domain and helper logic increm
 
 ### 9.1 Setup
 
-The `OnlyWar.Tests` xUnit project references the game assembly and runs against the shipped rules database. Keep expanding it around pure domain and helper logic first. Systems with Godot node dependencies cannot be unit tested without a Godot runtime; focus the test project on pure domain and helper logic. Test parallelization is disabled assembly-wide (`[assembly: CollectionBehavior(DisableTestParallelization = true)]`) so suites that load the shared `GameDataSingleton` do not interfere.
+`OnlyWar.Tests` references both the host and the headless projects, preserving the mixed
+regression suite. `OnlyWar.HeadlessTests` references Domain, Contracts, Medical, Persistence,
+Runtime and the temporary Engine compatibility bridge, and runs without loading `OnlyWarGodot`
+or `GodotSharp`. Its smoke tests check the reference allowlist, test-only friend access,
+explicit readiness/reservations, in-memory catalog, atomic file behavior, runtime construction,
+geometry behavior, and embedded-name loading/determinism. It reuses the existing name tests
+and small model fixtures through linked test sources. Systems with Godot node dependencies
+still need the engine for native interaction; host compilation alone does not certify export.
+The existing suite serializes shared state; the headless name tests use the shared-state
+collection. Run targeted non-Slow tests as directed by `AGENTS.md`.
+
+Foundation commands:
+
+```powershell
+dotnet build OnlyWarGodot.sln --nologo -v q
+dotnet test OnlyWar.HeadlessTests/OnlyWar.HeadlessTests.csproj
+dotnet test OnlyWar.Tests/OnlyWar.Tests.csproj --filter "FullyQualifiedName~ReadinessBoundaryTests&Category!=Slow"
+```
 
 Make `RNG` injectable: introduce an `IRNG` interface and a `SeededRNG` implementation so tests can run with a fixed seed for deterministic results. *(Implemented — `Helpers/IRNG.cs` with `StaticRNG` (production adapter over the global `RNG`), `SeededRNG` (own seeded instance), and a `FixedRNG` test double. `RatingCalculator`, end-of-turn processors, mission checks/steps, tactical force generation, battle placement/planning/actions, and aftermath consume injected `IRNG`; production supplies `StaticRNG` through `GameSession`.)*
 

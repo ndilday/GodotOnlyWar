@@ -33,7 +33,7 @@ public class ScenarioTurnTests
     public ScenarioTurnTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = new GameRulesData();
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
     }
 

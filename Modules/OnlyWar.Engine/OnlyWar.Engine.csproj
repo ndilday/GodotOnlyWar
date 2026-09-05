@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>OnlyWar</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OnlyWar.Battles/OnlyWar.Battles.csproj" />
+    <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <ProjectReference Include="../OnlyWar.Generation/OnlyWar.Generation.csproj" />
+    <ProjectReference Include="../OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
+    <ProjectReference Include="../OnlyWar.Medical/OnlyWar.Medical.csproj" />
+    <ProjectReference Include="../OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
+    <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
+    <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Transitional model/data adapters still use SQLite until the Campaign/Application
+         reconstruction slices move in SB-07/SB-10. The isolated file/catalog implementation is
+         owned by OnlyWar.Persistence. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+  </ItemGroup>
+</Project>
+

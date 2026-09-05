@@ -22,7 +22,7 @@ internal static class TestExecutionContextFactory
         // any contested roll a test relies on strictly off zero; see the accuracy comment on
         // TestModelFactory's Test Knife for the case that hung a battle for 1000 turns.
         random ??= new FixedRNG();
-        GameRulesData rules = new(RulesDatabaseFixture.DatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(RulesDatabaseFixture.DatabasePath);
         BattleAftermathDependencies aftermath = new(
             new Date(1, 1, 1),
             random,

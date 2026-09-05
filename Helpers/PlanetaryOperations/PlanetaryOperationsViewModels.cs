@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using Godot;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
@@ -211,9 +212,9 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             bool playerForces = playerSquads.Count > 0;
             RecruitmentProgram recruitmentProgram = sector?.PlayerForce?.RecruitmentProgram;
             int playerEffectiveStrength = playerSquads.Sum(squad =>
-                SquadStrengthSnapshotBuilder.Build(squad, recruitmentProgram).DutyReady);
+                SquadStrengthSnapshotBuilder.Build(squad, program: recruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad)).DutyReady);
             int playerFullStrength = playerSquads.Sum(squad =>
-                SquadStrengthSnapshotBuilder.Build(squad, recruitmentProgram).Full);
+                SquadStrengthSnapshotBuilder.Build(squad, program: recruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad)).Full);
             int activeOrders = CountActivePlayerOrders(sector, region);
             List<(RegionFaction Presence, IntelEstimatePresentation Estimate)> hostileEstimates = region.RegionFactionMap.Values
                 .Where(presence => presence.IsPublic
@@ -314,7 +315,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 .ToList();
             IntelLevel weakest = estimates.Count == 0
                 ? IntelLevel.None : estimates.Min(item => item.Level);
-            return $"Intel: {RegionFactionExtensions.GetIntelligenceLevelDescription(
+            return $"Intel: {RegionFactionDescriptionExtensions.GetIntelligenceLevelDescription(
                 region.GetPlayerVisibleIntel())} · {IntelEstimatePresentationBuilder.Marks(weakest)}";
         }
 
@@ -346,7 +347,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             return presence.PlanetFaction.Faction.IsPlayerFaction
                 || presence.PlanetFaction.Faction.IsDefaultFaction
                 ? $"{value:0.##}"
-                : RegionFactionExtensions.GetDefenseLevelDescription(value);
+                : RegionFactionDescriptionExtensions.GetDefenseLevelDescription(value);
         }
 
         private static string ControlOverlayText(
@@ -588,7 +589,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             List<(string Label, string Value)> regionRows =
             [
                 Row("Control", control.State.ToString()),
-                Row("Intelligence", RegionFactionExtensions.GetIntelligenceLevelDescription(
+                Row("Intelligence", RegionFactionDescriptionExtensions.GetIntelligenceLevelDescription(
                     region.GetPlayerVisibleIntel())),
                 Row("Population", region.HasHiddenDefaultFaction()
                     ? "Unknown"
@@ -696,7 +697,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             bool exact)
         {
             double value = RegionDefenses.GetShared(presence, type);
-            string description = RegionFactionExtensions.GetDefenseLevelDescription(value);
+            string description = RegionFactionDescriptionExtensions.GetDefenseLevelDescription(value);
             return exact ? $"{description} ({value:0.##})" : description;
         }
 

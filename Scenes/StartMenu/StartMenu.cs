@@ -60,7 +60,7 @@ public partial class StartMenu : Control
         {
             // Load once when the setup screen opens so its choices come from the same immutable
             // rules snapshot that will generate the campaign.
-            _newGameRulesData = new GameRulesData(GameStorage.RulesDatabasePath);
+            _newGameRulesData = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(GameStorage.RulesDatabasePath);
             ScenarioProfile profile = _newGameRulesData.ScenarioProfiles.GetRequired(
                 ScenarioKeys.PromisedWorld);
             IReadOnlyList<Faction> invaderFactions = profile
@@ -111,7 +111,7 @@ public partial class StartMenu : Control
         try
         {
             GameDataSingleton.Instance.InitializeNewGameData(
-                _newGameRulesData ?? new GameRulesData(GameStorage.RulesDatabasePath),
+                _newGameRulesData ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(GameStorage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 settings.ChapterName,
                 settings.Seed,

@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -140,10 +141,7 @@ namespace OnlyWar.Helpers
             string geneSeedStatus = BuildGeneSeedStatus(wounds);
             Squad squad = soldier.AssignedSquad;
 
-            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
-                soldier,
-                force?.Army?.ChapterOperationalDoctrine,
-                force?.RecruitmentProgram);
+            DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(soldier, doctrine: force?.Army?.ChapterOperationalDoctrine, recruitmentProgram: force?.RecruitmentProgram);
 
             return new MedicalSoldierSummary(
                 soldier.Id,

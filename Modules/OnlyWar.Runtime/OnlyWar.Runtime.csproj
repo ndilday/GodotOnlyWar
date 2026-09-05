@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>OnlyWar</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <ProjectReference Include="../OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
+    <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Models/Soldiers/Names/given_names.txt" LogicalName="OnlyWar.SoldierNames.Given" />
+    <EmbeddedResource Include="Models/Soldiers/Names/surnames.txt" LogicalName="OnlyWar.SoldierNames.Surnames" />
+  </ItemGroup>
+</Project>

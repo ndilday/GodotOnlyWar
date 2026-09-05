@@ -14,7 +14,7 @@ namespace OnlyWar.Tests.Generation;
 
 // Coverage for the governance hierarchy (Design/Reference/OpeningScenario.md):
 // the derived Sector Lord / subsector-governor designation folded into
-// SectorBuilder.GenerateWarpNetwork. The designation is recomputed (not persisted),
+// OnlyWar.Runtime.WorldGeometry.SectorTopologyBuilder.Rebuild. The designation is recomputed (not persisted),
 // so the round-trip test proves it re-derives identically from saved planet data.
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture>
@@ -94,8 +94,8 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
     {
         GameRulesData firstData = LoadFreshRulesData();
         GameRulesData secondData = LoadFreshRulesData();
-        Sector first = SectorBuilder.GenerateSector(4, firstData, _date, "Deterministic Chapter");
-        Sector second = SectorBuilder.GenerateSector(4, secondData, _date, "Deterministic Chapter");
+        Sector first = TestGeneration.GenerateSector(4, firstData, _date, "Deterministic Chapter");
+        Sector second = TestGeneration.GenerateSector(4, secondData, _date, "Deterministic Chapter");
 
         Planet firstCapital = first.GetSectorCapital();
         Planet secondCapital = second.GetSectorCapital();
@@ -133,7 +133,7 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
             // the derived warp network + governance designation from the persisted planets.
             Sector reloaded = new Sector(
                 sector.PlayerForce, loaded.Characters, loaded.Planets, loaded.Fleets);
-            SectorBuilder.GenerateWarpNetwork(reloaded, _data);
+            OnlyWar.Runtime.WorldGeometry.SectorTopologyBuilder.Rebuild(reloaded, _data);
 
             Planet reloadedCapital = reloaded.GetSectorCapital();
             Assert.NotNull(reloadedCapital);
@@ -166,7 +166,7 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
     private static GameRulesData LoadFreshRulesData()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        GameRulesData data = new();
+        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(data, new Date(39, 500, 1), null);
         return data;
     }
@@ -180,8 +180,8 @@ public sealed class GovernanceHierarchyFixture
     public GovernanceHierarchyFixture()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        Data = new GameRulesData();
+        Data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(Data, new Date(39, 500, 1), null);
-        SeedOneSector = SectorBuilder.GenerateSector(1, Data, new Date(39, 500, 1), "Governance Fixture Chapter");
+        SeedOneSector = TestGeneration.GenerateSector(1, Data, new Date(39, 500, 1), "Governance Fixture Chapter");
     }
 }

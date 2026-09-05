@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.UI;
@@ -404,10 +405,10 @@ public partial class LoadoutDoctrineDialog : Control
                 && squad.IsPresentOperationalForce)
             .ToList() ?? [];
         int withheld = squads.Sum(squad =>
-            SquadStrengthSnapshotBuilder.Build(squad, recruitment, _operationalDoctrine)
+            SquadStrengthSnapshotBuilder.Build(squad, program: recruitment, doctrine: _operationalDoctrine)
                 .DoctrineWithholdingCount);
         int unable = squads.Count(squad =>
-            SquadReadinessService.Evaluate(squad, doctrine: _operationalDoctrine)
+            SquadReadinessService.Evaluate(squad, program: CurrentCampaignReadinessContext.ResolveProgram(squad), doctrine: _operationalDoctrine)
                 .StructuralBlockers.Count > 0);
         _doctrineSummary.Text = $"Current roster consequence: {withheld} soldier(s) withheld by injury doctrine; "
             + $"{unable} squad(s) unable to deploy under these structural rules."

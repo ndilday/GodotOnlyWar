@@ -206,7 +206,7 @@ public class TurnTrainingTests
         public static TurnTrainingFixture Create()
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameRulesData rules = new();
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             Faction playerFaction = CreatePlayerFaction();
             SoldierTemplate soldierTemplate = CreateTrainingSoldierTemplate();
             SquadTemplate squadTemplate = CreateSquadTemplate(playerFaction);

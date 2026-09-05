@@ -160,7 +160,7 @@ public class FleetMovementTests
         public static FleetMovementFixture Create()
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameRulesData rules = new();
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             Faction playerFaction = CreatePlayerFaction();
             Planet origin = CreatePlanet(1, "Origin", 10, 10, playerFaction);
             Planet destination = CreatePlanet(2, "Destination", 20, 10, playerFaction);

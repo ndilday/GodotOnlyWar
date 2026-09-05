@@ -14,7 +14,7 @@ using Xunit;
 namespace OnlyWar.Tests.Generation;
 
 // Coverage for the "Promised World" generation override (Design/Reference/OpeningScenario.md section 3,
-// step 2): ScenarioBuilder.StampPromisedWorld, invoked from SectorBuilder.GenerateSector in place
+// step 2): ScenarioBuilder.StampPromisedWorld, invoked from TestGeneration.GenerateSector in place
 // of the old FoundTakebackPlanet prototype. The stamp invariants and full per-seed determinism are
 // the load-bearing guarantees for the opening.
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
@@ -26,7 +26,7 @@ public class ScenarioBuilderTests
     public ScenarioBuilderTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = new GameRulesData();
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
     }
 
@@ -43,7 +43,7 @@ public class ScenarioBuilderTests
     [Fact]
     public void GenerateSector_Seed1ProducesPlayablePromisedWorldInvariants()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Promise Chapter");
+        Sector sector = TestGeneration.GenerateSector(1, _data, _date, "Promise Chapter");
         Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
         Faction tyranids = Tyranids;
         Faction cult = _data.SectorFactions.Infiltrator;
@@ -191,7 +191,7 @@ public class ScenarioBuilderTests
     {
         Faction orks = _data.Factions.Single(faction => faction.Name == "Orks");
 
-        Sector sector = SectorBuilder.GenerateSector(
+        Sector sector = TestGeneration.GenerateSector(
             1,
             _data,
             _date,
@@ -207,9 +207,9 @@ public class ScenarioBuilderTests
     private (GameRulesData Data, Sector Sector) GenerateFreshSector(int seed)
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        GameRulesData data = new();
+        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, null);
-        Sector sector = SectorBuilder.GenerateSector(seed, data, _date, "Deterministic Chapter");
+        Sector sector = TestGeneration.GenerateSector(seed, data, _date, "Deterministic Chapter");
         return (data, sector);
     }
 
@@ -250,7 +250,7 @@ public class ScenarioBuilderTests
     [InlineData(3)]
     public void GenerateSector_KeyScopedSimSeedsRunWithoutThrowing(int seed)
     {
-        Sector sector = SectorBuilder.GenerateSector(seed, _data, _date, "Robustness Chapter");
+        Sector sector = TestGeneration.GenerateSector(seed, _data, _date, "Robustness Chapter");
 
         Assert.NotNull(sector.Scenario);
         Assert.Equal(ObjectiveState.Pending, sector.Scenario.State);

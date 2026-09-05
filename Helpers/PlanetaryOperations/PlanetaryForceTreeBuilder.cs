@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using Godot;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
@@ -209,9 +210,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             IReadOnlySet<int> selectedIds,
             bool collapsed)
         {
-            int dutyReady = items.Sum(item => SquadStrengthSnapshotBuilder.Build(
-                item.Squad,
-                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram).DutyReady);
+            int dutyReady = items.Sum(item => SquadStrengthSnapshotBuilder.Build(item.Squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(item.Squad)).DutyReady);
             int selected = items.Count(item => selectedIds.Contains(item.Squad.Id) || item.Assigned);
             string badge = selected == 0 ? $"{items.Count} sq · {dutyReady} duty-ready"
                 : selected == items.Count ? $"ALL · {dutyReady} duty-ready"
@@ -241,9 +240,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             IReadOnlySet<int> selectedIds)
         {
             Squad squad = item.Squad;
-            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(
-                squad,
-                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad));
             int dutyReady = strengthSnapshot.DutyReady;
             string commitment = squad.CurrentOrders == null ? "Unassigned"
                 : MissionAvailability.GetOrderLabel(squad.CurrentOrders.Mission);
@@ -305,9 +302,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Squad squad = item?.Squad;
             if (squad == null) return string.Empty;
 
-            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(
-                squad,
-                GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram);
+            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad));
             int healthy = strengthSnapshot.DutyReady;
             int total = strengthSnapshot.Full;
             string commitment = squad.CurrentOrders == null ? "Unassigned"

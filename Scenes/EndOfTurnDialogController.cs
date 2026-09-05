@@ -506,7 +506,7 @@ public partial class EndOfTurnDialogController : DialogController
         Region region = transfer.Region;
         string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
         string inheritor = transfer.To?.Name ?? "local forces";
-        string rating = RegionFactionExtensions.GetDefenseLevelDescription(transfer.SharedEntrenchment);
+        string rating = RegionFactionDescriptionExtensions.GetDefenseLevelDescription(transfer.SharedEntrenchment);
 
         return new EndOfTurnReportEntry(
             "Fortifications",

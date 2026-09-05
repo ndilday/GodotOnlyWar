@@ -173,11 +173,11 @@ public class GaussianCalculatorTests
     {
         float first = GaussianCalculator.DetermineMarginOfSuccessZvalue(
             0.25f,
-            new SeededRNG(123));
+            new SeededRNG(123).NextRandomZValue());
 
         float second = GaussianCalculator.DetermineMarginOfSuccessZvalue(
             0.25f,
-            new SeededRNG(123));
+            new SeededRNG(123).NextRandomZValue());
 
         Assert.Equal(first, second);
     }

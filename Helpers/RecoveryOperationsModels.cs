@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace OnlyWar.Helpers
 {
     public enum RecoverySortMode { Severity, RecoveryTime, Squad, Location }
-    public enum RecoveryMovementChoice { None, DetachCasualty, MoveWholeSquad }
+
     public enum RecoveryActionState { Met, Pending, Blocked }
     public sealed record RecoverySortRequest(RecoverySortMode Mode, bool Ascending);
 

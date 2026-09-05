@@ -50,6 +50,10 @@ public class OrderAttachmentTests
         return new PlayerSoldier(TestModelFactory.CreateSoldier(name: name), name);
     }
 
+    private static Squad CreateLineSquad(string name) =>
+        TestModelFactory.CreateSquad(
+            name, TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate));
+
     private static Order CreateOrder(SectorSimulationFixture fixture, params Squad[] squads)
     {
         RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
@@ -57,12 +61,15 @@ public class OrderAttachmentTests
         {
             squad.CurrentRegion = fixture.Planet.Regions[0];
         }
-        return OrderAssignment.AssignSquadsToMission(
+        Order order = OrderAssignment.AssignSquadsToMission(
+            fixture.OrderCommands,
             squads,
             fixture.Planet.Regions[5],
             new AvailableMission("Attack", MissionAvailabilityKind.Attack),
             enemy.PlanetFaction.Faction.Id,
             Aggression.Normal);
+        Assert.NotNull(order);
+        return order;
     }
 
     // ---- pointer-pair symmetry -------------------------------------------------------
@@ -71,7 +78,7 @@ public class OrderAttachmentTests
     public void Attach_SetsBothHalvesOfThePointerPair()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
@@ -87,7 +94,7 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
 
         OrderAttachment.Attach(specialist, order);
@@ -101,16 +108,18 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Order first = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("First", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("First"));
         RegionFaction cult = fixture.AddPublicCult(region: 6, population: 2000, organization: 100);
-        Squad second = TestModelFactory.CreateSquad("Second", TestModelFactory.CreateSoldier());
+        Squad second = CreateLineSquad("Second");
         second.CurrentRegion = fixture.Planet.Regions[0];
         Order secondOrder = OrderAssignment.AssignSquadsToMission(
+            fixture.OrderCommands,
             [second],
             fixture.Planet.Regions[6],
             new AvailableMission("Attack", MissionAvailabilityKind.Attack),
             cult.PlanetFaction.Faction.Id,
             Aggression.Normal);
+        Assert.NotNull(secondOrder);
         PlayerSoldier specialist = CreateSpecialist();
 
         OrderAttachment.Attach(specialist, first);
@@ -126,7 +135,7 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
         OrderAttachment.Attach(specialist, order);
 
@@ -142,7 +151,7 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier first = CreateSpecialist("Apothecary");
         PlayerSoldier second = CreateSpecialist("Techmarine");
         OrderAttachment.Attach(first, order);
@@ -163,7 +172,7 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
 
@@ -180,7 +189,7 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region origin = fixture.Planet.Regions[0];
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
@@ -196,7 +205,7 @@ public class OrderAttachmentTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region origin = fixture.Planet.Regions[0];
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier trooper = CreateSpecialist("Brother Trooper");
         Squad line = TestModelFactory.CreateSquad("Second Line");
         line.AddSquadMember(trooper);
@@ -212,7 +221,7 @@ public class OrderAttachmentTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region origin = fixture.Planet.Regions[0];
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
         home.CurrentRegion = origin;
@@ -230,7 +239,7 @@ public class OrderAttachmentTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region origin = fixture.Planet.Regions[0];
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         Soldier wounded = TestModelFactory.CreateSoldier(name: "Brother Casualty");
         HitLocation vital = wounded.Body.HitLocations.First(l => l.Template.IsVital);
         vital.Wounds = new Wounds(vital.Template.CrippleWound, 0);
@@ -247,7 +256,7 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
         home.CurrentRegion = fixture.Planet.Regions[9];
@@ -268,6 +277,7 @@ public class OrderAttachmentTests
         apothecarion.CurrentRegion = fixture.Planet.Regions[0];
 
         Order order = OrderAssignment.AssignSquadsToMission(
+            fixture.OrderCommands,
             [apothecarion],
             fixture.Planet.Regions[5],
             new AvailableMission("Attack", MissionAvailabilityKind.Attack),
@@ -289,13 +299,14 @@ public class OrderAttachmentTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
         Region origin = fixture.Planet.Regions[0];
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         line.CurrentRegion = origin;
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
         home.CurrentRegion = origin;
 
         Order order = OrderAssignment.AssignSquadsToMission(
+            fixture.OrderCommands,
             [line],
             fixture.Planet.Regions[5],
             new AvailableMission("Attack", MissionAvailabilityKind.Attack),
@@ -315,7 +326,7 @@ public class OrderAttachmentTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
         Region origin = fixture.Planet.Regions[0];
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         line.CurrentRegion = origin;
         // A line-squad member is not detachable, so this must create nothing at all.
         PlayerSoldier trooper = CreateSpecialist("Brother Trooper");
@@ -324,6 +335,7 @@ public class OrderAttachmentTests
         otherLine.CurrentRegion = origin;
 
         Order order = OrderAssignment.AssignSquadsToMission(
+            fixture.OrderCommands,
             [line],
             fixture.Planet.Regions[5],
             new AvailableMission("Attack", MissionAvailabilityKind.Attack),
@@ -350,6 +362,7 @@ public class OrderAttachmentTests
         home.CurrentRegion = fixture.Planet.Regions[0];
 
         Order order = OrderAssignment.AssignSquadsToMission(
+            fixture.OrderCommands,
             [],
             fixture.Planet.Regions[5],
             new AvailableMission("Attack", MissionAvailabilityKind.Attack),
@@ -368,7 +381,7 @@ public class OrderAttachmentTests
     public void UnassignSquads_RemovingTheLastSquad_ReleasesTheAttachedSpecialists()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
@@ -385,7 +398,7 @@ public class OrderAttachmentTests
     public void UnassignSpecialists_RecallsTheManButLeavesTheOrderStanding()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
@@ -404,7 +417,7 @@ public class OrderAttachmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Order order = CreateOrder(
-            fixture, TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier()));
+            fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
         OrderAttachment.Attach(specialist, order);
@@ -421,14 +434,14 @@ public class OrderAttachmentTests
     public void InboundOrderSummary_ReportsTheAttachedCount()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
         OrderAttachment.Attach(specialist, order);
 
         InboundOrderInfo inbound = Assert.Single(
-            InboundOrders.ForRegion(fixture.Planet.Regions[5]));
+            InboundOrders.ForRegion(fixture.Sector, fixture.Planet.Regions[5]));
 
         Assert.Equal(1, inbound.AttachedCount);
         Assert.Contains("+1 attached", inbound.SummaryLabel);
@@ -447,18 +460,19 @@ public class OrderAttachmentTests
         Squad home = CreateDetachableSquad("Apothecarion", free, committed);
         home.CurrentRegion = origin;
         playerRegionFaction.LandedSquads.Add(home);
-        Squad line = TestModelFactory.CreateSquad("Line", TestModelFactory.CreateSoldier());
+        Squad line = CreateLineSquad("Line");
         line.CurrentRegion = origin;
         playerRegionFaction.LandedSquads.Add(line);
         Order order = CreateOrder(fixture, line);
         OrderAttachment.Attach(committed, order);
 
         IReadOnlyList<SpecialistOption> fresh =
-            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin);
+            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin, fixture.ChapterRoster);
         IReadOnlyList<SpecialistOption> editing =
-            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin, order);
+            SpecialistAvailability.EnumerateCandidates(
+                playerRegionFaction, origin, fixture.ChapterRoster, order);
         IReadOnlyList<SpecialistOption> roster =
-            SpecialistAvailability.EnumerateRoster(playerRegionFaction, origin);
+            SpecialistAvailability.EnumerateRoster(playerRegionFaction, origin, fixture.ChapterRoster);
 
         // Issuing a new order: the committed man is not on offer for a second one.
         Assert.Equal(["Free Apothecary"], fresh.Select(o => o.Soldier.Name).ToArray());
@@ -487,7 +501,7 @@ public class OrderAttachmentTests
         playerRegionFaction.LandedSquads.Add(home);
 
         SpecialistOption option = Assert.Single(
-            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin));
+            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin, fixture.ChapterRoster));
 
         Assert.Equal("Brother Apothecary | Test Marine | Apothecarion", option.Label);
     }

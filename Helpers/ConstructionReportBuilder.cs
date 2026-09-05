@@ -180,7 +180,7 @@ namespace OnlyWar.Helpers
         }
 
         private static string Describe(double level) =>
-            RegionFactionExtensions.GetDefenseLevelDescription(level);
+            RegionFactionDescriptionExtensions.GetDefenseLevelDescription(level);
 
         private static string Location(string location) =>
             string.IsNullOrWhiteSpace(location) ? "an unknown location" : location;

@@ -52,6 +52,9 @@ Active plans were deleted on 2026-08-21 under the promotion rule. `ForceLegibili
 distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is now recorded in
 `VisualBaselines/PlanetaryOperations/`. Active design work currently retained here is:
 
+- [SubsystemBoundaries.md](Active/SubsystemBoundaries.md) — phased, assignable architecture work for
+  Battles, Planetary Operations, Readiness/Medical, Persistence, Generation, and UI, including
+  orchestrator ownership, integration gates, and final TDD/PRD reconciliation and plan retirement.
 - `RangedCombatFollowUps.md` — narrow ranged-combat backlog described below.
 - `PlanetaryOperationsRework.md` — implemented 2026-08-25; retained temporarily as its phase-by-phase
   acceptance record. The shipped architecture is summarized in `OnlyWar_TDD.md` §7.5.

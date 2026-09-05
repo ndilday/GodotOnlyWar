@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -128,7 +129,7 @@ namespace OnlyWar.Helpers
         private static RecoverySquadStatus BuildSquadStatus(PlayerSoldier patient)
         {
             Squad squad = patient.AssignedSquad;
-            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(squad);
+            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(squad, program: CurrentCampaignReadinessContext.ResolveProgram(squad), doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad));
             return new RecoverySquadStatus(
                 squad?.Name ?? "Unassigned",
                 squad?.ParentUnit?.Name ?? "No company",

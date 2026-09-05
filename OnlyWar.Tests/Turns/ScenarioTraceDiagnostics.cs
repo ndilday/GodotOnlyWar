@@ -55,9 +55,9 @@ public class ScenarioTraceDiagnostics
 
         foreach (int seed in seeds)
         {
-            GameRulesData data = new();
+            GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, null);
-            Sector sector = SectorBuilder.GenerateSector(seed, data, _date, $"Pocket {seed}");
+            Sector sector = TestGeneration.GenerateSector(seed, data, _date, $"Pocket {seed}");
             GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, sector);
             Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
             Faction imp = data.DefaultFaction;
@@ -140,7 +140,7 @@ public class ScenarioTraceDiagnostics
 
     private void RunOneSeed(int seed, StringBuilder csv)
     {
-        GameRulesData data = new();
+        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, null);
 
         // Capture the generation-time trace (the pre/post-landing SimulatePlanetForward sims emit
@@ -173,7 +173,7 @@ public class ScenarioTraceDiagnostics
         Sector sector;
         try
         {
-            sector = SectorBuilder.GenerateSector(seed, data, _date, $"Seed {seed} Chapter");
+            sector = TestGeneration.GenerateSector(seed, data, _date, $"Seed {seed} Chapter");
         }
         finally
         {

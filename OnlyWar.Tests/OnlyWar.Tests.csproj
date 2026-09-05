@@ -6,7 +6,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OnlyWarGodot.csproj" />
+    <ProjectReference Include="../OnlyWarGodot.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Engine/OnlyWar.Engine.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Battles/OnlyWar.Battles.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Medical/OnlyWar.Medical.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,3 +25,4 @@
     </PackageReference>
   </ItemGroup>
 </Project>
+

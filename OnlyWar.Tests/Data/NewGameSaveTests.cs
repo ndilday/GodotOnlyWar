@@ -106,9 +106,9 @@ public sealed class NewGameSaveFixture
     public NewGameSaveFixture()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        Data = new GameRulesData();
+        Data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         GameDataSingleton.Instance.LoadGameDataFromBlob(Data, Date, null);
-        Sector = SectorBuilder.GenerateSector(1, Data, Date, "New Game Save Fixture Chapter");
+        Sector = TestGeneration.GenerateSector(1, Data, Date, "New Game Save Fixture Chapter");
         RoundTrip = new GameStateRoundTripFixture(Data, Date);
     }
 }

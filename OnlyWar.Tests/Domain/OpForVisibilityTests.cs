@@ -88,7 +88,7 @@ public class OpForVisibilityTests
     {
         Assert.Equal(
             expected,
-            RegionFactionExtensions.GetIntelligenceLevelDescription(intelligence));
+            RegionFactionDescriptionExtensions.GetIntelligenceLevelDescription(intelligence));
     }
 
     [Theory]
@@ -170,6 +170,6 @@ public class OpForVisibilityTests
     [InlineData(20, "Massive")]
     public void GetDefenseLevelDescription_NeverExposesRawValue(int level, string expected)
     {
-        Assert.Equal(expected, RegionFactionExtensions.GetDefenseLevelDescription(level));
+        Assert.Equal(expected, RegionFactionDescriptionExtensions.GetDefenseLevelDescription(level));
     }
 }

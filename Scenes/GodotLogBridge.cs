@@ -19,6 +19,7 @@ public partial class GodotLogBridge : Node
 
     public override void _EnterTree()
     {
+        OnlyWar.Composition.GodotHostPaths.Configure();
         _logSink = DurableLogSink.Create();
 
         BattleLog.Sink = message => _logSink.Write("Battle", message);
