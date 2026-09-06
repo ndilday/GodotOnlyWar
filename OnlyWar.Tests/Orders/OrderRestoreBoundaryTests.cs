@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Missions;
@@ -27,7 +28,7 @@ public class OrderRestoreBoundaryTests
         PlayerSoldier character = CreateCharacter(fixture, kind);
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [squad], [character]);
+        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [squad], [character], MedicalReadinessDecisions.Instance);
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Same(order, squad.CurrentOrders);
@@ -51,7 +52,7 @@ public class OrderRestoreBoundaryTests
         character.CurrentOrder = other;
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [squad], [character]);
+        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [squad], [character], MedicalReadinessDecisions.Instance);
 
         Assert.False(result.Succeeded);
         Assert.Null(squad.CurrentOrders);
@@ -76,12 +77,12 @@ public class OrderRestoreBoundaryTests
         Assert.True(OrderMutationService.Cancel(fixture.Sector, order).Succeeded);
         Assert.Null(squad.CurrentOrders);
         Assert.Empty(order.AssignedSquads);
-        var restored = OrderMutationService.Restore(fixture.Sector, token);
+        var restored = OrderMutationService.Restore(fixture.Sector, token, MedicalReadinessDecisions.Instance);
 
         Assert.True(restored.Succeeded, restored.Message);
         Assert.Same(order, squad.CurrentOrders);
         Assert.Single(order.AssignedSquads);
-        Assert.False(OrderMutationService.Restore(fixture.Sector, token).Succeeded);
+        Assert.False(OrderMutationService.Restore(fixture.Sector, token, MedicalReadinessDecisions.Instance).Succeeded);
         Assert.Single(order.AssignedSquads);
     }
 
@@ -98,7 +99,7 @@ public class OrderRestoreBoundaryTests
         Assert.True(OrderMutationService.Cancel(original.Sector, order).Succeeded);
         var replacement = SectorSimulationFixture.Create();
 
-        Assert.False(OrderMutationService.Restore(replacement.Sector, token).Succeeded);
+        Assert.False(OrderMutationService.Restore(replacement.Sector, token, MedicalReadinessDecisions.Instance).Succeeded);
 
         Assert.Null(squad.CurrentOrders);
         Assert.Empty(order.AssignedSquads);
@@ -114,7 +115,7 @@ public class OrderRestoreBoundaryTests
         Squad second = CreateSquad(fixture, "Second", false);
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [first, second], []);
+        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [first, second], [], MedicalReadinessDecisions.Instance);
 
         Assert.False(result.Succeeded);
         Assert.Null(first.CurrentOrders);
@@ -131,7 +132,7 @@ public class OrderRestoreBoundaryTests
         Squad second = CreateSquad(fixture, "Second", true);
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [first, second], []);
+        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [first, second], [], MedicalReadinessDecisions.Instance);
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Same(order, first.CurrentOrders);
@@ -148,12 +149,63 @@ public class OrderRestoreBoundaryTests
         Order order = CancelledOrder(original);
         var replacement = SectorSimulationFixture.Create();
 
-        var result = OrderMutationService.RestoreParticipants(replacement.Sector, order, [squad], []);
+        var result = OrderMutationService.RestoreParticipants(replacement.Sector, order, [squad], [], MedicalReadinessDecisions.Instance);
 
         Assert.False(result.Succeeded);
         Assert.Null(squad.CurrentOrders);
         Assert.Empty(order.AssignedSquads);
         Assert.DoesNotContain(order, replacement.Sector.Orders.Values);
+    }
+
+    // SB-05a: deployment doctrine comes from the force the command names, not from whichever
+    // campaign is installed. Both directions matter: the named campaign's doctrine must apply, and
+    // the installed campaign's must not leak in.
+    [Fact]
+    public void IssueOrder_AppliesTheNamedCampaignsDoctrineNotTheInstalledOnes()
+    {
+        GameDataSingleton active = GameDataSingleton.Instance;
+        GameRulesData oldRules = active.GameRulesData;
+        Date oldDate = active.Date;
+        Sector oldSector = active.Sector;
+        try
+        {
+            var issuing = SectorSimulationFixture.CreateDetached();
+            var installed = SectorSimulationFixture.CreateDetached();
+            AvailableMission recon = new("Recon", MissionAvailabilityKind.Recon);
+
+            // The installed campaign would wave anything through; the one being commanded demands
+            // more duty-ready brothers than the five-man squad has.
+            installed.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+                .MinimumDutyReadySquadStrength = 1;
+            issuing.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+                .MinimumDutyReadySquadStrength = 6;
+            active.LoadGameDataFromBlob(null, new Date(42, 1, 1), installed.Sector);
+
+            Squad squad = CreateSquad(issuing, "First", true);
+            Assert.Null(OrderAssignment.AssignSquadsToMission(
+                issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
+                Aggression.Normal));
+            Assert.Empty(issuing.Sector.Orders.Values);
+
+            // Flip only the commanded campaign's doctrine; the installed one now forbids what the
+            // named one allows, and the named one must still win.
+            issuing.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+                .MinimumDutyReadySquadStrength = 1;
+            installed.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+                .MinimumDutyReadySquadStrength = 99;
+
+            Order order = OrderAssignment.AssignSquadsToMission(
+                issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
+                Aggression.Normal);
+
+            Assert.NotNull(order);
+            Assert.Same(order, Assert.Single(issuing.Sector.Orders.Values));
+            Assert.Empty(installed.Sector.Orders.Values);
+        }
+        finally
+        {
+            active.LoadGameDataFromBlob(oldRules, oldDate, oldSector);
+        }
     }
 
     // SB-05a: order issue and cancellation resolve against the campaign they were handed. Two

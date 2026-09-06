@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Application;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Storage;
@@ -45,7 +46,7 @@ public partial class MainGameScene : Control
 	private MainScreenController _activePrimaryScreen;
 	private CommandScreenController _commandScreen;
 	private ActivityOverlay _activityOverlay;
-	private TurnController _turnController;
+	private CampaignApplication _campaignApplication;
 	private EndOfTurnDialogController _endOfTurnDialog;
 	private BriefingDialogController _scenarioNotificationDialog;
 	private PopupMenu _recruitmentPlacementMenu;
@@ -97,7 +98,8 @@ public partial class MainGameScene : Control
 		_primaryContentHost = GetNode<Control>("UILayer/PrimaryContentHost");
 		_modalLayer = GetNode<Control>("UILayer/ModalLayer");
 		_activityOverlay = GetNode<ActivityOverlay>("UILayer/ActivityOverlay");
-		_turnController = new TurnController();
+		_campaignApplication = new CampaignApplication(StaticRNG.Instance);
+		_campaignApplication.AttachCurrentCampaign();
 		_previousScreenStack = new Stack<Control>();
 		InitializeCampaignControls();
 		RefreshTopMenuStatus();
@@ -1240,8 +1242,7 @@ public partial class MainGameScene : Control
 	private void ProcessTurnCore()
 	{
 		// handle squad orders
-		TurnResolutionResult turnResult =
-			_turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
+		TurnResolutionResult turnResult = _campaignApplication.AdvanceTurn();
 		RefreshTopMenuStatus();
 		_sectorMap.RefreshFleets();
 		_sectorMap.RefreshLabels();

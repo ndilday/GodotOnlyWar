@@ -1,4 +1,6 @@
 using Godot;
+using OnlyWar.Application;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Diagnostics;
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Storage;
@@ -133,7 +135,8 @@ public partial class StartMenu
 
 		try
 		{
-			CampaignLoader.LoadIntoSingleton(args.Slot.FilePath);
+			_campaignApplication = new CampaignApplication(StaticRNG.Instance);
+			_campaignApplication.LoadAndInstall(args.Slot.FilePath);
 			LaunchMainGameScene();
 		}
 		catch (Exception exception)

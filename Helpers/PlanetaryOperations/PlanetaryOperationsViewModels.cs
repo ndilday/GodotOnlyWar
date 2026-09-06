@@ -573,7 +573,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 .ToList() ?? [];
             return new RegionalOperationsViewModel(
                 RegionalOrderEligibilityService.Build(
-                    sector, target, selectedMission, selectedOrder),
+                    sector, target, MedicalReadinessDecisions.Instance, selectedMission, selectedOrder),
                 BuildRegionCards(target, sector),
                 active,
                 all.Where(option => option.Kind != MissionAvailabilityKind.Special).ToList(),

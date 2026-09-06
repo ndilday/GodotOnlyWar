@@ -1,8 +1,9 @@
 using System.Collections.Generic;
+using OnlyWar.Contracts.Battles;
 
 namespace OnlyWar.Models.Battles
 {
-    public class BattleHistory
+    public class BattleHistory : IBattleReplay
     {
         public List<BattleTurn> Turns { get; }
         // Player-career credit. Multiple fatal hits on one enemy can legitimately produce multiple

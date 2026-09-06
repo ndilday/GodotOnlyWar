@@ -1,4 +1,6 @@
 using Godot;
+using OnlyWar.Application;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Models;
 using System;
@@ -14,6 +16,7 @@ public partial class StartMenu : Control
 	private Label _loadStatusLabel;
 	private bool _isTransitioning;
 	private GameRulesData _newGameRulesData;
+	private CampaignApplication _campaignApplication;
 
 	public override void _Ready()
 	{
@@ -110,8 +113,9 @@ public partial class StartMenu : Control
 
         try
         {
-            GameDataSingleton.Instance.InitializeNewGameData(
-                _newGameRulesData ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(GameStorage.RulesDatabasePath),
+			_campaignApplication = new CampaignApplication(StaticRNG.Instance);
+			_campaignApplication.StartNewCampaign(
+				_newGameRulesData ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(GameStorage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 settings.ChapterName,
                 settings.Seed,

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>OnlyWar</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <ProjectReference Include="../OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
+    <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
+    <ProjectReference Include="../OnlyWar.Battles/OnlyWar.Battles.csproj" />
+    <ProjectReference Include="../OnlyWar.Medical/OnlyWar.Medical.csproj" />
+    <ProjectReference Include="../OnlyWar.Operations/OnlyWar.Operations.csproj" />
+    <ProjectReference Include="../OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
+    <ProjectReference Include="../OnlyWar.Generation/OnlyWar.Generation.csproj" />
+    <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
+    <InternalsVisibleTo Include="OnlyWar.Application" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+  </ItemGroup>
+</Project>

@@ -457,7 +457,7 @@ public partial class MainGameScene
 
 		try
 		{
-			CampaignLoader.LoadIntoSingleton(savePath);
+			_campaignApplication.LoadAndInstall(savePath);
 			PackedScene mainScene = GD.Load<PackedScene>(
 				"res://Scenes/MainGameScreen/main_game_scene.tscn");
 			MainGameScene replacement = mainScene.Instantiate<MainGameScene>();

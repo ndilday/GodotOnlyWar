@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
@@ -346,6 +347,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
                     Sector, _selectedRegion, _selectedMission, [], characters,
                     ResolveTargetFactionId(_selectedMission),
                     _selectedOrder?.LevelOfAggression ?? Aggression.Normal,
+                    MedicalReadinessDecisions.Instance,
                     CurrentDate);
             if (characterResult.Succeeded)
             {
@@ -368,6 +370,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
             Sector, _selectedRegion, _selectedMission, squads,
             ResolveTargetFactionId(_selectedMission),
             _selectedOrder?.LevelOfAggression ?? Aggression.Normal,
+            MedicalReadinessDecisions.Instance,
             CurrentDate);
         if (result.Succeeded)
         {
@@ -426,7 +429,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
         OrderMutationResult result = OrderMutationService.RemoveSquad(Sector, order, squad);
         if (result.Succeeded)
         {
-            SetUndo("squad removal", () => OrderMutationService.RestoreSquad(Sector, order, squad, CurrentDate));
+            SetUndo("squad removal", () => OrderMutationService.RestoreSquad(Sector, order, squad, MedicalReadinessDecisions.Instance, CurrentDate));
             if (order.Force.IsEmpty) _selectedOrder = null;
             Changed(result.Message);
         }
@@ -448,7 +451,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
             if (result.Succeeded)
             {
                 _selectedOrder = null;
-                SetUndo("order cancellation", () => OrderMutationService.Restore(Sector, undo, CurrentDate));
+                SetUndo("order cancellation", () => OrderMutationService.Restore(Sector, undo, MedicalReadinessDecisions.Instance, CurrentDate));
                 Changed(result.Message);
             }
             else ShowFeedback(result.Message);
@@ -477,12 +480,12 @@ public partial class PlanetaryOperationsScreenController : DialogController
         bool attached = ReferenceEquals(soldier?.CurrentOrder, _selectedOrder);
         OrderMutationResult result = attached
             ? OrderMutationService.DetachSpecialist(Sector, _selectedOrder, soldier)
-            : OrderMutationService.AttachSpecialist(Sector, _selectedOrder, soldier, CurrentDate);
+            : OrderMutationService.AttachSpecialist(Sector, _selectedOrder, soldier, MedicalReadinessDecisions.Instance, CurrentDate);
         if (result.Succeeded)
         {
             Order order = _selectedOrder;
             SetUndo(attached ? "specialist detachment" : "specialist attachment", () => attached
-                ? OrderMutationService.AttachSpecialist(Sector, order, soldier, CurrentDate)
+                ? OrderMutationService.AttachSpecialist(Sector, order, soldier, MedicalReadinessDecisions.Instance, CurrentDate)
                 : OrderMutationService.DetachSpecialist(Sector, order, soldier));
             Changed(result.Message);
         }
@@ -563,7 +566,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
             .Select(GetPlayerPresence)
             .Where(presence => presence != null)
             .SelectMany(presence => SpecialistAvailability.EnumerateRoster(
-                presence, _selectedRegion, ChapterRoster, _selectedOrder))
+                presence, _selectedRegion, ChapterRoster, MedicalReadinessDecisions.Instance, _selectedOrder))
             .Where(option => IsInOrderArea(option?.Soldier, _selectedRegion))
             .GroupBy(option => option.Soldier.Id)
             .Select(group => group.First())

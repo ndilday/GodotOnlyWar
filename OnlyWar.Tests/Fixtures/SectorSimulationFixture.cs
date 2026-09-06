@@ -37,7 +37,8 @@ internal sealed class SectorSimulationFixture
     /// mutate rather than depending on whichever campaign is installed in the singleton (SB-05a).
     /// </summary>
     public OnlyWar.Contracts.Operations.OrderCommandContext OrderCommands =>
-        new(Sector, CurrentDate);
+        new(Sector, CurrentDate,
+            OnlyWar.Helpers.Readiness.MedicalReadinessDecisions.Instance);
 
     /// <summary>Every player soldier the chapter could lend to an operation.</summary>
     public System.Collections.Generic.IEnumerable<OnlyWar.Models.Soldiers.PlayerSoldier> ChapterRoster =>

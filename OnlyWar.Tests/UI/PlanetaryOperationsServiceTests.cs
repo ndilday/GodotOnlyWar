@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
@@ -44,7 +45,7 @@ public class PlanetaryOperationsServiceTests
         fixture.Sector.AddNewOrder(otherOrder);
 
         RegionalEligibilityResult result = RegionalOrderEligibilityService.Build(
-            fixture.Sector, target);
+            fixture.Sector, target, MedicalReadinessDecisions.Instance);
 
         Assert.Contains(result.Candidates, item => item.Squad == targetSquad);
         Assert.Contains(result.Candidates, item => item.Squad == adjacentSquad);
@@ -75,7 +76,7 @@ public class PlanetaryOperationsServiceTests
             .Single(option => option.Kind == kind);
 
         RegionalEligibilityResult result = RegionalOrderEligibilityService.Build(
-            fixture.Sector, target, mission);
+            fixture.Sector, target, MedicalReadinessDecisions.Instance, mission);
 
         Assert.Contains(result.Candidates, item => item.Squad == targetSquad);
         Assert.DoesNotContain(result.Candidates, item => item.Squad == adjacentSquad);
@@ -98,7 +99,7 @@ public class PlanetaryOperationsServiceTests
             [assigned], target, recon, -1, Aggression.Normal);
 
         RegionalSquadCandidate candidate = RegionalOrderEligibilityService.Build(
-                fixture.Sector, target, recon, order)
+                fixture.Sector, target, MedicalReadinessDecisions.Instance, recon, order)
             .Candidates.Single(item => item.Squad == assigned);
 
         Assert.True(candidate.IsAssignedToContext);
@@ -119,11 +120,11 @@ public class PlanetaryOperationsServiceTests
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
 
         OrderMutationResult created = OrderMutationService.CreateOrAdd(
-            fixture.Sector, target, recon, [first, second], -1, Aggression.Normal);
+            fixture.Sector, target, recon, [first, second], -1, Aggression.Normal, MedicalReadinessDecisions.Instance);
         Squad third = AddPlayerSquad(
             fixture, adjacent, "Third Squad", members: 5, withLeader: true);
         OrderMutationResult reinforced = OrderMutationService.CreateOrAdd(
-            fixture.Sector, target, recon, [third], -1, Aggression.Cautious);
+            fixture.Sector, target, recon, [third], -1, Aggression.Cautious, MedicalReadinessDecisions.Instance);
 
         Assert.True(created.Succeeded);
         Assert.Equal(OrderMutationKind.Created, created.Kind);
@@ -272,7 +273,7 @@ public class PlanetaryOperationsServiceTests
         Squad squad = AddPlayerSquad(fixture, beta, "Beta Squad");
 
         RegionalEligibilityResult result = RegionalOrderEligibilityService.Build(
-            fixture.Sector, gamma);
+            fixture.Sector, gamma, MedicalReadinessDecisions.Instance);
 
         Assert.DoesNotContain(result.Candidates, candidate => candidate.Squad == squad);
         Assert.DoesNotContain(result.Groups, group => group.Origin == beta);
@@ -452,7 +453,7 @@ public class PlanetaryOperationsServiceTests
         PlayerSoldier character = new(TestModelFactory.CreateSoldier(), "Brother Medicus");
         administrative.AddSquadMember(character);
         fixture.Sector.PlayerForce.Army.PlayerSoldierMap[character.Id] = character;
-        new IndividualPostingService().RestorePhysical(
+        new IndividualPostingService(OrderCommitmentSurface.Instance).RestorePhysical(
             character,
             IndividualPostingPurpose.Independent,
             CampaignLocation.Landed(region),
@@ -631,7 +632,7 @@ public class PlanetaryOperationsServiceTests
         AvailableMission recon = MissionAvailability.GetAvailableMissions(region, region)
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
         Order order = OrderMutationService.CreateOrAdd(
-            fixture.Sector, region, recon, [line], -1, Aggression.Normal).Order;
+            fixture.Sector, region, recon, [line], -1, Aggression.Normal, MedicalReadinessDecisions.Instance).Order;
         Squad pool = CreatePlayerSquad(fixture, "Apothecarion", 0,
             SquadTypes.PermitsIndividualDetachment);
         PlayerSoldier specialist = new(TestModelFactory.CreateSoldier(), "Brother Medicus");
@@ -643,7 +644,7 @@ public class PlanetaryOperationsServiceTests
         OrderMutationResult aggression = OrderMutationService.SetAggression(
             fixture.Sector, order, Aggression.Aggressive);
         OrderMutationResult attached = OrderMutationService.AttachSpecialist(
-            fixture.Sector, order, specialist);
+            fixture.Sector, order, specialist, MedicalReadinessDecisions.Instance);
         OrderMutationResult detached = OrderMutationService.DetachSpecialist(
             fixture.Sector, order, specialist);
 
@@ -694,7 +695,7 @@ public class PlanetaryOperationsServiceTests
             fixture, region, "Librarius", squadTypes: SquadTypes.PermitsIndividualDetachment);
 
         RegionalEligibilityResult eligibility = RegionalOrderEligibilityService.Build(
-            fixture.Sector, region);
+            fixture.Sector, region, MedicalReadinessDecisions.Instance);
         List<ForceTreeSquad> roster = PlanetaryOperationsScreenController.BuildOrderTreeRoster(
             eligibility);
 

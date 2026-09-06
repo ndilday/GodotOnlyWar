@@ -1,6 +1,9 @@
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
+using OnlyWar.Helpers.Application.Adapters.Operations;
+using OnlyWar.Contracts.Operations;
+using OnlyWar.Builders;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -35,7 +38,11 @@ internal static class TestExecutionContextFactory
             state,
             new MissionRules(TestSkills.Stealth, TestSkills.Tactics),
             random,
-            battle);
+            new BattleEngagementResolver(battle),
+            new TacticalEntityIdAllocator(),
+            new MissionCampaignInputs(
+                new Date(1, 1, 1),
+                Personnel: OperationsPersonnelSurface.Instance));
     }
 
     private sealed class NoOpPlayerBattleAftermathSink : IPlayerBattleAftermathSink

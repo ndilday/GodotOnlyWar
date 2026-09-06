@@ -6,9 +6,11 @@
   <ItemGroup>
     <ProjectReference Include="../Modules/OnlyWar.Domain/OnlyWar.Domain.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
-    <ProjectReference Include="../Modules/OnlyWar.Engine/OnlyWar.Engine.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Application/OnlyWar.Application.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Campaign/OnlyWar.Campaign.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Battles/OnlyWar.Battles.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Medical/OnlyWar.Medical.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Operations/OnlyWar.Operations.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Generation/OnlyWar.Generation.csproj" />
@@ -23,4 +25,3 @@
     <Compile Include="../OnlyWar.Tests/Generation/NameGeneratorTests.cs" Link="NameGeneratorTests.cs" />
   </ItemGroup>
 </Project>
-

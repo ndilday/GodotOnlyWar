@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using OnlyWar.Contracts.Operations;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.UI;
@@ -38,7 +40,7 @@ public sealed class ReadinessBoundaryTests
             SquadRowContext.ForNewOrder(), program, doctrine);
         Assert.Equal(4, row.Strength.DutyReady);
         Assert.False(row.Readiness.CanBeginDeployment);
-        Assert.False(OrderForceService.AssignSquad(order, squad, doctrine, program));
+        Assert.False(OrderForceService.AssignSquad(order, squad, MedicalReadinessDecisions.Instance, doctrine, program));
         Assert.Empty(order.AssignedSquads);
         Assert.Null(squad.CurrentOrders);
         Assert.Empty(BattleSquadFactory.GetParticipants(squad, doctrine, program));
@@ -47,7 +49,7 @@ public sealed class ReadinessBoundaryTests
         Assert.True(new SquadRowViewModelBuilder().Build(squad,
             SquadRowContext.ForNewOrder(), program, doctrine).Readiness.CanBeginDeployment);
         Assert.Equal(5, BattleSquadFactory.GetParticipants(squad, doctrine, program).Count);
-        Assert.True(OrderForceService.AssignSquad(order, squad, doctrine, program));
+        Assert.True(OrderForceService.AssignSquad(order, squad, MedicalReadinessDecisions.Instance, doctrine, program));
     }
 
     [Fact]
@@ -89,6 +91,35 @@ public sealed class ReadinessBoundaryTests
         {
             active.LoadGameDataFromBlob(oldRules, oldDate, oldSector, oldUpgrade);
         }
+    }
+
+    // SB-05b-1: order policy consumes readiness as an injected capability. A command context built
+    // without one must fail loudly rather than quietly waving a formation onto an order it is not
+    // fit for -- the failure mode a nullable capability with a permissive fallback would have.
+    [Fact]
+    public void IssuingAnOrderWithoutAReadinessCapabilityFailsRatherThanSkippingTheDeploymentGate()
+    {
+        var fixture = SectorSimulationFixture.CreateDetached();
+        Squad squad = CreateSquad(fixture.Sector.PlayerForce.Faction);
+        squad.CurrentRegion = fixture.Planet.Regions[0];
+        fixture.DefaultRegionFaction(0).LandedSquads.Add(squad);
+        AvailableMission mission = MissionAvailability
+            .GetAvailableMissions(fixture.Planet.Regions[0], fixture.Planet.Regions[0])
+            .First(option => option.Kind == MissionAvailabilityKind.Recon);
+
+        OrderCommandContext withoutReadiness =
+            new(fixture.Sector, fixture.CurrentDate);
+
+        Assert.Throws<InvalidOperationException>(() => OrderAssignment.AssignSquadsToMission(
+            withoutReadiness, [squad], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
+        Assert.Null(squad.CurrentOrders);
+
+        // The same command with the capability supplied issues normally.
+        OrderCommandContext withReadiness = new(
+            fixture.Sector, fixture.CurrentDate, MedicalReadinessDecisions.Instance);
+        Assert.NotNull(OrderAssignment.AssignSquadsToMission(
+            withReadiness, [squad], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
+        Assert.NotNull(squad.CurrentOrders);
     }
 
     private static Squad CreateSquad(Faction faction, int? lastSoldierId = null)

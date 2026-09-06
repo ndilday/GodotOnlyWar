@@ -1,0 +1,344 @@
+using OnlyWar.Helpers;
+using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Treatment;
+using OnlyWar.Models.Orders;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Models.Squads;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace OnlyWar.Helpers.Medical
+{
+    // FieldCareTreatment and FieldCareReport are boundary values and live in
+    // Modules/OnlyWar.Contracts/Medical/FieldCareReportValues.cs (SB-05b-1). This service is only
+    // their producer.
+
+    /// <summary>
+    /// Apothecary field care (Design/Reference/CasualtyRealism.md §2.6, Phase 2b).
+    ///
+    /// An Apothecary converts his Medical rating into a DAILY wound capacity and spends it on the
+    /// wounded within his reach, as forced wound-band demotions that take effect the moment they
+    /// happen. A brother hit in a day-2 assault and treated that evening enters the day-3 battle at
+    /// reduced severity -- which is the entire reason this is a daily pass rather than a credit
+    /// banked until turn processing.
+    ///
+    /// REACH IS THE ORDER. Every wounded brother in the order's assigned squads, plus its attached
+    /// soldiers. That falls out of Phase 2a's order-level attachment for free, and it is the payoff
+    /// SpecialistAttachment.md §3.1 predicted.
+    ///
+    /// WHERE IT RUNS. Once per distinct <see cref="Order"/> per campaign day, from
+    /// <c>MissionDayScheduler</c>'s scheduler-level <c>onDayEnd</c> hook. NEVER off a
+    /// <c>MissionStepDriver</c>: one order fans out into several independent single-squad drivers
+    /// under <c>MissionForceMode.IndependentSquads</c>, and a driver-hung pass would treat the same
+    /// order's wounded once per element -- an Apothecary silently worth 3x on a Recon order. The
+    /// dedup is the caller's (MissionTurnProcessor collects distinct orders once), and Phase 1b's
+    /// daily-healing pass established the same precedent.
+    ///
+    /// WHAT IT CANNOT DO. Unfreeze a replacement-eligible location -- surgery remains surgery --
+    /// touch a severed location, or repair an augmetic location. It is a bonus on top of natural
+    /// healing, never a prerequisite for it: <c>MedicalTurnProcessor.ApplyWeeklyHealing</c> stays
+    /// unconditional for everyone else.
+    ///
+    /// A CONSEQUENCE WORTH STATING, because it is not obvious from §2.6 alone: since
+    /// <c>HitLocation.IsReplacementEligible</c> is true for severed non-vital locations only.
+    /// Field care can therefore continue working on crippled locations, while a brother who has
+    /// actually lost a non-vital part remains a surgical case. An Apothecary in the field cannot
+    /// shortcut that surgery. What he CAN do is return the walking wounded to the line, including
+    /// men carrying several severe wounds who would otherwise be out for months.
+    ///
+    /// BATTLE BOUNDARY. An individually duty-ready Apothecary may be materialized as a one-person
+    /// battle element by BattleSquadFactory. Field-care capacity remains a separate between-days
+    /// medical effect and is not itself a tactical aura.
+    /// </summary>
+    public static class FieldCareService
+    {
+        /// <summary>
+        /// One order's daily field care. Call once per distinct order per day; calling it twice for
+        /// the same day double-treats.
+        /// </summary>
+        public static void ApplyDailyFieldCare(
+            Order order,
+            FieldCareReport report,
+            IReadOnlyList<BaseSkill> medicalSkills = null,
+            int day = 0,
+            RatingConsumerBindings ratingBindings = null)
+        {
+            if (order == null || report == null) return;
+
+            List<PlayerSoldier> underOrder = EnumerateUnderOrder(order).ToList();
+            List<PlayerSoldier> apothecaries = underOrder.Where(IsAvailableApothecary).ToList();
+            if (apothecaries.Count == 0) return;
+
+            foreach (PlayerSoldier apothecary in apothecaries)
+            {
+                if (report.ApothecaryIds.Contains(apothecary.Id)) continue;
+                report.ApothecaryIds.Add(apothecary.Id);
+                report.ApothecaryNames.Add(apothecary.Name);
+            }
+
+            RunOneDay(apothecaries, underOrder, report, medicalSkills, day, order.Id,
+                ratingBindings ?? RatingConsumerBindings.CreateDefault());
+        }
+
+        /// <summary>
+        /// Garrison care (§2.6). An Apothecary NOT on a mission treats co-located brothers who are
+        /// likewise not on a mission -- the Apothecarium at rest, which is where most convalescence
+        /// actually happens. Same capacity, same triage; reach is co-location rather than a shared
+        /// order.
+        ///
+        /// GARRISON VERSUS FIELD PRIORITY (§3.3, decided): FIELD WINS, and it wins by construction
+        /// rather than by a rule. An Apothecary under an order is excluded here by the very
+        /// "not on a mission" test that defines the garrison pool, so the two pools are disjoint and
+        /// no man can spend the same day twice. The cost of sending him forward is therefore visible
+        /// exactly where §2.6 wanted it: the backlog at home stops moving.
+        ///
+        /// Resolves during turn processing rather than on a day loop, since with nobody fighting
+        /// there is no reason to iterate days -- but it runs the identical daily routine
+        /// <see cref="FieldCareConstants.GarrisonDaysPerTurn"/> times, re-triaging between each, so
+        /// the two halves cannot drift apart.
+        /// </summary>
+        public static IReadOnlyList<FieldCareReport> ApplyGarrisonFieldCare(
+            IEnumerable<PlayerSoldier> chapterMembers,
+            IReadOnlyList<BaseSkill> medicalSkills = null,
+            RatingConsumerBindings ratingBindings = null)
+        {
+            List<FieldCareReport> reports = [];
+            if (chapterMembers == null) return reports;
+
+            List<PlayerSoldier> garrison = chapterMembers
+                .Where(soldier => soldier != null && !IsOnMission(soldier))
+                .ToList();
+
+            foreach (IGrouping<string, PlayerSoldier> location in garrison
+                .GroupBy(GetLocationKey)
+                .Where(group => group.Key != null)
+                .OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                List<PlayerSoldier> present = location.ToList();
+                List<PlayerSoldier> apothecaries = present.Where(IsAvailableApothecary).ToList();
+                if (apothecaries.Count == 0) continue;
+
+                FieldCareReport report = new();
+                foreach (PlayerSoldier apothecary in apothecaries)
+                {
+                    report.ApothecaryIds.Add(apothecary.Id);
+                    report.ApothecaryNames.Add(apothecary.Name);
+                }
+
+                for (int day = 1; day <= FieldCareConstants.GarrisonDaysPerTurn; day++)
+                {
+                    RunOneDay(apothecaries, present, report, medicalSkills, day, null,
+                        ratingBindings ?? RatingConsumerBindings.CreateDefault());
+                }
+                reports.Add(report);
+            }
+
+            return reports;
+        }
+
+        /// <summary>
+        /// Everyone an order can reach: its squads' members plus the individuals attached to it
+        /// (Phase 2a). Deduplicated, because an attached specialist is still on his home squad's
+        /// roll and that squad could in principle also be assigned.
+        /// </summary>
+        public static IEnumerable<PlayerSoldier> EnumerateUnderOrder(Order order)
+        {
+            if (order == null) return [];
+            return order.Force.AllPlayerSoldiers;
+        }
+
+        /// <summary>
+        /// The base skills that compose the Medical rating, resolved from the data-driven rating
+        /// definitions rather than by name. Deliberately not a NamedSkillRegistry entry: the
+        /// registry throws on a missing skill at load, and field-care XP is not worth making the
+        /// rules database fail to open over.
+        /// </summary>
+        public static IReadOnlyList<BaseSkill> ResolveMedicalSkills(
+            IEnumerable<RatingDefinition> ratingDefinitions,
+            IReadOnlyDictionary<int, BaseSkill> baseSkillMap,
+            RatingConsumerBindings ratingBindings = null)
+        {
+            if (ratingDefinitions == null || baseSkillMap == null) return [];
+            ratingBindings ??= RatingConsumerBindings.CreateDefault();
+            RatingDefinition medical = ratingDefinitions
+                .FirstOrDefault(definition => definition.Key == ratingBindings[
+                    RatingConsumerRole.MedicalCapacity]);
+            if (medical == null) return [];
+            return medical.Components
+                .Where(component => component.ComponentType == RatingComponentType.SkillTotal)
+                .OrderBy(component => component.Ordinal)
+                .Select(component =>
+                    baseSkillMap.TryGetValue(component.TargetId, out BaseSkill skill) ? skill : null)
+                .Where(skill => skill != null)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Is this brother committed to an operation? True when he is attached to an order as an
+        /// individual OR his squad is under orders. Settles CasualtyRealism §3.3's garrison/field
+        /// partition with one expression, as SpecialistAttachment.md §8 predicted it would.
+        /// </summary>
+        public static bool IsOnMission(PlayerSoldier soldier) =>
+            soldier?.CurrentOrder != null
+            || (soldier?.IndividualPosting == null && soldier?.AssignedSquad?.CurrentOrders != null);
+
+        /// <summary>
+        /// Where this brother is, for co-location purposes. Routed through
+        /// <see cref="PlayerSoldier.EffectiveRegion"/> rather than <c>AssignedSquad.CurrentRegion</c>
+        /// -- SpecialistAttachment.md §8 trap 2: an attached Apothecary's home squad may sit aboard
+        /// ship while he is forward, and reading the squad would believe he is in two places.
+        /// Null when he has no determinable location, which drops him out of every pool.
+        /// </summary>
+        public static string GetLocationKey(PlayerSoldier soldier)
+        {
+            if (soldier == null) return null;
+            // Aboard ship beats a region: a boarded squad's CurrentRegion may still be set from
+            // wherever it embarked, which is the same precedence MedicalProcedureService.SameLocation
+            // applies.
+            Models.CampaignLocation location = CampaignLocationService.ForSoldier(soldier);
+            if (location?.Ship != null) return $"ship:{location.Ship.Id}";
+            return location?.Region == null ? null : $"region:{location.Region.Id}";
+        }
+
+        /// <summary>
+        /// Fit to practise medicine: an Apothecary by template, and neither down nor immobilised.
+        /// Identified by template name through <see cref="MedicalProcedureService"/>, the existing
+        /// single source of truth for who counts as one.
+        /// </summary>
+        public static bool IsAvailableApothecary(PlayerSoldier soldier) =>
+            soldier != null
+            && MedicalProcedureService.IsApothecary(soldier)
+            && soldier.IsCombatEffective;
+
+        /// <summary>
+        /// The Apothecaries who would treat this brother if he needed it today, under whichever of
+        /// the two passes he falls into. Drives the Apothecarium screen's field-care readout, so the
+        /// player can see BEFORE committing that sending the Apothecary forward leaves the men at
+        /// home uncovered -- the tension §2.6 wanted made legible.
+        ///
+        /// Derived from exactly the same predicates the passes use, so the screen cannot promise
+        /// care the engine will not deliver.
+        /// </summary>
+        public static IReadOnlyList<PlayerSoldier> GetCoveringApothecaries(
+            PlayerSoldier soldier, IEnumerable<PlayerSoldier> chapterMembers)
+        {
+            if (soldier == null) return [];
+
+            Order order = soldier.CurrentOrder ?? soldier.AssignedSquad?.CurrentOrders;
+            if (order != null)
+            {
+                return EnumerateUnderOrder(order).Where(IsAvailableApothecary).ToList();
+            }
+
+            if (chapterMembers == null) return [];
+            string key = GetLocationKey(soldier);
+            if (key == null) return [];
+            return chapterMembers
+                .Where(candidate => candidate != null
+                    && !IsOnMission(candidate)
+                    && IsAvailableApothecary(candidate)
+                    && GetLocationKey(candidate) == key)
+                .ToList();
+        }
+
+        public static float GetCapacity(
+            PlayerSoldier apothecary,
+            RatingConsumerBindings ratingBindings = null) =>
+            FieldCareConstants.GetDailyCapacity(GetMedicalRating(apothecary, ratingBindings));
+
+        public static float GetMedicalRating(
+            PlayerSoldier apothecary,
+            RatingConsumerBindings ratingBindings = null) =>
+            (ratingBindings ?? RatingConsumerBindings.CreateDefault()).Get(
+                apothecary?.SoldierEvaluationHistory?.LastOrDefault(),
+                RatingConsumerRole.MedicalCapacity);
+
+        // ---- The daily pass -------------------------------------------------------------------
+
+        /// <summary>
+        /// One day's care for one pool. Greedy worst-first to exhaustion, with NO per-soldier cap
+        /// (§3.2, decided): one brother may absorb the whole day if he is the worst case, which is
+        /// the point -- Astartes healing already handles light wounds without help, so spreading
+        /// capacity thin returns nobody to the line. Daily re-triage is what keeps that fair: once
+        /// the worst case's RecoveryTimeLeft drops below the next man's, the queue reorders on its
+        /// own with no explicit cap needed.
+        ///
+        /// USE-IT-OR-LOSE-IT (§3.2, decided): whatever is left at the end of the day is gone. It is
+        /// the simpler and more defensible reading of a man's working day, and it removes a piece of
+        /// per-Apothecary state that would otherwise need persisting.
+        /// </summary>
+        private static void RunOneDay(
+            IReadOnlyList<PlayerSoldier> apothecaries,
+            IReadOnlyList<PlayerSoldier> pool,
+            FieldCareReport report,
+            IReadOnlyList<BaseSkill> medicalSkills,
+            int day,
+            int? orderId,
+            RatingConsumerBindings ratingBindings)
+        {
+            IReadOnlyList<FieldCareTreatmentResult> treatments = FieldCarePolicy.ApplyDailyCare(
+                apothecaries.Select(apothecary => new FieldCareProviderFacts(
+                    apothecary.Id,
+                    apothecary.Name,
+                    GetCapacity(apothecary, ratingBindings))).ToList(),
+                pool.Select(patient => new FieldCarePatientFacts(
+                    patient.Id,
+                    patient.Name,
+                    patient.Template?.Rank ?? 0,
+                    patient.Template?.Subrank ?? 0,
+                    patient.Body)).ToList(),
+                StaticRNG.Instance,
+                day);
+
+            foreach (FieldCareTreatmentResult treatment in treatments)
+            {
+                report.RecordTreatment(new FieldCareTreatment(
+                    treatment.SoldierId,
+                    treatment.SoldierName,
+                    treatment.LocationName,
+                    treatment.FromBand,
+                    treatment.WoundsMoved,
+                    treatment.Cost,
+                    treatment.Day));
+                GameLog.Debug(() =>
+                    $"FIELD_CARE order={(orderId.HasValue ? orderId.Value.ToString() : "garrison")} "
+                    + $"day={day} apothecaries=[{string.Join(",", apothecaries.Select(a => $"{a.Name}#{a.Id}"))}] "
+                    + $"patient={treatment.SoldierName}#{treatment.SoldierId} location={treatment.LocationName} "
+                    + $"from={treatment.FromBand} woundsMoved={treatment.WoundsMoved} cost={treatment.Cost:F2}");
+            }
+
+            GrantMedicalExperience(apothecaries, medicalSkills,
+                treatments.Sum(treatment => treatment.Cost), ratingBindings);
+        }
+
+        private static void GrantMedicalExperience(
+            IReadOnlyList<PlayerSoldier> apothecaries,
+            IReadOnlyList<BaseSkill> medicalSkills,
+            float capacitySpent,
+            RatingConsumerBindings ratingBindings)
+        {
+            if (capacitySpent <= 0f || medicalSkills == null || medicalSkills.Count == 0) return;
+
+            float totalCapacity = apothecaries.Sum(apothecary =>
+                GetCapacity(apothecary, ratingBindings));
+            if (totalCapacity <= 0f) return;
+
+            foreach (PlayerSoldier apothecary in apothecaries)
+            {
+                // Split by contribution, so the Master of the Apothecarion working alongside a
+                // junior brother takes the larger share of the practice as well as the larger share
+                // of the load.
+                float share = GetCapacity(apothecary, ratingBindings) / totalCapacity;
+                float points = capacitySpent * share
+                    * FieldCareConstants.MedicalExperiencePerCapacitySpent;
+                if (points <= 0f) continue;
+                foreach (BaseSkill skill in medicalSkills)
+                {
+                    apothecary.AddSkillPoints(skill, points);
+                }
+            }
+        }
+    }
+}

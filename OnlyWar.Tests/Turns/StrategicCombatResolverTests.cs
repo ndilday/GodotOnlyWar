@@ -1,9 +1,16 @@
-﻿using System.Collections.Generic;
+﻿using OnlyWar.Helpers.Readiness;
+using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Helpers.Turns;
+using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Application.Adapters.Operations;
+using OnlyWar.Contracts.Battles;
+using OnlyWar.Contracts.Operations;
+using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Missions;
@@ -304,10 +311,25 @@ public class StrategicCombatResolverTests
             invadesOnVictory: true);
         Order order = new(new List<Squad>(), false, true, Aggression.Normal, mission);
         GameDataSingleton data = GameDataSingleton.Instance;
-        MissionTurnProcessor processor = new(
-            new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
-            null,
-            null);
+        CampaignBattleEquipmentSource equipment =
+            new(data.GameRulesData, fixture.Sector.PlayerForce);
+        MissionTurnProcessor processor = new(new MissionTurnDependencies
+        {
+            Sector = fixture.Sector,
+            Rules = data.GameRulesData,
+            CurrentDate = data.Date,
+            Random = StaticRNG.Instance,
+            Readiness = MedicalReadinessDecisions.Instance,
+            Engagements = new NoOpEngagementResolver(),
+            Equipment = equipment,
+            MissionRules = new MissionRules(TestSkills.Stealth, TestSkills.Tactics),
+            Personnel = OperationsPersonnelSurface.Instance,
+            CreateBattleSquad = (isPlayer, squad, doctrine, program) =>
+                BattleSquadFactory.Create(isPlayer, squad, doctrine, program, equipment),
+            CreateAttachedBattleSquad = (character, tacticalId, faction, doctrine, program) =>
+                BattleSquadFactory.CreateAttachedCharacter(
+                    character, tacticalId, faction, doctrine, program, equipment)
+        });
         List<StrategicCombatResult> results = [];
 
         processor.ProcessStrategicCombatMissions([order], results);
@@ -362,5 +384,12 @@ public class StrategicCombatResolverTests
         };
         fixture.Planet.Regions[region].RegionFactionMap[source.PlanetFaction.Faction.Id] = regionFaction;
         return regionFaction;
+    }
+
+    private sealed class NoOpEngagementResolver : IEngagementResolver
+    {
+        public EngagementResult Resolve(EngagementInput input) =>
+            throw new System.InvalidOperationException(
+                "The strategic-only fixture does not execute tactical engagements.");
     }
 }

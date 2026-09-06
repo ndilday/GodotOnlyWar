@@ -13,7 +13,7 @@ using OnlyWar.Models.Battles;
 
 namespace OnlyWar.Helpers.Battles
 {
-    public class BattleSquad : ICloneable
+    public class BattleSquad : ICloneable, IEngagementState
     {
         private readonly IBattleEquipmentSource _equipment;
         private static int _globalAbleSoldiersVersion;

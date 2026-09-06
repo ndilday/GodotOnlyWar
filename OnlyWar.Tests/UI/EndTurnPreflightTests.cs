@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Command;
 using OnlyWar.Helpers.Turns;
@@ -373,7 +374,7 @@ public class EndTurnPreflightTests
         lender.AddSquadMember(lent);
         campaign.RootUnit.AddSquad(lender);
         GetOrAddPlayerRegionFaction(campaign, campaign.Region).LandedSquads.Add(lender);
-        OnlyWar.Helpers.Orders.OrderAttachment.Attach(lent, order);
+        OnlyWar.Helpers.Orders.OrderAttachment.Attach(lent, order, MedicalReadinessDecisions.Instance);
 
         EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
             campaign.Sector,

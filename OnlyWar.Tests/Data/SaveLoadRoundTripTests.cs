@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Readiness;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -252,7 +253,7 @@ public class SaveLoadRoundTripTests
             && s.Members.Count > 0
             && s.Id != administrativeSquad.Id);
         PlayerSoldier attachedSpecialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
-        OrderAttachment.Attach(attachedSpecialist, order);
+        OrderAttachment.Attach(attachedSpecialist, order, MedicalReadinessDecisions.Instance);
         int attachedSpecialistId = attachedSpecialist.Id;
         int detachableSquadId = detachableSquad.Id;
 
@@ -700,7 +701,7 @@ public class SaveLoadRoundTripTests
         Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
             s.PermitsIndividualDeployment && s.Members.Count > 0);
         PlayerSoldier specialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
-        OrderAttachment.Attach(specialist, order);
+        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
         int specialistId = specialist.Id;
 
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_load_orders");

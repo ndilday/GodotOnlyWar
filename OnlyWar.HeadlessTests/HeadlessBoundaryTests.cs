@@ -10,6 +10,7 @@ using OnlyWar.Contracts.Runtime;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Application;
 using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Geometry;
@@ -30,8 +31,17 @@ public class HeadlessBoundaryTests
         AssertReferences(typeof(Coordinate).Assembly, []);
         AssertReferences(typeof(IRNG).Assembly, ["OnlyWar.Domain"]);
         AssertReferences(typeof(BattleSquadFactory).Assembly,
-            ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Battles", "OnlyWar.Generation",
-             "OnlyWar.Medical", "OnlyWar.Persistence", "OnlyWar.Runtime"]);
+             ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Battles", "OnlyWar.Generation",
+             "OnlyWar.Medical", "OnlyWar.Persistence", "OnlyWar.Runtime", "OnlyWar.Operations",
+             "OnlyWar.Campaign"]);
+        AssertReferences(typeof(CampaignApplication).Assembly,
+            ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Runtime", "OnlyWar.Campaign",
+             "OnlyWar.Battles", "OnlyWar.Medical", "OnlyWar.Operations", "OnlyWar.Persistence",
+             "OnlyWar.Generation"]);
+        AssertReferences(typeof(FactionStrategyController).Assembly,
+            ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Runtime", "OnlyWar.Battles",
+             "OnlyWar.Medical", "OnlyWar.Persistence", "OnlyWar.Operations", "OnlyWar.Generation"],
+            allowSqlite: true);
         // Tactical execution reaches nothing but the shared domain and its boundary contracts: no
         // Engine bridge, no campaign orchestration, no current session (SB-06).
         AssertReferences(typeof(OnlyWar.Helpers.Battles.BattleTurnResolver).Assembly,
@@ -42,6 +52,11 @@ public class HeadlessBoundaryTests
             ["OnlyWar.Domain", "OnlyWar.Contracts"], allowSqlite: true);
         AssertReferences(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Contracts"]);
+        // Operations owns order/mission sequencing. The current migration retains BattleSquad
+        // handles internally until the engagement projection is completed, so Battles is the only
+        // transitional feature reference (SB-05b-2; the final allowlist is enforced by SB-12).
+        AssertReferences(typeof(OnlyWar.Models.Missions.MissionContext).Assembly,
+            ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Runtime", "OnlyWar.Battles"]);
         // Generation constructs initial state over explicit ports; it never references campaign
         // orchestration or turn simulation, which is what keeps the two acyclic (SB-09).
         AssertReferences(typeof(SectorBuilder).Assembly,
@@ -208,10 +223,11 @@ public class HeadlessBoundaryTests
         {
             Assert.False(reference.Name.StartsWith("Godot"));
             if (reference.Name.StartsWith("OnlyWar")) Assert.Contains(reference.Name, allowed);
-            if (!allowSqlite && assembly.GetName().Name != "OnlyWar.Engine")
+            if (!allowSqlite)
                 Assert.DoesNotContain("Sqlite", reference.Name, StringComparison.OrdinalIgnoreCase);
         }
         Assert.All(assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>(),
-            friend => Assert.Contains(friend.AssemblyName, new[] { "OnlyWar.Tests", "OnlyWar.HeadlessTests" }));
+            friend => Assert.Contains(friend.AssemblyName,
+                new[] { "OnlyWar.Tests", "OnlyWar.HeadlessTests", "OnlyWar.Application" }));
     }
 }
