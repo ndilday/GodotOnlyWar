@@ -217,7 +217,7 @@ public sealed class OperationsScreenApplicationTests
         squad = AddPlayerSquad(fixture, region, "Operations Squad", members: 5);
         CampaignApplication application = new(new SeededRNG(11));
         application.Install(new GameSession(
-            GameDataSingleton.Instance.GameRulesData, fixture.Sector,
+            fixture.Rules, fixture.Sector,
             fixture.CurrentDate, new SeededRNG(12)));
         return application;
     }

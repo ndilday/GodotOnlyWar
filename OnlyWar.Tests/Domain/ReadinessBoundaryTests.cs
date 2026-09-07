@@ -52,51 +52,36 @@ public sealed class ReadinessBoundaryTests
         Assert.True(OrderForceService.AssignSquad(order, squad, MedicalReadinessDecisions.Instance, doctrine, program));
     }
 
-    // SB-12: the compatibility readiness adapter is gone. A row built without explicit inputs
-    // resolves nothing at all -- not even for the squad belonging to the installed campaign --
-    // so the live Black Carapace procedure below can only reach a row that is handed the program.
+    // SB-12: a row built without explicit inputs resolves nothing from another campaign. The live
+    // Black Carapace procedure below can only reach a row that is handed the program.
     [Fact]
-    public void ReadinessNeverResolvesTheInstalledCampaignWithoutExplicitInputs()
+    public void ReadinessNeverResolvesAnotherCampaignWithoutExplicitInputs()
     {
-        GameDataSingleton active = GameDataSingleton.Instance;
-        var oldRules = active.GameRulesData;
-        var oldSector = active.Sector;
-        var oldDate = active.Date;
-        bool oldUpgrade = active.UpgradePending;
-        try
+        var live = SectorSimulationFixture.CreateDetached();
+        var detached = SectorSimulationFixture.CreateDetached();
+        Squad liveSquad = CreateSquad(live.Sector.PlayerForce.Faction);
+        PlayerSoldier liveMember = (PlayerSoldier)liveSquad.Members.Last();
+        Squad detachedSquad = CreateSquad(detached.Sector.PlayerForce.Faction, liveMember.Id);
+        PlayerSoldier detachedMember = (PlayerSoldier)detachedSquad.Members.Last();
+        live.Sector.PlayerForce.RecruitmentProgram = new RecruitmentProgram();
+        live.Sector.PlayerForce.RecruitmentProgram.Procedures.Add(new RecruitmentProcedure
         {
-            var live = SectorSimulationFixture.CreateDetached();
-            var detached = SectorSimulationFixture.CreateDetached();
-            Squad liveSquad = CreateSquad(live.Sector.PlayerForce.Faction);
-            PlayerSoldier liveMember = (PlayerSoldier)liveSquad.Members.Last();
-            Squad detachedSquad = CreateSquad(detached.Sector.PlayerForce.Faction, liveMember.Id);
-            PlayerSoldier detachedMember = (PlayerSoldier)detachedSquad.Members.Last();
-            live.Sector.PlayerForce.RecruitmentProgram = new RecruitmentProgram();
-            live.Sector.PlayerForce.RecruitmentProgram.Procedures.Add(new RecruitmentProcedure
-            {
-                Type = RecruitmentProcedureType.BlackCarapace,
-                SubjectId = liveMember.Id
-            });
-            active.LoadGameDataFromBlob(null, new Date(42, 1, 1), live.Sector);
+            Type = RecruitmentProcedureType.BlackCarapace,
+            SubjectId = liveMember.Id
+        });
 
-            Assert.True(DutyReadinessService.Evaluate(liveMember).IsDutyReady);
-            Assert.True(DutyReadinessService.Evaluate(detachedMember).IsDutyReady);
-            Assert.Equal(5, new SquadRowViewModelBuilder().Build(detachedSquad).Strength.DutyReady);
-            Assert.Equal(5, new SquadRowViewModelBuilder().Build(liveSquad).Strength.DutyReady);
+        Assert.True(DutyReadinessService.Evaluate(liveMember).IsDutyReady);
+        Assert.True(DutyReadinessService.Evaluate(detachedMember).IsDutyReady);
+        Assert.Equal(5, new SquadRowViewModelBuilder().Build(detachedSquad).Strength.DutyReady);
+        Assert.Equal(5, new SquadRowViewModelBuilder().Build(liveSquad).Strength.DutyReady);
 
-            // The same squad, given the installed campaign's program explicitly, does hold the
-            // recruit back: the input decides the answer, never the installed campaign.
-            Assert.Equal(4, new SquadRowViewModelBuilder().Build(
-                liveSquad,
-                program: live.Sector.PlayerForce.RecruitmentProgram).Strength.DutyReady);
+        // The same squad, given its campaign program explicitly, does hold the recruit back: the
+        // input decides the answer, never ambient campaign state.
+        Assert.Equal(4, new SquadRowViewModelBuilder().Build(
+            liveSquad,
+            program: live.Sector.PlayerForce.RecruitmentProgram).Strength.DutyReady);
 
-            active.LoadGameDataFromBlob(null, new Date(42, 1, 2), detached.Sector);
-            Assert.Equal(5, new SquadRowViewModelBuilder().Build(liveSquad).Strength.DutyReady);
-        }
-        finally
-        {
-            active.LoadGameDataFromBlob(oldRules, oldDate, oldSector, oldUpgrade);
-        }
+        Assert.Equal(5, new SquadRowViewModelBuilder().Build(liveSquad).Strength.DutyReady);
     }
 
     // SB-05b-1: order policy consumes readiness as an injected capability. A command context built

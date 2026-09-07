@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.StrategicCombat;
@@ -54,11 +54,11 @@ namespace OnlyWar.Helpers.Missions.Raid
                 TargetBattleValue = Math.Min(targetBattleValue, StrategicCombatRules.MassCombatBattleValueFloor - 1),
                 Profile = ForceCompositionProfile.Garrison
             };
-            List<BattleSquad> opposingSquads = ForceGenerator.GenerateForce(
+            List<OperationalMissionElement> opposingSquads = ForceGenerator.GenerateForce(
                     request,
                     execution.Random,
                     execution.EntityIds)
-                .Select(squad => new BattleSquad(false, squad))
+                .Select(squad => execution.EngagementElements.CreateSquad(false, squad))
                 .ToList();
 
             if (opposingSquads.Count == 0)
@@ -88,11 +88,11 @@ namespace OnlyWar.Helpers.Missions.Raid
                 then: new WithdrawIfAbleMissionStep());
         }
 
-        private static long AbleBattleValue(IEnumerable<BattleSquad> squads)
+        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads)
         {
             return squads
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+                .SelectMany(squad => squad.AbleMembers)
+                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
         }
     }
 }

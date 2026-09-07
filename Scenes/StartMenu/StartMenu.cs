@@ -143,6 +143,7 @@ public partial class StartMenu : Control
         // Replace StartMenu with MainGameScene
         PackedScene mainGameSceneScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/main_game_scene.tscn");
         MainGameScene mainGameSceneInstance = mainGameSceneScene.Instantiate<MainGameScene>();
+        mainGameSceneInstance.Configure(_campaignApplication);
         mainGameSceneInstance.SetStartupWarning(startupWarning);
         QueueFree(); // StartMenu removes itself
         GetParent().AddChild(mainGameSceneInstance); // Add MainGameScene to the *parent* of StartMenu

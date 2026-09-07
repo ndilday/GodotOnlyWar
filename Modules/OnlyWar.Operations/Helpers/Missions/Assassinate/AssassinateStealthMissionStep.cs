@@ -39,7 +39,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
             Faction assassin = context.MissionSquads.FirstOrDefault()?.Faction;
-            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            int headcount = context.MissionSquads.Sum(s => s.AbleMembers.Count);
             // Getting close to the target unseen is contested by everyone watching the ground, not
             // just the faction the target belongs to, so this uses the same aggregated search-effort
             // model as ReconStealthMissionStep - and with it that model's log10(1 + x) shape, so a

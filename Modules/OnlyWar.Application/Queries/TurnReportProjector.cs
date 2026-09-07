@@ -42,7 +42,7 @@ internal static class TurnReportProjector
             if (!reportedContexts.Add(context)) continue;
 
             bool isPlayerRecon = context.Order?.Mission?.MissionType == MissionType.Recon
-                && context.MissionSquads.Any(squad => squad?.Squad?.Faction?.IsPlayerFaction == true);
+                && context.MissionSquads.Any(squad => squad?.CampaignSquad?.Faction?.IsPlayerFaction == true);
             if (isPlayerRecon)
             {
                 List<MissionContext> orderElements = missionContexts
@@ -232,7 +232,7 @@ internal static class TurnReportProjector
         string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
         List<string> squadNames = elementContexts
             .SelectMany(context => context.MissionSquads)
-            .Select(squad => squad?.Squad?.Name)
+            .Select(squad => squad?.CampaignSquad?.Name)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct()
             .ToList();
@@ -266,9 +266,9 @@ internal static class TurnReportProjector
         Region region = mission?.RegionFaction?.Region;
         string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
         bool actingFactionIsPlayer = context.MissionSquads
-            .Any(squad => squad?.Squad?.Faction?.IsPlayerFaction == true);
+            .Any(squad => squad?.CampaignSquad?.Faction?.IsPlayerFaction == true);
         string attacker = context.MissionSquads
-            .Select(squad => squad?.Squad?.Faction?.Name)
+            .Select(squad => squad?.CampaignSquad?.Faction?.Name)
             .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? "Unknown attacker";
         string defender = mission?.RegionFaction?.PlanetFaction?.Faction?.Name ?? "Unknown defender";
 
@@ -278,7 +278,7 @@ internal static class TurnReportProjector
             string subtitle = MissionReportHeadlineBuilder.Build(
                 mission?.MissionType ?? MissionType.Patrol,
                 context.MissionSquads
-                    .Select(squad => squad?.Squad?.Name)
+                    .Select(squad => squad?.CampaignSquad?.Name)
                     .ToList(),
                 defender,
                 region?.Name,

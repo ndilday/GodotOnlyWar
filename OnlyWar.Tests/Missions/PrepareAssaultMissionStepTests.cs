@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.StrategicCombat;
@@ -38,7 +39,10 @@ public class PrepareAssaultMissionStepTests
         squad.CurrentRegion = region;
         Order order = new([squad], false, true, Aggression.Aggressive,
             new Mission(MissionType.Advance, target, 0));
-        MissionContext context = new(order, [new BattleSquad(true, squad)], []);
+        MissionContext context = new(
+            order,
+            [TestMissionElementFactory.From(new BattleSquad(true, squad))],
+            []);
 
         new MissionStepDriver(
             TestExecutionContextFactory.CreateMission(context, new FixedRNG()),
@@ -105,14 +109,15 @@ public class PrepareAssaultMissionStepTests
 
         long reserve = FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(target);
 
-        List<BattleSquad> defenders = new PrepareAssaultMissionStep()
+        List<OperationalMissionElement> defenders = new PrepareAssaultMissionStep()
             .AssembleDefendingForce(
-                target,
-                attackerMarginOfSuccess: 0f,
-                new SeededRNG(1));
+            target,
+            attackerMarginOfSuccess: 0f,
+            new SeededRNG(1),
+            engagementElements: TestExecutionContextFactory.CreateEngagementResolver());
 
         long generatedBattleValue = defenders
-            .SelectMany(squad => squad.Squad.Members)
+            .SelectMany(squad => squad.Members)
             .Sum(soldier => (long)soldier.Template.BattleValue);
 
         Assert.True(reserve > 0, "fixture must reserve something to mobilise");
@@ -133,7 +138,7 @@ public class PrepareAssaultMissionStepTests
     [Fact]
     public void PatrolDetection_WithoutRules_DefaultsToJoiningTheDefence()
     {
-        (BattleSquad patrol, RegionFaction _) = CreatePatrol();
+        (OperationalMissionElement patrol, RegionFaction _) = CreatePatrol();
 
         Assert.True(PrepareAssaultMissionStep.PatrolDetectedAttack(
             patrol, attackerBattleValue: 1_000, defenderTactics: null, random: null));
@@ -173,7 +178,7 @@ public class PrepareAssaultMissionStepTests
         int detections = 0;
         for (int seed = 0; seed < DetectionSampleCount; seed++)
         {
-            (BattleSquad patrol, RegionFaction presence) = CreatePatrol();
+            (OperationalMissionElement patrol, RegionFaction presence) = CreatePatrol();
             presence.CommittedAttention = committedAttention;
             if (PrepareAssaultMissionStep.PatrolDetectedAttack(
                 patrol, attackerBattleValue, TestSkills.Tactics, new SeededRNG(seed)))
@@ -184,7 +189,7 @@ public class PrepareAssaultMissionStepTests
         return detections;
     }
 
-    private static (BattleSquad, RegionFaction) CreatePatrol()
+    private static (OperationalMissionElement, RegionFaction) CreatePatrol()
     {
         Planet planet = new(1, "Terra", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Terra Lambda", new RegionCoordinate(0, 0), 0);
@@ -196,7 +201,7 @@ public class PrepareAssaultMissionStepTests
         squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Normal, new Mission(MissionType.Patrol, presence, 0));
         presence.LandedSquads.Add(squad);
-        return (new BattleSquad(false, squad), presence);
+        return (TestMissionElementFactory.From(new BattleSquad(false, squad)), presence);
     }
 
     private static RegionFaction AddPresence(Region region, Faction faction)

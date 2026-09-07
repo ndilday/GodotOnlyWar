@@ -1,4 +1,5 @@
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -12,7 +13,8 @@ public class TurnControllerResultTests
     public void ProcessTurn_ReturnsResolutionCollections()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        TurnController controller = new();
+        TurnController controller = new(new GameSession(
+            fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance));
 
         TurnResolutionResult result = controller.ProcessTurn(fixture.Sector);
 

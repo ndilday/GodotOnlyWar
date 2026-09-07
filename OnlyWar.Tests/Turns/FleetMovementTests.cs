@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -145,12 +146,22 @@ public class FleetMovementTests
     private sealed class FleetMovementFixture
     {
         public Sector Sector { get; }
+        public GameRulesData Rules { get; }
+        public Date CurrentDate { get; }
         public TaskForce TaskForce { get; }
         public Planet Origin { get; }
         public Planet Destination { get; }
 
-        private FleetMovementFixture(Sector sector, TaskForce taskForce, Planet origin, Planet destination)
+        private FleetMovementFixture(
+            GameRulesData rules,
+            Date currentDate,
+            Sector sector,
+            TaskForce taskForce,
+            Planet origin,
+            Planet destination)
         {
+            Rules = rules;
+            CurrentDate = currentDate;
             Sector = sector;
             TaskForce = taskForce;
             Origin = origin;
@@ -173,13 +184,15 @@ public class FleetMovementTests
             fleet.TaskForces.Add(taskForce);
             PlayerForce playerForce = new(playerFaction, null, fleet);
             Sector sector = new(playerForce, [], [], [taskForce]);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, new Date(1, 1, 1), sector);
-            return new FleetMovementFixture(sector, taskForce, origin, destination);
+            return new FleetMovementFixture(
+                rules, new Date(1, 1, 1), sector, taskForce, origin, destination);
         }
 
         public void ProcessTurn()
         {
-            new TurnController(new NoOpTrainingService()).ProcessTurn(Sector);
+            new TurnController(
+                new GameSession(Rules, Sector, CurrentDate, StaticRNG.Instance),
+                new NoOpTrainingService()).ProcessTurn(Sector);
         }
 
         private static Faction CreatePlayerFaction()

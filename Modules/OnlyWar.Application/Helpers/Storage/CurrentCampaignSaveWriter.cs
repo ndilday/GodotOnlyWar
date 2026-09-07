@@ -14,22 +14,6 @@ namespace OnlyWar.Helpers.Storage
     /// </summary>
     public static class CurrentCampaignSaveWriter
     {
-        public static void Write(string filePath)
-        {
-            GameDataSingleton game = GameDataSingleton.Instance;
-            if (!game.IsInitialized)
-            {
-                throw new InvalidOperationException("No campaign is currently loaded.");
-            }
-
-            Write(filePath, new GameSession(
-                game.GameRulesData,
-                game.Sector,
-                game.Date,
-                StaticRNG.Instance));
-            game.UpgradePending = false;
-        }
-
         public static void Write(string filePath, ICampaignSession session)
         {
             if (session == null) throw new ArgumentNullException(nameof(session));

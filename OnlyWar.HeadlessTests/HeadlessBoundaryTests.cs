@@ -40,8 +40,7 @@ public class HeadlessBoundaryTests
              "OnlyWar.Generation"]);
         AssertReferences(typeof(FactionStrategyController).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Runtime", "OnlyWar.Battles",
-             "OnlyWar.Medical", "OnlyWar.Persistence", "OnlyWar.Operations", "OnlyWar.Generation"],
-            allowSqlite: true);
+             "OnlyWar.Medical", "OnlyWar.Operations", "OnlyWar.Generation"]);
         // Tactical execution reaches nothing but the shared domain and its boundary contracts: no
         // Engine bridge, no campaign orchestration, no current session (SB-06).
         AssertReferences(typeof(OnlyWar.Helpers.Battles.BattleTurnResolver).Assembly,
@@ -52,11 +51,10 @@ public class HeadlessBoundaryTests
             ["OnlyWar.Domain", "OnlyWar.Contracts"], allowSqlite: true);
         AssertReferences(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Contracts"]);
-        // Operations owns order/mission sequencing. The current migration retains BattleSquad
-        // handles internally until the engagement projection is completed, so Battles is the only
-        // transitional feature reference (SB-05b-2; the final allowlist is enforced by SB-12).
+        // Operations owns order/mission sequencing and carries only neutral operational elements;
+        // the Application adapter owns the tactical BattleSquad projection (SB-12).
         AssertReferences(typeof(OnlyWar.Models.Missions.MissionContext).Assembly,
-            ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Runtime", "OnlyWar.Battles"]);
+            ["OnlyWar.Domain", "OnlyWar.Contracts", "OnlyWar.Runtime"]);
         // Generation constructs initial state over explicit ports; it never references campaign
         // orchestration or turn simulation, which is what keeps the two acyclic (SB-09).
         AssertReferences(typeof(SectorBuilder).Assembly,
@@ -80,6 +78,26 @@ public class HeadlessBoundaryTests
         Assert.DoesNotContain(typeof(EquipmentRulesCatalog).GetMethods(),
             method => method.GetParameters().Any(parameter =>
                 parameter.ParameterType.Namespace?.StartsWith("System.Data") == true));
+    }
+
+    [Fact]
+    public void PersistenceContractsDoNotExposeStorageProviderTypes()
+    {
+        Assembly contracts = typeof(IAtomicCampaignFileStore).Assembly;
+        IEnumerable<Type> publicSurface = contracts.GetExportedTypes()
+            .SelectMany(type => new[] { type }
+                .Concat(type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                    .SelectMany(method => new[] { method.ReturnType }
+                        .Concat(method.GetParameters().Select(parameter => parameter.ParameterType))))
+                .Concat(type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                    .Select(property => property.PropertyType)))
+            .SelectMany(UnwrapTypes)
+            .Distinct();
+
+        Assert.DoesNotContain(publicSurface, type =>
+            type.Namespace?.StartsWith("System.Data", StringComparison.Ordinal) == true
+            || type.Namespace?.StartsWith("Microsoft.Data.Sqlite", StringComparison.Ordinal) == true
+            || type.Name.Contains("Sqlite", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -229,5 +247,24 @@ public class HeadlessBoundaryTests
         Assert.All(assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>(),
             friend => Assert.Contains(friend.AssemblyName,
                 new[] { "OnlyWar.Tests", "OnlyWar.HeadlessTests", "OnlyWar.Application" }));
+    }
+
+    private static IEnumerable<Type> UnwrapTypes(Type type)
+    {
+        if (type.IsByRef || type.IsPointer || type.IsArray)
+        {
+            foreach (Type nested in UnwrapTypes(type.GetElementType())) yield return nested;
+            yield break;
+        }
+        if (type.IsGenericType)
+        {
+            yield return type.GetGenericTypeDefinition();
+            foreach (Type argument in type.GetGenericArguments())
+            {
+                foreach (Type nested in UnwrapTypes(argument)) yield return nested;
+            }
+            yield break;
+        }
+        yield return type;
     }
 }

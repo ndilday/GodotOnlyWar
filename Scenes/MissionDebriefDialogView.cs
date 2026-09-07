@@ -146,7 +146,11 @@ public partial class MissionDebriefDialogView : DialogView
 
     private void AddBattleContent(VBoxContainer stack, MissionDebriefLine line, string prefix = "")
     {
-        BattleDebriefReport report = line.BattleReport ?? BattleDebriefReportBuilder.Build(line.BattleHistory);
+        BattleHistory battleHistory = line.BattleHistory as BattleHistory;
+        BattleDebriefReport report = line.BattleReport
+            ?? (battleHistory == null
+                ? new BattleDebriefReport(0, 0, System.Array.Empty<BattleCasualtyEntry>())
+                : BattleDebriefReportBuilder.Build(battleHistory));
         Label summary = new()
         {
             Text = prefix + BattleDebriefReportBuilder.BuildSummaryLine(report),
@@ -182,7 +186,6 @@ public partial class MissionDebriefDialogView : DialogView
         };
         controls.AddChild(casualtyButton);
 
-        BattleHistory battleHistory = line.BattleHistory;
         if (battleHistory != null)
         {
             Button reviewButton = new()

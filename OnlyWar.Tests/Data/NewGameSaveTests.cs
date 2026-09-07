@@ -34,8 +34,6 @@ public class NewGameSaveTests : IClassFixture<NewGameSaveFixture>
     [Fact]
     public void NewGame_SavesThroughProductionPath_WithoutManualRegistration()
     {
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, _sector);
-
         // The production-path save below depends on generation registering the root unit. Keep the
         // direct assertion here rather than generating a second sector in a registration-only test.
         Assert.Contains(_sector.PlayerForce.Army.OrderOfBattle, _data.PlayerFaction.Units);
@@ -62,7 +60,6 @@ public class NewGameSaveTests : IClassFixture<NewGameSaveFixture>
     [Fact]
     public void FailedSave_LeavesPreviousSaveIntact_AndNoTempFiles()
     {
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, _sector);
         List<Unit> units = _data.Factions.SelectMany(f => f.Units).ToList();
 
         string dir = Path.Combine(Path.GetTempPath(), $"onlywar_atomic_{Guid.NewGuid():N}");
@@ -107,7 +104,6 @@ public sealed class NewGameSaveFixture
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         Data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(Data, Date, null);
         Sector = TestGeneration.GenerateSector(1, Data, Date, "New Game Save Fixture Chapter");
         RoundTrip = new GameStateRoundTripFixture(Data, Date);
     }

@@ -1,5 +1,4 @@
 using OnlyWar.Contracts.Battles;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Missions;
 using System;
 using System.Collections.Generic;
@@ -21,8 +20,8 @@ namespace OnlyWar.Helpers.Missions.Assault
             MissionExecutionContext execution = firstDriver.Execution;
             MissionContext first = firstDriver.State;
             MissionContext second = secondDriver.State;
-            List<BattleSquad> firstForce = CombatCapable(first.MissionSquads);
-            List<BattleSquad> secondForce = CombatCapable(second.MissionSquads);
+            List<OperationalMissionElement> firstForce = CombatCapable(first.MissionSquads);
+            List<OperationalMissionElement> secondForce = CombatCapable(second.MissionSquads);
 
             first.DaysElapsed++;
             second.DaysElapsed++;
@@ -45,7 +44,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             long secondBefore = AbleBattleValue(secondForce);
 
             ushort range = MissionOpeningRange.Interpolate(
-                firstForce, secondForce, 0f, execution.Random);
+                firstForce, secondForce, execution.Engagements, 0f, execution.Random);
             EngagementResult engagement = execution.Engagements.Resolve(
                     new EngagementInput(
                         first.MissionParticipants,
@@ -103,15 +102,16 @@ namespace OnlyWar.Helpers.Missions.Assault
 
         internal static bool CanContestTomorrow(MissionContext context) =>
             context != null
-            && context.MissionSquads.Any(squad => squad.AbleSoldiers.Count > 0)
+            && context.MissionSquads.Any(squad => squad.AbleMembers.Count > 0)
             && !context.MissionLossesExceedAggressionThreshold;
 
-        private static List<BattleSquad> CombatCapable(IEnumerable<BattleSquad> squads) =>
-            squads.Where(squad => squad.AbleSoldiers.Count > 0).ToList();
+        private static List<OperationalMissionElement> CombatCapable(
+            IEnumerable<OperationalMissionElement> squads) =>
+            squads.Where(squad => squad.AbleMembers.Count > 0).ToList();
 
-        private static long AbleBattleValue(IEnumerable<BattleSquad> squads) =>
-            squads.SelectMany(squad => squad.AbleSoldiers)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
+            squads.SelectMany(squad => squad.AbleMembers)
+                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
 
     }
 }

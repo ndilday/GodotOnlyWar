@@ -176,9 +176,9 @@ public sealed class MedicalScreenApplicationTests
 
     private static CampaignApplication CreateApplication(out PlayerSoldier patient)
     {
-        SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         var application = new CampaignApplication(new SeededRNG(7));
-        application.Install(CreateSession(GameDataSingleton.Instance.GameRulesData, out patient));
+        application.Install(CreateSession(fixture.Rules, out patient));
         return application;
     }
 

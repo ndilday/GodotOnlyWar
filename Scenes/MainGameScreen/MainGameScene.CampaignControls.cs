@@ -458,6 +458,7 @@ public partial class MainGameScene
 			PackedScene mainScene = GD.Load<PackedScene>(
 				"res://Scenes/MainGameScreen/main_game_scene.tscn");
 			MainGameScene replacement = mainScene.Instantiate<MainGameScene>();
+			replacement.Configure(_campaignApplication);
 			Node parent = GetParent();
 			HideActivity();
 			parent.AddChild(replacement);

@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
+using OnlyWar.Application;
 using OnlyWar.Builders;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
@@ -21,7 +24,6 @@ public class SectorBuilderTests
         GameRulesData rules = LoadRulesWithProfile(
             "sector-dimensions-and-density", 20, 20, 1.0, 20);
         Date currentDate = new(39, 500, 1);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(rules, currentDate, null);
 
         Sector sector = TestGeneration.GenerateSector(
             1, rules, currentDate, "Profile Driven Chapter");
@@ -55,11 +57,10 @@ public class SectorBuilderTests
     // SB-09: generation and the opening-scenario warm-up construct a candidate campaign. Nothing is
     // published while they run, so a new game can be generated with no campaign installed at all.
     [Fact]
-    public void GenerateSector_WithNoInstalledCampaign_BuildsCandidateWithoutPublishingIt()
+    public void GenerateSector_BuildsCandidateWithoutPublishingIt()
     {
         GameRulesData rules = LoadRulesWithProfile(
             "unpublished-candidate", 10, 10, 1.0, 20);
-        GameDataSingleton.Instance.ClearCampaign();
 
         Sector candidate = TestGeneration.GenerateSector(
             3, rules, new Date(39, 500, 1), "Candidate Chapter");
@@ -67,28 +68,28 @@ public class SectorBuilderTests
         Assert.NotNull(candidate.Scenario);
         Assert.NotEmpty(candidate.Planets);
         Assert.NotNull(candidate.PlayerForce);
-        // The warm-up ran against the candidate's own session; the process still has no campaign.
-        Assert.Null(GameDataSingleton.Instance.Sector);
-        Assert.False(GameDataSingleton.Instance.IsInitialized);
     }
 
     // SB-09: a failed new game leaves the campaign the player is already in exactly as it was.
     [Fact]
-    public void InitializeNewGameData_WhenGenerationFails_LeavesTheActiveCampaignInstalled()
+    public void StartNewCampaign_WhenGenerationFails_LeavesTheActiveCampaignInstalled()
     {
         GameRulesData rules = LoadRulesWithProfile("failed-candidate", 10, 10, 1.0, 20);
         Date activeDate = new(39, 400, 1);
         Sector active = CreateSector(new Coordinate(0, 0), new Coordinate(2, 0));
-        GameDataSingleton.Instance.LoadGameDataFromBlob(rules, activeDate, active);
+        CampaignApplication application = new(new SeededRNG(41));
+        GameSession activeSession = new(rules, active, activeDate, new SeededRNG(42));
+        application.Install(activeSession);
 
         Assert.Throws<InvalidOperationException>(() =>
-            GameDataSingleton.Instance.InitializeNewGameData(
+            application.StartNewCampaign(
                 rules, new Date(39, 500, 1), "Doomed Chapter", 4,
                 ScenarioFactionSelection.ForFaction(-999)));
 
-        Assert.Same(active, GameDataSingleton.Instance.Sector);
-        Assert.Same(activeDate, GameDataSingleton.Instance.Date);
-        Assert.Same(rules, GameDataSingleton.Instance.GameRulesData);
+        Assert.Same(activeSession, application.ActiveSession);
+        Assert.Same(active, application.ActiveSession.Sector);
+        Assert.Same(activeDate, application.ActiveSession.CurrentDate);
+        Assert.Same(rules, application.ActiveSession.Rules);
     }
 
     private static Sector CreateSector(params Coordinate[] positions)

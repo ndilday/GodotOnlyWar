@@ -6,9 +6,9 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
-    internal static class RecruitmentSaveMapper
+    public static class RecruitmentSaveMapper
     {
-        internal static RecruitmentSaveData ToSaveData(RecruitmentProgram program)
+        public static RecruitmentSaveData ToSaveData(RecruitmentProgram program)
         {
             if (program == null)
             {
@@ -124,7 +124,7 @@ namespace OnlyWar.Helpers.Database.GameState
             return data;
         }
 
-        internal static RecruitmentProgram FromSaveData(RecruitmentSaveData data)
+        public static RecruitmentProgram FromSaveData(RecruitmentSaveData data)
         {
             if (data == null || data.Programs.Count == 0)
             {

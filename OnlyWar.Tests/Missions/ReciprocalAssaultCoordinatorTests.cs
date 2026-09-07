@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Assault;
@@ -85,7 +86,9 @@ public class ReciprocalAssaultCoordinatorTests
         };
 
         fixture.First.State.RecordReciprocalAssaultOutcome(
-            dailyBattle, BattleSide.Attacker, enemyDeaths: 0);
+            TestMissionElementFactory.ToEngagementResult(dailyBattle),
+            EngagementSide.First,
+            enemyDeaths: 0);
 
         Assert.False(fixture.First.State.ForceWithdrewUnderFire);
         Assert.True(ReciprocalAssaultResolver.CanContestTomorrow(
@@ -141,9 +144,13 @@ public class ReciprocalAssaultCoordinatorTests
             [secondSquad], true, true, Aggression.Aggressive,
             new Mission(MissionType.Advance, firstPresence, 0));
         MissionContext firstContext = new(
-            firstOrder, [new BattleSquad(true, firstSquad)], []);
+            firstOrder,
+            [TestMissionElementFactory.From(new BattleSquad(true, firstSquad))],
+            []);
         MissionContext secondContext = new(
-            secondOrder, [new BattleSquad(false, secondSquad)], []);
+            secondOrder,
+            [TestMissionElementFactory.From(new BattleSquad(false, secondSquad))],
+            []);
 
         MissionStepDriver firstDriver = new(
             TestExecutionContextFactory.CreateMission(firstContext, new FixedRNG()),

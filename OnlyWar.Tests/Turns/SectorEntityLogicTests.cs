@@ -321,7 +321,7 @@ public class SectorEntityLogicTests
         Assert.True(deadlineWeeks < 39, $"expected a threat deadline under 39 weeks, got {deadlineWeeks}");
         // whatever severity was classified, the deadline is the one the code-owned supply profile
         // assigns to it
-        int expected = GameDataSingleton.Instance.GameRulesData
+        int expected = fixture.Rules
             .SupplyEconomyRules.SeverityDeadlineWeeks[request.Severity];
         Assert.Equal(expected, deadlineWeeks);
         Assert.Equal(expected, request.Commitment.CompletionDeadlineWeeks);
@@ -451,7 +451,8 @@ public class SectorEntityLogicTests
         RegionFaction weak = fixture.AddPublicCult(0, population: 10000, organization: 100);
         strong.Garrison = strong.Population;
         weak.Garrison = weak.Population;
-        TurnController controller = new();
+        TurnController controller = new(new GameSession(
+            fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance));
 
         int strongCount = 0;
         int weakCount = 0;
@@ -478,18 +479,16 @@ public class SectorEntityLogicTests
     private static PlanetDemographicsProcessor CreateDemographicsProcessor(
         SectorSimulationFixture fixture)
     {
-        GameDataSingleton data = GameDataSingleton.Instance;
         return new PlanetDemographicsProcessor(
-            new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
+            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance),
             new OrganicPopulationGrowthLedger());
     }
 
     private static PlanetIntelligenceProcessor CreateIntelligenceProcessor(
         SectorSimulationFixture fixture)
     {
-        GameDataSingleton data = GameDataSingleton.Instance;
         return new PlanetIntelligenceProcessor(
-            new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
+            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance),
             []);
     }
 }

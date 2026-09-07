@@ -1,4 +1,3 @@
-﻿using OnlyWar.Helpers.Battles;
 using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Missions;
@@ -28,11 +27,11 @@ namespace OnlyWar.Helpers.Missions
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
-            List<BattleSquad> missionSquads = context.MissionSquads
-                .Where(squad => squad.AbleSoldiers.Count > 0)
+            List<OperationalMissionElement> missionSquads = context.MissionSquads
+                .Where(squad => squad.AbleMembers.Count > 0)
                 .ToList();
-            List<BattleSquad> opposingSquads = context.OpposingSquads
-                .Where(squad => squad.AbleSoldiers.Count > 0)
+            List<OperationalMissionElement> opposingSquads = context.OpposingSquads
+                .Where(squad => squad.AbleMembers.Count > 0)
                 .ToList();
             if (missionSquads.Count == 0 || opposingSquads.Count == 0)
             {
@@ -46,8 +45,8 @@ namespace OnlyWar.Helpers.Missions
             // preferred engagement ranges: a decisive attacker fights at its own preference, a
             // repelled one is held out at the defender's. See MissionOpeningRange.
             ushort range = MissionOpeningRange.Interpolate(
-                missionSquads, opposingSquads, marginOfSuccess, execution.Random);
-            int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
+                missionSquads, opposingSquads, execution.Engagements, marginOfSuccess, execution.Random);
+            int oppForSize = opposingSquads.Sum(s => s.AbleMembers.Count);
             // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else it is read.
             string opposingFaction = opposingSquads.First().Faction?.Name ?? "an unidentified force";
             string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {opposingFaction}\n";
@@ -73,9 +72,9 @@ namespace OnlyWar.Helpers.Missions
                 opposingBattleValueBefore - AbleBattleValue(opposingSquads));
             // A force left combat-ineffective by the engagement ends its mission here rather than
             // recursing into steps that assume a manned squad (placement/checks index into
-            // AbleSoldiers and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
+            // able members and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
             // casualty abort, applied at the point the battle actually depletes the squad.
-            if (!context.MissionSquads.Any(squad => squad.AbleSoldiers.Count > 0))
+            if (!context.MissionSquads.Any(squad => squad.AbleMembers.Count > 0))
             {
                 context.ForceWithdrewUnderFire = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
@@ -96,9 +95,9 @@ namespace OnlyWar.Helpers.Missions
             return MissionStepResult.Continue(resumeStep, marginOfSuccess, resumeStep);
         }
 
-        private static long AbleBattleValue(IEnumerable<BattleSquad> squads) =>
+        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
             squads
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+                .SelectMany(squad => squad.AbleMembers)
+                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
     }
 }

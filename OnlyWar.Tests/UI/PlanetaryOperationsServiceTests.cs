@@ -830,9 +830,11 @@ public class PlanetaryOperationsServiceTests
         {
             _fixture = fixture;
             _application = new CampaignApplication(new SeededRNG(31));
+            GameRulesData rules = fixture.Rules
+                ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(
+                    RulesDatabaseFixture.DatabasePath);
             _application.Install(new OnlyWar.Helpers.Simulation.GameSession(
-                GameDataSingleton.Instance.IsInitialized
-                    ? GameDataSingleton.Instance.GameRulesData : null,
+                rules,
                 fixture.Sector, fixture.CurrentDate, new SeededRNG(32)));
         }
 

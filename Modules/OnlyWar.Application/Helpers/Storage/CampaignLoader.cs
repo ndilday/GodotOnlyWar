@@ -15,14 +15,9 @@ namespace OnlyWar.Helpers.Storage
     /// </summary>
     public static class CampaignLoader
     {
-        public static void LoadIntoSingleton(string savePath)
-        {
-            GameDataSingleton.Instance.Install(LoadSession(savePath, StaticRNG.Instance));
-        }
-
         /// <summary>
-        /// Reconstructs a detached session. Nothing is published to the compatibility singleton;
-        /// callers decide whether and when the fully validated result becomes active.
+        /// Reconstructs a detached session. Callers decide whether and when the fully validated
+        /// result becomes active.
         /// </summary>
         public static GameSession LoadSession(string savePath, IRNG random)
         {

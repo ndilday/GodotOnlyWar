@@ -4,7 +4,7 @@ using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Helpers.Narrative
 {
     /// <summary>
     /// Rebuilds current presentation views from the canonical current-format event ledgers.

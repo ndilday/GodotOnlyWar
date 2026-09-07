@@ -1,10 +1,7 @@
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
+using OnlyWar.Helpers.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -15,6 +12,8 @@ namespace OnlyWar.Helpers.Database.GameState
 {
     public class PlanetDataAccess
     {
+        public int NextMissionId { get; private set; } = 1;
+
         public List<Planet> GetPlanets(IDbConnection connection,
                                        IReadOnlyDictionary<int, Faction> factionMap,
                                        IReadOnlyDictionary<int, Character> characterMap,
@@ -141,7 +140,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         && targetBattleValue == null)
                     {
                         targetBattleValue =
-                            AmbushMissionSizing.EstimateLegacyTargetBattleValue(missionSize);
+                            LegacySaveValueMappers.EstimateLegacyAmbushTargetBattleValue(missionSize);
                     }
 
                     Region region = regionMap[regionId];
@@ -200,7 +199,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         maxId = id;
                     }
                 }
-                IdGenerator.SetNextMissionId(maxId + 1);
+                NextMissionId = maxId + 1;
             }
             return missionMap;
         }

@@ -4,6 +4,8 @@ using OnlyWar.Helpers.Battles.Placers;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Recruitment;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -12,16 +14,16 @@ using System.Linq;
 namespace OnlyWar.Helpers.Battles;
 
 /// <summary>
-/// Transitional composition adapter between Operations' engagement contract and the tactical
-/// Battles implementation. The adapter owns tactical construction, placement, resolver lifetime,
-/// and replay translation; mission policy receives only <see cref="EngagementResult"/>.
+/// Composition adapter between Operations' engagement contract and the tactical Battles
+/// implementation. The adapter owns tactical construction, placement, resolver lifetime, replay
+/// translation, and the retained BattleSquad state for each operational element.
 /// </summary>
-    public sealed class BattleEngagementResolver : IEngagementResolver
-    {
+public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementElementFactory
+{
     private readonly BattleExecutionContext _execution;
     private readonly IBattleEquipmentSource _equipment;
 
-        public BattleEngagementResolver(
+    public BattleEngagementResolver(
         BattleExecutionContext execution,
         IBattleEquipmentSource equipment = null)
     {
@@ -30,6 +32,63 @@ namespace OnlyWar.Helpers.Battles;
     }
 
     public IRNG Random => _execution.Random;
+
+    public OperationalMissionElement CreateSquad(
+        bool isPlayerSquad,
+        Squad squad,
+        ChapterOperationalDoctrine doctrine = null,
+        RecruitmentProgram program = null) =>
+        CreateElement(BattleSquadFactory.Create(
+            isPlayerSquad,
+            squad,
+            doctrine,
+            program,
+            _equipment));
+
+    public OperationalMissionElement CreateAttachedCharacter(
+        PlayerSoldier character,
+        int tacticalId,
+        Faction fallbackFaction,
+        ChapterOperationalDoctrine doctrine = null,
+        RecruitmentProgram program = null) =>
+        CreateElement(BattleSquadFactory.CreateAttachedCharacter(
+            character,
+            tacticalId,
+            fallbackFaction,
+            doctrine,
+            program,
+            _equipment));
+
+    public void Update(OperationalMissionElement element)
+    {
+        if (element == null) throw new ArgumentNullException(nameof(element));
+        if (element.State is not BattleSquadEngagementState state)
+        {
+            throw new InvalidOperationException(
+                "Only Application-created engagement elements can be updated by the Battles adapter.");
+        }
+
+        ApplyParticipantSelection(state.BattleSquad, element.FrozenParticipantIds);
+    }
+
+    public int GetPreferredOpeningRange(
+        OperationalMissionElement element,
+        IReadOnlyList<OperationalMissionElement> opposingElements)
+    {
+        if (element == null) throw new ArgumentNullException(nameof(element));
+        List<BattleSquad> opposing = (opposingElements ?? Array.Empty<OperationalMissionElement>())
+            .Where(opposingElement => opposingElement != null)
+            .Select(opposingElement => Materialize(opposingElement.ToEngagementParticipant()))
+            .Where(squad => squad != null)
+            .ToList();
+        if (opposing.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "An opening-range query requires at least one opposing element.");
+        }
+
+        return Materialize(element.ToEngagementParticipant()).GetPreferredOpeningRange(opposing);
+    }
 
     public EngagementResult Resolve(EngagementInput input)
     {
@@ -84,42 +143,59 @@ namespace OnlyWar.Helpers.Battles;
 
     private BattleSquad Materialize(EngagementParticipant participant)
     {
-        if (participant.State is BattleSquad existing)
+        if (participant?.State is BattleSquadEngagementState state)
         {
             // The state handle is scoped to the mission execution context. Replacing this wrapper
             // would lose the physical mission weapon pools and the battle-local equipment state
             // that must survive a multi-day mission.
-            if (participant.FrozenParticipantIds != null)
-            {
-                HashSet<int> selected = participant.FrozenParticipantIds.ToHashSet();
-                existing.RefreshEngagementParticipants(
-                    existing.Soldiers
-                        .Select(soldier => soldier.Soldier)
-                        .Where(soldier => selected.Contains(soldier.Id)));
-            }
-            return existing;
+            ApplyParticipantSelection(state.BattleSquad, participant.FrozenParticipantIds);
+            return state.BattleSquad;
         }
 
-        EngagementElementTraits traits = participant.Traits ?? new EngagementElementTraits();
-        BattleElementSpec spec = new(
-            participant.TacticalId,
-            participant.Name,
-            participant.Faction,
-            participant.EffectiveMembers,
-            new BattleElementTraits(
-                traits.ProvidesCommandAura,
-                traits.ProvidesSynapse,
-                traits.IsHeadquarters),
-            participant.CampaignSquad,
-            participant.CampaignCharacter);
-        BattleSquad result = new(spec, _equipment);
-        if (participant.FrozenParticipantIds != null)
+        throw new InvalidOperationException(
+            "Engagement participants must carry an Application-created operational element state.");
+    }
+
+    private static void ApplyParticipantSelection(
+        BattleSquad battleSquad,
+        IReadOnlyList<int> frozenParticipantIds)
+    {
+        if (battleSquad == null || frozenParticipantIds == null) return;
+        HashSet<int> selected = frozenParticipantIds.ToHashSet();
+        battleSquad.RefreshEngagementParticipants(
+            battleSquad.Soldiers
+                .Select(soldier => soldier.Soldier)
+                .Where(soldier => selected.Contains(soldier.Id)));
+    }
+
+    private static OperationalMissionElement CreateElement(BattleSquad battleSquad)
+    {
+        if (battleSquad == null) return null;
+        return new OperationalMissionElement(
+            battleSquad.Id,
+            battleSquad.Name,
+            battleSquad.Faction,
+            battleSquad.Soldiers.Select(soldier => soldier.Soldier),
+            battleSquad.IsPlayerSquad,
+            new EngagementElementTraits(
+                battleSquad.Traits.ProvidesCommandAura,
+                battleSquad.Traits.ProvidesSynapse,
+                battleSquad.Traits.IsHeadquarters),
+            battleSquad.CampaignSquad,
+            battleSquad.CampaignCharacter,
+            new BattleSquadEngagementState(battleSquad),
+            battleSquad.EngagementParticipantIds,
+            battleSquad.AbleSoldiers.Count);
+    }
+
+    internal sealed class BattleSquadEngagementState : IEngagementState
+    {
+        internal BattleSquadEngagementState(BattleSquad battleSquad)
         {
-            HashSet<int> selected = participant.FrozenParticipantIds.ToHashSet();
-            result.RefreshEngagementParticipants(
-                participant.EffectiveMembers.Where(soldier => selected.Contains(soldier.Id)));
+            BattleSquad = battleSquad ?? throw new ArgumentNullException(nameof(battleSquad));
         }
-        return result;
+
+        internal BattleSquad BattleSquad { get; }
     }
 
     private static void Place(
@@ -200,7 +276,9 @@ namespace OnlyWar.Helpers.Battles;
             BattleDebriefReportBuilder.BuildSummaryLine(
                 BattleDebriefReportBuilder.Build(history)),
             history,
-            history.EnemiesKilled,
+            // Operations reports unique enemy bodies, while BattleHistory.EnemiesKilled is the
+            // player-career credit total and can include multiple credits for one body.
+            history.FirstSideEnemyDeaths,
             history.FirstSideEnemiesKilled,
             history.KilledSoldierIds.Count(secondIds.Contains),
             history.KilledSoldierIds.Count(firstIds.Contains),
@@ -232,9 +310,17 @@ namespace OnlyWar.Helpers.Battles;
     };
 }
 
-/// <summary>Builds a contract request from the transitional mission-side battle handles.</summary>
+/// <summary>Builds a contract request from neutral operational mission elements.</summary>
 public static class BattleEngagementInputBuilder
 {
+    public static EngagementParticipant From(OperationalMissionElement element)
+    {
+        if (element == null) throw new ArgumentNullException(nameof(element));
+        return element.ToEngagementParticipant();
+    }
+
+    // Kept at the Application boundary for tactical-only callers that already own a BattleSquad.
+    // Operations never uses this overload and cannot reference BattleSquad after SB-12.
     public static EngagementParticipant From(BattleSquad squad)
     {
         if (squad == null) throw new ArgumentNullException(nameof(squad));
@@ -251,7 +337,7 @@ public static class BattleEngagementInputBuilder
                 squad.Traits.IsHeadquarters),
             squad.CampaignSquad,
             squad.CampaignCharacter,
-            squad);
+            new BattleEngagementResolver.BattleSquadEngagementState(squad));
     }
 
     public static IReadOnlyList<EngagementParticipant> From(IEnumerable<BattleSquad> squads) =>

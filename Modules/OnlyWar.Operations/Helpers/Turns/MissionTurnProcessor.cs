@@ -3,8 +3,6 @@ using OnlyWar.Builders;
 using OnlyWar.Contracts.Battles;
 using OnlyWar.Contracts.Medical;
 using OnlyWar.Contracts.Operations;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
@@ -40,7 +38,6 @@ namespace OnlyWar.Helpers.Turns
         private readonly Date _currentDate;
         private readonly IRNG _random;
         private readonly MissionRules _missionRules;
-        private readonly IBattleEquipmentSource _equipment;
         private readonly ChapterOperationalDoctrine _doctrine;
         private readonly RecruitmentProgram _recruitment;
         private readonly IReadOnlyList<StrategicInvasionForce> _invasionForces;
@@ -51,8 +48,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly IEngagementResolver _engagements;
         private readonly IOperationsPersonnelSurface _personnel;
         private readonly Func<StrategicInvasionForce, Region, float, IRNG, FactionBehaviorRulesProfile, bool> _strategicCommanderCanBeReached;
-        private readonly Func<bool, Squad, ChapterOperationalDoctrine, RecruitmentProgram, BattleSquad> _createBattleSquad;
-        private readonly Func<PlayerSoldier, int, Faction, ChapterOperationalDoctrine, RecruitmentProgram, BattleSquad> _createAttachedBattleSquad;
+        private readonly IEngagementElementFactory _engagementElements;
         private readonly Action<IEnumerable<ISoldier>> _applyDailyHealing;
         private readonly Func<IReadOnlyList<BaseSkill>> _resolveMedicalSkills;
         private readonly Action<Order, FieldCareReport, IReadOnlyList<BaseSkill>, int, RatingConsumerBindings> _applyDailyFieldCare;
@@ -72,7 +68,6 @@ namespace OnlyWar.Helpers.Turns
             _currentDate = dependencies.CurrentDate;
             _random = dependencies.Random;
             _readiness = dependencies.Readiness;
-            _equipment = dependencies.Equipment;
             _missionRules = dependencies.MissionRules;
             _doctrine = dependencies.Doctrine;
             _recruitment = dependencies.Recruitment;
@@ -81,8 +76,7 @@ namespace OnlyWar.Helpers.Turns
             _engagements = dependencies.Engagements;
             _personnel = dependencies.Personnel;
             _strategicCommanderCanBeReached = dependencies.StrategicCommanderCanBeReached;
-            _createBattleSquad = dependencies.CreateBattleSquad;
-            _createAttachedBattleSquad = dependencies.CreateAttachedBattleSquad;
+            _engagementElements = dependencies.EngagementElements;
             _applyDailyHealing = dependencies.ApplyDailyHealing;
             _resolveMedicalSkills = dependencies.ResolveMedicalSkills;
             _applyDailyFieldCare = dependencies.ApplyDailyFieldCare;
@@ -211,19 +205,21 @@ namespace OnlyWar.Helpers.Turns
                 List<string> readinessMessages = [];
                 List<SquadReadinessBlocker> readinessBlockers = [];
                 List<MissionSquadReadinessIssue> readinessIssues = [];
-                List<BattleSquad> involvedBattleSquads = [];
+                List<OperationalMissionElement> involvedElements = [];
                 foreach (Squad squad in order.AssignedSquads)
                 {
                     if (squad == null) continue;
                     SquadReadinessSnapshot readiness = isPlayerOrder
                         ? _readiness.EvaluateSquad(squad, program: _recruitment, doctrine: doctrine)
                         : null;
-                    BattleSquad battleSquad = isPlayerOrder
-                        ? _createBattleSquad(true, squad, doctrine, _recruitment)
-                        : new BattleSquad(false, squad, equipment: _equipment);
-                    if (battleSquad.AbleSoldiers.Count > 0)
+                    OperationalMissionElement element = _engagementElements.CreateSquad(
+                        isPlayerOrder,
+                        squad,
+                        doctrine,
+                        _recruitment);
+                    if (element?.AbleMembers.Count > 0)
                     {
-                        involvedBattleSquads.Add(battleSquad);
+                        involvedElements.Add(element);
                     }
                     else if (isPlayerOrder)
                     {
@@ -252,26 +248,20 @@ namespace OnlyWar.Helpers.Turns
                     }
                 }
 
-                involvedBattleSquads.AddRange(order.AssignedCharacters
+                involvedElements.AddRange(order.AssignedCharacters
                     .Select(character => isPlayerOrder
-                        ? _createAttachedBattleSquad(
+                        ? _engagementElements.CreateAttachedCharacter(
                             character,
                             entityIds.GetNextId(),
                             order.OwnerFaction,
                             doctrine, _recruitment)
                         : character.IsCombatEffective
-                            ? new BattleSquad(new BattleElementSpec(
+                            ? _engagementElements.CreateAttachedCharacter(
+                                character,
                                 entityIds.GetNextId(),
-                                character.Name,
-                                character.AssignedSquad?.Faction ?? order.OwnerFaction,
-                                new ISoldier[] { character },
-                                new BattleElementTraits(
-                                    IsHeadquarters: character.AssignedSquad?.SquadTemplate?.SquadType
-                                        .HasFlag(SquadTypes.HQ) == true),
-                                CampaignSquad: character.AssignedSquad,
-                                CampaignCharacter: character), _equipment)
+                                order.OwnerFaction)
                             : null)
-                    .Where(battleSquad => battleSquad != null)
+                    .Where(element => element != null)
                     .ToList());
                 if (isPlayerOrder)
                 {
@@ -280,7 +270,7 @@ namespace OnlyWar.Helpers.Turns
                         .Select(character =>
                             $"{character.Name} withheld: {_readiness.EvaluateSoldier(character, doctrine: doctrine, program: _recruitment).Reason ?? "not duty-ready"}."));
                 }
-                if (involvedBattleSquads.Count == 0)
+                if (involvedElements.Count == 0)
                 {
                     MissionContext unavailable = new(order, [], [], doctrine, _recruitment);
                     unavailable.MarkAvailabilityBlocked(
@@ -313,12 +303,17 @@ namespace OnlyWar.Helpers.Turns
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"squads={order.AssignedSquads.Count}, soldiers={order.AssignedSquads.Sum(s => s.Members.Count)}, "
                     + $"battleValue={SquadBattleValue(order.AssignedSquads)}");
-                IEnumerable<List<BattleSquad>> missionElements =
-                    BuildMissionElements(order.Mission.MissionType, involvedBattleSquads);
+                IEnumerable<List<OperationalMissionElement>> missionElements =
+                    BuildMissionElements(order.Mission.MissionType, involvedElements);
 
-                foreach (List<BattleSquad> elementSquads in missionElements)
+                foreach (List<OperationalMissionElement> elementSquads in missionElements)
                 {
-                    MissionContext context = new(order, elementSquads, new List<BattleSquad>(), doctrine, _recruitment);
+                    MissionContext context = new(
+                        order,
+                        elementSquads,
+                        new List<OperationalMissionElement>(),
+                        doctrine,
+                        _recruitment);
                     if (readinessBlockers.Count > 0)
                     {
                         context.MarkAvailabilityBlocked(
@@ -344,11 +339,11 @@ namespace OnlyWar.Helpers.Turns
                             _recruitment,
                             _invasionForces,
                             _factionRules,
-                            _equipment,
+                            null,
                             _readiness,
                             _personnel,
                             _strategicCommanderCanBeReached),
-                        _createBattleSquad);
+                        _engagementElements);
                     scheduled.Add(new ScheduledMission
                     {
                         Order = order,
@@ -441,14 +436,14 @@ namespace OnlyWar.Helpers.Turns
             RegionFaction target = order.Mission.RegionFaction;
             Region region = order.Mission.Region;
             Faction targetFaction = order.Mission.TargetFaction;
-            List<BattleSquad> squads = order.AssignedSquads
+            List<OperationalMissionElement> squads = order.AssignedSquads
                 .Where(squad => squad != null)
-                .Select(squad => _createBattleSquad(
+                .Select(squad => _engagementElements.CreateSquad(
                     true,
                     squad,
                     _sector?.PlayerForce?.Army?.ChapterOperationalDoctrine ?? _doctrine,
                     _recruitment))
-                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .Where(squad => squad?.AbleMembers.Count > 0)
                 .ToList();
             MissionContext context = new(order, squads, []);
             if (squads.Count == 0)
@@ -548,7 +543,7 @@ namespace OnlyWar.Helpers.Turns
                     && !driver.State.OperatingDaysSpent
                     && !driver.State.MissionLossesExceedAggressionThreshold
                     && driver.State.MissionSquads.Any(
-                        squad => squad.AbleSoldiers.Count > 0)
+                        squad => squad.AbleMembers.Count > 0)
                     && driver.State.DaysElapsed < day)
                 .ToList();
             HashSet<MissionStepDriver> paired = [];
@@ -595,17 +590,17 @@ namespace OnlyWar.Helpers.Turns
                 && secondTarget.PlanetFaction.Faction.Id == firstAttacker.Id;
         }
 
-        public static IReadOnlyList<List<BattleSquad>> BuildMissionElements(
+        public static IReadOnlyList<List<OperationalMissionElement>> BuildMissionElements(
             MissionType missionType,
-            List<BattleSquad> involvedBattleSquads)
+            List<OperationalMissionElement> involvedElements)
         {
             if (MissionForcePolicy.GetMode(missionType) == MissionForceMode.IndependentSquads)
             {
-                return involvedBattleSquads
-                    .Select(squad => new List<BattleSquad> { squad })
+                return involvedElements
+                    .Select(element => new List<OperationalMissionElement> { element })
                     .ToList();
             }
-            return new List<List<BattleSquad>> { involvedBattleSquads };
+            return new List<List<OperationalMissionElement>> { involvedElements };
         }
 
         // Committed attention is per-DAY state, so it is wiped before each day resolves: a feint that

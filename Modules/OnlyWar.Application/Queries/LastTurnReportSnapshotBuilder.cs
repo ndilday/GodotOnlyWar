@@ -109,8 +109,9 @@ namespace OnlyWar.Helpers.Turns
 
         private static LastTurnDebriefLineSnapshot ToSnapshot(MissionDebriefLine line)
         {
+            BattleHistory history = line.BattleHistory as BattleHistory;
             BattleDebriefReport report = line.BattleReport
-                ?? (line.BattleHistory == null ? null : BattleDebriefReportBuilder.Build(line.BattleHistory));
+                ?? (history == null ? null : BattleDebriefReportBuilder.Build(history));
             BattleSummarySnapshot battleSummary = report == null
                 ? null
                 : new BattleSummarySnapshot(

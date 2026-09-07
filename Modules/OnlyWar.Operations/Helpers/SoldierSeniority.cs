@@ -31,7 +31,7 @@ namespace OnlyWar.Helpers
             return OrderBySeniority(soldiers, soldier => soldier);
         }
 
-        // Selector overload, so wrappers that hold an ISoldier rather than being one (BattleSoldier)
+        // Selector overload, so wrappers that hold an ISoldier rather than being one
         // can be ordered without unwrapping and re-pairing them.
         public static IOrderedEnumerable<T> OrderBySeniority<T>(
             IEnumerable<T> items, Func<T, ISoldier> soldierSelector)

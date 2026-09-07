@@ -8,18 +8,11 @@ namespace OnlyWar.Helpers
 {
     // Shared dev-facing debug log for soldier skill/attribute growth over a discrete activity
     // (a mission, a battle, or a week of training). Captures a snapshot of each soldier's raw
-    // skill points and attribute values before the activity, then diffs and reports at Debug level
-    // afterward - so battle XP, mission field experience (PRD §4.12), and garrison training can be
-    // compared apples-to-apples in the same log format.
-    //
-    // Everything is gated on Debug being enabled: with logging off (the default,
-    // GameLog.MinimumLevel == Off) Capture returns null and no soldier walking happens at all, so
-    // this is zero-overhead in normal play.
+    // skill points and attribute values before the activity, then diffs and reports at Debug level.
+    // It lives with the neutral diagnostics contracts so both Operations and Battles can use it
+    // without creating a dependency from either bounded context onto the other.
     public static class SoldierProgressLog
     {
-        // Attribute readers, in display order. Kept as a fixed list (rather than reflecting the
-        // Attribute enum) because ISoldier exposes the derived stat values directly and that is what
-        // AddAttributePoints ultimately moves.
         private static readonly (string Label, Func<ISoldier, float> Read)[] AttributeReaders =
         {
             ("Str", s => s.Strength),
@@ -35,9 +28,7 @@ namespace OnlyWar.Helpers
 
         public sealed class ProgressSnapshot
         {
-            // soldierId -> (baseSkillId -> pointsInvested)
             internal Dictionary<int, Dictionary<int, float>> SkillPoints { get; }
-            // soldierId -> (attribute label -> value)
             internal Dictionary<int, Dictionary<string, float>> Attributes { get; }
 
             internal ProgressSnapshot(
@@ -73,7 +64,6 @@ namespace OnlyWar.Helpers
 
         public static void LogDelta(string header, IEnumerable<ISoldier> soldiers, ProgressSnapshot before)
         {
-            // before == null means logging was off at snapshot time; nothing to do.
             if (before == null || soldiers == null)
             {
                 return;
@@ -165,8 +155,6 @@ namespace OnlyWar.Helpers
             GameLog.Debug(() => report);
         }
 
-        // Mirrors Skill.SkillBonus so a pre-activity skill value can be reconstructed from the
-        // snapshotted raw points (log2 curve, with the untrained-skill floor of -4).
         private static float BonusForPoints(float points, float difficulty) =>
             (points <= 0f ? -4f : (float)Math.Log(points, 2)) - difficulty;
     }

@@ -43,20 +43,26 @@ public partial class MainGameScene : Control
 	private int? _selectedPlanetId;
 	private int? _selectedFleetId;
 	private bool _isProcessingTurn;
-	// The sector map is a scene child, so its own _Ready runs before this scene's. Build the
-	// application and hand it to the map here, where the parent still runs first.
+
+	internal CampaignApplication CampaignApplication => _campaignApplication;
+
+	internal void Configure(CampaignApplication campaignApplication)
+	{
+		_campaignApplication = campaignApplication
+			?? throw new ArgumentNullException(nameof(campaignApplication));
+	}
+
+	// The sector map is a scene child, so its own _Ready runs before this scene's. The host must
+	// configure the application here, where the parent still runs first.
 	public override void _EnterTree()
 	{
-		// The engine log seams (BattleLog/GameLog) are wired to the Godot console by the
-		// GodotLogBridge autoload, which runs before any scene so generation logging is captured too.
-		_campaignApplication = new CampaignApplication(StaticRNG.Instance);
-		_campaignApplication.TryAttachCurrentCampaign();
+		if (_campaignApplication == null) return;
 		GetNode<SectorMap>("SectorMap").Configure(_campaignApplication);
 	}
 
 	public override void _Ready()
 	{
-		if (!_campaignApplication.HasCampaign)
+		if (_campaignApplication?.HasCampaign != true)
 		{
 			GD.PushError("MainGameScene requires initialized game data. Use StartMenu or Scenes/Debug/main_game_preview_bootstrap.tscn.");
 			SetProcess(false);

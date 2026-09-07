@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
             Faction infiltrator = context.MissionSquads.FirstOrDefault()?.Faction;
-            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            int headcount = context.MissionSquads.Sum(s => s.AbleMembers.Count);
             // Slipping in is contested by everyone watching the ground, not just the faction the
             // mission is aimed at, so this uses the same aggregated model as ReconStealthMissionStep.
             StealthDifficultyTerms terms =
@@ -40,8 +40,8 @@ namespace OnlyWar.Helpers.Missions.Recon
             context.DaysElapsed++;
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
             float bestStealth = context.MissionSquads
-                .SelectMany(s => s.AbleSoldiers)
-                .Select(sol => sol.Soldier.GetTotalSkillValue(stealth))
+                .SelectMany(s => s.AbleMembers)
+                .Select(sol => sol.GetTotalSkillValue(stealth))
                 .DefaultIfEmpty(0f)
                 .Max();
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);

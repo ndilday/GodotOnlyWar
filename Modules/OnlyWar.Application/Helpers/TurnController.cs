@@ -42,15 +42,6 @@ namespace OnlyWar.Helpers
         private readonly OrganicPopulationGrowthLedger _organicPopulationGrowthLedger;
         private readonly TurnResolutionResult _lastResult;
 
-        public TurnController() : this(CreateCurrentSession(), null)
-        {
-        }
-
-        public TurnController(ISoldierTrainingService trainingService)
-            : this(CreateCurrentSession(), trainingService)
-        {
-        }
-
         public TurnController(
             GameSession session,
             ISoldierTrainingService trainingService = null)
@@ -84,6 +75,8 @@ namespace OnlyWar.Helpers
                 _session.Rules,
                 _session.Random,
                 aftermath);
+            BattleEngagementResolver engagementAdapter =
+                new(battleExecution, equipment);
             _missionTurnProcessor = new MissionTurnProcessor(new MissionTurnDependencies
             {
                 Sector = _session.Sector,
@@ -91,8 +84,7 @@ namespace OnlyWar.Helpers
                 CurrentDate = _session.CurrentDate,
                 Random = _session.Random,
                 Readiness = MedicalReadinessDecisions.Instance,
-                Engagements = new BattleEngagementResolver(battleExecution, equipment),
-                Equipment = equipment,
+                Engagements = engagementAdapter,
                 MissionRules = new MissionRules(
                     _session.Rules.Skills.Stealth,
                     _session.Rules.Skills.Tactics),
@@ -101,11 +93,7 @@ namespace OnlyWar.Helpers
                 InvasionForces = _session.Sector.StrategicInvasionForces,
                 FactionRules = _session.Rules.FactionBehaviorRules,
                 Personnel = OperationsPersonnelSurface.Instance,
-                CreateBattleSquad = (isPlayer, squad, doctrine, program) =>
-                    BattleSquadFactory.Create(isPlayer, squad, doctrine, program, equipment),
-                CreateAttachedBattleSquad = (character, tacticalId, faction, doctrine, program) =>
-                    BattleSquadFactory.CreateAttachedCharacter(
-                        character, tacticalId, faction, doctrine, program, equipment),
+                EngagementElements = engagementAdapter,
                 ApplyDailyHealing = MedicalTurnProcessor.ApplyDailyHealing,
                 ResolveMedicalSkills = () => FieldCareService.ResolveMedicalSkills(
                     _session.Rules.RatingDefinitions,
@@ -188,21 +176,23 @@ namespace OnlyWar.Helpers
 
             // --- 2. Mission Execution Phase ---
             var strategicCombatOrders = allOrdersThisTurn.Where(o => o.Mission is StrategicCombatMission);
-            _missionTurnProcessor.ProcessStrategicCombatMissions(strategicCombatOrders, StrategicCombatResults);
-            foreach (StrategicCombatResult strategicResult in StrategicCombatResults)
+            _missionTurnProcessor.ProcessStrategicCombatMissions(
+                strategicCombatOrders, _lastResult.StrategicCombatResults);
+            foreach (StrategicCombatResult strategicResult in _lastResult.StrategicCombatResults)
             {
                 if (strategicResult.ControlChanged)
                 {
                     _factionCapabilityCampaignProcessor.AffiliateCapturedRegion(sector, strategicResult);
                 }
             }
-            _factionCapabilityCampaignProcessor.ResolveStrategicLeaderDeaths(sector, StrategicCombatResults);
+            _factionCapabilityCampaignProcessor.ResolveStrategicLeaderDeaths(
+                sector, _lastResult.StrategicCombatResults);
 
             var combatOrders = allOrdersThisTurn.Where(o =>
                 !o.Force.IsEmpty
                 && o.Mission?.MissionType != MissionType.Recruitment);
             _missionTurnProcessor.ProcessCombatMissions(
-                combatOrders, MissionContexts, ConstructionReports);
+                combatOrders, _lastResult.MissionContexts, _lastResult.ConstructionReports);
 
             var constructionOrders = allOrdersThisTurn.Where(o => o.Force.IsEmpty && o.Mission is ConstructionMission);
             MissionTurnProcessor.ProcessConstructionOrders(constructionOrders);
@@ -215,9 +205,11 @@ namespace OnlyWar.Helpers
             MissionAftermathProcessor.RemoveConsumedSpecialMissions(playerOrdersThisTurn);
 
             // --- 3. Planetary Simulation & Resolution Phase ---
-            _missionAftermathProcessor.ApplyMissionResults(MissionContexts);
-            _factionCapabilityCampaignProcessor.AffiliateTacticalCaptures(sector, MissionContexts);
-            _factionCapabilityCampaignProcessor.ResolveTacticalLeaderDeaths(sector, MissionContexts);
+            _missionAftermathProcessor.ApplyMissionResults(_lastResult.MissionContexts);
+            _factionCapabilityCampaignProcessor.AffiliateTacticalCaptures(
+                sector, _lastResult.MissionContexts);
+            _factionCapabilityCampaignProcessor.ResolveTacticalLeaderDeaths(
+                sector, _lastResult.MissionContexts);
             _chapterUpkeepProcessor.ProcessMedical(sector);
             // Days a mission did not need become training credit, so the upkeep pass needs to know how
             // long each squad was actually committed for.
@@ -235,7 +227,10 @@ namespace OnlyWar.Helpers
             // --- 4. Scenario Resolution Phase ---
             // Resolve the opening objective after the planet sim has settled this turn, so the
             // win/lapse checks read the post-combat, post-growth state of the promised world.
-            ProcessScenario(sector);
+            if (_scenarioTurnProcessor.TryResolve(sector, out string scenarioNotification))
+            {
+                _lastResult.ScenarioNotification = scenarioNotification;
+            }
             ScenarioMetricsCollector.LogScenarioRegionMetrics($"date={_session.CurrentDate}");
             ScenarioMetricsCollector.EndScenarioRegionMetrics();
             MissionAftermathProcessor.CleanupResolvedPlayerOrders(sector, playerOrdersThisTurn);
@@ -372,11 +367,11 @@ namespace OnlyWar.Helpers
         private Dictionary<int, int> BuildMissionDaysBySquad()
         {
             Dictionary<int, int> daysBySquad = new();
-            foreach (MissionContext context in MissionContexts)
+            foreach (MissionContext context in _lastResult.MissionContexts)
             {
-                foreach (Battles.BattleSquad battleSquad in context.MissionSquads)
+                foreach (OperationalMissionElement element in context.MissionSquads)
                 {
-                    int squadId = battleSquad.Squad?.Id ?? battleSquad.Id;
+                    int squadId = element.CampaignSquad?.Id ?? element.Id;
                     int days = context.DaysElapsed;
                     daysBySquad[squadId] = daysBySquad.TryGetValue(squadId, out int existing)
                         ? System.Math.Max(existing, days)
@@ -400,14 +395,5 @@ namespace OnlyWar.Helpers
             }
         }
 
-        private static GameSession CreateCurrentSession()
-        {
-            GameDataSingleton gameData = GameDataSingleton.Instance;
-            return new GameSession(
-                gameData.GameRulesData,
-                gameData.Sector,
-                gameData.Date,
-                StaticRNG.Instance);
-        }
     }
 }

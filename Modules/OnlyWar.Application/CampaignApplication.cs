@@ -11,11 +11,12 @@ namespace OnlyWar.Application;
 /// <summary>
 /// Application boundary for campaign lifetime and cross-subsystem workflow coordination.
 /// Generation, loading and turn resolution return detached session state first; only Install
-/// publishes a successful result to the legacy host compatibility surface.
+/// publishes a successful result to this application's active session.
 /// </summary>
 public sealed partial class CampaignApplication : IMedicalScreenApplication
 {
     private readonly IRNG _random;
+    private readonly CampaignRecoverabilityTracker _recoverability = new();
     private GameSession _activeSession;
 
     public CampaignApplication(IRNG random)
@@ -29,43 +30,6 @@ public sealed partial class CampaignApplication : IMedicalScreenApplication
     }
 
     public GameSession ActiveSession => _activeSession;
-
-    /// <summary>
-    /// Adopts the campaign already published by a legacy host bootstrap. This keeps scene
-    /// replacement and preview flows on the explicit application session without regenerating
-    /// or reloading the campaign.
-    /// </summary>
-    public GameSession AttachCurrentCampaign()
-    {
-        GameDataSingleton game = GameDataSingleton.Instance;
-        if (!game.IsInitialized)
-        {
-            throw new InvalidOperationException("No campaign is currently loaded.");
-        }
-
-        _activeSession = new GameSession(
-            game.GameRulesData,
-            game.Sector,
-            game.Date,
-            _random)
-        {
-            UpgradePending = game.UpgradePending
-        };
-        NotifySessionChanged();
-        return _activeSession;
-    }
-
-    /// <summary>
-    /// Adopts a legacy-bootstrapped campaign when there is one, and reports rather than throws
-    /// when there is not. A host scene opened without a campaign asks this instead of inspecting
-    /// the compatibility singleton itself.
-    /// </summary>
-    public bool TryAttachCurrentCampaign()
-    {
-        if (!GameDataSingleton.Instance.IsInitialized) return false;
-        AttachCurrentCampaign();
-        return true;
-    }
 
     public GameSession CreateNewCampaign(
         GameRulesData rules,
@@ -115,17 +79,14 @@ public sealed partial class CampaignApplication : IMedicalScreenApplication
     {
         if (session == null) throw new ArgumentNullException(nameof(session));
 
-        // Publish only after the detached session is fully constructed. If the compatibility
-        // boundary rejects the install, the previous active session remains the application one.
-        GameDataSingleton.Instance.Install(session);
         _activeSession = session;
         if (session.UpgradePending)
         {
-            GameDataSingleton.Instance.Recoverability.BeginLoadedCampaign();
+            _recoverability.BeginLoadedCampaign();
         }
         else
         {
-            GameDataSingleton.Instance.Recoverability.BeginNewCampaign();
+            _recoverability.BeginNewCampaign();
         }
         NotifySessionChanged();
     }
@@ -147,7 +108,6 @@ public sealed partial class CampaignApplication : IMedicalScreenApplication
     public void Close()
     {
         _activeSession = null;
-        GameDataSingleton.Instance.ClearCampaign();
         NotifySessionChanged();
     }
 }

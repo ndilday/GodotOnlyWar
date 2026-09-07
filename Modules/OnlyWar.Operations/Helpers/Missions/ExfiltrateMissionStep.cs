@@ -1,5 +1,5 @@
 using OnlyWar.Contracts.Operations;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -29,13 +29,13 @@ namespace OnlyWar.Helpers.Missions
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
             Faction force = context.MissionSquads.FirstOrDefault()?.Faction;
-            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            int headcount = context.MissionSquads.Sum(s => s.AbleMembers.Count);
             // Slipping back out is contested by every enemy watching the region, the same aggregated
             // model as the way in (ReconStealthMissionStep / InfiltrateMissionStep).
             float difficulty = MissionStealthDifficulty
                 .Calculate(region, headcount, force).Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
-            if (context.MissionSquads.SelectMany(s => s.AbleSoldiers).Count() == 0)
+            if (context.MissionSquads.SelectMany(s => s.AbleMembers).Count() == 0)
             {
                 MarkForceLostBehindEnemyLines(
                     context, region, execution.Campaign.Date, execution.Personnel);
@@ -108,11 +108,11 @@ namespace OnlyWar.Helpers.Missions
             Date currentDate,
             IOperationsPersonnelSurface personnel)
         {
-            foreach (BattleSquad missionSquad in context.MissionSquads)
+            foreach (OperationalMissionElement missionSquad in context.MissionSquads)
             {
-                if (missionSquad?.Squad != null)
+                if (missionSquad?.CampaignSquad != null)
                 {
-                    Squad squad = missionSquad.Squad;
+                    Squad squad = missionSquad.CampaignSquad;
                     Region previousRegion = squad.CurrentRegion;
                     if (previousRegion != null
                         && squad.Faction != null

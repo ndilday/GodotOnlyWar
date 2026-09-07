@@ -12,11 +12,6 @@ namespace OnlyWar.Tests.Battles;
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class BattleStateTests
 {
-    public BattleStateTests()
-    {
-        LegacyWeaponSetBattleFixture.UseIntrinsicBattleValues();
-    }
-
     [Fact]
     public void CopyConstructor_PreservesMovementStateIndependently()
     {

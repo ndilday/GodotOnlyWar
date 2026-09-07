@@ -1,5 +1,5 @@
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -24,13 +24,13 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public DetectedMissionStep(){}
 
-        private static long AbleBattleValue(IEnumerable<BattleSquad> squads) =>
+        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
             squads
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+                .SelectMany(squad => squad.AbleMembers)
+                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
 
-        private static long AbleBattleValue(BattleSquad squad) =>
-            squad?.AbleSoldiers.Sum(member => (long)member.Soldier.Template.BattleValue) ?? 0;
+        private static long AbleBattleValue(OperationalMissionElement squad) =>
+            squad?.AbleMembers.Sum(member => (long)(member.Template?.BattleValue ?? 0)) ?? 0;
 
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
@@ -44,7 +44,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             context.Spotter = spotter;
 
             int intruderCount = context.MissionSquads.Sum(
-                squad => squad.AbleSoldiers.Count);
+                squad => squad.AbleMembers.Count);
             if (intruderCount == 0)
             {
                 bool lostWhileExfiltrating = resumeStep is ExfiltrateMissionStep;
@@ -81,18 +81,18 @@ namespace OnlyWar.Helpers.Missions.Recon
             // Only forces actually out looking can intercept: squads on a Patrol or Recon order in the
             // spotter's region. Nothing is conjured. A region with sensors but nobody sweeping knows
             // perfectly well that there are enemies out there and is too busy to do anything about it.
-            List<BattleSquad> screen = spotter.LandedSquads
+            List<OperationalMissionElement> screen = spotter.LandedSquads
                 .Where(squad => squad.CurrentOrders?.Mission.MissionType == MissionType.Patrol
                     || squad.CurrentOrders?.Mission.MissionType == MissionType.Recon)
-                .Select(squad => (execution.CreateBattleSquad ?? throw new InvalidOperationException(
-                        "Mission execution did not provide a battle element factory."))(
+                .Select(squad => (execution.EngagementElements ?? throw new InvalidOperationException(
+                        "Mission execution did not provide a battle element factory.")).CreateSquad(
                     squad.Faction?.IsPlayerFaction == true,
                     squad,
                     squad.Faction?.IsPlayerFaction == true
                         ? execution.Campaign.Doctrine
                         : null,
                     execution.Campaign.Recruitment))
-                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .Where(squad => squad?.AbleMembers.Count > 0)
                 // Largest first, so the screen commits the fewest squads that will do the job and the
                 // rest carry on screening.
                 .OrderByDescending(AbleBattleValue)
@@ -118,9 +118,9 @@ namespace OnlyWar.Helpers.Missions.Recon
 
             // Commit squads until the requirement is met. Reaching parity but falling short of the ideal
             // still engages - with less than it wanted, which is the cost of a thin screen.
-            List<BattleSquad> interceptors = new();
+            List<OperationalMissionElement> interceptors = new();
             long committedBattleValue = 0;
-            foreach (BattleSquad squad in screen)
+            foreach (OperationalMissionElement squad in screen)
             {
                 // A modded or legacy combatant may carry zero BattleValue. Still commit one real
                 // squad rather than letting a zero requirement produce an empty "interception".
@@ -144,7 +144,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // OpFor — the old code evaluated this from context.OpposingSquads *before* it was
             // populated, so it computed Log(0) = -infinity and the scout trivially won every contest.
             BaseSkill tactics = execution.Rules.Tactics;
-            int opForSize = Math.Max(1, context.OpposingSquads.Sum(s => s.AbleSoldiers.Count));
+            int opForSize = Math.Max(1, context.OpposingSquads.Sum(s => s.AbleMembers.Count));
             float difficulty = 10.0f + (float)Math.Log(opForSize, 10);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
@@ -152,7 +152,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                 spotter.PlanetFaction?.Faction?.Name ?? "an unidentified force";
             GameLog.Trace(() =>
                 $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
-                + $"intercepted by {context.OpposingSquads.Sum(s => s.AbleSoldiers.Count)} "
+                + $"intercepted by {context.OpposingSquads.Sum(s => s.AbleMembers.Count)} "
                 + $"{interceptorFaction} ({context.OpposingSquads.Count} squads), "
                 + $"tacticsMargin={margin:F2} -> {(margin > 0 ? "outmaneuvered them (cross-detection)" : "AMBUSHED")}");
             return margin > 0.0f

@@ -391,18 +391,8 @@ public sealed class RosterAndMapScreenApplicationTests
     // ----- Scene-wide audit ---------------------------------------------------------------
 
     [Fact]
-    public void NoCampaignScreenReachesForTheCompatibilitySingleton()
+    public void NoCampaignScreenMentionsTheRetiredCampaignSingleton()
     {
-        // Startup composition (the debug bootstraps) is the one place the host is still allowed
-        // to touch it; every gameplay screen goes through the application boundary. Recorded for
-        // SB-12, which removes the singleton itself.
-        string[] allowed =
-        [
-            Path.Combine("Debug", "MainGamePreviewBootstrap.cs"),
-            Path.Combine("Debug", "ReleaseSceneWiringSmoke.cs"),
-            "GodotLogBridge.cs"
-        ];
-
         List<string> offenders = Directory
             .EnumerateFiles(
                 Path.Combine(RulesDatabaseFixture.RepositoryRoot, "Scenes"),
@@ -411,7 +401,6 @@ public sealed class RosterAndMapScreenApplicationTests
             .Where(path => File.ReadAllText(path).Contains("GameDataSingleton"))
             .Select(path => Path.GetRelativePath(
                 Path.Combine(RulesDatabaseFixture.RepositoryRoot, "Scenes"), path))
-            .Where(relative => !allowed.Contains(relative))
             .ToList();
 
         Assert.Empty(offenders);
@@ -496,7 +485,7 @@ public sealed class RosterAndMapScreenApplicationTests
     {
         CampaignApplication application = new(new SeededRNG(31));
         application.Install(new GameSession(
-            GameDataSingleton.Instance.GameRulesData,
+            fixture.Rules,
             fixture.Sector,
             fixture.CurrentDate,
             new SeededRNG(32)));
@@ -538,7 +527,7 @@ public sealed class RosterAndMapScreenApplicationTests
 
         CampaignApplication application = new(new SeededRNG(31));
         application.Install(new GameSession(
-            GameDataSingleton.Instance.GameRulesData,
+            fixture.Rules,
             new Sector(force, [], [home, away], [inOrbit, elsewhere]),
             fixture.CurrentDate,
             new SeededRNG(32)));
@@ -563,7 +552,7 @@ public sealed class RosterAndMapScreenApplicationTests
             new Fleet("Fleet", null, null));
         CampaignApplication application = new(new SeededRNG(51));
         application.Install(new GameSession(
-            GameDataSingleton.Instance.GameRulesData,
+            fixture.Rules,
             new Sector(force, [], [fixture.Planet], []),
             fixture.CurrentDate,
             new SeededRNG(52)));

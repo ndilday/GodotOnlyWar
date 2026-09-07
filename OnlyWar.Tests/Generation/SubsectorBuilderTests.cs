@@ -19,7 +19,6 @@ public class SubsectorBuilderTests
     public SubsectorBuilderTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath), new Date(41, 1, 1), null);
     }
 
     [Fact]

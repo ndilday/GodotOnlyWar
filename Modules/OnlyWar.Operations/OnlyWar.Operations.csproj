@@ -7,8 +7,6 @@
     <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
     <ProjectReference Include="../OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
     <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
-    <!-- MissionContext retains the tactical handle until the host replay projection moves. -->
-    <ProjectReference Include="../OnlyWar.Battles/OnlyWar.Battles.csproj" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
     <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>

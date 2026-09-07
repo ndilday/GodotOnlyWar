@@ -1,5 +1,5 @@
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
@@ -190,7 +190,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
                 return MissionStepResult.Complete;
             }
 
-            List<BattleSquad> responders =
+            List<OperationalMissionElement> responders =
                 GenerateResponse(execution, enemyFaction, drawn, feintBattleValue);
             if (responders.Count == 0)
             {
@@ -207,7 +207,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
             GameLog.Debug(() =>
                 $"Diversion response {DescribeTarget(enemyFaction)} day {context.DaysElapsed}: "
                 + $"difficulty={difficulty:F2} (drawn={drawn:F2}), margin={margin:F2} -> COUNTERATTACK "
-                + $"({responders.Count} squads, {responders.Sum(s => s.AbleSoldiers.Count)} soldiers)");
+                + $"({responders.Count} squads, {responders.Sum(s => s.AbleMembers.Count)} soldiers)");
 
             // The engagement resolves on this same day (MeetingEngagementMissionStep does not consume
             // one), and a force that survives it resumes demonstrating tomorrow.
@@ -220,20 +220,20 @@ namespace OnlyWar.Helpers.Missions.Diversion
         // strength instead would send a fraction of a hive fleet - millions of BV, clamped to the
         // tactical ceiling - at a single demonstrating squad every time it succeeded, which would make
         // diversions against exactly the factions they are most useful against unsurvivable.
-        private static List<BattleSquad> GenerateResponse(
+        private static List<OperationalMissionElement> GenerateResponse(
             MissionExecutionContext execution,
             RegionFaction enemyFaction,
             float drawn,
             long feintBattleValue)
         {
             long available = enemyFaction.GetDeployedStrength();
-            if (available <= 0) return new List<BattleSquad>();
+            if (available <= 0) return new List<OperationalMissionElement>();
 
             long target = (long)Math.Round(feintBattleValue * (1.0 + drawn));
             target = Math.Max(target, enemyFaction.PlanetFaction.Faction.MinimumForceRequest);
             target = Math.Min(target, available);
             target = Math.Min(target, StrategicCombatRules.MassCombatBattleValueFloor - 1);
-            if (target <= 0) return new List<BattleSquad>();
+            if (target <= 0) return new List<OperationalMissionElement>();
 
             var request = new ForceGenerationRequest
             {
@@ -242,14 +242,14 @@ namespace OnlyWar.Helpers.Missions.Diversion
                 Profile = ForceCompositionProfile.Garrison
             };
             return ForceGenerator.GenerateForce(request, execution.Random, execution.EntityIds)
-                .Select(squad => new BattleSquad(false, squad))
+                .Select(squad => execution.EngagementElements.CreateSquad(false, squad))
                 .ToList();
         }
 
         private static long FeintBattleValue(MissionContext context) =>
             Math.Max(1L, context.MissionSquads
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue));
+                .SelectMany(squad => squad.AbleMembers)
+                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0)));
 
         private static string DescribeTarget(RegionFaction target) =>
             $"{target.Region.Planet.Name}/{target.Region.Name}/{target.PlanetFaction.Faction.Name}";

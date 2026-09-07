@@ -1,7 +1,6 @@
 using OnlyWar.Contracts.Operations;
 using OnlyWar.Contracts.Battles;
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Recruitment;
@@ -38,13 +37,13 @@ namespace OnlyWar.Helpers.Missions
         public IRNG Random { get; }
         /// <summary>
         /// The only tactical dependency visible to mission policy. The concrete Battles resolver is
-        /// composed by the application/Engine adapter and never constructed by a mission step.
+        /// composed by the Application adapter and never constructed by a mission step.
         /// </summary>
         public IEngagementResolver Engagements { get; }
         public IEntityIdAllocator EntityIds { get; }
         public MissionCampaignInputs Campaign { get; }
         public IOperationsPersonnelSurface Personnel { get; }
-        public Func<bool, Squad, ChapterOperationalDoctrine, RecruitmentProgram, BattleSquad> CreateBattleSquad { get; }
+        public IEngagementElementFactory EngagementElements { get; }
 
         public MissionExecutionContext(
             MissionContext state,
@@ -62,7 +61,7 @@ namespace OnlyWar.Helpers.Missions
             IEngagementResolver engagements,
             IEntityIdAllocator entityIds,
             MissionCampaignInputs campaign = null,
-            Func<bool, Squad, ChapterOperationalDoctrine, RecruitmentProgram, BattleSquad> createBattleSquad = null)
+            IEngagementElementFactory engagementElements = null)
         {
             Campaign = campaign ?? new MissionCampaignInputs(new OnlyWar.Models.Date(1), state?.OperationalDoctrine, state?.RecruitmentProgram);
             State = state ?? throw new ArgumentNullException(nameof(state));
@@ -71,7 +70,7 @@ namespace OnlyWar.Helpers.Missions
             Engagements = engagements ?? throw new ArgumentNullException(nameof(engagements));
             EntityIds = entityIds ?? throw new ArgumentNullException(nameof(entityIds));
             Personnel = Campaign.Personnel ?? OperationsPersonnelDefaults.Current;
-            CreateBattleSquad = createBattleSquad;
+            EngagementElements = engagementElements;
         }
     }
 }

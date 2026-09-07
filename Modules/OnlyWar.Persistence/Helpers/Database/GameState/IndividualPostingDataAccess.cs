@@ -1,9 +1,5 @@
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -31,14 +27,9 @@ namespace OnlyWar.Helpers.Database.GameState
             command.ExecuteNonQuery();
         }
 
-        public void Populate(
-            IDbConnection connection,
-            IReadOnlyDictionary<int, Squad> squads,
-            IReadOnlyDictionary<int, PlayerSoldier> soldiers,
-            IReadOnlyDictionary<int, Ship> ships,
-            IReadOnlyDictionary<int, Region> regions)
+        public IReadOnlyList<IndividualPostingRecord> GetRecords(IDbConnection connection)
         {
-            IndividualPostingService service = new(OrderCommitmentSurface.Instance);
+            List<IndividualPostingRecord> records = [];
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = @"SELECT SoldierId, Purpose, LoadedShipId,
                 LandedRegionId, StartedDate FROM IndividualPosting ORDER BY SoldierId";
@@ -46,28 +37,26 @@ namespace OnlyWar.Helpers.Database.GameState
             while (reader.Read())
             {
                 int soldierId = reader.GetInt32(0);
-                if (!soldiers.TryGetValue(soldierId, out PlayerSoldier soldier))
-                {
-                    throw new InvalidDataException($"Posting references missing soldier {soldierId}.");
-                }
                 int purposeValue = reader.GetInt32(1);
                 if (!Enum.IsDefined(typeof(IndividualPostingPurpose), purposeValue))
                 {
                     throw new InvalidDataException($"Posting for soldier {soldierId} has an invalid purpose.");
                 }
                 IndividualPostingPurpose purpose = (IndividualPostingPurpose)purposeValue;
-                Ship ship = reader.IsDBNull(2) ? null : ships.GetValueOrDefault(reader.GetInt32(2));
-                Region region = reader.IsDBNull(3) ? null : regions.GetValueOrDefault(reader.GetInt32(3));
-                if ((ship == null) == (region == null))
+                int? shipId = reader.IsDBNull(2) ? null : reader.GetInt32(2);
+                int? regionId = reader.IsDBNull(3) ? null : reader.GetInt32(3);
+                if (shipId.HasValue == regionId.HasValue)
                 {
                     throw new InvalidDataException($"Posting for soldier {soldierId} has an invalid location.");
                 }
-                service.RestorePhysical(
-                    soldier,
+                records.Add(new IndividualPostingRecord(
+                    soldierId,
                     purpose,
-                    ship != null ? CampaignLocation.Aboard(ship) : CampaignLocation.Landed(region),
-                    Date.FromTotalWeeks(reader.GetInt32(4)));
+                    shipId,
+                    regionId,
+                    reader.GetInt32(4)));
             }
+            return records;
         }
     }
 }

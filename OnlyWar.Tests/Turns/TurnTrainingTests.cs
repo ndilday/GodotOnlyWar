@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -169,6 +170,8 @@ public class TurnTrainingTests
         private readonly List<Squad> _squads = [];
 
         public Sector Sector { get; }
+        public GameRulesData Rules { get; }
+        public Date CurrentDate { get; }
         public Ship Ship { get; }
         public TaskForce TaskForce { get; }
         public Region Region { get; }
@@ -180,6 +183,8 @@ public class TurnTrainingTests
         public TestTrainingService TrainingService { get; }
 
         private TurnTrainingFixture(
+            GameRulesData rules,
+            Date currentDate,
             Sector sector,
             Ship ship,
             TaskForce taskForce,
@@ -191,6 +196,8 @@ public class TurnTrainingTests
             SoldierTemplate soldierTemplate,
             TestTrainingService trainingService)
         {
+            Rules = rules;
+            CurrentDate = currentDate;
             ScoutHqSquadTemplate = scoutHqSquadTemplate;
             Sector = sector;
             Ship = ship;
@@ -240,9 +247,11 @@ public class TurnTrainingTests
 
             PlayerForce playerForce = new(playerFaction, new Army("Training Test Army", null, null, orderOfBattle, []), fleet);
             Sector sector = new(playerForce, [], [], [taskForce]);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, new Date(1, 1, 1), sector);
+            Date currentDate = new(1, 1, 1);
 
             return new TurnTrainingFixture(
+                rules,
+                currentDate,
                 sector,
                 ship,
                 taskForce,
@@ -329,7 +338,9 @@ public class TurnTrainingTests
 
         public void ProcessTurn()
         {
-            new TurnController(TrainingService).ProcessTurn(Sector);
+            new TurnController(
+                new GameSession(Rules, Sector, CurrentDate, StaticRNG.Instance),
+                TrainingService).ProcessTurn(Sector);
         }
 
         private static SoldierTemplate CreateTrainingSoldierTemplate()

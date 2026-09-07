@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers;
@@ -362,8 +362,8 @@ namespace OnlyWar.Helpers.Turns
                         attackerObserver,
                         null,
                         Math.Max(0L, context.MissionSquads
-                            .SelectMany(squad => squad.AbleSoldiers)
-                            .Sum(soldier => (long)soldier.Soldier.Template.BattleValue)))
+                            .SelectMany(squad => squad.AbleMembers)
+                            .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0))))
                 };
 
             AddTacticalParticipant(
@@ -372,7 +372,7 @@ namespace OnlyWar.Helpers.Turns
                 targetPresence.Population,
                 targetPresence.GetDeployedStrength());
 
-            foreach (BattleSquad opposing in context.OpposingSquads ?? [])
+            foreach (OperationalMissionElement opposing in context.OpposingSquads ?? [])
             {
                 Faction faction = opposing?.Faction;
                 if (faction == null || participants.Any(item => item.Faction.Id == faction.Id)) continue;
@@ -434,21 +434,18 @@ namespace OnlyWar.Helpers.Turns
             return created;
         }
 
-        private static long FallenBattleValue(IEnumerable<BattleSquad> squads)
+        private static long FallenBattleValue(IEnumerable<OperationalMissionElement> squads)
         {
             if (squads == null) return 0;
             return squads
-                .SelectMany(squad => squad.Soldiers)
-                .Where(soldier => !soldier.IsCombatEffective)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+                .Sum(squad => squad.FallenBattleValue);
         }
 
-        private static long AbleBattleValue(IEnumerable<BattleSquad> squads)
+        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads)
         {
             if (squads == null) return 0;
             return squads
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+                .Sum(squad => squad.AbleBattleValue);
         }
 
         private static void ResolveOffensiveSurvivors(MissionContext context)
@@ -458,7 +455,7 @@ namespace OnlyWar.Helpers.Turns
             {
                 return;
             }
-            BattleSquad first = context.MissionSquads.FirstOrDefault();
+            OperationalMissionElement first = context.MissionSquads.FirstOrDefault();
             if (first == null || first.IsPlayerSquad) return;
 
             long survivors = AbleBattleValue(context.MissionSquads);

@@ -2,7 +2,6 @@ using OnlyWar.Contracts.Battles;
 using OnlyWar.Contracts.Medical;
 using OnlyWar.Contracts.Operations;
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Readiness;
@@ -31,7 +30,6 @@ public sealed class MissionTurnDependencies
     public IRNG Random { get; init; }
     public IReadinessDecisions Readiness { get; init; }
     public IEngagementResolver Engagements { get; init; }
-    public IBattleEquipmentSource Equipment { get; init; }
     public MissionRules MissionRules { get; init; }
     public ChapterOperationalDoctrine Doctrine { get; init; }
     public RecruitmentProgram Recruitment { get; init; }
@@ -40,8 +38,7 @@ public sealed class MissionTurnDependencies
     public IOperationsPersonnelSurface Personnel { get; init; }
     public Func<StrategicInvasionForce, Region, float, IRNG, FactionBehaviorRulesProfile, bool> StrategicCommanderCanBeReached { get; init; }
 
-    public Func<bool, Squad, ChapterOperationalDoctrine, RecruitmentProgram, BattleSquad> CreateBattleSquad { get; init; }
-    public Func<PlayerSoldier, int, Faction, ChapterOperationalDoctrine, RecruitmentProgram, BattleSquad> CreateAttachedBattleSquad { get; init; }
+    public IEngagementElementFactory EngagementElements { get; init; }
     public Action<IEnumerable<ISoldier>> ApplyDailyHealing { get; init; }
     public Func<IReadOnlyList<BaseSkill>> ResolveMedicalSkills { get; init; }
     public Action<Order, FieldCareReport, IReadOnlyList<BaseSkill>, int, RatingConsumerBindings> ApplyDailyFieldCare { get; init; }
@@ -60,7 +57,6 @@ public sealed class MissionTurnDependencies
         if (Readiness == null) throw new ArgumentNullException(nameof(Readiness));
         if (Engagements == null) throw new ArgumentNullException(nameof(Engagements));
         if (MissionRules == null) throw new ArgumentNullException(nameof(MissionRules));
-        if (CreateBattleSquad == null) throw new ArgumentNullException(nameof(CreateBattleSquad));
-        if (CreateAttachedBattleSquad == null) throw new ArgumentNullException(nameof(CreateAttachedBattleSquad));
+        if (EngagementElements == null) throw new ArgumentNullException(nameof(EngagementElements));
     }
 }

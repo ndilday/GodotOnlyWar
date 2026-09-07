@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -27,7 +28,6 @@ public class ScenarioBuilderTests
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
     }
 
     private Faction Tyranids => _data.Factions.Single(f => f.Name == "Tyranids");
@@ -171,7 +171,6 @@ public class ScenarioBuilderTests
         Assert.Equal(firstStamped, secondStamped);
         Assert.Equal(FactionPopulationTotals(first), FactionPopulationTotals(second));
 
-        GameDataSingleton.Instance.LoadGameDataFromBlob(firstData, _date, first);
         Planet promised = first.GetPlanet(first.Scenario.PromisedPlanetId);
 
         // Reuse the already-generated deterministic sector to verify that the planet-scoped
@@ -180,7 +179,9 @@ public class ScenarioBuilderTests
         Planet other = first.Planets.Values.First(p => p.Id != promised.Id);
         List<((int, int), long)> before = RegionFactionPopulations(other);
 
-        new TurnController().SimulatePlanetForward(first, promised, turns: 5);
+        new TurnController(new GameSession(
+            firstData, first, _date, StaticRNG.Instance)).SimulatePlanetForward(
+                first, promised, turns: 5);
 
         Assert.Equal(before, RegionFactionPopulations(other));
     }
@@ -208,7 +209,6 @@ public class ScenarioBuilderTests
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, null);
         Sector sector = TestGeneration.GenerateSector(seed, data, _date, "Deterministic Chapter");
         return (data, sector);
     }

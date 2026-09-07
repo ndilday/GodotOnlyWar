@@ -120,7 +120,7 @@ public partial class ReleaseSceneWiringSmoke : Node
             "Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection/DossierContent");
         Require(dossierSection?.Visible == true && dossierContent?.GetChildCount() > 0,
             "Selecting the initial planet did not show its world dossier.");
-        Planet selectedPlanet = GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault();
+        Planet selectedPlanet = mainGame.CampaignApplication.ActiveSession.Sector.Planets.Values.FirstOrDefault();
         if (selectedPlanet != null)
         {
             systemInspector.DisplayFleetContext(selectedPlanet.Id);
@@ -289,7 +289,7 @@ public partial class ReleaseSceneWiringSmoke : Node
         Button endTurnButton = RequireNode<Button>(mainGame,
             "UILayer/BottomMenu/Panel/MarginContainer/HBoxContainer/EndTurnButton");
         EndTurnPreflightReport expectedPreflight = EndTurnPreflight.Evaluate(
-            OnlyWar.Models.GameDataSingleton.Instance.Sector,
+            mainGame.CampaignApplication.ActiveSession.Sector,
             new EndTurnWarningPreferences());
         if (Require(expectedPreflight.RequiresConfirmation,
                 "Preview campaign unexpectedly contains no End Turn attention; refusing to resolve a full turn."))

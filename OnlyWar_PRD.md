@@ -1,8 +1,8 @@
 # OnlyWar — Product Requirements Document
 
-**Version:** Alpha 0.7.2 Released / Alpha 0.8 Roadmap
+**Version:** Alpha 0.8 shipped scope / post-0.8 backlog
 
-**Last Updated:** September 1, 2026
+**Last Updated:** September 7, 2026
 **Author:** Nathan Dilday  
 
 ---
@@ -888,7 +888,7 @@ new-format campaign, while older formats are rejected by the exact-version compa
 - The game maintains several rolling autosaves, including a protected pre-turn autosave immediately before turn resolution mutates campaign state. Autosaves are distinct from and never overwrite named manual slots.
 - Save writes remain atomic. A failed save leaves the prior valid file intact and presents an actionable error rather than creating an empty or half-written campaign.
 - Exact-version compatibility is the rule; ordered schema migration remains unbuilt, so a save of an older format is rejected rather than upgraded. Acceptable during alpha; the point at which players have campaigns worth preserving is the point migrators get written.
- - **The save format version moves with the schema.** *(Format 10, 2026-08-16 — complete itemized chapter-role and soldier-personal equipment loadouts were added on top of format 9's relationship, awareness, and target-intelligence schema.)* Whenever a save-schema change ships, the format version must change with it, so the existing compatibility guard can reject the file **early and legibly** — the chooser marks it incompatible with a stated reason, and the loader refuses it before reading any campaign table. Note for anyone maintaining this: a save/load round-trip test cannot catch a missed bump, because the writer recreates the schema from scratch on every save and therefore always agrees with itself. Only an older file opened by a newer build exposes it.
+  - **The save format version moves with the schema.** *(The 0.7.2 release used format 10; the current format is 19 — see §4.18 and TDD §4.2. The latest addition persists Chapter operational doctrine.)* Whenever a save-schema change ships, the format version must change with it, so the existing compatibility guard can reject the file **early and legibly** — the chooser marks it incompatible with a stated reason, and the loader refuses it before reading any campaign table. Note for anyone maintaining this: a save/load round-trip test cannot catch a missed bump, because the writer recreates the schema from scratch on every save and therefore always agrees with itself. Only an older file opened by a newer build exposes it.
 - The load chooser displays incompatible or failed saves with the reason they cannot be opened. It does not hide them or replace the error with a generic “no save found” state.
 
 ---
@@ -1425,13 +1425,16 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
   orders, missions, loadouts, and operational presentation; live battle-boundary re-evaluation;
   and inclusive **WITHHELD** status distinct from physical incapacity. §§4.5, 4.12, 4.13, 4.26;
   TDD §§4.2, 5.3, 6.6.2, 7.6.
+- ✅ **Engineering follow-through** — the broad turn coordinator is split by domain, and the
+  obsolete turn-controller compatibility shims and unused prototypes are retired. Remaining
+  persistent-ID compatibility is low-priority technical debt in TDD §8.7, not an Alpha 0.8
+  player-facing requirement.
 
 **Remaining in 0.8.**
 
 - ⬜ **Founding myth** — a short generated chapter history at new-game start. §4.19.
 - ⬜ **Wider-Imperium dispatches (initial)** — voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing. §4.19.
 - ⬜ **Techmarines & the Mars pipeline** — replace the placeholder (aspirants leave for ~2 years and return immediately) with a deferred-cohort pipeline: the chapter starts with no Techmarines, the founding cohort returns after ~18 in-game years, and the player sends further drafts on an ongoing basis. Adds between-mission vehicle maintenance and a Techmarine **Cybernetic Repair** procedure. **Prerequisite for Vehicles** (§5.7). §4.28; open questions §§6.15–6.17.
-- ⬜ **Engineering follow-through** — split the remaining large `PlanetTurnProcessor` by domain and retire transitional `TurnController` compatibility shims and unused prototypes as callers migrate. Enabling work, not a separate player-facing feature. TDD §8.
 
 **Deferred out of the active 0.8 sequence.**
 

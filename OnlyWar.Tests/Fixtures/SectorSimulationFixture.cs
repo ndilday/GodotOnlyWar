@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -14,8 +15,8 @@ using OnlyWar.Models.Units;
 namespace OnlyWar.Tests.Fixtures;
 
 /// <summary>
-/// Builds a compact single-planet sector wired into <see cref="GameDataSingleton"/>
-/// for exercising <see cref="TurnController"/> end-of-turn logic. Every region is
+/// Builds a compact single-planet sector with explicit rules and date inputs for exercising
+/// <see cref="TurnController"/> end-of-turn logic. Every region is
 /// controlled by a public default faction (so <c>GetControllingFaction</c> resolves),
 /// and helpers add hidden cults, rival controllers, and governors on top.
 /// </summary>
@@ -31,7 +32,7 @@ internal sealed class SectorSimulationFixture
 
     /// <summary>
     /// The rules this fixture loaded, or null when it was created detached. Tests that drive a
-    /// policy needing rules pass this explicitly rather than reading the installed campaign.
+    /// policy needing rules pass this explicitly rather than reading another session.
     /// </summary>
     public GameRulesData Rules { get; private set; }
 
@@ -40,7 +41,7 @@ internal sealed class SectorSimulationFixture
 
     /// <summary>
     /// Explicit campaign inputs for order-lifecycle commands, so order tests name the sector they
-    /// mutate rather than depending on whichever campaign is installed in the singleton (SB-05a).
+    /// mutate rather than depending on whichever campaign happens to be active (SB-05a).
     /// </summary>
     public OnlyWar.Contracts.Operations.OrderCommandContext OrderCommands =>
         new(Sector, CurrentDate,
@@ -57,24 +58,24 @@ internal sealed class SectorSimulationFixture
 
     public static SectorSimulationFixture Create(long defaultRegionPopulation = 20000)
     {
-        return CreateCore(defaultRegionPopulation, loadGlobalGameData: true);
+        return CreateCore(defaultRegionPopulation, loadRules: true);
     }
 
     /// <summary>
     /// Builds the same compact model without changing the process current directory or loading it
-    /// into <see cref="GameDataSingleton"/>. Use this for pure model/service tests so they can run
-    /// in parallel with tests that own the production singleton.
+    /// with no rules loaded. Use this for pure model/service tests that do not need a campaign
+    /// session.
     /// </summary>
     public static SectorSimulationFixture CreateDetached(long defaultRegionPopulation = 20000)
     {
-        return CreateCore(defaultRegionPopulation, loadGlobalGameData: false);
+        return CreateCore(defaultRegionPopulation, loadRules: false);
     }
 
     private static SectorSimulationFixture CreateCore(
         long defaultRegionPopulation,
-        bool loadGlobalGameData)
+        bool loadRules)
     {
-        if (loadGlobalGameData)
+        if (loadRules)
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         }
@@ -104,7 +105,7 @@ internal sealed class SectorSimulationFixture
         Army army = new("Test Army", null, null, null, []);
         PlayerForce playerForce = new(player, army, new Fleet("Test Fleet", null, null));
         fixture.Sector = new Sector(playerForce, [], [fixture.Planet], []);
-        if (loadGlobalGameData)
+        if (loadRules)
         {
             GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
             // These are single-planet simulations with one governor, so tests force or suppress a
@@ -113,7 +114,6 @@ internal sealed class SectorSimulationFixture
             // trait-driven expectations stay deterministic.
             rules.SupplyEconomyRules.RequestGenerationRate = 1m;
             fixture.Rules = rules;
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, fixture.CurrentDate, fixture.Sector);
         }
 
         return fixture;
@@ -209,7 +209,12 @@ internal sealed class SectorSimulationFixture
         return governor;
     }
 
-    public void ProcessTurn() => new TurnController().ProcessTurn(Sector);
+    public void ProcessTurn() => new TurnController(
+        new OnlyWar.Helpers.Simulation.GameSession(
+            Rules ?? throw new InvalidOperationException("This fixture has no rules."),
+            Sector,
+            CurrentDate,
+            StaticRNG.Instance)).ProcessTurn(Sector);
 
     private static Planet CreatePlanet()
     {

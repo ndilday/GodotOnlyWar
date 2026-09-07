@@ -20,11 +20,6 @@ namespace OnlyWar.Tests.Battles;
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class BattleSquadPlannerTests
 {
-    public BattleSquadPlannerTests()
-    {
-        LegacyWeaponSetBattleFixture.UseIntrinsicBattleValues();
-    }
-
     private sealed class EngagedDecisionScenario
     {
         public BattleSquad ShooterSquad { get; init; }

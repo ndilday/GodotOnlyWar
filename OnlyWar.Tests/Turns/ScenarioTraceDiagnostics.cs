@@ -8,6 +8,7 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
@@ -56,9 +57,7 @@ public class ScenarioTraceDiagnostics
         foreach (int seed in seeds)
         {
             GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, null);
             Sector sector = TestGeneration.GenerateSector(seed, data, _date, $"Pocket {seed}");
-            GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, sector);
             Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
             Faction imp = data.DefaultFaction;
             Faction tyr = data.SectorFactions.Invader;
@@ -68,7 +67,11 @@ public class ScenarioTraceDiagnostics
 
             for (int turn = 0; turn <= turns; turn++)
             {
-                if (turn > 0) new TurnController().ProcessTurn(sector);
+                if (turn > 0)
+                {
+                    new TurnController(new GameSession(
+                        data, sector, _date, StaticRNG.Instance)).ProcessTurn(sector);
+                }
 
                 long impTotal = 0;
                 foreach (Region r in promised.Regions)
@@ -141,7 +144,6 @@ public class ScenarioTraceDiagnostics
     private void RunOneSeed(int seed, StringBuilder csv)
     {
         GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, null);
 
         // Capture the generation-time trace (the pre/post-landing SimulatePlanetForward sims emit
         // Info/Debug), so we can read how long the swarm fed and how the cult war went.
@@ -181,8 +183,6 @@ public class ScenarioTraceDiagnostics
             GameLog.MinimumLevel = GameLogLevel.Off;
         }
 
-        // Register the fully generated sector so ProcessTurn can resolve the singleton.
-        GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, sector);
         Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
 
         StringBuilder report = new();
@@ -196,9 +196,9 @@ public class ScenarioTraceDiagnostics
         Snapshot(data, sector, promised, seed, turn: 0, postLandingWeeks,
             battles: 0, strategic: 0, csv, report);
 
+        TurnController controller = new(new GameSession(data, sector, _date, StaticRNG.Instance));
         for (int turn = 1; turn <= IdleTurns; turn++)
         {
-            TurnController controller = new();
             TurnResolutionResult result = controller.ProcessTurn(sector);
             Snapshot(data, sector, promised, seed, turn, postLandingWeeks,
                 result.MissionContexts.Count, result.StrategicCombatResults.Count, csv, report);

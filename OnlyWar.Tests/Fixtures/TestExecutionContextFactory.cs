@@ -14,6 +14,19 @@ namespace OnlyWar.Tests.Fixtures;
 
 internal static class TestExecutionContextFactory
 {
+    public static BattleEngagementResolver CreateEngagementResolver(IRNG random = null)
+    {
+        random ??= new FixedRNG();
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(RulesDatabaseFixture.DatabasePath);
+        BattleAftermathDependencies aftermath = new(
+            new Date(1, 1, 1),
+            random,
+            NoOpPlayerBattleAftermathSink.Instance);
+        BattleExecutionContext battle = new(
+            rules, random, aftermath, throwOnInertBattle: true);
+        return new BattleEngagementResolver(battle);
+    }
+
     public static MissionExecutionContext CreateMission(
         MissionContext state,
         IRNG random = null)
@@ -25,30 +38,21 @@ internal static class TestExecutionContextFactory
         // any contested roll a test relies on strictly off zero; see the accuracy comment on
         // TestModelFactory's Test Knife for the case that hung a battle for 1000 turns.
         random ??= new FixedRNG();
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(RulesDatabaseFixture.DatabasePath);
-        BattleAftermathDependencies aftermath = new(
-            new Date(1, 1, 1),
-            random,
-            NoOpPlayerBattleAftermathSink.Instance);
         // throwOnInertBattle: a battle that stops progressing is an engine bug the game survives
         // and a test must not. See BattleExecutionContext.ThrowOnInertBattle.
-        BattleExecutionContext battle = new(
-            rules, random, aftermath, throwOnInertBattle: true);
+        BattleEngagementResolver engagement = CreateEngagementResolver(random);
         return new MissionExecutionContext(
             state,
             new MissionRules(TestSkills.Stealth, TestSkills.Tactics),
             random,
-            new BattleEngagementResolver(battle),
+            engagement,
             new TacticalEntityIdAllocator(),
             new MissionCampaignInputs(
                 new Date(1, 1, 1),
                 Personnel: OperationsPersonnelSurface.Instance),
-            // Mission steps that raise an interception or an assault screen build tactical squads
-            // through this factory. Production composes it in TurnController; without it here the
-            // step throws instead of exercising the sizing rule under test.
-            (isPlayer, squad, doctrine, program) => BattleSquadFactory.Create(
-                isPlayer, squad, doctrine, program,
-                new CampaignBattleEquipmentSource(rules, null)));
+            // Mission steps that raise an interception or an assault screen create neutral elements
+            // through the same Application adapter as production.
+            engagement);
     }
 
     private sealed class NoOpPlayerBattleAftermathSink : IPlayerBattleAftermathSink

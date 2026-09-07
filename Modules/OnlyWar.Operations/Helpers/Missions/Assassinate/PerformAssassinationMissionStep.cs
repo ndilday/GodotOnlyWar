@@ -2,7 +2,6 @@ using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Contracts.Battles;
 using OnlyWar.Models.Missions;
-using OnlyWar.Models.Battles;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -10,7 +9,6 @@ using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models;
 using System.Linq;
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Turns;
 
 namespace OnlyWar.Helpers.Missions.Assassinate
@@ -70,7 +68,9 @@ namespace OnlyWar.Helpers.Missions.Assassinate
                 // The strategic commander is a real persistent squad. Putting it directly into the encounter
                 // lets the existing battle casualty ledger drive the deterministic tactical death
                 // hook after the mission resolves.
-                context.OpposingSquads = [new BattleSquad(false, physicalForce.CommandSquad, equipment: execution.Campaign.Equipment)];
+                context.OpposingSquads = [execution.EngagementElements.CreateSquad(
+                    false,
+                    physicalForce.CommandSquad)];
             }
             else
             {
@@ -88,13 +88,13 @@ namespace OnlyWar.Helpers.Missions.Assassinate
                         request,
                         execution.Random,
                         execution.EntityIds)
-                    .Select(s => new BattleSquad(false, s))
+                    .Select(s => execution.EngagementElements.CreateSquad(false, s))
                     .ToList();
             }
 
-            BattleSquad targetSquad = context.OpposingSquads.FirstOrDefault();
-            context.AssassinationTargetSoldierId = targetSquad?.SquadLeader?.Soldier.Id
-                ?? targetSquad?.AbleSoldiers.FirstOrDefault()?.Soldier.Id;
+            OperationalMissionElement targetSquad = context.OpposingSquads.FirstOrDefault();
+            context.AssassinationTargetSoldierId = targetSquad?.SquadLeader?.Id
+                ?? targetSquad?.AbleMembers.FirstOrDefault()?.Id;
 
             context.TargetLocated = true;
             context.AddLog($"Day {context.DaysElapsed}: Force has located the assassination target");

@@ -1,9 +1,7 @@
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Battles;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -17,7 +15,7 @@ namespace OnlyWar.Models.Missions
     public class MissionDebriefLine
     {
         public string Text { get; }
-        public BattleHistory BattleHistory { get; }
+        public IBattleReplay BattleHistory { get; }
         public BattleDebriefReport BattleReport { get; }
         public ushort? Day { get; }
         public string SquadName { get; }
@@ -27,7 +25,7 @@ namespace OnlyWar.Models.Missions
 
         public MissionDebriefLine(
             string text,
-            BattleHistory battleHistory = null,
+            IBattleReplay battleHistory = null,
             BattleDebriefReport battleReport = null,
             ushort? day = null,
             string squadName = null)
@@ -114,33 +112,32 @@ namespace OnlyWar.Models.Missions
         public IReadOnlyList<SquadReadinessBlocker> AvailabilityBlockers { get; private set; }
         public List<MissionSquadReadinessIssue> ReadinessIssues { get; } = [];
 
-        public List<BattleSquad> MissionSquads { get; }
+        public List<OperationalMissionElement> MissionSquads { get; }
         /// <summary>
-        /// Neutral participant projection used at the engagement boundary. The transitional
-        /// BattleSquad handles remain private implementation state for now, while mission policy
-        /// passes these contract values to the resolver.
+        /// Neutral participant projection used at the engagement boundary. Tactical state remains
+        /// opaque while mission policy passes these contract values to the resolver.
         /// </summary>
         public IReadOnlyList<EngagementParticipant> MissionParticipants =>
             (MissionSquads ?? [])
-                .Where(squad => squad?.AbleSoldiers.Count > 0)
-                .Select(ToEngagementParticipant)
+                .Where(squad => squad?.AbleMembers.Count > 0)
+                .Select(squad => squad.ToEngagementParticipant())
                 .ToList();
 
         public IReadOnlyList<EngagementParticipant> OpposingParticipants =>
             (OpposingSquads ?? [])
-                .Where(squad => squad?.AbleSoldiers.Count > 0)
-                .Select(ToEngagementParticipant)
+                .Where(squad => squad?.AbleMembers.Count > 0)
+                .Select(squad => squad.ToEngagementParticipant())
                 .ToList();
 
         public IReadOnlyList<PlayerSoldier> StartingPlayerParticipants { get; }
 
         // Battle value of the force when the MISSION began, which is a different baseline from the one
-        // BattleForceEvaluator uses inside a battle.
+        // the tactical resolver uses inside a battle.
         //
         // The same aggression percentage governs both scales, against two baselines: in-battle
         // disengagement measures against the opening value of THAT battle, and the decision to seek a
         // further battle measures against this one. The distinction is load-bearing rather than
-        // pedantic - BattleSquad.StartingBattleValue resets every engagement, so day 2's fight opens
+        // pedantic - the tactical state resets its engagement baseline every fight, so day 2's fight opens
         // reading 100% remaining no matter what day 1 cost, and without a mission-scope baseline the
         // across-days rule simply would not fire.
         public long StartingMissionBattleValue { get; }
@@ -187,7 +184,7 @@ namespace OnlyWar.Models.Missions
             get
             {
                 if (StartingMissionBattleValue <= 0) return false;
-                double? threshold = BattleForceEvaluator.GetEligibilityThreshold(
+                double? threshold = GetMissionLossThreshold(
                     Order?.LevelOfAggression ?? Aggression.Normal);
                 if (threshold == null) return false;
                 double remaining = (double)CurrentMissionBattleValue / StartingMissionBattleValue;
@@ -195,7 +192,7 @@ namespace OnlyWar.Models.Missions
             }
         }
         public ushort DaysElapsed { get; set; }
-        public List<BattleSquad> OpposingSquads { get; set; }
+        public List<OperationalMissionElement> OpposingSquads { get; set; }
         public List<string> Log { get; private set; }
         public List<MissionDebriefLine> DebriefLines { get; }
 
@@ -291,8 +288,8 @@ namespace OnlyWar.Models.Missions
 
         public MissionContext(
             Order order,
-            List<BattleSquad> playerSquads,
-            List<BattleSquad> opposingForces,
+            List<OperationalMissionElement> playerSquads,
+            List<OperationalMissionElement> opposingForces,
             ChapterOperationalDoctrine operationalDoctrine = null,
             RecruitmentProgram recruitmentProgram = null)
         {
@@ -302,8 +299,7 @@ namespace OnlyWar.Models.Missions
             RecruitmentProgram = recruitmentProgram;
             RefreshDutyReadyParticipants();
             StartingPlayerParticipants = playerSquads
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Select(battleSoldier => battleSoldier.Soldier)
+                .SelectMany(squad => squad.AbleMembers)
                 .OfType<PlayerSoldier>()
                 .Distinct()
                 .ToList();
@@ -322,26 +318,23 @@ namespace OnlyWar.Models.Missions
         }
 
         /// <summary>
-        /// Re-evaluates player participants at a mission-stage/engagement boundary. The wrappers
-        /// remain mission-owned so equipment, history, and aftermath state survive; only the set
-        /// allowed into the next engagement changes.
+        /// Re-evaluates player participants at a mission-stage/engagement boundary. The elements
+        /// remain mission-owned so opaque tactical state survives; only the set allowed into the
+        /// next engagement changes.
         /// </summary>
         internal RecruitmentProgram RecruitmentProgram { get; }
 
-        public void RefreshDutyReadyParticipants(IReadinessDecisions readiness = null)
+        public void RefreshDutyReadyParticipants(
+            IReadinessDecisions readiness = null,
+            IEngagementElementFactory engagementElements = null)
         {
             if (readiness == null)
             {
                 return;
             }
-            foreach (BattleSquad squad in MissionSquads
+            foreach (OperationalMissionElement squad in MissionSquads
                 .Where(squad => squad?.IsPlayerSquad == true
-                    // A null participant set identifies the legacy in-memory battle wrapper
-                    // used by callers that have already selected the engagement roster. The
-                    // campaign boundary uses BattleSquadFactory, which always supplies an
-                    // explicit (possibly empty) frozen set. Preserve the former direct-wrapper
-                    // semantics while ensuring real mission stages are re-evaluated.
-                    && (squad.EngagementParticipantIds != null || OperationalDoctrine != null)))
+                    && (squad.FrozenParticipantIds != null || OperationalDoctrine != null)))
             {
                 if (squad.CampaignCharacter != null)
                 {
@@ -352,22 +345,24 @@ namespace OnlyWar.Models.Missions
                             RecruitmentProgram).IsDutyReady
                             ? new[] { squad.CampaignCharacter }
                             : Array.Empty<ISoldier>());
+                    engagementElements?.Update(squad);
                     continue;
                 }
 
                 SquadReadinessSnapshot snapshot = readiness.EvaluateSquad(
-                    squad.Squad,
+                    squad.CampaignSquad,
                     program: RecruitmentProgram,
                     doctrine: OperationalDoctrine);
                 squad.RefreshEngagementParticipants(
                     snapshot.StructuralBlockers.Count == 0
                         ? readiness.GetDutyReadyMembers(
-                                squad.Squad,
+                                squad.CampaignSquad,
                                 OperationalDoctrine,
                                 RecruitmentProgram)
                             .Where(member => member is not PlayerSoldier player
                                 || player.IndividualPosting == null)
                         : Array.Empty<ISoldier>());
+                engagementElements?.Update(squad);
             }
         }
 
@@ -389,27 +384,21 @@ namespace OnlyWar.Models.Missions
             ReadinessIssues.Add(issue);
         }
 
-        private static EngagementParticipant ToEngagementParticipant(BattleSquad squad) =>
-            new(
-                squad.Id,
-                squad.Name,
-                squad.Faction,
-                squad.Soldiers.Select(soldier => soldier.Soldier).ToArray(),
-                squad.EngagementParticipantIds?.ToArray(),
-                squad.IsPlayerSquad,
-                new EngagementElementTraits(
-                    squad.Traits.ProvidesCommandAura,
-                    squad.Traits.ProvidesSynapse,
-                    squad.Traits.IsHeadquarters),
-                squad.CampaignSquad,
-                squad.CampaignCharacter,
-                squad);
-
-        private static long SumBattleValue(IEnumerable<BattleSquad> squads) =>
+        private static long SumBattleValue(IEnumerable<OperationalMissionElement> squads) =>
             squads?
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Sum(battleSoldier => (long)battleSoldier.Soldier.Template.BattleValue)
+                .SelectMany(squad => squad.AbleMembers)
+                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0))
             ?? 0L;
+
+        private static double? GetMissionLossThreshold(Aggression aggression) => aggression switch
+        {
+            Aggression.Avoid => 0.90,
+            Aggression.Cautious => 0.75,
+            Aggression.Normal => 0.50,
+            Aggression.Attritional => 0.25,
+            Aggression.Aggressive => null,
+            _ => 0.50
+        };
 
         public void AddLog(string text)
         {
@@ -420,19 +409,6 @@ namespace OnlyWar.Models.Missions
                 squadName: GetElementSquadName()));
         }
 
-        public void AddBattleReport(BattleHistory battleHistory)
-        {
-            BattleDebriefReport report = BattleDebriefReportBuilder.Build(battleHistory);
-            string summary = BattleDebriefReportBuilder.BuildSummaryLine(report);
-            Log.Add(summary);
-            DebriefLines.Add(new MissionDebriefLine(
-                summary,
-                battleHistory,
-                report,
-                GetElementDay(),
-                GetElementSquadName()));
-        }
-
         /// <summary>
         /// Records the detached result returned by the engagement boundary. The replay is retained
         /// only for the current host review workflow; mission policy consumes the value facts on the
@@ -441,13 +417,11 @@ namespace OnlyWar.Models.Missions
         public void AddBattleReport(EngagementResult engagement)
         {
             if (engagement == null) return;
-            BattleHistory history = engagement.Replay as BattleHistory;
-            string summary = engagement.Summary
-                ?? BattleDebriefReportBuilder.BuildSummaryLine(engagement.Report);
+            string summary = engagement.Summary ?? "Engagement resolved.";
             Log.Add(summary);
             DebriefLines.Add(new MissionDebriefLine(
                 summary,
-                history,
+                engagement.Replay,
                 engagement.Report,
                 GetElementDay(),
                 GetElementSquadName()));
@@ -461,28 +435,6 @@ namespace OnlyWar.Models.Missions
 
         private bool IsIndependentReconElement() =>
             Order?.Mission?.MissionType == MissionType.Recon && MissionSquads.Count == 1;
-
-        public void RecordBattleOutcome(BattleHistory battleHistory)
-        {
-            if (battleHistory != null)
-            {
-                KilledSoldierIds.UnionWith(battleHistory.KilledSoldierIds);
-            }
-            EnemiesKilled += battleHistory.FirstSideEnemyDeaths;
-            EnemyKillCredits += battleHistory.FirstSideEnemiesKilled;
-            if (AssassinationTargetSoldierId is int targetId
-                && battleHistory.KilledSoldierIds.Contains(targetId))
-            {
-                TargetEliminated = true;
-            }
-
-            RecordFriendlyCasualties(battleHistory);
-
-            if (MissionSideWithdrewOrRouted(battleHistory.Outcome))
-            {
-                ForceWithdrewUnderFire = true;
-            }
-        }
 
         /// <summary>Folds a detached tactical result into mission-level outcome facts.</summary>
         public void RecordBattleOutcome(EngagementResult engagement)
@@ -512,14 +464,6 @@ namespace OnlyWar.Models.Missions
         /// Incapacitation is a real state change from a prior day's tally only in one direction:
         /// a man already counted as incapacitated who later dies moves to the dead total.
         /// </summary>
-        private void RecordFriendlyCasualties(BattleHistory battleHistory)
-        {
-            if (battleHistory == null) return;
-            RecordFriendlyCasualties(
-                battleHistory.KilledSoldierIds,
-                battleHistory.IncapacitatedSoldierIds);
-        }
-
         private void RecordFriendlyCasualties(
             IEnumerable<int> killedSoldierIds,
             IEnumerable<int> incapacitatedSoldierIds)
@@ -551,20 +495,6 @@ namespace OnlyWar.Models.Missions
         /// force can reform and contest the ground again tomorrow.
         /// </summary>
         public void RecordReciprocalAssaultOutcome(
-            BattleHistory battleHistory,
-            BattleSide missionSide,
-            int enemyDeaths)
-        {
-            EnemiesKilled += Math.Max(0, enemyDeaths);
-            // The resolver only tracks per-hit kill credit for its first side. Unique enemy deaths
-            // are the stable symmetric quantity available to both linked mission reports.
-            EnemyKillCredits += missionSide == BattleSide.Attacker
-                ? Math.Max(0, battleHistory?.FirstSideEnemiesKilled ?? 0)
-                : Math.Max(0, enemyDeaths);
-            RecordFriendlyCasualties(battleHistory);
-        }
-
-        public void RecordReciprocalAssaultOutcome(
             EngagementResult engagement,
             EngagementSide missionSide,
             int enemyDeaths)
@@ -577,33 +507,15 @@ namespace OnlyWar.Models.Missions
             RecordFriendlyCasualties(engagement.KilledIds, engagement.IncapacitatedIds);
         }
 
-        public BattleSideProfile CreateMissionBattleProfile(BattleRole role) =>
-            new(Order?.LevelOfAggression ?? Aggression.Normal, role);
-
         public EngagementSideProfile CreateMissionEngagementProfile(EngagementRole role) =>
             new(Order?.LevelOfAggression ?? Aggression.Normal, role);
 
-        public static BattleSideProfile CreateOpposingBattleProfile(
-            IEnumerable<BattleSquad> opposingSquads,
-            BattleRole role)
-        {
-            List<Aggression> aggressions = (opposingSquads ?? Enumerable.Empty<BattleSquad>())
-                .Select(squad => squad.CampaignCharacter?.CurrentOrder ?? squad.Squad?.CurrentOrders)
-                .Where(order => order != null)
-                .Select(order => order.LevelOfAggression)
-                .Distinct()
-                .OrderBy(aggression => aggression)
-                .ToList();
-            Aggression aggression = aggressions.Count == 1 ? aggressions[0] : Aggression.Normal;
-            return new BattleSideProfile(aggression, role);
-        }
-
         public static EngagementSideProfile CreateOpposingEngagementProfile(
-            IEnumerable<BattleSquad> opposingSquads,
+            IEnumerable<OperationalMissionElement> opposingSquads,
             EngagementRole role)
         {
-            List<Aggression> aggressions = (opposingSquads ?? Enumerable.Empty<BattleSquad>())
-                .Select(squad => squad.CampaignCharacter?.CurrentOrder ?? squad.Squad?.CurrentOrders)
+            List<Aggression> aggressions = (opposingSquads ?? Enumerable.Empty<OperationalMissionElement>())
+                .Select(squad => squad.CampaignCharacter?.CurrentOrder ?? squad.CampaignSquad?.CurrentOrders)
                 .Where(order => order != null)
                 .Select(order => order.LevelOfAggression)
                 .Distinct()
@@ -611,40 +523,6 @@ namespace OnlyWar.Models.Missions
                 .ToList();
             Aggression aggression = aggressions.Count == 1 ? aggressions[0] : Aggression.Normal;
             return new EngagementSideProfile(aggression, role);
-        }
-
-        private bool MissionSideWithdrewOrRouted(BattleOutcome outcome)
-        {
-            if (outcome == null)
-            {
-                return false;
-            }
-
-            // A routed/disengaged squad can remain in the typed outcome after another squad
-            // finishes the opposing force. Once the mission side holds the field by annihilation,
-            // those historical IDs are not a withdrawal of the mission as a whole. This also keeps
-            // the mission report from turning a same-turn wipeout into "MISSION FAILED".
-            if (outcome.EndReason == BattleEndReason.Annihilation
-                && outcome.SideHoldingField == BattleSide.Attacker)
-            {
-                return false;
-            }
-
-            HashSet<int> missionSquadIds = MissionSquads.Select(squad => squad.Id).ToHashSet();
-            if (outcome.DisengagedSquadIds.Any(missionSquadIds.Contains)
-                || outcome.RoutingSquadIds.Any(missionSquadIds.Contains))
-            {
-                return true;
-            }
-
-            if (outcome.EndReason == BattleEndReason.MutualDisengagement)
-            {
-                return true;
-            }
-
-            bool withdrawalEnding = outcome.EndReason is BattleEndReason.Withdrawal
-                or BattleEndReason.Rout;
-            return withdrawalEnding && outcome.SideHoldingField == BattleSide.Opposing;
         }
 
         private bool MissionSideWithdrewOrRouted(EngagementOutcome outcome)

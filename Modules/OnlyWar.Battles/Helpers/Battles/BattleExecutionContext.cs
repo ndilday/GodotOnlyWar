@@ -7,7 +7,7 @@ namespace OnlyWar.Helpers.Battles
     /// <summary>
     /// Immutable dependencies for one tactical battle. The mission layer creates this from its
     /// session-scoped inputs; battle helpers receive only the rules, random stream, and explicit
-    /// campaign-effects boundary they need rather than reaching back into GameDataSingleton.
+    /// campaign-effects boundary they need rather than reaching back into global campaign state.
     /// </summary>
     public sealed class BattleExecutionContext
     {

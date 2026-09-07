@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Drawing;
+using OnlyWar.Contracts.Battles;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
@@ -33,7 +34,8 @@ public class MissionOutcomeRecorderTests
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
 
-        MissionContext context = new(squad.CurrentOrders, [battleSquad], []);
+        MissionContext context = new(squad.CurrentOrders,
+            [TestMissionElementFactory.From(battleSquad)], []);
         // no Spotter set -> undetected; no EnemiesKilled -> pure recon
 
         MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1));
@@ -62,7 +64,8 @@ public class MissionOutcomeRecorderTests
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
 
-        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
+        MissionContext context = new(squad.CurrentOrders,
+            [TestMissionElementFactory.From(battleSquad)], [])
         {
             Spotter = spotterFaction,
             ForceBrokeContact = true
@@ -113,7 +116,8 @@ public class MissionOutcomeRecorderTests
             Aggression.Cautious, new Mission(MissionType.Assassination, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
 
-        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
+        MissionContext context = new(squad.CurrentOrders,
+            [TestMissionElementFactory.From(battleSquad)], [])
         {
             TargetLocated = true,
             TargetEliminated = true,
@@ -140,7 +144,8 @@ public class MissionOutcomeRecorderTests
         BattleSquad battleSquad = new(true, squad);
 
         // Force lost behind enemy lines before reaching the target -> the recorder's "aborted" branch.
-        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
+        MissionContext context = new(squad.CurrentOrders,
+            [TestMissionElementFactory.From(battleSquad)], [])
         {
             ForceLostContact = true
         };
@@ -165,7 +170,8 @@ public class MissionOutcomeRecorderTests
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
         BattleSquad battleSquad = new(false, squad);
 
-        MissionContext context = new(squad.CurrentOrders, [battleSquad], []);
+        MissionContext context = new(squad.CurrentOrders,
+            [TestMissionElementFactory.From(battleSquad)], []);
 
         // Should not throw, and there is no PlayerSoldier to have received an event.
         MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1));
@@ -187,7 +193,8 @@ public class MissionOutcomeRecorderTests
         squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Aggressive, new Mission(MissionType.LightningRaid, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
-        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
+        MissionContext context = new(squad.CurrentOrders,
+            [TestMissionElementFactory.From(battleSquad)], [])
         {
             EnemiesKilled = 3
         };
@@ -226,7 +233,8 @@ public class MissionOutcomeRecorderTests
         squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
 
-        return new MissionContext(squad.CurrentOrders, [new BattleSquad(true, squad)], [])
+        return new MissionContext(squad.CurrentOrders,
+            [TestMissionElementFactory.From(new BattleSquad(true, squad))], [])
         {
             Spotter = new RegionFaction(new PlanetFaction(enemy), region)
         };

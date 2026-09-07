@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
@@ -99,11 +100,8 @@ public class InterceptionSizingTests
     public void Interception_CombatIneffectiveIntruder_EndsWithoutBuildingEmptyInterception()
     {
         MissionContext context = CreateDetectionScenario(screenSquads: 0);
-        BattleSquad intruder = Assert.Single(context.MissionSquads);
-        foreach (BattleSoldier soldier in intruder.Soldiers.ToList())
-        {
-            intruder.RemoveSoldier(soldier);
-        }
+        OperationalMissionElement intruder = Assert.Single(context.MissionSquads);
+        intruder.RefreshEngagementParticipants([]);
 
         MissionStepResult result = new DetectedMissionStep().ExecuteMissionStep(
             CreateExecution(context), -1.0f, resumeStep: null);
@@ -120,8 +118,8 @@ public class InterceptionSizingTests
 
     private static int CommittedBattleValue(MissionContext context) =>
         context.OpposingSquads
-            .SelectMany(squad => squad.AbleSoldiers)
-            .Sum(soldier => soldier.Soldier.Template.BattleValue);
+            .SelectMany(squad => squad.AbleMembers)
+            .Sum(soldier => soldier.Template.BattleValue);
 
     // A two-man intruder (4 battle value) caught in a region held by one enemy faction, with
     // `screenSquads` interchangeable two-man patrols out looking. Spotter is left unset so the step
@@ -158,7 +156,10 @@ public class InterceptionSizingTests
             levelOfAggression: Aggression.Normal,
             mission: new Mission(MissionType.Recon, defender, missionSize: 0));
 
-        return new MissionContext(order, [new BattleSquad(true, intruder)], []);
+        return new MissionContext(
+            order,
+            [TestMissionElementFactory.From(new BattleSquad(true, intruder))],
+            []);
     }
 
     // A two-man patrol landed in the region. The Order constructor is what wires Squad.CurrentOrders

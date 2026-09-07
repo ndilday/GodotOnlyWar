@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Orders
     // Order-level attachment of individual specialists (Design/Reference/SpecialistAttachment.md,
     // Phase 2a). An attached specialist remains WITH the force at the campaign/order layer. When
     // individually duty-ready, the Phase 2 battle boundary materializes him as a one-person
-    // BattleSquad; the attachment itself still does not bind him to a standing squad or add
+    // an engagement element; the attachment itself still does not bind him to a standing squad or add
     // specialist battlefield effects.
     //
     // This type owns BOTH halves of the pointer pair -- Order.AttachedSoldiers and

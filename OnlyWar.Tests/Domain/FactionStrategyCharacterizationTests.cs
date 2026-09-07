@@ -188,9 +188,6 @@ public sealed class FactionStrategyCharacterizationTests
     [Fact]
     public void ExplicitStrategyDependencies_UseTheSuppliedBehaviorRules()
     {
-        double singletonRatio = GameDataSingleton.Instance.GameRulesData?.FactionBehaviorRules?.DefendedLandingRatio ?? 2.0;
-        Assert.NotEqual(100.0, singletonRatio);
-
         List<Order> permissiveOrders = BuildKnownInvasionPlan(0.5);
         List<Order> restrictiveOrders = BuildKnownInvasionPlan(100.0);
 

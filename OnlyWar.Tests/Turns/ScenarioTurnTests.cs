@@ -6,6 +6,8 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -34,7 +36,6 @@ public class ScenarioTurnTests
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
     }
 
     private Faction Tyranids => _data.SectorFactions.Invader;
@@ -110,7 +111,7 @@ public class ScenarioTurnTests
             }
         }
 
-        new TurnController().ProcessScenario(sector);
+        ProcessScenario(sector);
 
         Assert.Equal(ObjectiveState.Won, sector.Scenario.State);
         // The player is installed as the planet-wide controlling faction (the Chapter World).
@@ -157,7 +158,7 @@ public class ScenarioTurnTests
         hiddenCult.IsPublic = false;
         Assert.True(hiddenCult.Population > 0);
 
-        new TurnController().ProcessScenario(sector);
+        ProcessScenario(sector);
 
         Assert.Equal(ObjectiveState.Won, sector.Scenario.State);
         Assert.True(promised.PlanetFactionMap.ContainsKey(player.Id));
@@ -200,7 +201,7 @@ public class ScenarioTurnTests
         Assert.Contains(promised.Regions, r =>
             r.RegionFactionMap.TryGetValue(imperial.Id, out RegionFaction rf) && rf.Population > 0);
 
-        new TurnController().ProcessScenario(sector);
+        ProcessScenario(sector);
 
         Assert.Equal(ObjectiveState.Lapsed, sector.Scenario.State);
         Assert.False(promised.PlanetFactionMap.ContainsKey(sector.PlayerForce.Faction.Id));
@@ -227,7 +228,7 @@ public class ScenarioTurnTests
             r.RegionFactionMap.TryGetValue(cult.Id, out RegionFaction rf)
             && rf.IsPublic && (rf.Population > 0 || rf.Garrison > 0));
 
-        new TurnController().ProcessScenario(sector);
+        ProcessScenario(sector);
 
         // Not liberated: no win, no world granted, still the player's live objective.
         Assert.Equal(ObjectiveState.Pending, sector.Scenario.State);
@@ -249,7 +250,7 @@ public class ScenarioTurnTests
 
         Assert.Contains(promised.Regions, r => r.RegionFactionMap.ContainsKey(Tyranids.Id));
 
-        new TurnController().ProcessScenario(sector);
+        ProcessScenario(sector);
 
         Assert.Equal(ObjectiveState.Lapsed, sector.Scenario.State);
         // No Chapter World granted.
@@ -270,7 +271,7 @@ public class ScenarioTurnTests
         Sector sector = fixture.Sector;
         Assert.Null(sector.GetSectorLord());
 
-        new TurnController().ProcessScenario(sector);
+        ProcessScenario(sector);
 
         Assert.Equal(ObjectiveState.Lapsed, sector.Scenario.State);
     }
@@ -291,8 +292,7 @@ public class ScenarioTurnTests
             region.RegionFactionMap.Remove(Tyranids.Id);
         }
 
-        TurnController controller = new();
-        string notification = controller.ProcessScenario(sector);
+        string notification = ProcessScenario(sector);
 
         Assert.Equal(ObjectiveState.Won, sector.Scenario.State);
         Assert.False(promised.PlanetFactionMap.ContainsKey(player.Id));
@@ -305,8 +305,6 @@ public class ScenarioTurnTests
         RNG.Reset(20250628);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Sector sector = fixture.Sector;
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-
         Planet planet = fixture.Planet;
         Region region = planet.Regions.First();
         RegionFaction playerRegionFaction = AddPlayerRegionFaction(sector, planet, region);
@@ -337,7 +335,8 @@ public class ScenarioTurnTests
                                       Aggression.Cautious, mission);
         sector.AddNewOrder(constructionOrder);
 
-        new TurnController().ProcessTurn(sector);
+        new TurnController(new GameSession(
+            _data, sector, _date, StaticRNG.Instance)).ProcessTurn(sector);
 
         Assert.Contains(constructionOrder.Id, sector.Orders.Keys);
         Assert.Same(constructionOrder, squad.CurrentOrders);
@@ -397,8 +396,7 @@ public class ScenarioTurnTests
             }
         }
 
-        TurnController controller = new();
-        string notification = controller.ProcessScenario(sector);
+        string notification = ProcessScenario(sector);
 
         Assert.False(string.IsNullOrEmpty(notification));
         Assert.Contains(promised.Name, notification);
@@ -424,7 +422,8 @@ public class ScenarioTurnTests
                 }
             };
 
-            new TurnController().ProcessTurn(fixture.Sector);
+            new TurnController(new GameSession(
+                _data, fixture.Sector, _date, StaticRNG.Instance)).ProcessTurn(fixture.Sector);
         }
         finally
         {
@@ -491,8 +490,14 @@ public class ScenarioTurnTests
                 lord.Id)
         };
 
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         return new ScenarioFixture(sector, promised);
+    }
+
+    private string ProcessScenario(Sector sector)
+    {
+        ScenarioTurnProcessor processor = new(new GameSession(
+            _data, sector, _date, StaticRNG.Instance));
+        return processor.TryResolve(sector, out string notification) ? notification : null;
     }
 
     private PlayerForce CreatePlayerForce(Faction player)

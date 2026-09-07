@@ -117,7 +117,6 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
     public void Governance_RederivesIdenticallyAfterSaveLoad()
     {
         Sector sector = _seedOneSector;
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
 
         int originalCapitalId = sector.GetSectorCapital().Id;
@@ -167,7 +166,6 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(data, new Date(39, 500, 1), null);
         return data;
     }
 }
@@ -181,7 +179,6 @@ public sealed class GovernanceHierarchyFixture
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         Data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(Data, new Date(39, 500, 1), null);
         SeedOneSector = TestGeneration.GenerateSector(1, Data, new Date(39, 500, 1), "Governance Fixture Chapter");
     }
 }

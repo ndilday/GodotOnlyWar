@@ -7,7 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Units;
 using OnlyWar.Helpers.Extensions;
 
@@ -24,11 +23,11 @@ namespace OnlyWar.Helpers.Missions.Ambush
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
-            List<BattleSquad> missionSquads = context.MissionSquads
-                .Where(squad => squad.AbleSoldiers.Count > 0)
+            List<OperationalMissionElement> missionSquads = context.MissionSquads
+                .Where(squad => squad.AbleMembers.Count > 0)
                 .ToList();
-            List<BattleSquad> opposingSquads = context.OpposingSquads
-                .Where(squad => squad.AbleSoldiers.Count > 0)
+            List<OperationalMissionElement> opposingSquads = context.OpposingSquads
+                .Where(squad => squad.AbleMembers.Count > 0)
                 .ToList();
             if (missionSquads.Count == 0 || opposingSquads.Count == 0)
             {
@@ -47,7 +46,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.GetOwnRegionAwareness() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
-            difficulty += (float)Math.Log(missionSquads.Sum(s => s.AbleSoldiers.Count), 10);
+            difficulty += (float)Math.Log(missionSquads.Sum(s => s.AbleMembers.Count), 10);
             // the attacker's own knowledge of the region makes it easier to find a stealthy route
             Faction attacker = missionSquads.FirstOrDefault()?.Faction;
             if (attacker != null) difficulty -= enemyFaction.Region.GetFactionRegionAwareness(attacker);
@@ -73,8 +72,8 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 // not this step's - the local check asks only whether the ambush stayed hidden until
                 // the enemy walked in.
                 ushort range = MissionOpeningRange.Interpolate(
-                    missionSquads, opposingSquads, marginOfSuccess, execution.Random);
-                int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
+                    missionSquads, opposingSquads, execution.Engagements, marginOfSuccess, execution.Random);
+                int oppForSize = opposingSquads.Sum(s => s.AbleMembers.Count);
                 // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else.
                 string opposingFaction =
                     opposingSquads.First().Faction?.Name ?? "an unidentified force";
@@ -95,7 +94,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 context.AddBattleReport(engagement);
                 context.RecordDefenderLosses(
                     opposingBattleValueBefore - AbleBattleValue(opposingSquads));
-                if (!context.MissionSquads.Any(squad => squad.AbleSoldiers.Count > 0))
+                if (!context.MissionSquads.Any(squad => squad.AbleMembers.Count > 0))
                 {
                     context.ForceWithdrewUnderFire = true;
                     context.AddLog($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
@@ -123,9 +122,9 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 new MeetingEngagementMissionStep(), margin, new ExfiltrateMissionStep());
         }
 
-        private static long AbleBattleValue(IEnumerable<BattleSquad> squads) =>
+        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
             squads
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+                .SelectMany(squad => squad.AbleMembers)
+                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
     }
 }

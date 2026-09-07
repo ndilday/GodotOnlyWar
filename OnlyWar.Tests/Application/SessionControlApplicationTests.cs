@@ -117,9 +117,9 @@ public sealed class SessionControlApplicationTests
 
     private static CampaignApplication CreateApplication()
     {
-        SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         CampaignApplication application = new(new SeededRNG(41));
-        application.Install(CreateSession(GameDataSingleton.Instance.GameRulesData));
+        application.Install(CreateSession(fixture.Rules));
         return application;
     }
 

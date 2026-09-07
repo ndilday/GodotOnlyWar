@@ -1,5 +1,6 @@
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -24,13 +25,14 @@ public class MissionOpeningRangeTests
     [Fact]
     public void Interpolate_WellSetRangedAmbush_OpensFartherThanABlownOne()
     {
-        BattleSquad shooters = CreateRangedSquad();
-        BattleSquad brawlers = CreateMeleeSquad();
+        OperationalMissionElement shooters = ToMissionElement(CreateRangedSquad());
+        OperationalMissionElement brawlers = ToMissionElement(CreateMeleeSquad());
+        IEngagementResolver resolver = TestExecutionContextFactory.CreateEngagementResolver();
 
         ushort wellSet = MissionOpeningRange.Interpolate(
-            [shooters], [brawlers], 3.0f, new FixedRNG());
+            [shooters], [brawlers], resolver, 3.0f, new FixedRNG());
         ushort blown = MissionOpeningRange.Interpolate(
-            [shooters], [brawlers], -3.0f, new FixedRNG());
+            [shooters], [brawlers], resolver, -3.0f, new FixedRNG());
 
         Assert.True(
             wellSet > blown,
@@ -43,13 +45,14 @@ public class MissionOpeningRangeTests
     [Fact]
     public void Interpolate_WellSetMeleeAmbush_OpensCloserThanABlownOne()
     {
-        BattleSquad brawlers = CreateMeleeSquad();
-        BattleSquad shooters = CreateRangedSquad();
+        OperationalMissionElement brawlers = ToMissionElement(CreateMeleeSquad());
+        OperationalMissionElement shooters = ToMissionElement(CreateRangedSquad());
+        IEngagementResolver resolver = TestExecutionContextFactory.CreateEngagementResolver();
 
         ushort wellSet = MissionOpeningRange.Interpolate(
-            [brawlers], [shooters], 3.0f, new FixedRNG());
+            [brawlers], [shooters], resolver, 3.0f, new FixedRNG());
         ushort blown = MissionOpeningRange.Interpolate(
-            [brawlers], [shooters], -3.0f, new FixedRNG());
+            [brawlers], [shooters], resolver, -3.0f, new FixedRNG());
 
         Assert.True(
             wellSet < blown,
@@ -63,13 +66,14 @@ public class MissionOpeningRangeTests
     [Fact]
     public void Interpolate_StaysBetweenTheTwoSidesPreferences()
     {
-        BattleSquad shooters = CreateRangedSquad();
-        BattleSquad brawlers = CreateMeleeSquad();
+        OperationalMissionElement shooters = ToMissionElement(CreateRangedSquad());
+        OperationalMissionElement brawlers = ToMissionElement(CreateMeleeSquad());
+        IEngagementResolver resolver = TestExecutionContextFactory.CreateEngagementResolver();
         // PHASE 7: each side's preference is now derived against the other side's whole force, so
         // the endpoints the interpolation must stay between are asked the same way Interpolate
         // asks them.
-        int shooterPreference = shooters.GetPreferredOpeningRange([brawlers]);
-        int brawlerPreference = brawlers.GetPreferredOpeningRange([shooters]);
+        int shooterPreference = resolver.GetPreferredOpeningRange(shooters, [brawlers]);
+        int brawlerPreference = resolver.GetPreferredOpeningRange(brawlers, [shooters]);
 
         Assert.True(
             shooterPreference > brawlerPreference,
@@ -78,7 +82,7 @@ public class MissionOpeningRangeTests
         foreach (float margin in new[] { -10f, -1f, 0f, 1f, 10f })
         {
             ushort range = MissionOpeningRange.Interpolate(
-                [shooters], [brawlers], margin, new FixedRNG());
+                [shooters], [brawlers], resolver, margin, new FixedRNG());
             Assert.InRange(range, brawlerPreference, shooterPreference);
         }
     }
@@ -112,10 +116,11 @@ public class MissionOpeningRangeTests
     [Fact]
     public void PreferredOpeningRange_IsTheDerivedBandNotWeaponReach()
     {
-        BattleSquad shooters = CreateRangedSquad();
-        BattleSquad brawlers = CreateMeleeSquad();
+        OperationalMissionElement shooters = ToMissionElement(CreateRangedSquad());
+        OperationalMissionElement brawlers = ToMissionElement(CreateMeleeSquad());
+        IEngagementResolver resolver = TestExecutionContextFactory.CreateEngagementResolver();
 
-        int opening = shooters.GetPreferredOpeningRange([brawlers]);
+        int opening = resolver.GetPreferredOpeningRange(shooters, [brawlers]);
         int headroom = (int)(10 * brawlers.GetSquadMove());
 
         Assert.True(
@@ -212,4 +217,7 @@ public class MissionOpeningRangeTests
         }
         return new BattleSquad(false, squad);
     }
+
+    private static OperationalMissionElement ToMissionElement(BattleSquad squad) =>
+        TestMissionElementFactory.From(squad);
 }

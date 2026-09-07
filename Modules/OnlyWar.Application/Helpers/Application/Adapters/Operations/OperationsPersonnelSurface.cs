@@ -12,7 +12,7 @@ using System.Collections.Generic;
 namespace OnlyWar.Helpers.Application.Adapters.Operations;
 
 /// <summary>
-/// Engine composition for the Operations personnel port. Operations receives this capability;
+/// Application composition for the Operations personnel port. Operations receives this capability;
 /// only this adapter knows which Campaign services currently implement it.
 /// </summary>
 public sealed class OperationsPersonnelSurface : IOperationsPersonnelSurface

@@ -30,7 +30,6 @@ public class BattleTurnResolverTests
         try
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, battleDate, null);
         }
         finally
         {
@@ -73,7 +72,6 @@ public class BattleTurnResolverTests
         try
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, battleDate, null);
         }
         finally
         {

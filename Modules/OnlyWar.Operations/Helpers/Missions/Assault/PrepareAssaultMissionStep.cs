@@ -1,6 +1,6 @@
 using OnlyWar.Contracts.Operations;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Builders;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Turns;
@@ -110,7 +110,7 @@ namespace OnlyWar.Helpers.Missions.Assault
                 // How much force is arriving, which is what decides whether a patrol could plausibly
                 // have missed it.
                 context.CurrentMissionBattleValue, execution.Campaign,
-                execution.CreateBattleSquad);
+                execution.EngagementElements);
 
             if (context.OpposingSquads.Count == 0)
             {
@@ -152,7 +152,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             return scaled >= long.MaxValue ? long.MaxValue : Math.Max(1L, (long)scaled);
         }
 
-        internal List<BattleSquad> AssembleDefendingForce(
+        internal List<OperationalMissionElement> AssembleDefendingForce(
             RegionFaction defendingRegionFaction,
             float attackerMarginOfSuccess,
             IRNG random,
@@ -161,9 +161,12 @@ namespace OnlyWar.Helpers.Missions.Assault
             long defenderBattleValueAlreadyDestroyed = 0,
             long attackerBattleValue = 0,
             MissionCampaignInputs campaign = null,
-            Func<bool, Squad, ChapterOperationalDoctrine, RecruitmentProgram, BattleSquad> createBattleSquad = null)
+            IEngagementElementFactory engagementElements = null)
         {
-            var defendingForce = new List<BattleSquad>();
+            IEngagementElementFactory elementFactory = engagementElements
+                ?? throw new InvalidOperationException(
+                    "Mission execution did not provide a battle element factory.");
+            var defendingForce = new List<OperationalMissionElement>();
 
             // A defence order protects the geographic region, not merely one faction's enclave
             // within it, so every allied presence in the assaulted region is pooled into the
@@ -183,23 +186,22 @@ namespace OnlyWar.Helpers.Missions.Assault
             // screen posted to engage raiders — it joins the defence of the region it patrols.
             var defendingSquads = GetRegionalDefensiveSquads(defendingRegionFaction, campaign?.PhysicalForces);
 
-            List<BattleSquad> landedDefenders = defendingSquads
-                .Select(s => (createBattleSquad ?? throw new InvalidOperationException(
-                        "Mission execution did not provide a battle element factory."))(
+            List<OperationalMissionElement> landedDefenders = defendingSquads
+                .Select(s => elementFactory.CreateSquad(
                     s.Faction?.IsPlayerFaction == true,
                     s,
                     s.Faction?.IsPlayerFaction == true
                         ? campaign?.Doctrine
                         : null,
                     campaign?.Recruitment))
-                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .Where(squad => squad?.AbleMembers.Count > 0)
                 .ToList();
 
             // 1a. A patrol fights only if it saw this coming. Everything else here - a Defense order, an
             // exposed diversion force, a show of force - is standing on the ground by intent and is
             // caught up in the fighting regardless.
             landedDefenders = landedDefenders
-                .Where(bs => (bs.CampaignCharacter?.CurrentOrder ?? bs.Squad?.CurrentOrders)
+                .Where(bs => (bs.CampaignCharacter?.CurrentOrder ?? bs.CampaignSquad?.CurrentOrders)
                         ?.Mission?.MissionType != MissionType.Patrol
                     || PatrolDetectedAttack(bs, attackerBattleValue, defenderTactics, random))
                 .ToList();
@@ -295,7 +297,7 @@ namespace OnlyWar.Helpers.Missions.Assault
                 };
                 var garrisonSquads = CapTacticalForce(
                     ForceGenerator.GenerateForce(request, random, entityIds));
-                defendingForce.AddRange(garrisonSquads.Select(s => new BattleSquad(false, s))); // Garrisons are never player squads
+                defendingForce.AddRange(garrisonSquads.Select(s => elementFactory.CreateSquad(false, s))); // Garrisons are never player squads
             }
 
             return defendingForce;
@@ -346,7 +348,7 @@ namespace OnlyWar.Helpers.Missions.Assault
         /// learns to feint.
         /// </remarks>
         internal static bool PatrolDetectedAttack(
-            BattleSquad patrol,
+            OperationalMissionElement patrol,
             long attackerBattleValue,
             BaseSkill defenderTactics,
             IRNG random)
@@ -364,11 +366,11 @@ namespace OnlyWar.Helpers.Missions.Assault
                 // A bold patrol ranges wider and is likelier to be astride the approach: aggression's
                 // EFFECT axis, matching PatrolSweepMissionStep.
                 + MissionAggressionModifiers.EffectDifficulty(
-                    (patrol.CampaignCharacter?.CurrentOrder ?? patrol.Squad?.CurrentOrders)
+                    (patrol.CampaignCharacter?.CurrentOrder ?? patrol.CampaignSquad?.CurrentOrders)
                         ?.LevelOfAggression ?? Aggression.Normal);
 
             float margin = new LeaderMissionTest(defenderTactics, difficulty)
-                .RunMissionCheck(new List<BattleSquad> { patrol }, random);
+                .RunMissionCheck(new List<OperationalMissionElement> { patrol }, random);
             bool detected = margin > 0f;
                 GameLog.Debug(() =>
                     $"Patrol detection {patrol.Name}: difficulty={difficulty:F2} "
@@ -379,12 +381,12 @@ namespace OnlyWar.Helpers.Missions.Assault
 
         // The patrol's own presence in the region it patrols, which is where its committed attention
         // lives. Falls back to null rather than guessing when the squad has no resolvable presence.
-        private static RegionFaction ResolvePatrolledFaction(BattleSquad patrol)
+        private static RegionFaction ResolvePatrolledFaction(OperationalMissionElement patrol)
         {
-            Order order = patrol.CampaignCharacter?.CurrentOrder ?? patrol.Squad?.CurrentOrders;
+            Order order = patrol.CampaignCharacter?.CurrentOrder ?? patrol.CampaignSquad?.CurrentOrders;
             RegionFaction anchored = order?.Mission?.RegionFaction;
             if (anchored != null) return anchored;
-            Region region = patrol.CampaignCharacter?.EffectiveRegion ?? patrol.Squad?.CurrentRegion;
+            Region region = patrol.CampaignCharacter?.EffectiveRegion ?? patrol.CampaignSquad?.CurrentRegion;
             int? factionId = patrol.Faction?.Id;
             if (region == null || factionId == null) return null;
             return region.RegionFactionMap.TryGetValue(factionId.Value, out RegionFaction rf) ? rf : null;
@@ -402,7 +404,7 @@ namespace OnlyWar.Helpers.Missions.Assault
         /// of PRD §4.13 was never implemented at all.
         ///
         /// The advantage lands here rather than inside the battle because
-        /// <see cref="BattleSquad.CoverModifier"/> is declared but never read by the battle engine, so
+        /// The tactical cover modifier is not currently consumed by the battle engine, so
         /// there is currently no in-battle channel to attach prepared positions to. Routing it through
         /// garrison mobilisation keeps the change out of the tactical resolver entirely, which is also
         /// what keeps seeded battle baselines intact.
@@ -415,7 +417,7 @@ namespace OnlyWar.Helpers.Missions.Assault
         /// </remarks>
         internal static float ContestPreparation(
             RegionFaction defendingRegionFaction,
-            List<BattleSquad> landedDefenders,
+            List<OperationalMissionElement> landedDefenders,
             float attackerMarginOfSuccess,
             BaseSkill defenderTactics,
             IRNG random)
@@ -425,8 +427,8 @@ namespace OnlyWar.Helpers.Missions.Assault
             // uncontested behaviour rather than silently skipping the roll's RNG draw.
             if (defenderTactics == null || random == null) return attackerMarginOfSuccess;
 
-            List<BattleSquad> prepared = landedDefenders
-                .Where(bs => (bs.CampaignCharacter?.CurrentOrder ?? bs.Squad?.CurrentOrders)
+            List<OperationalMissionElement> prepared = landedDefenders
+                .Where(bs => (bs.CampaignCharacter?.CurrentOrder ?? bs.CampaignSquad?.CurrentOrders)
                     ?.Mission?.MissionType == MissionType.DefenseInDepth)
                 .ToList();
             if (prepared.Count == 0) return attackerMarginOfSuccess;

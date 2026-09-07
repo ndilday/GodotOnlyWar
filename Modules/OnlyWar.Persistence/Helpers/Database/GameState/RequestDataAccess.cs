@@ -1,4 +1,3 @@
-using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Supply;
@@ -11,13 +10,15 @@ namespace OnlyWar.Helpers.Database.GameState
 {
     public class RequestDataAccess
     {
-        public List<IRequest> GetRequests(
+        public int HighestRequestId { get; private set; } = -1;
+
+        public List<PresenceRequestRecord> GetRequestRecords(
             IDbConnection connection,
             IReadOnlyDictionary<int, Character> characterMap,
             IReadOnlyDictionary<int, Faction> factionMap,
             List<Planet> planetList)
         {
-            List<IRequest> requests = [];
+            List<PresenceRequestRecord> requestRecords = [];
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = @"SELECT Id, CharacterId, PlanetId, ThreatFactionId,
                 RequestDate, ResolutionDate, Deadline, Status, CommitmentKey,
@@ -50,8 +51,12 @@ namespace OnlyWar.Helpers.Database.GameState
                         ? []
                         : tags.Split('|', StringSplitOptions.RemoveEmptyEntries),
                     reader.GetInt32(15));
-                PresenceRequest request = new(
-                    id, planet, requester, threat, requestDate, deadline, commitment,
+                PresenceRequestRecord request = new(
+                    id, planet.Id, requester.Id, threat?.Id,
+                    requestDate.GetTotalWeeks(),
+                    resolvedDate?.GetTotalWeeks(),
+                    deadline.GetTotalWeeks(),
+                    commitment,
                     reader.GetInt32(18),
                     (PledgeScheduleKind)reader.GetInt32(19),
                     reader.GetInt32(20),
@@ -60,18 +65,14 @@ namespace OnlyWar.Helpers.Database.GameState
                     (RequestHazard)reader.GetInt32(23),
                     reader.GetInt64(17),
                     reader.GetBoolean(24),
-                    status,
-                    resolvedDate);
-                requests.Add(request);
-                if (status is RequestStatus.Open or RequestStatus.InProgress)
-                {
-                    requester.ActiveRequest = request;
-                }
+                    status);
+                requestRecords.Add(request);
             }
 
-            RequestFactory.Instance.SetCurrentHighestRequestId(
-                requests.Count == 0 ? -1 : requests.Max(request => request.Id));
-            return requests;
+            HighestRequestId = requestRecords.Count == 0
+                ? -1
+                : requestRecords.Max(request => request.Id);
+            return requestRecords;
         }
 
         public void SaveRequest(IDbTransaction transaction, IRequest request)

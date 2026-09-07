@@ -23,7 +23,6 @@ public class ChapterMusterPerformanceTests
         _output = output;
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, new Date(39, 500, 1), null);
     }
 
     [Trait("Category", "Slow")]

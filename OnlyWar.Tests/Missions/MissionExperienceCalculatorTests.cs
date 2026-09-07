@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -68,7 +69,7 @@ public class MissionExperienceCalculatorTests
     {
         PlayerSoldier first = CreatePlayerSoldier("First", dexterity: 10, skillPoints: 1);
         PlayerSoldier second = CreatePlayerSoldier("Second", dexterity: 10, skillPoints: 1);
-        BattleSquad squad = CreateBattleSquad(first, second);
+        OperationalMissionElement squad = CreateBattleSquad(first, second);
         SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
 
         float firstBefore = first.GetTotalSkillValue(TestSkills.Stealth);
@@ -86,7 +87,7 @@ public class MissionExperienceCalculatorTests
     {
         Soldier npc = TestModelFactory.CreateSoldier(name: "NPC", dexterity: 10,
             skills: new Skill(TestSkills.Stealth, 1));
-        BattleSquad squad = CreateBattleSquad(false, npc);
+        OperationalMissionElement squad = CreateBattleSquad(false, npc);
         SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
 
         float before = npc.GetTotalSkillValue(TestSkills.Stealth);
@@ -102,7 +103,7 @@ public class MissionExperienceCalculatorTests
     {
         Soldier npc = TestModelFactory.CreateSoldier(name: "NPC", dexterity: 10,
             skills: new Skill(TestSkills.Stealth, 1));
-        BattleSquad squad = CreateBattleSquad(false, npc);
+        OperationalMissionElement squad = CreateBattleSquad(false, npc);
         SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
         List<string> logs = [];
         GameLogLevel previousMinimumLevel = GameLog.MinimumLevel;
@@ -128,7 +129,7 @@ public class MissionExperienceCalculatorTests
     public void RunMissionCheck_AwardsOnlyInTheSkillUsedByTheCheck()
     {
         PlayerSoldier soldier = CreatePlayerSoldier("Solo", dexterity: 10, skillPoints: 1);
-        BattleSquad squad = CreateBattleSquad(soldier);
+        OperationalMissionElement squad = CreateBattleSquad(soldier);
         SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
 
         float leadershipBefore = soldier.GetTotalSkillValue(TestSkills.Leadership);
@@ -144,7 +145,7 @@ public class MissionExperienceCalculatorTests
     {
         PlayerSoldier low = CreatePlayerSoldier("Low", dexterity: 10, skillPoints: 1);
         PlayerSoldier high = CreatePlayerSoldier("High", dexterity: 10, skillPoints: 16);
-        BattleSquad squad = CreateBattleSquad(low, high);
+        OperationalMissionElement squad = CreateBattleSquad(low, high);
         IndividualMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
 
         float lowBefore = low.GetTotalSkillValue(TestSkills.Stealth);
@@ -164,18 +165,18 @@ public class MissionExperienceCalculatorTests
         return new PlayerSoldier(soldier, name);
     }
 
-    private static BattleSquad CreateBattleSquad(params ISoldier[] soldiers)
+    private static OperationalMissionElement CreateBattleSquad(params ISoldier[] soldiers)
     {
         return CreateBattleSquad(true, soldiers);
     }
 
-    private static BattleSquad CreateBattleSquad(bool isPlayerSquad, params ISoldier[] soldiers)
+    private static OperationalMissionElement CreateBattleSquad(bool isPlayerSquad, params ISoldier[] soldiers)
     {
         Squad squad = new("Test Squad", null, TestModelFactory.SquadTemplate);
         foreach (ISoldier soldier in soldiers)
         {
             squad.AddSquadMember(soldier);
         }
-        return new BattleSquad(isPlayerSquad, squad);
+        return TestMissionElementFactory.From(new BattleSquad(isPlayerSquad, squad));
     }
 }

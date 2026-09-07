@@ -46,7 +46,6 @@ public class SaveLoadRoundTripTests
         // one subsector (MaxSubsectorDiameter = 20), so only one planet becomes a
         // governance capital and the promised-world selection always has eligible worlds.
         _data.OverrideSectorGeometryForTesting(new Coordinate(20, 20), 0.02f);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
         _roundTrip = new GameStateRoundTripFixture(_data, _date);
     }
 
@@ -55,7 +54,6 @@ public class SaveLoadRoundTripTests
     public void SaveThenLoad_MutatedGeneratedSector_PreservesRoundTripFeatures()
     {
         Sector sector = TestGeneration.GenerateSector(1, _data, _date, "Round Trip Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
         Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
 
@@ -391,15 +389,16 @@ public class SaveLoadRoundTripTests
             Assert.True(loadedDoctrinePlanet.LoadoutDoctrine.TryGetLoadout(
                 doctrineSquad.SquadTemplate.Id, out IReadOnlyList<WeaponSet> loadedPlanetLoadout));
             Assert.Equal(2, loadedPlanetLoadout.Count);
-            Assert.Equal(sector.PlayerForce.Requests.Count, loaded.Requests.Count);
-            IRequest loadedRequest = loaded.Requests.Single(request => request.Id == requestId);
+            Assert.Equal(sector.PlayerForce.Requests.Count, loaded.RequestRecords.Count);
+            PresenceRequestRecord loadedRequest = loaded.RequestRecords
+                .Single(request => request.Id == requestId);
             Assert.Equal(RequestStatus.InProgress, loadedRequest.Status);
             Assert.Equal("Reconnaissance investigation", loadedRequest.Commitment.DisplayName);
             Assert.Equal(new[] { "Scout", "Covert" }, loadedRequest.Commitment.QualificationTags);
             Assert.Equal(savedCommitment.ReferenceBattleValuePerPackage,
                 loadedRequest.ProgressBattleValueTime);
             Assert.Equal(145, loadedRequest.OfferedRequisition);
-            Assert.Equal(new Date(39, 500, 7), loadedRequest.Deadline);
+            Assert.Equal(new Date(39, 500, 7).GetTotalWeeks(), loadedRequest.DeadlineWeeks);
             Assert.Equal(2, loaded.Pledges.Count);
             Pledge loadedPledge = loaded.Pledges.Single(pledge => pledge.Id == originalPledge.Id);
             Assert.Equal(originalPledge.SourcePlanetId, loadedPledge.SourcePlanetId);
@@ -502,22 +501,17 @@ public class SaveLoadRoundTripTests
                 loaded.Planets.SelectMany(p => p.Regions).SelectMany(r => r.SpecialMissions),
                 m => m.Id == orderMission.Id);
 
-            // 1. The attachment survived.
-            Order loadedOrder = loadedSquad.CurrentOrders;
-            PlayerSoldier loadedSpecialist = Assert.Single(loadedOrder.AssignedCharacters);
-            Assert.Equal(attachedSpecialistId, loadedSpecialist.Id);
-            // 2. And it points at the SAME instance the home squad holds -- the assertion that
-            //    catches the PlayerSoldier-wrapper trap. He is still on his squad's roll, so he
-            //    must not have loaded as a fallen brother either.
+            // Persistence returns the raw relationship; Application rehydrates the Operations
+            // attachment after the complete graph exists.
+            OrderCharacterRecord loadedAssignment = Assert.Single(
+                loaded.OrderCharacterAssignments,
+                assignment => assignment.OrderId == loadedSquad.CurrentOrders.Id);
+            Assert.Equal(attachedSpecialistId, loadedAssignment.SoldierId);
             Squad loadedHomeSquad = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
                 .Single(s => s.Id == detachableSquadId);
-            ISoldier rosterInstance = loadedHomeSquad.Members
-                .Single(m => m.Id == attachedSpecialistId);
-            Assert.Same(rosterInstance, loadedSpecialist);
+            Assert.NotNull(loadedHomeSquad.Members.Single(m => m.Id == attachedSpecialistId));
             Assert.DoesNotContain(loaded.FallenBrothers, f => f.Id == attachedSpecialistId);
-            // 3. The soldier-side backpointer resolves to the same order object.
-            Assert.Same(loadedOrder, loadedSpecialist.CurrentOrder);
 
             Squad loadedLandedSquad = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
@@ -548,15 +542,16 @@ public class SaveLoadRoundTripTests
             Assert.Equal(
                 eventSoldier.RecruitmentBirthDate,
                 loadedEventSoldier.RecruitmentBirthDate);
-            SoldierEvent loadedEvent = loadedEventSoldier.SoldierEvents
-                .Single(e => e.Type == SoldierEventType.BattleParticipation);
-            Assert.Equal(battleEvent.Detail, loadedEvent.Detail);
-            Assert.Equal(_date, loadedEvent.Date);
-            Assert.Equal(7, loadedEvent.FactionId);
-            Assert.Equal(4, loadedEvent.Magnitude);
-            Assert.Equal("Northern Waste, Test World", loadedEvent.LocationName);
-            Assert.Equal(battleEvent.Render(), loadedEvent.Render());
-            Assert.True(loadedEventSoldier.SoldierEvents.Count > 1);
+            CampaignEvent loadedEvent = loaded.CampaignEventLedger.Events
+                .Single(@event => @event.Type == CampaignEventType.BattleParticipation
+                    && @event.Entities.Any(entity => entity.EntityId == eventSoldier.Id));
+            LegacySoldierEventPayload loadedPayload =
+                Assert.IsType<LegacySoldierEventPayload>(loadedEvent.Payload);
+            Assert.Equal(battleEvent.Detail, loadedPayload.Detail);
+            Assert.Equal(_date.GetTotalWeeks(), loadedEvent.OccurredWeek);
+            Assert.Equal(7, loadedPayload.FactionId);
+            Assert.Equal(4, loadedPayload.Magnitude);
+            Assert.Equal("Northern Waste, Test World", loadedPayload.LocationName);
 
             PlayerSoldier loadedIncapacitated = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
@@ -574,9 +569,10 @@ public class SaveLoadRoundTripTests
             Assert.Equal(
                 CasualtyState.Incapacitated,
                 CasualtyStateEvaluator.Classify(loadedIncapacitated, bodyRecovered: true));
-            Assert.Single(
-                loadedIncapacitated.SoldierEvents,
-                e => e.Type == SoldierEventType.Incapacitated);
+            Assert.Contains(
+                loaded.CampaignEventLedger.Events,
+                @event => @event.Type == CampaignEventType.Incapacitated
+                    && @event.Entities.Any(entity => entity.EntityId == incapacitatedId));
             // No stored flag means an untouched brother comes back healthy, with nothing to migrate.
             Assert.Equal(
                 CasualtyState.Unharmed,
@@ -586,11 +582,14 @@ public class SaveLoadRoundTripTests
             Assert.Equal(doomedId, loadedFallen.Id);
             Assert.Equal(doomedName, loadedFallen.Name);
             Assert.Null(loadedFallen.AssignedSquad);
-            SoldierEvent death = loadedFallen.SoldierEvents
-                .Single(e => e.Type == SoldierEventType.Death);
-            Assert.Equal(7, death.FactionId);
-            Assert.Equal(13, death.WeaponTemplateId);
-            Assert.Equal("Killed in battle with the Tyranids by a Scything Talon", death.Render());
+            CampaignEvent death = loaded.CampaignEventLedger.Events
+                .Single(@event => @event.Type == CampaignEventType.Death
+                    && @event.Entities.Any(entity => entity.EntityId == doomedId));
+            LegacySoldierEventPayload deathPayload =
+                Assert.IsType<LegacySoldierEventPayload>(death.Payload);
+            Assert.Equal(7, deathPayload.FactionId);
+            Assert.Equal(13, deathPayload.WeaponTemplateId);
+            Assert.Equal("Killed in battle with the Tyranids by a Scything Talon", deathPayload.Detail);
             Assert.DoesNotContain(
                 loaded.Units.SelectMany(u => u.GetAllSquads()).SelectMany(s => s.Members),
                 m => m.Id == doomedId);
@@ -620,7 +619,6 @@ public class SaveLoadRoundTripTests
         // battle. Unlike the other round-trip tests, this deliberately does NOT pre-seed the
         // reconstruction faction, reproducing the real load path.
         Sector sector = TestGeneration.GenerateSector(1, _data, _date, "Load Reconstruct Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
         sector.PlayerForce.LastTurnReportSnapshot = new LastTurnReportSnapshot(
             _date.GetTotalWeeks(),
@@ -681,7 +679,6 @@ public class SaveLoadRoundTripTests
         // that turn processing (TurnController) and the region/planet inbound-orders views read.
         // Without the rebuild a reloaded game processes and displays no standing orders.
         Sector sector = TestGeneration.GenerateSector(1, _data, _date, "Load Orders Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
         Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
 

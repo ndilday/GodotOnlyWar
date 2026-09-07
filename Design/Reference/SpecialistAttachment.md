@@ -87,8 +87,8 @@ already carries player-only state (`GeneticCompatibility`, awards, evaluations).
 
 ### 1.3 New service — `Helpers/Orders/OrderAttachment.cs`
 
-Modelled on `Helpers/Orders/OrderAssignment.cs` (static, reads `GameDataSingleton.Instance.Sector`
-only where it must). Owns **both sides** of the pointer pair so nothing can half-attach:
+Modelled on `Helpers/Orders/OrderAssignment.cs`, with sector and date supplied through the explicit
+`OrderCommandContext`. Owns **both sides** of the pointer pair so nothing can half-attach:
 
 - `Attach(PlayerSoldier, Order)` / `Detach(PlayerSoldier)` / `ReleaseAll(Order)`
 - `CanAttach(PlayerSoldier, Order, Region originRegion, out string reason)` — §3 validation

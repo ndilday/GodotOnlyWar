@@ -1,9 +1,9 @@
 using OnlyWar.Builders;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Units;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +28,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
             BaseSkill stealth = execution.Rules.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             Faction attacker = context.MissionSquads.FirstOrDefault()?.Faction;
-            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            int headcount = context.MissionSquads.Sum(s => s.AbleMembers.Count);
             // Setting an ambush without being seen first is contested by everyone watching the
             // ground, not just the faction being ambushed, so this uses the same aggregated
             // search-effort model as ReconStealthMissionStep - and with it that model's log10(1 + x)
@@ -53,7 +53,8 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 context.Order.Mission,
                 enemyFaction,
                 execution.Random,
-                execution.EntityIds);
+                execution.EntityIds,
+                execution.EngagementElements);
 
             context.DaysElapsed++;
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
@@ -73,13 +74,13 @@ namespace OnlyWar.Helpers.Missions.Ambush
             return MissionStepResult.Continue(new MeetingEngagementMissionStep(), margin);
         }
 
-        private static List<BattleSquad> PopulateOpposingForce(
+        private static List<OperationalMissionElement> PopulateOpposingForce(
             Mission mission,
             RegionFaction enemyFaction,
             IRNG random,
-            IEntityIdAllocator entityIds)
+            IEntityIdAllocator entityIds,
+            IEngagementElementFactory engagementElements)
         {
-            List<BattleSquad> opposingForces = new List<BattleSquad>();
             long targetBattleValue =
                 AmbushMissionSizing.ResolveTargetBattleValue(mission, random);
 
@@ -93,7 +94,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 Profile = ForceCompositionProfile.AmbushForce
             };
             return ForceGenerator.GenerateForce(request, random, entityIds)
-                .Select(s => new BattleSquad(false, s))
+                .Select(s => engagementElements.CreateSquad(false, s))
                 .ToList();
         }
     }

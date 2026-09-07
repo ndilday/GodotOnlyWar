@@ -11,7 +11,7 @@ namespace OnlyWar.Tests.Architecture;
 /// SB-12's enforcement fixture. The assembly-reference matrix is checked in
 /// <c>OnlyWar.HeadlessTests.HeadlessBoundaryTests</c>, which can only see what a project
 /// references; these are the checks that need to see the sources: which files may reach for the
-/// compatibility singleton, which may name the process-wide RNG, and where SQL is allowed to live.
+/// retired global campaign state, which may name the process-wide RNG, and where SQL is allowed to live.
 ///
 /// Each allowlist below names exact files and says why. That is the point of the rule: an
 /// allowlist that named a whole subsystem would not constrain anything. When a bridge is removed,
@@ -20,37 +20,15 @@ namespace OnlyWar.Tests.Architecture;
 public class ModuleBoundaryEnforcementTests
 {
     // Directories that hold shipping code. The test project itself is deliberately not scanned:
-    // tests may name the singleton and the static RNG, which is how they stay honest about what
-    // they install.
+    // tests may name the static RNG for deterministic setup, but production sources are scanned
+    // independently from the fixtures.
     private static readonly string[] ProductionRoots =
         ["Modules", "Scenes", "Helpers", "Composition", "Builders", "Models"];
 
     [Fact]
-    public void TheCompatibilitySingletonIsConfinedToItsNamedCompositionPoints()
+    public void TheRetiredCampaignSingletonDoesNotAppearInProductionSources()
     {
-        // The Application owns campaign lifetime and is the only production code that publishes to
-        // or reads from the singleton; the two Debug scenes are startup composition for the preview
-        // and smoke scenes, and GodotLogBridge only mentions it in a comment.
-        string[] allowed =
-        [
-            // The type itself.
-            Path.Combine("Modules", "OnlyWar.Application", "Models", "GameDataSingleton.cs"),
-            // Install/clear on campaign publication, and adopting a host-bootstrapped campaign.
-            Path.Combine("Modules", "OnlyWar.Application", "CampaignApplication.cs"),
-            // Recoverability tracking still lives on the singleton.
-            Path.Combine("Modules", "OnlyWar.Application", "SessionControlApplication.cs"),
-            // Turn resolution's remaining current-session read.
-            Path.Combine("Modules", "OnlyWar.Application", "Helpers", "TurnController.cs"),
-            // Save/load entry points that still publish to the compatibility surface.
-            Path.Combine("Modules", "OnlyWar.Application", "Helpers", "Storage", "CampaignLoader.cs"),
-            Path.Combine(
-                "Modules", "OnlyWar.Application", "Helpers", "Storage", "CurrentCampaignSaveWriter.cs"),
-            // Startup composition for the debug/preview scenes.
-            Path.Combine("Scenes", "Debug", "MainGamePreviewBootstrap.cs"),
-            Path.Combine("Scenes", "Debug", "ReleaseSceneWiringSmoke.cs")
-        ];
-
-        Assert.Empty(FindOffenders("GameDataSingleton", allowed));
+        Assert.Empty(FindOffenders("GameDataSingleton", []));
     }
 
     [Fact]
@@ -64,42 +42,29 @@ public class ModuleBoundaryEnforcementTests
             Path.Combine("Modules", "OnlyWar.Runtime", "StaticRNG.cs"),
             Path.Combine("Modules", "OnlyWar.Runtime", "Naming", "NameGeneratorFacade.cs"),
             Path.Combine("Modules", "OnlyWar.Generation", "Chapter", "NewChapterBuilder.cs"),
-            // Application composition: the session RNG is chosen here and passed onward.
-            Path.Combine("Modules", "OnlyWar.Application", "Models", "GameDataSingleton.cs"),
-            Path.Combine("Modules", "OnlyWar.Application", "Helpers", "TurnController.cs"),
-            Path.Combine("Modules", "OnlyWar.Application", "Helpers", "Storage", "CampaignLoader.cs"),
-            Path.Combine(
-                "Modules", "OnlyWar.Application", "Helpers", "Storage", "CurrentCampaignSaveWriter.cs"),
             Path.Combine(
                 "Modules", "OnlyWar.Application", "Helpers", "Application", "Adapters", "Generation",
                 "GenerationSupportAdapters.cs"),
             // The host's composition roots, where the application is constructed.
             Path.Combine("Scenes", "StartMenu", "StartMenu.cs"),
             Path.Combine("Scenes", "StartMenu", "StartMenu.ReleaseControls.cs"),
-            Path.Combine("Scenes", "MainGameScreen", "MainGameScene.cs")
+            Path.Combine("Scenes", "Debug", "MainGamePreviewBootstrap.cs")
         ];
 
         Assert.Empty(FindOffenders("StaticRNG", allowed));
     }
 
     [Fact]
-    public void SqlLivesOnlyInPersistenceAndTheTrackedCampaignDatabaseFolder()
+    public void SqlLivesOnlyInPersistence()
     {
-        // SB-00 puts SQL in Persistence alone. The rules/save readers under Campaign's Database
-        // folder are the one tracked exception: they materialize live campaign models that have not
-        // moved to Domain, so Persistence -- which may reference only Domain and Contracts -- cannot
-        // hold them yet. The exception is a folder, not the subsystem: no other Campaign source may
-        // open a connection.
+        // SB-00 puts SQL in Persistence alone. Campaign owns policy and projections; its load/save
+        // callers receive domain data and raw rows from the Persistence adapter.
         List<string> offenders = EnumerateProductionSources()
             .Where(path => ContainsAny(CodeOf(path.Full),
                 "using System.Data", "Microsoft.Data.Sqlite", "System.Data.SQLite"))
             .Select(path => path.Relative)
             .Where(relative =>
                 !relative.StartsWith(Path.Combine("Modules", "OnlyWar.Persistence") + Path.DirectorySeparatorChar,
-                    StringComparison.Ordinal)
-                && !relative.StartsWith(
-                    Path.Combine("Modules", "OnlyWar.Campaign", "Helpers", "Database")
-                        + Path.DirectorySeparatorChar,
                     StringComparison.Ordinal))
             .ToList();
 

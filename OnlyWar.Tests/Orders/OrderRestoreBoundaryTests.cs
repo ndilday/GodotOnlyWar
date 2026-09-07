@@ -157,55 +157,42 @@ public class OrderRestoreBoundaryTests
         Assert.DoesNotContain(order, replacement.Sector.Orders.Values);
     }
 
-    // SB-05a: deployment doctrine comes from the force the command names, not from whichever
-    // campaign is installed. Both directions matter: the named campaign's doctrine must apply, and
-    // the installed campaign's must not leak in.
+    // SB-05a: deployment doctrine comes from the force the command names. Both directions matter:
+    // the named campaign's doctrine must apply, and no ambient campaign may leak in.
     [Fact]
     public void IssueOrder_AppliesTheNamedCampaignsDoctrineNotTheInstalledOnes()
     {
-        GameDataSingleton active = GameDataSingleton.Instance;
-        GameRulesData oldRules = active.GameRulesData;
-        Date oldDate = active.Date;
-        Sector oldSector = active.Sector;
-        try
-        {
-            var issuing = SectorSimulationFixture.CreateDetached();
-            var installed = SectorSimulationFixture.CreateDetached();
-            AvailableMission recon = new("Recon", MissionAvailabilityKind.Recon);
+        var issuing = SectorSimulationFixture.CreateDetached();
+        var installed = SectorSimulationFixture.CreateDetached();
+        AvailableMission recon = new("Recon", MissionAvailabilityKind.Recon);
 
-            // The installed campaign would wave anything through; the one being commanded demands
-            // more duty-ready brothers than the five-man squad has.
-            installed.Sector.PlayerForce.Army.ChapterOperationalDoctrine
-                .MinimumDutyReadySquadStrength = 1;
-            issuing.Sector.PlayerForce.Army.ChapterOperationalDoctrine
-                .MinimumDutyReadySquadStrength = 6;
-            active.LoadGameDataFromBlob(null, new Date(42, 1, 1), installed.Sector);
+        // The other campaign would wave anything through; the one being commanded demands more
+        // duty-ready brothers than the five-man squad has.
+        installed.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+            .MinimumDutyReadySquadStrength = 1;
+        issuing.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+            .MinimumDutyReadySquadStrength = 6;
 
-            Squad squad = CreateSquad(issuing, "First", true);
-            Assert.Null(OrderAssignment.AssignSquadsToMission(
-                issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
-                Aggression.Normal));
-            Assert.Empty(issuing.Sector.Orders.Values);
+        Squad squad = CreateSquad(issuing, "First", true);
+        Assert.Null(OrderAssignment.AssignSquadsToMission(
+            issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
+            Aggression.Normal));
+        Assert.Empty(issuing.Sector.Orders.Values);
 
-            // Flip only the commanded campaign's doctrine; the installed one now forbids what the
-            // named one allows, and the named one must still win.
-            issuing.Sector.PlayerForce.Army.ChapterOperationalDoctrine
-                .MinimumDutyReadySquadStrength = 1;
-            installed.Sector.PlayerForce.Army.ChapterOperationalDoctrine
-                .MinimumDutyReadySquadStrength = 99;
+        // Flip only the commanded campaign's doctrine; the other campaign now forbids what the
+        // named one allows, and the named one must still win.
+        issuing.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+            .MinimumDutyReadySquadStrength = 1;
+        installed.Sector.PlayerForce.Army.ChapterOperationalDoctrine
+            .MinimumDutyReadySquadStrength = 99;
 
-            Order order = OrderAssignment.AssignSquadsToMission(
-                issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
-                Aggression.Normal);
+        Order order = OrderAssignment.AssignSquadsToMission(
+            issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
+            Aggression.Normal);
 
-            Assert.NotNull(order);
-            Assert.Same(order, Assert.Single(issuing.Sector.Orders.Values));
-            Assert.Empty(installed.Sector.Orders.Values);
-        }
-        finally
-        {
-            active.LoadGameDataFromBlob(oldRules, oldDate, oldSector);
-        }
+        Assert.NotNull(order);
+        Assert.Same(order, Assert.Single(issuing.Sector.Orders.Values));
+        Assert.Empty(installed.Sector.Orders.Values);
     }
 
     // SB-05a: order issue and cancellation resolve against the campaign they were handed. Two
@@ -214,7 +201,6 @@ public class OrderRestoreBoundaryTests
     [Fact]
     public void IssueAndCancel_OnDetachedSessions_MutateOnlyTheSuppliedCampaign()
     {
-        GameDataSingleton.Instance.ClearCampaign();
         var first = SectorSimulationFixture.CreateDetached();
         var second = SectorSimulationFixture.CreateDetached();
         Squad firstSquad = CreateSquad(first, "First", true);
@@ -230,8 +216,6 @@ public class OrderRestoreBoundaryTests
         Assert.NotNull(secondOrder);
         Assert.Same(firstOrder, Assert.Single(first.Sector.Orders.Values));
         Assert.Same(secondOrder, Assert.Single(second.Sector.Orders.Values));
-        Assert.Null(GameDataSingleton.Instance.Sector);
-
         Assert.True(OrderAssignment.UnassignSquads([firstSquad]));
 
         Assert.Empty(first.Sector.Orders.Values);

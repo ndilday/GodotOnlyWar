@@ -219,7 +219,8 @@ public class MissionDayBudgetTests
             levelOfAggression: Aggression.Normal,
             mission: new Mission(missionType, targetFaction, missionSize: 0));
 
-        return new MissionContext(order, [new BattleSquad(true, squad)], []);
+        return new MissionContext(order,
+            [TestMissionElementFactory.From(new BattleSquad(true, squad))], []);
     }
 
     private static Soldier CreateSaboteur(SoldierTemplate template, string name) =>
@@ -250,7 +251,8 @@ public class MissionDayBudgetTests
             levelOfAggression: Aggression.Normal,
             mission: new Mission(MissionType.Recon, targetFaction, missionSize: 0));
 
-        return new MissionContext(order, [new BattleSquad(true, squad)], []);
+        return new MissionContext(order,
+            [TestMissionElementFactory.From(new BattleSquad(true, squad))], []);
     }
 
     // The day budget only compares region identity, so the property tests get by with no owning

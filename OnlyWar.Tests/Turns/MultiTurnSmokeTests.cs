@@ -22,7 +22,7 @@ public class MultiTurnSmokeTests
 
         fixture.ProcessTurn();
 
-        Assert.Equal(new Date(1, 1, 2), GameDataSingleton.Instance.Date);
+        Assert.Equal(new Date(1, 1, 2), fixture.CurrentDate);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Missions;
@@ -125,7 +126,9 @@ public class MissionDaySchedulerTests
     {
         // Order is unused by the stubs, and MissionContext tolerates a null one (every read of it is
         // null-conditional), which keeps this a test of the scheduler rather than of world building.
-        MissionContext context = new(null, new List<BattleSquad>(), new List<BattleSquad>());
+        MissionContext context = new(null,
+            new List<OperationalMissionElement>(),
+            new List<OperationalMissionElement>());
         return new MissionStepDriver(
             TestExecutionContextFactory.CreateMission(context, new FixedRNG()),
             startingStep);

@@ -581,7 +581,8 @@ public class MissionStealthDifficultyTests
             levelOfAggression: Aggression.Normal,
             mission: new Mission(MissionType.Sabotage, target, missionSize: 0));
 
-        return new MissionContext(order, [new BattleSquad(true, squad)], []);
+        return new MissionContext(order,
+            [TestMissionElementFactory.From(new BattleSquad(true, squad))], []);
     }
 
     // Trained saboteurs clear every check in the loop, so the mission runs its full day budget and

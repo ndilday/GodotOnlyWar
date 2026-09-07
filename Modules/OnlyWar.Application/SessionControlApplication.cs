@@ -33,7 +33,7 @@ public sealed partial class CampaignApplication : ISessionControlApplication
     private void SubscribeStatus()
     {
         if (_statusSubscribed) return;
-        GameDataSingleton.Instance.Recoverability.StateChanged += OnRecoverabilityChanged;
+        _recoverability.StateChanged += OnRecoverabilityChanged;
         _statusSubscribed = true;
     }
 
@@ -43,14 +43,14 @@ public sealed partial class CampaignApplication : ISessionControlApplication
     public CampaignStatusView QueryStatus()
     {
         SubscribeStatus();
-        GameDataSingleton game = GameDataSingleton.Instance;
+        bool hasCampaign = _activeSession != null;
         return new CampaignStatusView(
-            _activeSession != null && game.IsInitialized,
-            game.IsInitialized && game.Recoverability.IsDirty,
+            hasCampaign,
+            hasCampaign && _recoverability.IsDirty,
             CampaignName());
     }
 
-    public void MarkChanged() => GameDataSingleton.Instance.Recoverability.MarkChanged();
+    public void MarkChanged() => _recoverability.MarkChanged();
 
     public SaveCampaignResult SaveCampaign(SaveCampaignCommand command)
     {
@@ -62,8 +62,7 @@ public sealed partial class CampaignApplication : ISessionControlApplication
 
         // Capture what is being saved before writing, so a failed write cannot mark a later state
         // recoverable. Only a successful write clears the dirty flag.
-        CampaignRecoverabilityTracker tracker = GameDataSingleton.Instance.Recoverability;
-        CampaignRevision revision = tracker.CaptureRevision();
+        CampaignRevision revision = _recoverability.CaptureRevision();
         try
         {
             SaveGameEntry entry = command.Kind switch
@@ -78,7 +77,7 @@ public sealed partial class CampaignApplication : ISessionControlApplication
                     _saves.SaveInitialAutosave(CampaignName(), path => Save(path)),
                 _ => _saves.SaveProtectedPreTurn(CampaignName(), path => Save(path))
             };
-            tracker.MarkSaveSucceeded(revision);
+            _recoverability.MarkSaveSucceeded(revision);
             return new(true, $"Campaign saved as {entry.DisplayName}.",
                 entry.DisplayName, entry.LastWriteTimeLocal);
         }

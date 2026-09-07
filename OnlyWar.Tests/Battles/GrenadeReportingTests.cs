@@ -83,7 +83,6 @@ public class GrenadeReportingTests
         try
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, battleDate, null);
         }
         finally
         {

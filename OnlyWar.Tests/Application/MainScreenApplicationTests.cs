@@ -195,8 +195,8 @@ public sealed class MainScreenApplicationTests
     {
         string source = ReadScene(Path.Combine("MainGameScreen", "MainGameScene.cs"));
         // Turn resolution, the persisted report, the founding directive and neophyte placement
-        // are all application commands now. The remaining singleton reads in this file resolve
-        // entities for screens SB-11c still has to migrate.
+        // are all application commands now. This source audit also guards against reintroducing a
+        // global campaign read.
         Assert.DoesNotContain("TurnResolutionResult", source);
         Assert.DoesNotContain("LastTurnReportSnapshot", source);
         Assert.DoesNotContain("BriefingAcknowledged", source);
@@ -211,9 +211,9 @@ public sealed class MainScreenApplicationTests
 
     private static CampaignApplication CreateApplication(IReadOnlyList<Planet> planets = null)
     {
-        SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         CampaignApplication application = new(new SeededRNG(41));
-        application.Install(CreateSession(GameDataSingleton.Instance.GameRulesData, planets));
+        application.Install(CreateSession(fixture.Rules, planets));
         return application;
     }
 

@@ -16,8 +16,8 @@ public sealed class CampaignApplicationTests
     {
         SectorSimulationFixture firstFixture = SectorSimulationFixture.Create();
         SectorSimulationFixture secondFixture = SectorSimulationFixture.CreateDetached();
-        GameRulesData rules = GameDataSingleton.Instance.GameRulesData
-            ?? throw new InvalidOperationException("The shared rules fixture was not initialized.");
+        GameRulesData rules = firstFixture.Rules
+            ?? throw new InvalidOperationException("The rules fixture was not initialized.");
         CampaignApplication application = new(new SeededRNG(101));
         GameSession first = new(rules, firstFixture.Sector, new Date(1, 1, 1), new SeededRNG(102));
         GameSession second = new(rules, secondFixture.Sector, new Date(2, 1, 1), new SeededRNG(103));
@@ -26,8 +26,8 @@ public sealed class CampaignApplicationTests
         application.Install(second);
 
         Assert.Same(second, application.ActiveSession);
-        Assert.Same(second.Sector, GameDataSingleton.Instance.Sector);
-        Assert.Same(second.CurrentDate, GameDataSingleton.Instance.Date);
+        Assert.Same(second.Sector, application.ActiveSession.Sector);
+        Assert.Same(second.CurrentDate, application.ActiveSession.CurrentDate);
         Assert.NotSame(first.Sector, application.ActiveSession.Sector);
     }
 
@@ -35,8 +35,8 @@ public sealed class CampaignApplicationTests
     public void FailedLoadLeavesTheInstalledSessionUntouched()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        GameRulesData rules = GameDataSingleton.Instance.GameRulesData
-            ?? throw new InvalidOperationException("The shared rules fixture was not initialized.");
+        GameRulesData rules = fixture.Rules
+            ?? throw new InvalidOperationException("The rules fixture was not initialized.");
         CampaignApplication application = new(new SeededRNG(104));
         GameSession active = new(rules, fixture.Sector, new Date(3, 1, 1), new SeededRNG(105));
         application.Install(active);
@@ -45,7 +45,7 @@ public sealed class CampaignApplicationTests
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "missing-onlywar-save.s3db")));
 
         Assert.Same(active, application.ActiveSession);
-        Assert.Same(active.Sector, GameDataSingleton.Instance.Sector);
-        Assert.Same(active.CurrentDate, GameDataSingleton.Instance.Date);
+        Assert.Same(active.Sector, application.ActiveSession.Sector);
+        Assert.Same(active.CurrentDate, application.ActiveSession.CurrentDate);
     }
 }

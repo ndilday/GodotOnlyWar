@@ -1,5 +1,6 @@
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
@@ -14,7 +15,7 @@ public class MissionCheckTests
     [Fact]
     public void IndividualMissionTest_UsesHighestSkilledAbleSoldier()
     {
-        BattleSquad squad = CreateBattleSquad(
+        OperationalMissionElement squad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(name: "Low", dexterity: 10, skills: new Skill(TestSkills.Stealth, 1)),
             TestModelFactory.CreateSoldier(name: "High", dexterity: 10, skills: new Skill(TestSkills.Stealth, 16)));
         IndividualMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
@@ -32,10 +33,10 @@ public class MissionCheckTests
     [Fact]
     public void LeaderMissionTest_SkillBreaksTieBetweenLeadersOfEqualRank()
     {
-        BattleSquad firstSquad = CreateBattleSquad(
+        OperationalMissionElement firstSquad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Decent Leader", charisma: 11, skills: new Skill(TestSkills.Leadership, 4)),
             TestModelFactory.CreateSoldier(name: "Brilliant Non-Leader", charisma: 18, skills: new Skill(TestSkills.Leadership, 64)));
-        BattleSquad secondSquad = CreateBattleSquad(
+        OperationalMissionElement secondSquad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Best Leader", charisma: 12, skills: new Skill(TestSkills.Leadership, 8)));
         LeaderMissionTest missionTest = new(TestSkills.Leadership, difficulty: 5);
 
@@ -134,7 +135,7 @@ public class MissionCheckTests
     [Fact]
     public void LeaderMissionTest_FallsBackToBestIndividualWhenNoLeaderExists()
     {
-        BattleSquad squad = CreateBattleSquad(
+        OperationalMissionElement squad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(name: "Low", charisma: 10, skills: new Skill(TestSkills.Leadership, 1)),
             TestModelFactory.CreateSoldier(name: "High", charisma: 13, skills: new Skill(TestSkills.Leadership, 4)));
         LeaderMissionTest missionTest = new(TestSkills.Leadership, difficulty: 5);
@@ -150,7 +151,7 @@ public class MissionCheckTests
     [Fact]
     public void SquadMissionTest_UsesAverageSkillAcrossAbleSoldiers()
     {
-        BattleSquad squad = CreateBattleSquad(
+        OperationalMissionElement squad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(name: "First", dexterity: 10, skills: new Skill(TestSkills.Stealth, 1)),
             TestModelFactory.CreateSoldier(name: "Second", dexterity: 14, skills: new Skill(TestSkills.Stealth, 4)));
         SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
@@ -170,7 +171,7 @@ public class MissionCheckTests
             name: "Scout",
             dexterity: 10,
             skills: new Skill(TestSkills.Stealth, 1));
-        BattleSquad squad = CreateBattleSquad(scout);
+        OperationalMissionElement squad = CreateBattleSquad(scout);
         IndividualMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
         var random = new RecordingRng(0.75);
 
@@ -181,9 +182,10 @@ public class MissionCheckTests
         Assert.Equal(1, random.NormalDraws);
     }
 
-    private static BattleSquad CreateBattleSquad(params Soldier[] soldiers)
+    private static OperationalMissionElement CreateBattleSquad(params Soldier[] soldiers)
     {
-        return new BattleSquad(true, TestModelFactory.CreateSquad("Test Squad", soldiers));
+        return TestMissionElementFactory.From(
+            new BattleSquad(true, TestModelFactory.CreateSquad("Test Squad", soldiers)));
     }
 
     private static float ExpectedMargin(float zAdvantage, int seed)

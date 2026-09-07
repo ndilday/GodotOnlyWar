@@ -358,7 +358,8 @@ public class MissionTargetStrengthTests
             levelOfAggression: Aggression.Normal,
             mission: new Mission(missionType, target, missionSize: 1));
 
-        return new MissionContext(order, [new BattleSquad(true, squad)], []);
+        return new MissionContext(order,
+            [TestMissionElementFactory.From(new BattleSquad(true, squad))], []);
     }
 
     // Trained raiders clear the checks in the loop; untrained ones fall back to the unskilled

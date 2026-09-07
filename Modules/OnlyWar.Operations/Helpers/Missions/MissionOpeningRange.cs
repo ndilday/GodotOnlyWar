@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Extensions;
 using System.Collections.Generic;
 using System.Linq;
@@ -35,11 +35,13 @@ namespace OnlyWar.Helpers.Missions
         /// mission force's own preference; at or below zero it opens at the enemy's.
         /// </param>
         public static ushort Interpolate(
-            IReadOnlyList<BattleSquad> missionSquads,
-            IReadOnlyList<BattleSquad> opposingSquads,
+            IReadOnlyList<OperationalMissionElement> missionSquads,
+            IReadOnlyList<OperationalMissionElement> opposingSquads,
+            IEngagementResolver resolver,
             float marginOfSuccess,
             IRNG random)
         {
+            if (resolver == null) throw new System.ArgumentNullException(nameof(resolver));
             float rangeModifier = GaussianCalculator.ApproximateNormalCDF(marginOfSuccess);
             // RNG-STREAM ANCHOR, and nothing else. Phase 6 drew one representative member per side
             // to stand in for that side's target profile, opposing-side first, to preserve the RNG
@@ -48,12 +50,12 @@ namespace OnlyWar.Helpers.Missions
             // anything -- but dropping them would shift every seeded mission battle's RNG stream,
             // mixing a wholesale re-baseline into a change whose only intended effect is the range.
             // Keeping them makes any divergence below attributable to the opening range itself.
-            _ = opposingSquads.First().GetRandomSquadMember(random);
-            _ = missionSquads.First().GetRandomSquadMember(random);
+            _ = opposingSquads.First().GetRandomAbleMember(random);
+            _ = missionSquads.First().GetRandomAbleMember(random);
             double missionRange = missionSquads.Average(
-                squad => squad.GetPreferredOpeningRange(opposingSquads));
+                squad => resolver.GetPreferredOpeningRange(squad, opposingSquads));
             double opposingRange = opposingSquads.Average(
-                squad => squad.GetPreferredOpeningRange(missionSquads));
+                squad => resolver.GetPreferredOpeningRange(squad, missionSquads));
             return (ushort)(opposingRange + (missionRange - opposingRange) * rangeModifier);
         }
     }

@@ -155,7 +155,6 @@ public sealed class FactionCapabilityStateTests
     {
         GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date campaignDate = new(39, 500, 1);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(rules, campaignDate, null);
         Sector sector = TestGeneration.GenerateSector(1, rules, campaignDate, "Invasion Source Test");
         PlanetTemplate template = rules.PlanetTemplateEligibility
             .GetEligibleTemplateIds(PlanetTemplateEligibilityKeys.GhostPopulationSource)
@@ -185,7 +184,6 @@ public sealed class FactionCapabilityStateTests
     {
         GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
         Date campaignDate = new(39, 500, 1);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(rules, campaignDate, null);
         Sector sector = TestGeneration.GenerateSector(1, rules, campaignDate, "Invasion Save Test");
         Faction invasionFaction = GetInvasionFaction(rules);
         Assert.NotNull(invasionFaction);

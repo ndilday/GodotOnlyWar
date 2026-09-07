@@ -1,4 +1,3 @@
-using OnlyWar.Builders;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -8,8 +7,6 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Models;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Orders;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -22,6 +19,7 @@ namespace OnlyWar.Helpers.Database.GameState
     {
         public IReadOnlyDictionary<int, Order> LoadedOrders { get; private set; } =
             new Dictionary<int, Order>();
+        public int NextOrderId { get; private set; } = 1;
 
         public Dictionary<int, List<Squad>> GetSquadsByUnitId(IDbConnection connection,
                                                                IReadOnlyDictionary<int, SquadTemplate> squadTemplateMap,
@@ -213,14 +211,14 @@ namespace OnlyWar.Helpers.Database.GameState
                         maxOrderId = orderId;
                     }
                 }
-                IdGenerator.SetNextOrderId(maxOrderId + 1);
+                NextOrderId = maxOrderId + 1;
             }
         }
 
-        public void PopulateOrderCharacters(
-            IDbConnection connection,
-            IReadOnlyDictionary<int, PlayerSoldier> soldiers)
+        public IReadOnlyList<OrderCharacterRecord> GetOrderCharacterAssignments(
+            IDbConnection connection)
         {
+            List<OrderCharacterRecord> assignments = [];
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = "SELECT OrderId, SoldierId FROM OrderCharacter";
             using IDataReader reader = command.ExecuteReader();
@@ -228,19 +226,9 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 int orderId = reader.GetInt32(0);
                 int soldierId = reader.GetInt32(1);
-                if (!LoadedOrders.TryGetValue(orderId, out Order order)
-                    || !soldiers.TryGetValue(soldierId, out PlayerSoldier soldier))
-                {
-                    throw new InvalidDataException(
-                        $"OrderCharacter ({orderId}, {soldierId}) references a missing order or player soldier.");
-                }
-                if (soldier.CurrentOrder != null && !ReferenceEquals(soldier.CurrentOrder, order))
-                {
-                    throw new InvalidDataException(
-                        $"Player soldier {soldierId} is assigned to multiple orders.");
-                }
-                OrderForceService.BindLoadedCharacter(order, soldier);
+                assignments.Add(new OrderCharacterRecord(orderId, soldierId));
             }
+            return assignments;
         }
 
         public List<Unit> GetUnits(IDbConnection connection,

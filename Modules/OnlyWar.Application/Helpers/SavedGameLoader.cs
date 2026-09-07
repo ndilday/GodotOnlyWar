@@ -1,14 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using OnlyWar.Builders;
+using OnlyWar.Contracts.Operations;
 using OnlyWar.Helpers.Database.GameState;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Events;
 using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.Narrative;
 
 namespace OnlyWar.Helpers
 {
@@ -16,7 +22,7 @@ namespace OnlyWar.Helpers
     /// Rebuilds the in-memory <see cref="Sector"/> from a loaded <see cref="GameStateDataBlob"/>.
     /// Extracted from the StartMenu load flow so the reconstruction is unit-testable without the
     /// Godot runtime; the caller is still responsible for wiring the sector into
-    /// <see cref="GameDataSingleton"/> and rebuilding the (derived) warp network.
+    /// active application session and rebuilding the (derived) warp network.
     /// </summary>
     internal static class SavedGameLoader
     {
@@ -78,6 +84,22 @@ namespace OnlyWar.Helpers
             {
                 playerForce.ChapterChronicle.Append(entry);
             }
+            RestoreRequests(gameState, playerForce, gameRulesData);
+            // Event storage is reconstructed before Campaign applies its narrative projections.
+            // Persistence returns the canonical event/Chronicle data but does not classify,
+            // narrate, reconcile, or build the legacy history view.
+            CampaignEventProjectionBuilder.PopulateSoldierServiceRecords(
+                playerForce.CampaignEventLedger,
+                army.PlayerSoldierMap.Values.Concat(army.FallenBrothers.Values),
+                playerForce.CampaignIdentity);
+            ChapterChronicleProjector.Reconcile(
+                playerForce.CampaignEventLedger,
+                playerForce.ChapterChronicle,
+                playerForce.CampaignIdentity);
+            Dictionary<Date, List<EventHistory>> history =
+                CampaignEventProjectionBuilder.BuildBattleHistoryView(
+                    playerForce.ChapterChronicle,
+                    playerForce.CampaignEventLedger);
             playerForce.GeneseedStockpile = (ushort)gameState.GeneseedStockpile;
             playerForce.GeneseedPurity = gameState.GeneseedPurity;
             playerForce.HomeWorldPlanetId = gameState.HomeWorldPlanetId;
@@ -86,7 +108,7 @@ namespace OnlyWar.Helpers
             ValidateSquadLineageInvariants(playerForce);
             playerForce.LastTurnReportSnapshot = gameState.LastTurnReportSnapshot;
             playerForce.RestoreWorldControlEpisodes(gameState.WorldControlEpisodes);
-            foreach (var historyDay in gameState.History ?? new Dictionary<Date, List<EventHistory>>())
+            foreach (var historyDay in history)
             {
                 foreach (EventHistory entry in historyDay.Value ?? [])
                 {
@@ -96,7 +118,6 @@ namespace OnlyWar.Helpers
                         entry.SubEvents ?? []);
                 }
             }
-            playerForce.Requests.AddRange(gameState.Requests ?? []);
             playerForce.Pledges.AddRange(gameState.Pledges ?? []);
             Sector sector = new Sector(
                 playerForce,
@@ -119,13 +140,169 @@ namespace OnlyWar.Helpers
             {
                 sector.AddNewOrder(order);
             }
+            RestoreOrderCharacters(gameState, playerForce);
+            RestoreIndividualPostings(gameState, playerForce, sector);
             if (playerForce.RecruitmentProgram != null)
             {
                 playerForce.RecruitmentProgram.TaskOrder = sector.Orders.Values.FirstOrDefault(order =>
                     order.Mission?.MissionType == Models.Missions.MissionType.Recruitment
                     && order.OwnerFaction == playerForce.Faction);
             }
+            RestoreRuntimeIds(gameState);
             return sector;
+        }
+
+        private static void RestoreOrderCharacters(
+            GameStateDataBlob gameState,
+            PlayerForce playerForce)
+        {
+            Dictionary<int, Order> orders = (gameState.Orders ?? [])
+                .Where(order => order != null)
+                .ToDictionary(order => order.Id);
+            Dictionary<int, PlayerSoldier> soldiers = playerForce.Army.PlayerSoldierMap
+                .Concat(playerForce.Army.FallenBrothers)
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            HashSet<int> assignedSoldiers = [];
+            foreach (OrderCharacterRecord assignment in gameState.OrderCharacterAssignments ?? [])
+            {
+                if (!orders.TryGetValue(assignment.OrderId, out Order order)
+                    || !soldiers.TryGetValue(assignment.SoldierId, out PlayerSoldier soldier))
+                {
+                    throw new InvalidDataException(
+                        $"OrderCharacter ({assignment.OrderId}, {assignment.SoldierId}) references a missing order or player soldier.");
+                }
+                if (!assignedSoldiers.Add(assignment.SoldierId))
+                {
+                    throw new InvalidDataException(
+                        $"Player soldier {assignment.SoldierId} is assigned to multiple orders.");
+                }
+                if (!OrderForceService.BindLoadedCharacter(order, soldier))
+                {
+                    throw new InvalidDataException(
+                        $"OrderCharacter ({assignment.OrderId}, {assignment.SoldierId}) could not be restored.");
+                }
+            }
+        }
+
+        private static void RestoreRequests(
+            GameStateDataBlob gameState,
+            PlayerForce playerForce,
+            GameRulesData gameRulesData)
+        {
+            Dictionary<int, Planet> planets = (gameState.Planets ?? [])
+                .Where(planet => planet != null)
+                .ToDictionary(planet => planet.Id);
+            Dictionary<int, Character> characters = (gameState.Characters ?? [])
+                .Where(character => character != null)
+                .ToDictionary(character => character.Id);
+            Dictionary<int, Faction> factions = (gameRulesData?.Factions ?? [])
+                .Where(faction => faction != null)
+                .ToDictionary(faction => faction.Id);
+
+            foreach (PresenceRequestRecord record in gameState.RequestRecords ?? [])
+            {
+                if (!planets.TryGetValue(record.TargetPlanetId, out Planet planet)
+                    || !characters.TryGetValue(record.RequesterId, out Character requester))
+                {
+                    throw new InvalidDataException(
+                        $"Request {record.Id} references a missing planet or requester.");
+                }
+                Faction threatFaction = record.ThreatFactionId is int threatId
+                    ? factions.GetValueOrDefault(threatId)
+                    : null;
+                if (record.ThreatFactionId.HasValue && threatFaction == null)
+                {
+                    throw new InvalidDataException(
+                        $"Request {record.Id} references missing threat faction {record.ThreatFactionId.Value}.");
+                }
+                PresenceRequest request = new(
+                    record.Id,
+                    planet,
+                    requester,
+                    threatFaction,
+                    Date.FromTotalWeeks(record.RequestDateWeeks),
+                    Date.FromTotalWeeks(record.DeadlineWeeks),
+                    record.Commitment,
+                    record.OfferedRequisition,
+                    record.OfferedScheduleKind,
+                    record.OfferedCadenceWeeks,
+                    record.OfferedDeliveryDelayWeeks,
+                    record.Severity,
+                    record.Hazard,
+                    record.ProgressBattleValueTime,
+                    record.HasPlayerResponded,
+                    record.Status,
+                    record.ResolvedDateWeeks is int resolvedWeeks
+                        ? Date.FromTotalWeeks(resolvedWeeks)
+                        : null);
+                playerForce.Requests.Add(request);
+                if (record.Status is RequestStatus.Open or RequestStatus.InProgress)
+                {
+                    requester.ActiveRequest = request;
+                }
+            }
+        }
+
+        private static void RestoreIndividualPostings(
+            GameStateDataBlob gameState,
+            PlayerForce playerForce,
+            Sector sector)
+        {
+            Dictionary<int, PlayerSoldier> soldiers = playerForce.Army.PlayerSoldierMap
+                .Concat(playerForce.Army.FallenBrothers)
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            Dictionary<int, Ship> ships = sector.Fleets.Values
+                .SelectMany(fleet => fleet.Ships)
+                .ToDictionary(ship => ship.Id);
+            Dictionary<int, Region> regions = sector.Planets.Values
+                .SelectMany(planet => planet.Regions)
+                .ToDictionary(region => region.Id);
+            IndividualPostingService service = new(OrderCommitmentSurface.Instance);
+            foreach (IndividualPostingRecord record in gameState.IndividualPostings ?? [])
+            {
+                if (!soldiers.TryGetValue(record.SoldierId, out PlayerSoldier soldier))
+                {
+                    throw new InvalidDataException(
+                        $"Posting references missing soldier {record.SoldierId}.");
+                }
+                CampaignLocation location;
+                if (record.LoadedShipId is int shipId)
+                {
+                    if (!ships.TryGetValue(shipId, out Ship ship))
+                    {
+                        throw new InvalidDataException(
+                            $"Posting for soldier {record.SoldierId} references missing ship {shipId}.");
+                    }
+                    location = CampaignLocation.Aboard(ship);
+                }
+                else if (record.LandedRegionId is int regionId)
+                {
+                    if (!regions.TryGetValue(regionId, out Region region))
+                    {
+                        throw new InvalidDataException(
+                            $"Posting for soldier {record.SoldierId} references missing region {regionId}.");
+                    }
+                    location = CampaignLocation.Landed(region);
+                }
+                else
+                {
+                    throw new InvalidDataException(
+                        $"Posting for soldier {record.SoldierId} has no persisted location.");
+                }
+                service.RestorePhysical(
+                    soldier,
+                    record.Purpose,
+                    location,
+                    Date.FromTotalWeeks(record.StartedDate));
+            }
+        }
+
+        private static void RestoreRuntimeIds(GameStateDataBlob gameState)
+        {
+            SoldierFactory.Instance.SetCurrentHighestSoldierId(gameState.HighestSoldierId);
+            RequestFactory.Instance.SetCurrentHighestRequestId(gameState.HighestRequestId);
+            OnlyWar.Runtime.IdGenerator.SetNextMissionId(gameState.NextMissionId);
+            OnlyWar.Runtime.IdGenerator.SetNextOrderId(gameState.NextOrderId);
         }
 
         private static void RestoreFactionCapabilityState(

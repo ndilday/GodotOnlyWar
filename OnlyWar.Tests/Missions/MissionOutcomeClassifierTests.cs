@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Drawing;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
@@ -181,8 +182,8 @@ public class MissionOutcomeClassifierTests
     [Fact]
     public void Classify_NullMission_DefaultsToPatrol()
     {
-        MissionContext context = new(order: null, playerSquads: new List<BattleSquad>(),
-            opposingForces: new List<BattleSquad>());
+        MissionContext context = new(order: null, playerSquads: new List<OperationalMissionElement>(),
+            opposingForces: new List<OperationalMissionElement>());
 
         Assert.Equal(MissionType.Patrol, MissionOutcomeClassifier.Classify(context).MissionType);
     }
@@ -194,7 +195,7 @@ public class MissionOutcomeClassifierTests
     {
         SabotageMission mission = new(DefenseType.AntiAir, 3, CreateRegionFaction());
         Order order = new(new List<Squad>(), true, false, Aggression.Cautious, mission);
-        MissionContext context = new(order, new List<BattleSquad>(), new List<BattleSquad>())
+        MissionContext context = new(order, new List<OperationalMissionElement>(), new List<OperationalMissionElement>())
         {
             Impact = 2.5f,
             SabotageDamageDealt = 1.25,
@@ -219,7 +220,7 @@ public class MissionOutcomeClassifierTests
         Mission mission = new(missionType, CreateRegionFaction(), 0);
         Order order = new(new List<Squad>(), true, false,
             Aggression.Cautious, mission);
-        return new MissionContext(order, new List<BattleSquad>(), new List<BattleSquad>());
+        return new MissionContext(order, new List<OperationalMissionElement>(), new List<OperationalMissionElement>());
     }
 
     private static RegionFaction CreateRegionFaction()

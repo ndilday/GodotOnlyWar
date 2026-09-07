@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
             Faction scout = context.MissionSquads.FirstOrDefault()?.Faction;
-            int scoutHeadcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            int scoutHeadcount = context.MissionSquads.Sum(s => s.AbleMembers.Count);
             // Detection aggregates across every enemy faction in the region (one stealth check per
             // day, not N independent rolls); the terms are broken out for the trace.
             StealthDifficultyTerms terms =
@@ -60,8 +60,8 @@ namespace OnlyWar.Helpers.Missions.Recon
             // The best (highest-skill) able scout's stealth value, so the log shows the gap between
             // the skill the check is rolled on and the difficulty it faces.
             float bestStealth = context.MissionSquads
-                .SelectMany(s => s.AbleSoldiers)
-                .Select(sol => sol.Soldier.GetTotalSkillValue(stealth))
+                .SelectMany(s => s.AbleMembers)
+                .Select(sol => sol.GetTotalSkillValue(stealth))
                 .DefaultIfEmpty(0f)
                 .Max();
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);

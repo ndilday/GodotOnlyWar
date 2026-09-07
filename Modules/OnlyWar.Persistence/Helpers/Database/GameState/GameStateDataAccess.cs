@@ -1,5 +1,4 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
@@ -25,7 +24,7 @@ namespace OnlyWar.Helpers.Database.GameState
     {
         public List<Character> Characters { get; set; }
         public List<Planet> Planets { get; set; }
-        public List<IRequest> Requests { get; set; }
+        public List<PresenceRequestRecord> RequestRecords { get; set; }
         public List<Pledge> Pledges { get; set; }
         public List<TaskForce> Fleets { get; set; }
         public List<Unit> Units { get; set; }
@@ -43,7 +42,12 @@ namespace OnlyWar.Helpers.Database.GameState
         public List<Order> Orders { get; set; }
         // Medical procedures in progress (PRD 4.8 / 5.3), restored onto the loaded Army.
         public List<MedicalProcedure> MedicalProcedures { get; set; }
-        public Dictionary<Date, List<EventHistory>> History { get; set; }
+        public IReadOnlyList<IndividualPostingRecord> IndividualPostings { get; set; }
+        public IReadOnlyList<OrderCharacterRecord> OrderCharacterAssignments { get; set; }
+        public int HighestSoldierId { get; set; }
+        public int HighestRequestId { get; set; }
+        public int NextMissionId { get; set; }
+        public int NextOrderId { get; set; }
         // Squad-less fallen brothers, retained for their dossiers (PRD 4.12).
         public List<PlayerSoldier> FallenBrothers { get; set; }
         // The Opening Scenario state (Design/Reference/OpeningScenario.md), or null for sandbox
@@ -161,19 +165,19 @@ namespace OnlyWar.Helpers.Database.GameState
             List<GhostPopulationSource> ghostPopulationSources = LoadGhostPopulationSources(
                 dbCon, factionMap, planetTemplateMap);
             var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions, factionMap);
-            var requests = _requestDataAccess.GetRequests(dbCon, characterMap, factionMap, planets);
+            var requestRecords = _requestDataAccess.GetRequestRecords(
+                dbCon, characterMap, factionMap, planets);
             var pledges = _pledgeDataAccess.GetPledges(dbCon);
             var ships = _fleetDataAccess.GetShipsByFleetId(dbCon, shipTemplateMap);
             var shipMap = ships.Values.SelectMany(s => s).ToDictionary(ship => ship.Id);
             var fleets = _fleetDataAccess.GetFleetsByFactionId(dbCon, ships, factionMap, planets);
-            FlagshipService flagships = new();
             List<Ship> playerShips = fleets
                 .Where(fleet => fleet.Faction == factionMap.Values.FirstOrDefault(faction => faction.IsPlayerFaction))
                 .SelectMany(fleet => fleet.Ships)
                 .ToList();
             Faction playerFaction = factionMap.Values.FirstOrDefault(
                 faction => faction.IsPlayerFaction);
-            flagships.ValidateSinglePlayerFlagship(playerFaction, playerShips);
+            SaveStateValidator.ValidateSinglePlayerFlagship(playerFaction, playerShips);
             var loadouts = _unitDataAccess.GetSquadWeaponSets(dbCon, weaponSets);
             var squads = _unitDataAccess.GetSquadsByUnitId(dbCon, squadTemplates, loadouts,
                                                            shipMap, regions, missionMap, factionMap,
@@ -188,13 +192,13 @@ namespace OnlyWar.Helpers.Database.GameState
                 .Concat(recruitment.Aspirants.Select(aspirant => aspirant.Id))
                 .DefaultIfEmpty(0)
                 .Max();
-            SoldierFactory.Instance.SetCurrentHighestSoldierId(highestIdentity);
             var playerSoldiers = _playerSoldierDataAccess.GetData(dbCon, soldiers);
-            _unitDataAccess.PopulateOrderCharacters(dbCon, playerSoldiers);
-            // Postings hydrate only after soldiers, squads, ships, regions, and orders exist.
-            // The service rebuilds both order and individual-ship projections from these rows.
-            _individualPostingDataAccess.Populate(
-                dbCon, squadMap, playerSoldiers, shipMap, regions);
+            IReadOnlyList<OrderCharacterRecord> orderCharacterAssignments =
+                _unitDataAccess.GetOrderCharacterAssignments(dbCon);
+            // Postings are returned as raw rows. Campaign reconstruction hydrates them only after
+            // the complete domain graph exists, so Persistence does not invoke posting policy.
+            IReadOnlyList<IndividualPostingRecord> individualPostings =
+                _individualPostingDataAccess.GetRecords(dbCon);
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
             var lastTurnReportSnapshot = _lastTurnReportDataAccess.GetSnapshot(dbCon);
@@ -212,18 +216,11 @@ namespace OnlyWar.Helpers.Database.GameState
             ChapterChronicleLedger chronicle = _chapterChronicleDataAccess.GetLedger(dbCon, campaignEvents);
             IReadOnlyList<WorldControlEpisodeState> worldControlEpisodes =
                 _worldControlEpisodeDataAccess.GetStates(dbCon);
-            CampaignEventProjectionBuilder.PopulateSoldierServiceRecords(
-                campaignEvents,
-                playerSoldiers.Values.Concat(fallenBrothers),
-                campaignIdentity);
-            ChapterChronicleProjector.Reconcile(campaignEvents, chronicle, campaignIdentity);
-            Dictionary<Date, List<EventHistory>> history =
-                CampaignEventProjectionBuilder.BuildBattleHistoryView(chronicle, campaignEvents);
             return new GameStateDataBlob
             {
                 Characters = characterMap.Values.ToList(),
                 Planets = planets,
-                Requests = requests,
+                RequestRecords = requestRecords,
                 Pledges = pledges,
                 Fleets = fleets,
                 Units = units,
@@ -235,7 +232,12 @@ namespace OnlyWar.Helpers.Database.GameState
                 Recruitment = recruitment,
                 Orders = _unitDataAccess.LoadedOrders.Values.ToList(),
                 MedicalProcedures = medicalProcedures,
-                History = history,
+                IndividualPostings = individualPostings,
+                OrderCharacterAssignments = orderCharacterAssignments,
+                HighestSoldierId = highestIdentity,
+                HighestRequestId = _requestDataAccess.HighestRequestId,
+                NextMissionId = _planetDataAccess.NextMissionId,
+                NextOrderId = _unitDataAccess.NextOrderId,
                 FallenBrothers = fallenBrothers,
                 Scenario = global?.Scenario,
                 ChapterLoadoutDoctrine = chapterLoadoutDoctrine,

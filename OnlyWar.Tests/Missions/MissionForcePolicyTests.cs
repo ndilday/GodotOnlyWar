@@ -1,5 +1,6 @@
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models.Missions;
 using OnlyWar.Tests.Fixtures;
@@ -12,8 +13,8 @@ public class MissionForcePolicyTests
     [Fact]
     public void Recon_ResolvesAsOneIndependentElementPerSquad()
     {
-        BattleSquad first = CreateBattleSquad("First");
-        BattleSquad second = CreateBattleSquad("Second");
+        OperationalMissionElement first = CreateBattleSquad("First");
+        OperationalMissionElement second = CreateBattleSquad("Second");
 
         var elements = MissionTurnProcessor.BuildMissionElements(
             MissionType.Recon,
@@ -33,8 +34,8 @@ public class MissionForcePolicyTests
     [InlineData(MissionType.Advance)]
     public void MassForceMissions_ResolveAsOneUnifiedElement(MissionType missionType)
     {
-        BattleSquad first = CreateBattleSquad("First");
-        BattleSquad second = CreateBattleSquad("Second");
+        OperationalMissionElement first = CreateBattleSquad("First");
+        OperationalMissionElement second = CreateBattleSquad("Second");
 
         var elements = MissionTurnProcessor.BuildMissionElements(
             missionType,
@@ -45,8 +46,8 @@ public class MissionForcePolicyTests
         Assert.Equal([first, second], elements[0]);
     }
 
-    private static BattleSquad CreateBattleSquad(string name) =>
-        new(true, TestModelFactory.CreateSquad(
+    private static OperationalMissionElement CreateBattleSquad(string name) =>
+        TestMissionElementFactory.From(new BattleSquad(true, TestModelFactory.CreateSquad(
             name,
-            TestModelFactory.CreateSoldier(name: $"{name} Scout")));
+            TestModelFactory.CreateSoldier(name: $"{name} Scout"))));
 }

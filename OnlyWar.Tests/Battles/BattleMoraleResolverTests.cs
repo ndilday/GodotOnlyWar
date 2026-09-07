@@ -208,7 +208,6 @@ public class BattleMoraleResolverTests
         try
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, date, null);
         }
         finally
         {

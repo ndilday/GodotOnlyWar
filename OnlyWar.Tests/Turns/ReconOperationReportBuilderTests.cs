@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Tests.Fixtures;
@@ -87,7 +88,10 @@ public class ReconOperationReportBuilderTests
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Cautious,
             mission: mission);
-        MissionContext context = new(order, [squad], []);
+        MissionContext context = new(
+            order,
+            [TestMissionElementFactory.From(squad)],
+            []);
         context.Impact = impact;
         return context;
     }

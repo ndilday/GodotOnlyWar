@@ -3,6 +3,7 @@ using System.Drawing;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Contracts.Battles;
 using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
@@ -31,7 +32,7 @@ public class MissionStepOutcomeSignalTests
         BattleHistory history = new() { FirstSideEnemiesKilled = 2, FirstSideEnemyDeaths = 1 };
         history.KilledSoldierIds.Add(42);
 
-        context.RecordBattleOutcome(history);
+        context.RecordBattleOutcome(TestMissionElementFactory.ToEngagementResult(history));
 
         Assert.True(context.TargetEliminated);
         Assert.Equal(1, context.EnemiesKilled);
@@ -46,7 +47,7 @@ public class MissionStepOutcomeSignalTests
         BattleHistory history = new() { FirstSideEnemiesKilled = 1, FirstSideEnemyDeaths = 1 };
         history.KilledSoldierIds.Add(99);
 
-        context.RecordBattleOutcome(history);
+        context.RecordBattleOutcome(TestMissionElementFactory.ToEngagementResult(history));
 
         Assert.False(context.TargetEliminated);
         Assert.Equal(1, context.EnemiesKilled);
@@ -59,7 +60,7 @@ public class MissionStepOutcomeSignalTests
         MissionContext context = CreateContext(MissionType.Ambush);
         BattleHistory history = new() { FirstSideEnemiesKilled = 3, FirstSideEnemyDeaths = 2 };
 
-        context.RecordBattleOutcome(history);
+        context.RecordBattleOutcome(TestMissionElementFactory.ToEngagementResult(history));
 
         Assert.Equal(2, context.EnemiesKilled);
         Assert.Equal(3, context.EnemyKillCredits);
@@ -77,7 +78,7 @@ public class MissionStepOutcomeSignalTests
             Outcome = new BattleOutcome(reason, BattleSide.Opposing)
         };
 
-        context.RecordBattleOutcome(history);
+        context.RecordBattleOutcome(TestMissionElementFactory.ToEngagementResult(history));
 
         Assert.True(context.ForceWithdrewUnderFire);
     }
@@ -91,7 +92,7 @@ public class MissionStepOutcomeSignalTests
             Outcome = new BattleOutcome(BattleEndReason.Withdrawal, BattleSide.Attacker)
         };
 
-        context.RecordBattleOutcome(history);
+        context.RecordBattleOutcome(TestMissionElementFactory.ToEngagementResult(history));
 
         Assert.False(context.ForceWithdrewUnderFire);
     }
@@ -102,7 +103,10 @@ public class MissionStepOutcomeSignalTests
         BattleSquad missionSquad = CreateOrderedBattleSquad(Aggression.Cautious);
         Mission mission = new(MissionType.Advance, CreateRegionFaction(), 0);
         Order order = new([missionSquad.Squad], true, false, Aggression.Cautious, mission);
-        MissionContext context = new(order, [missionSquad], []);
+        MissionContext context = new(
+            order,
+            [TestMissionElementFactory.From(missionSquad)],
+            []);
         BattleHistory history = new()
         {
             FirstSideEnemyDeaths = 1,
@@ -112,7 +116,7 @@ public class MissionStepOutcomeSignalTests
                 routingSquadIds: [missionSquad.Id])
         };
 
-        context.RecordBattleOutcome(history);
+        context.RecordBattleOutcome(TestMissionElementFactory.ToEngagementResult(history));
 
         Assert.Equal(1, context.EnemiesKilled);
         Assert.False(context.ForceWithdrewUnderFire);
@@ -127,7 +131,7 @@ public class MissionStepOutcomeSignalTests
             Outcome = new BattleOutcome(BattleEndReason.MutualDisengagement, null)
         };
 
-        context.RecordBattleOutcome(history);
+        context.RecordBattleOutcome(TestMissionElementFactory.ToEngagementResult(history));
 
         Assert.True(context.ForceWithdrewUnderFire);
     }
@@ -136,29 +140,34 @@ public class MissionStepOutcomeSignalTests
     public void BattleProfiles_UseMissionAggressionAndCommonOpposingOrders()
     {
         MissionContext context = CreateContext(MissionType.Advance);
-        BattleSquad first = CreateOrderedBattleSquad(Aggression.Aggressive);
-        BattleSquad second = CreateOrderedBattleSquad(Aggression.Aggressive);
+        OperationalMissionElement first = TestMissionElementFactory.From(
+            CreateOrderedBattleSquad(Aggression.Aggressive));
+        OperationalMissionElement second = TestMissionElementFactory.From(
+            CreateOrderedBattleSquad(Aggression.Aggressive));
 
-        BattleSideProfile mission = context.CreateMissionBattleProfile(BattleRole.Ambusher);
-        BattleSideProfile opposing = MissionContext.CreateOpposingBattleProfile(
-            [second, first], BattleRole.Ambushed);
+        EngagementSideProfile mission = context.CreateMissionEngagementProfile(EngagementRole.Ambusher);
+        EngagementSideProfile opposing = MissionContext.CreateOpposingEngagementProfile(
+            [second, first], EngagementRole.Ambushed);
 
         Assert.Equal(Aggression.Cautious, mission.Aggression);
-        Assert.Equal(BattleRole.Ambusher, mission.BattleRole);
+        Assert.Equal(EngagementRole.Ambusher, mission.Role);
         Assert.Equal(Aggression.Aggressive, opposing.Aggression);
-        Assert.Equal(BattleRole.Ambushed, opposing.BattleRole);
+        Assert.Equal(EngagementRole.Ambushed, opposing.Role);
     }
 
     [Fact]
     public void OpposingProfile_MixedOrMissingOrders_FallsBackToNormal()
     {
-        BattleSquad cautious = CreateOrderedBattleSquad(Aggression.Cautious);
-        BattleSquad aggressive = CreateOrderedBattleSquad(Aggression.Aggressive);
+        OperationalMissionElement cautious = TestMissionElementFactory.From(
+            CreateOrderedBattleSquad(Aggression.Cautious));
+        OperationalMissionElement aggressive = TestMissionElementFactory.From(
+            CreateOrderedBattleSquad(Aggression.Aggressive));
 
         Assert.Equal(Aggression.Normal,
-            MissionContext.CreateOpposingBattleProfile([], BattleRole.Defender).Aggression);
+            MissionContext.CreateOpposingEngagementProfile([], EngagementRole.Defender).Aggression);
         Assert.Equal(Aggression.Normal,
-            MissionContext.CreateOpposingBattleProfile([cautious, aggressive], BattleRole.Defender).Aggression);
+            MissionContext.CreateOpposingEngagementProfile(
+                [cautious, aggressive], EngagementRole.Defender).Aggression);
     }
 
     [Fact]
@@ -222,7 +231,10 @@ public class MissionStepOutcomeSignalTests
         Mission mission = new(missionType, CreateRegionFaction(), 0);
         Order order = new(new List<Squad>(), true, false,
             Aggression.Cautious, mission);
-        return new MissionContext(order, new List<BattleSquad>(), new List<BattleSquad>());
+        return new MissionContext(
+            order,
+            new List<OperationalMissionElement>(),
+            new List<OperationalMissionElement>());
     }
 
     private static MissionExecutionContext CreateExecution(MissionContext context) =>

@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
             Faction saboteur = context.MissionSquads.FirstOrDefault()?.Faction;
-            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            int headcount = context.MissionSquads.Sum(s => s.AbleMembers.Count);
             // Being seen is a property of the region, not of the faction whose installations are the
             // target: the same aggregated search-effort model as ReconStealthMissionStep, so a
             // saboteur is priced against what the region's occupants are actually doing to find him

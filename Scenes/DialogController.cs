@@ -17,9 +17,16 @@ public partial class DialogController : Control
     /// </summary>
     public void RequestClose()
     {
+        // Visibility can change and global input can arrive before the deferred stack refresh
+        // runs (for example when a dialog is opened and the caller immediately sends X). Refresh
+        // synchronously before honoring the request so the actual top dialog is not left open.
         if (_dialogView != null && !_isTopDialog)
         {
-            return;
+            RefreshDialogStack();
+            if (!_isTopDialog)
+            {
+                return;
+            }
         }
         CloseButtonPressed?.Invoke(this, EventArgs.Empty);
     }

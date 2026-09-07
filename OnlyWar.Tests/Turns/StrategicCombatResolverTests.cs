@@ -16,6 +16,8 @@ using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Recruitment;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -310,25 +312,17 @@ public class StrategicCombatResolverTests
             Aggression.Normal,
             invadesOnVictory: true);
         Order order = new(new List<Squad>(), false, true, Aggression.Normal, mission);
-        GameDataSingleton data = GameDataSingleton.Instance;
-        CampaignBattleEquipmentSource equipment =
-            new(data.GameRulesData, fixture.Sector.PlayerForce);
         MissionTurnProcessor processor = new(new MissionTurnDependencies
         {
             Sector = fixture.Sector,
-            Rules = data.GameRulesData,
-            CurrentDate = data.Date,
+            Rules = fixture.Rules,
+            CurrentDate = fixture.CurrentDate,
             Random = StaticRNG.Instance,
             Readiness = MedicalReadinessDecisions.Instance,
             Engagements = new NoOpEngagementResolver(),
-            Equipment = equipment,
             MissionRules = new MissionRules(TestSkills.Stealth, TestSkills.Tactics),
             Personnel = OperationsPersonnelSurface.Instance,
-            CreateBattleSquad = (isPlayer, squad, doctrine, program) =>
-                BattleSquadFactory.Create(isPlayer, squad, doctrine, program, equipment),
-            CreateAttachedBattleSquad = (character, tacticalId, faction, doctrine, program) =>
-                BattleSquadFactory.CreateAttachedCharacter(
-                    character, tacticalId, faction, doctrine, program, equipment)
+            EngagementElements = new NoOpEngagementElementFactory()
         });
         List<StrategicCombatResult> results = [];
 
@@ -391,5 +385,27 @@ public class StrategicCombatResolverTests
         public EngagementResult Resolve(EngagementInput input) =>
             throw new System.InvalidOperationException(
                 "The strategic-only fixture does not execute tactical engagements.");
+
+        public int GetPreferredOpeningRange(
+            OperationalMissionElement element,
+            IReadOnlyList<OperationalMissionElement> opposingElements) => 0;
+    }
+
+    private sealed class NoOpEngagementElementFactory : IEngagementElementFactory
+    {
+        public OperationalMissionElement CreateSquad(
+            bool isPlayerSquad,
+            Squad squad,
+            ChapterOperationalDoctrine doctrine = null,
+            RecruitmentProgram program = null) => null;
+
+        public OperationalMissionElement CreateAttachedCharacter(
+            PlayerSoldier character,
+            int tacticalId,
+            Faction fallbackFaction,
+            ChapterOperationalDoctrine doctrine = null,
+            RecruitmentProgram program = null) => null;
+
+        public void Update(OperationalMissionElement element) { }
     }
 }

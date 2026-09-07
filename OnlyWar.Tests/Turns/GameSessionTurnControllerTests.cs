@@ -15,11 +15,11 @@ public sealed class GameSessionTurnControllerTests
     public void ProcessTurn_UsesInjectedSessionDateAndRandomSource()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        Date singletonDate = GameDataSingleton.Instance.Date;
+        Date fixtureDate = fixture.CurrentDate;
         Date sessionDate = new(9, 321, 17);
         CountingRng sessionRandom = new();
         GameSession session = new(
-            GameDataSingleton.Instance.GameRulesData,
+            fixture.Rules,
             fixture.Sector,
             sessionDate,
             sessionRandom);
@@ -28,7 +28,7 @@ public sealed class GameSessionTurnControllerTests
 
         Assert.NotNull(result);
         Assert.Equal(18, sessionDate.Week);
-        Assert.Equal(1, singletonDate.Week);
+        Assert.Equal(1, fixtureDate.Week);
         Assert.True(sessionRandom.LinearDoubleCalls > 0);
     }
 
@@ -37,7 +37,7 @@ public sealed class GameSessionTurnControllerTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         GameSession session = new(
-            GameDataSingleton.Instance.GameRulesData,
+            fixture.Rules,
             fixture.Sector,
             new Date(9, 321, 17),
             new CountingRng());
@@ -54,7 +54,7 @@ public sealed class GameSessionTurnControllerTests
     {
         Sector sector = new();
         GameSession session = new(
-            GameDataSingleton.Instance.GameRulesData,
+            SectorSimulationFixture.Create().Rules,
             sector,
             new Date(9, 321, 17),
             new CountingRng());
