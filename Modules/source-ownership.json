@@ -43,7 +43,6 @@
     "Medical/MedicalBoundaryContracts.cs",
     "Medical/ReadinessDecisions.cs",
     "Medical/SquadDeploymentContext.cs",
-    "Application/CampaignRuntimeDefaults.cs",
     "Application/CampaignSessionContracts.cs",
     "Persistence/PersistenceBoundaryContracts.cs",
     "Runtime/RuntimeBoundaryContracts.cs"
@@ -243,7 +242,6 @@
     "Helpers/MusterPlanService.cs",
     "Helpers/Narrative/BriefingComposer.cs",
     "Helpers/RatingCalculator.cs",
-    "Helpers/Readiness/CurrentCampaignReadinessContext.cs",
     "Helpers/RecoveryMovementChoice.cs",
     "Helpers/RecoveryPlanService.cs",
     "Helpers/Recruitment/RecruitmentForecastService.cs",
