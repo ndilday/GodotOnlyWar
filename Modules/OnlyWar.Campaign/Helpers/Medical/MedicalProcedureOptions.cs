@@ -11,7 +11,7 @@ namespace OnlyWar.Helpers
         int Weeks,
         int RequisitionCost,
         bool IsAvailable,
-        // Per-requisite breakdown and overall assignability are filled in by the controller
+        // Per-requisite breakdown and overall assignability are filled in by the application query
         // via MedicalProcedureService once the soldier/force context is known; the builder
         // leaves them at their defaults.
         IReadOnlyList<ProcedureRequisite> Requisites = null,

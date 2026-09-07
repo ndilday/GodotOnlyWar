@@ -78,19 +78,21 @@ namespace OnlyWar.Helpers.Turns
             List<CommandAttentionFact> facts = [];
             List<Squad> playerSquads = GetPlayerSquads(sector).ToList();
             RecruitmentProgram program = sector.PlayerForce?.RecruitmentProgram;
+            ChapterOperationalDoctrine doctrine =
+                sector.PlayerForce?.Army?.ChapterOperationalDoctrine;
 
             facts.AddRange(playerSquads
-                .Where(squad => IsIdleDeployableSquad(squad, program))
+                .Where(squad => IsIdleDeployableSquad(squad, program, doctrine))
                 .OrderBy(squad => squad.CurrentRegion?.Planet?.Name
                     ?? squad.BoardedLocation?.Fleet?.Planet?.Name)
                 .ThenBy(squad => squad.CurrentRegion?.Name
                     ?? squad.BoardedLocation?.Name)
                 .ThenBy(squad => squad.Name)
                 .ThenBy(squad => squad.Id)
-                .Select(squad => BuildSquadFact(squad, program)));
+                .Select(squad => BuildSquadFact(squad, program, doctrine)));
 
             facts.AddRange(playerSquads
-                .Where(squad => IsLeaderlessSquad(squad, program))
+                .Where(squad => IsLeaderlessSquad(squad, program, doctrine))
                 .OrderBy(squad => squad.ParentUnit?.Name)
                 .ThenBy(squad => squad.Name)
                 .ThenBy(squad => squad.Id)
@@ -240,7 +242,8 @@ namespace OnlyWar.Helpers.Turns
 
         private static bool IsIdleDeployableSquad(
             Squad squad,
-            RecruitmentProgram program)
+            RecruitmentProgram program,
+            ChapterOperationalDoctrine doctrine)
         {
             bool canDeployFromCurrentLocation = squad?.CurrentRegion != null
                 || squad?.BoardedLocation?.Fleet is
@@ -255,17 +258,20 @@ namespace OnlyWar.Helpers.Turns
                 && !squad.PermitsIndividualDeployment
                 && !OrderAttachment.HasAttachedMembers(squad)
                 && canDeployFromCurrentLocation
-                && SquadReadinessService.Evaluate(squad, program: program, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad)).StructuralState
+                && SquadReadinessService.Evaluate(
+                    squad, program: program, doctrine: doctrine).StructuralState
                     == SquadReadinessState.Ready;
         }
 
         private static bool IsLeaderlessSquad(
             Squad squad,
-            RecruitmentProgram program) =>
+            RecruitmentProgram program,
+            ChapterOperationalDoctrine doctrine) =>
             squad?.Faction?.IsPlayerFaction == true
                 && squad.CanAcceptSquadOrder
                 && squad.Members.Count > 0
-                && SquadReadinessService.Evaluate(squad, program: program, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad)).LeaderStatus
+                && SquadReadinessService.Evaluate(
+                    squad, program: program, doctrine: doctrine).LeaderStatus
                     == SquadLeaderStatus.Vacant;
 
         private static bool IsActionableTaskForceWithoutOrders(Sector sector, TaskForce fleet) =>
@@ -278,12 +284,14 @@ namespace OnlyWar.Helpers.Turns
 
         private static CommandAttentionFact BuildSquadFact(
             Squad squad,
-            RecruitmentProgram program)
+            RecruitmentProgram program,
+            ChapterOperationalDoctrine doctrine)
         {
             string unit = string.IsNullOrWhiteSpace(squad.ParentUnit?.Name)
                 ? string.Empty
                 : $" - {squad.ParentUnit.Name}";
-            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(squad, program: program, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad));
+            SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(
+                squad, program: program, doctrine: doctrine);
             string location = SquadLocationFormatter.Format(squad);
             return new CommandAttentionFact(
                 $"squad/{squad.Id}/idle",

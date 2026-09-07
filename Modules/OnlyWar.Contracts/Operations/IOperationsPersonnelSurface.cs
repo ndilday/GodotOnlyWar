@@ -41,7 +41,8 @@ public interface IOperationsPersonnelSurface
         CampaignLocation location,
         Order order,
         out string reason,
-        ChapterOperationalDoctrine doctrine = null);
+        ChapterOperationalDoctrine doctrine = null,
+        RecruitmentProgram program = null);
 
     IndividualPosting Restore(
         PlayerSoldier soldier,
@@ -49,7 +50,8 @@ public interface IOperationsPersonnelSurface
         CampaignLocation location,
         Date startedDate,
         Order order = null,
-        ChapterOperationalDoctrine doctrine = null);
+        ChapterOperationalDoctrine doctrine = null,
+        RecruitmentProgram program = null);
 
     IndividualPosting RestorePhysical(
         PlayerSoldier soldier,

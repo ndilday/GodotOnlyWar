@@ -50,6 +50,26 @@ namespace OnlyWar.Helpers.UI
             _ => BodyText
         };
 
+        /// <summary>
+        /// The single place an application-supplied <see cref="UiAccent"/> classification becomes a
+        /// colour. Queries choose the meaning; only the host chooses the palette.
+        /// </summary>
+        public static Color Resolve(UiAccent accent) => accent switch
+        {
+            UiAccent.Muted => MutedText,
+            UiAccent.Gold => Gold,
+            UiAccent.Player => PlayerAccent,
+            UiAccent.Opposing => OpposingAccent,
+            UiAccent.Contested => MapContested,
+            UiAccent.Stable => MedicalStable,
+            UiAccent.Warning => MedicalWarning,
+            UiAccent.Critical => Critical,
+            _ => BodyText
+        };
+
+        public static Color Resolve(UiAccent? accent, Color fallback) =>
+            accent.HasValue ? Resolve(accent.Value) : fallback;
+
         public static Color WithAlpha(Color color, float alpha)
         {
             color.A = alpha;

@@ -19,13 +19,17 @@ namespace OnlyWar.Helpers.StrategicCombat
         private readonly Action<IntelObservation> _recordTargetObservation;
         private readonly IReadOnlyList<StrategicInvasionForce> _strategicInvasionForces;
 
+        /// <summary>
+        /// The resolver never reaches for a process-wide RNG: the caller owns the session's
+        /// randomness and must name it (SB-12).
+        /// </summary>
         public StrategicCombatResolver(
-            IRNG rng = null,
+            IRNG rng,
             Action<PlanetFaction, Region, float> recordIntelGain = null,
             Action<IntelObservation> recordTargetObservation = null,
             IReadOnlyList<StrategicInvasionForce> strategicInvasionForces = null)
         {
-            _rng = rng ?? StaticRNG.Instance;
+            _rng = rng ?? throw new ArgumentNullException(nameof(rng));
             _recordIntelGain = recordIntelGain;
             _recordTargetObservation = recordTargetObservation;
             _strategicInvasionForces = strategicInvasionForces;

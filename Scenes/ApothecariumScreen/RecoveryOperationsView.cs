@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Application;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
@@ -24,7 +25,7 @@ public partial class RecoveryOperationsView : Control
     public event EventHandler BackPressed;
     public event EventHandler<int> PatientSelected;
     public event EventHandler<RecoverySortRequest> SortChanged;
-    public event EventHandler<CampaignLocation> DestinationSelected;
+    public event EventHandler<MedicalLocationId> DestinationSelected;
     public event EventHandler<RecoveryMovementChoice> MovementSelected;
     public event EventHandler<ReplacementOption> TreatmentSelected;
     public event EventHandler ConfirmPressed;
@@ -240,7 +241,7 @@ public partial class RecoveryOperationsView : Control
 
         VBoxContainer destination = CardStack("2  CARE DESTINATION");
         if (_model.Destinations.Count == 0) destination.AddChild(Info("NO DESTINATION SELECTED — no procedure destination is required."));
-        foreach (CareDestinationCandidate site in _model.Destinations)
+        foreach (CareDestinationView site in _model.Destinations)
         {
             Button button = new()
             {
@@ -251,8 +252,8 @@ public partial class RecoveryOperationsView : Control
                 TooltipText = BuildDestinationTooltip(site),
                 MouseDefaultCursorShape = CursorShape.PointingHand
             };
-            IconAtlas.Apply(button, site.Location.Ship != null ? "ship" : "map_pin");
-            CampaignLocation location = site.Location;
+            IconAtlas.Apply(button, site.Location.Kind == MedicalLocationKind.Ship ? "ship" : "map_pin");
+            MedicalLocationId location = site.Location;
             button.Pressed += () => DestinationSelected?.Invoke(this, location);
             destination.AddChild(button);
         }
@@ -440,15 +441,15 @@ public partial class RecoveryOperationsView : Control
         return string.Join("\n", lines.Where(line => !string.IsNullOrWhiteSpace(line)));
     }
 
-    private static string BuildDestinationTooltip(CareDestinationCandidate site)
+    private static string BuildDestinationTooltip(CareDestinationView site)
     {
         List<string> lines =
         [
             $"{site.Name} — {site.SiteType}",
             $"Eligibility: {site.State}",
             $"Passenger berths: {site.AvailableBerths} available; {site.RequiredBerths} required",
-            $"Apothecary: {site.Apothecary?.Name ?? "not present"}",
-            $"Techmarine: {site.Techmarine?.Name ?? "not present"}"
+            $"Apothecary: {site.ApothecaryName ?? "not present"}",
+            $"Techmarine: {site.TechmarineName ?? "not present"}"
         ];
         if (site.Reasons.Count == 0)
         {

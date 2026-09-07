@@ -59,12 +59,14 @@ namespace OnlyWar.Helpers.Medical
         /// the same day double-treats.
         /// </summary>
         public static void ApplyDailyFieldCare(
+            IRNG random,
             Order order,
             FieldCareReport report,
             IReadOnlyList<BaseSkill> medicalSkills = null,
             int day = 0,
             RatingConsumerBindings ratingBindings = null)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             if (order == null || report == null) return;
 
             List<PlayerSoldier> underOrder = EnumerateUnderOrder(order).ToList();
@@ -78,7 +80,7 @@ namespace OnlyWar.Helpers.Medical
                 report.ApothecaryNames.Add(apothecary.Name);
             }
 
-            RunOneDay(apothecaries, underOrder, report, medicalSkills, day, order.Id,
+            RunOneDay(random, apothecaries, underOrder, report, medicalSkills, day, order.Id,
                 ratingBindings ?? RatingConsumerBindings.CreateDefault());
         }
 
@@ -100,10 +102,12 @@ namespace OnlyWar.Helpers.Medical
         /// the two halves cannot drift apart.
         /// </summary>
         public static IReadOnlyList<FieldCareReport> ApplyGarrisonFieldCare(
+            IRNG random,
             IEnumerable<PlayerSoldier> chapterMembers,
             IReadOnlyList<BaseSkill> medicalSkills = null,
             RatingConsumerBindings ratingBindings = null)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             List<FieldCareReport> reports = [];
             if (chapterMembers == null) return reports;
 
@@ -129,7 +133,7 @@ namespace OnlyWar.Helpers.Medical
 
                 for (int day = 1; day <= FieldCareConstants.GarrisonDaysPerTurn; day++)
                 {
-                    RunOneDay(apothecaries, present, report, medicalSkills, day, null,
+                    RunOneDay(random, apothecaries, present, report, medicalSkills, day, null,
                         ratingBindings ?? RatingConsumerBindings.CreateDefault());
                 }
                 reports.Add(report);
@@ -270,6 +274,7 @@ namespace OnlyWar.Helpers.Medical
         /// per-Apothecary state that would otherwise need persisting.
         /// </summary>
         private static void RunOneDay(
+            IRNG random,
             IReadOnlyList<PlayerSoldier> apothecaries,
             IReadOnlyList<PlayerSoldier> pool,
             FieldCareReport report,
@@ -289,7 +294,7 @@ namespace OnlyWar.Helpers.Medical
                     patient.Template?.Rank ?? 0,
                     patient.Template?.Subrank ?? 0,
                     patient.Body)).ToList(),
-                StaticRNG.Instance,
+                random,
                 day);
 
             foreach (FieldCareTreatmentResult treatment in treatments)

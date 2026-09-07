@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Turns
             if (governor.ActiveRequest != null)
             {
                 IRequest request = governor.ActiveRequest;
-                request.ProcessTurn(_session.CurrentDate);
+                request.ProcessTurn(_session.CurrentDate, _session.Rules);
                 if (request.Status == RequestStatus.Fulfilled)
                 {
                     CreatePledge(request);

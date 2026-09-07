@@ -13,6 +13,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Helpers.UI;
+using OnlyWar.Application;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using System.Linq;
@@ -228,21 +229,18 @@ public class PlanetaryOperationsServiceTests
         Assert.DoesNotContain(squad, ship.LoadedSquads);
         Assert.Contains(squad, GetPlayerPresence(fixture, destination).LandedSquads);
 
-        IReadOnlyList<DossierCardData> cards = PlanetaryOperationsViewModelBuilder.BuildRegionCards(
-            destination, fixture.Sector);
-        DossierCardData defenses = Assert.Single(cards,
+        IReadOnlyList<DossierCardView> cards = Projections(fixture).QueryRegionCards(destination.Id);
+        DossierCardView defenses = Assert.Single(cards,
             card => card.Title == "Imperial Defenses");
-        Assert.Equal("2", defenses.Rows.Single(row => row.Item1 == "Forces").Item2);
+        Assert.Equal("2", defenses.Rows.Single(row => row.Label == "Forces").Value);
     }
 
     [Fact]
     public void MapBuilder_AlwaysUsesExactDiamondAndStableTerrain()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        PlanetRegionMapViewModel first = PlanetRegionMapViewModelBuilder.Build(
-            fixture.Sector, fixture.Planet, PlanetMapOverlay.Control, fixture.Default.Id);
-        PlanetRegionMapViewModel second = PlanetRegionMapViewModelBuilder.Build(
-            fixture.Sector, fixture.Planet, PlanetMapOverlay.Control, fixture.Default.Id);
+        PlanetMapProjection first = Projections(fixture).QueryMap(PlanetMapOverlay.Control, fixture.Default.Id);
+        PlanetMapProjection second = Projections(fixture).QueryMap(PlanetMapOverlay.Control, fixture.Default.Id);
 
         Assert.Equal(new[] { 1, 2, 3, 4, 3, 2, 1 }, first.Rows.Select(row => row.Count));
         Assert.Equal(16, first.Rows.Sum(row => row.Count));
@@ -255,13 +253,12 @@ public class PlanetaryOperationsServiceTests
     public void MapBuilder_RotatesRowsToMatchEncodedHexProjection()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
-        PlanetRegionMapViewModel map = PlanetRegionMapViewModelBuilder.Build(
-            fixture.Sector, fixture.Planet, PlanetMapOverlay.Control, fixture.Default.Id);
+        PlanetMapProjection map = Projections(fixture).QueryMap(PlanetMapOverlay.Control, fixture.Default.Id);
 
         Assert.Equal(
             new[] { "9", "5,12", "2,8,14", "0,4,11,15", "1,7,13", "3,10", "6" },
             map.Rows.Select(row => string.Join(",", row.Select(card =>
-                System.Array.IndexOf(fixture.Planet.Regions, card.Region)))));
+                card.RegionId))));
     }
 
     [Fact]
@@ -285,16 +282,15 @@ public class PlanetaryOperationsServiceTests
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction enemy = fixture.AddControllingFaction(0, "Red Corsairs", population: 1000);
 
-        PlanetRegionMapViewModel map = PlanetRegionMapViewModelBuilder.Build(
-            fixture.Sector, fixture.Planet, PlanetMapOverlay.Control, fixture.Default.Id);
-        RegionMapCardViewModel card = map.Rows.SelectMany(row => row)
-            .Single(item => item.Region == fixture.Planet.Regions[0]);
+        PlanetMapProjection map = Projections(fixture).QueryMap(PlanetMapOverlay.Control, fixture.Default.Id);
+        MapRegionCard card = map.Rows.SelectMany(row => row)
+            .Single(item => item.RegionId == fixture.Planet.Regions[0].Id);
 
         Assert.Equal(RegionControlState.Enemy, card.Control);
         Assert.Equal(enemy.PlanetFaction.Faction.Id, card.ControlFactionId);
         Assert.Equal(enemy.PlanetFaction.Faction.Name, card.ControlFactionName);
-        Assert.Equal(enemy.PlanetFaction.Faction.Color.ToGodotColor(), card.ControlBorderColor);
-        Assert.NotEqual(OnlyWarStyle.OpposingAccent, card.ControlBorderColor);
+        Assert.Equal(enemy.PlanetFaction.Faction.Color.ToGodotColor(), PlanetRegionMapView.BorderColor(card));
+        Assert.NotEqual(OnlyWarStyle.OpposingAccent, PlanetRegionMapView.BorderColor(card));
         Assert.Null(card.Presences.Single(item => item.FactionName == "Red Corsairs").IconKey);
         Assert.Contains("Control: Red Corsairs", RegionMapCardView.BuildTooltip(card));
     }
@@ -306,14 +302,13 @@ public class PlanetaryOperationsServiceTests
         fixture.AddControllingFaction(0, "Red Corsairs", population: 1000);
         fixture.AddPublicCult(0, population: 1000, organization: 100);
 
-        PlanetRegionMapViewModel map = PlanetRegionMapViewModelBuilder.Build(
-            fixture.Sector, fixture.Planet, PlanetMapOverlay.Control, fixture.Default.Id);
-        RegionMapCardViewModel card = map.Rows.SelectMany(row => row)
-            .Single(item => item.Region == fixture.Planet.Regions[0]);
+        PlanetMapProjection map = Projections(fixture).QueryMap(PlanetMapOverlay.Control, fixture.Default.Id);
+        MapRegionCard card = map.Rows.SelectMany(row => row)
+            .Single(item => item.RegionId == fixture.Planet.Regions[0].Id);
 
         Assert.Equal(RegionControlState.Contested, card.Control);
-        Assert.Equal(OnlyWarStyle.MapContested, card.ControlBorderColor);
-        Assert.NotEqual(OnlyWarStyle.Gold, card.ControlBorderColor);
+        Assert.Equal(OnlyWarStyle.MapContested, PlanetRegionMapView.BorderColor(card));
+        Assert.NotEqual(OnlyWarStyle.Gold, PlanetRegionMapView.BorderColor(card));
     }
 
     [Fact]
@@ -339,10 +334,9 @@ public class PlanetaryOperationsServiceTests
         fixture.Sector.AddNewOrder(new Order(
             [assigned], true, false, Aggression.Normal, assignedMission));
 
-        RegionMapCardViewModel card = PlanetRegionMapViewModelBuilder.Build(
-                fixture.Sector, fixture.Planet, PlanetMapOverlay.Control, fixture.Default.Id)
+        MapRegionCard card = Projections(fixture).QueryMap(PlanetMapOverlay.Control, fixture.Default.Id)
             .Rows.SelectMany(row => row)
-            .Single(item => item.Region == region);
+            .Single(item => item.RegionId == region.Id);
 
         Assert.Equal(1, card.UnassignedSquads);
         Assert.Equal(1, card.MissionOpportunities);
@@ -408,8 +402,7 @@ public class PlanetaryOperationsServiceTests
         fixture.AddConsumptionFaction(0, population: 100, organization: 100);
         fixture.AddPublicCult(0, population: 100, organization: 100);
 
-        IReadOnlyList<DossierCardData> cards = PlanetaryOperationsViewModelBuilder.BuildRegionCards(
-            region, fixture.Sector);
+        IReadOnlyList<DossierCardView> cards = Projections(fixture).QueryRegionCards(region.Id);
 
         Assert.Equal(
             new[]
@@ -421,7 +414,7 @@ public class PlanetaryOperationsServiceTests
             },
             cards.Select(card => (card.Title, card.Subtitle)));
 
-        Assert.Equal("1", cards[1].Rows.Single(row => row.Item1 == "Forces").Item2);
+        Assert.Equal("1", cards[1].Rows.Single(row => row.Label == "Forces").Value);
     }
 
     [Fact]
@@ -432,13 +425,12 @@ public class PlanetaryOperationsServiceTests
         fixture.AddControllingFaction(0, "Red Corsairs", population: 100);
         AddPlayerSquad(fixture, region, "Chapter Squad", members: 2);
 
-        IReadOnlyList<DossierCardData> cards = PlanetaryOperationsViewModelBuilder.BuildRegionCards(
-            region, fixture.Sector);
+        IReadOnlyList<DossierCardView> cards = Projections(fixture).QueryRegionCards(region.Id);
 
-        DossierCardData defenses = Assert.Single(cards,
+        DossierCardView defenses = Assert.Single(cards,
             card => card.Title == "Imperial Defenses");
         Assert.Equal("Test Chapter", defenses.Subtitle);
-        Assert.Equal("2", defenses.Rows.Single(row => row.Item1 == "Forces").Item2);
+        Assert.Equal("2", defenses.Rows.Single(row => row.Label == "Forces").Value);
     }
 
     [Fact]
@@ -459,13 +451,13 @@ public class PlanetaryOperationsServiceTests
             CampaignLocation.Landed(region),
             new Date(1));
 
-        DossierCardData defenses = Assert.Single(
-            PlanetaryOperationsViewModelBuilder.BuildRegionCards(region, fixture.Sector),
+        DossierCardView defenses = Assert.Single(
+            Projections(fixture).QueryRegionCards(region.Id),
             card => card.Title == "Imperial Defenses");
-        PlanetaryOperationsHeaderViewModel header =
-            PlanetaryOperationsViewModelBuilder.BuildHeader(fixture.Sector, fixture.Planet);
+        OperationsHeaderView header =
+            Projections(fixture).QueryHeader();
 
-        Assert.Equal("2", defenses.Rows.Single(row => row.Item1 == "Forces").Item2);
+        Assert.Equal("2", defenses.Rows.Single(row => row.Label == "Forces").Value);
         Assert.Equal(2, header.Landed);
     }
 
@@ -485,13 +477,13 @@ public class PlanetaryOperationsServiceTests
             administrative, CampaignLocation.Landed(region));
 
         Assert.True(result.Succeeded);
-        DossierCardData defenses = Assert.Single(
-            PlanetaryOperationsViewModelBuilder.BuildRegionCards(region, fixture.Sector),
+        DossierCardView defenses = Assert.Single(
+            Projections(fixture).QueryRegionCards(region.Id),
             card => card.Title == "Imperial Defenses");
-        PlanetaryOperationsHeaderViewModel header =
-            PlanetaryOperationsViewModelBuilder.BuildHeader(fixture.Sector, fixture.Planet);
+        OperationsHeaderView header =
+            Projections(fixture).QueryHeader();
 
-        Assert.Equal("1", defenses.Rows.Single(row => row.Item1 == "Forces").Item2);
+        Assert.Equal("1", defenses.Rows.Single(row => row.Label == "Forces").Value);
         Assert.Equal(1, header.Landed);
     }
 
@@ -532,13 +524,11 @@ public class PlanetaryOperationsServiceTests
             estimatedMilitaryStrength: 5,
             evidenceWeek: 1);
 
-        WorldDossierViewModel dossier = PlanetaryOperationsViewModelBuilder.BuildWorld(
-            fixture.Sector,
-            fixture.Planet,
-            fixture.Planet.Regions[0]);
-        DossierCardData cultCard = dossier.StrengthCards.Single(card => card.Subtitle == "Genestealer Cult");
+        WorldDossierView dossier = Projections(fixture).QueryWorldDossier(
+            fixture.Planet.Id, fixture.Planet.Regions[0].Id);
+        DossierCardView cultCard = dossier.StrengthCards.Single(card => card.Subtitle == "Genestealer Cult");
 
-        Assert.Equal("Thousands", cultCard.Rows.Single(row => row.Item1 == "Force Estimate").Item2);
+        Assert.Equal("Thousands", cultCard.Rows.Single(row => row.Label == "Force Estimate").Value);
     }
 
     [Fact]
@@ -595,13 +585,15 @@ public class PlanetaryOperationsServiceTests
         Squad squad = AddPlayerSquad(fixture, region, "Recon Squad");
         AvailableMission available = MissionAvailability.GetAvailableMissions(region, region)
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
-        Order active = new(
+        fixture.Sector.AddNewOrder(new Order(
             [squad], true, false, Aggression.Normal,
-            new Mission(MissionType.Recon, fixture.DefaultRegionFaction(0), 0));
+            new Mission(MissionType.Recon, fixture.DefaultRegionFaction(0), 0)));
+
+        RegionalOperationsView view = Projections(fixture).QueryOrders(region.Id);
 
         Assert.Equal(
-            PlanetaryOperationsScreenView.BuildMissionTooltip(available),
-            PlanetaryOperationsScreenView.BuildMissionTooltip(active, [available]));
+            view.OrdinaryMissions.Single(option => option.Key == available.IdentityKey).Tooltip,
+            Assert.Single(view.ActiveOrders).Tooltip);
     }
 
     [Fact]
@@ -615,11 +607,13 @@ public class PlanetaryOperationsServiceTests
         region.SpecialMissions.Add(special);
         AvailableMission available = MissionAvailability.GetAvailableMissions(region, region)
             .Single(option => option.SpecialMission?.Id == special.Id);
-        Order active = new([squad], true, false, Aggression.Normal, special);
+        fixture.Sector.AddNewOrder(new Order([squad], true, false, Aggression.Normal, special));
+
+        RegionalOperationsView view = Projections(fixture).QueryOrders(region.Id);
 
         Assert.Equal(
-            PlanetaryOperationsScreenView.BuildMissionTooltip(available),
-            PlanetaryOperationsScreenView.BuildMissionTooltip(active, [available]));
+            view.SpecialMissions.Single(option => option.Key == available.IdentityKey).Tooltip,
+            Assert.Single(view.ActiveOrders).Tooltip);
     }
 
     [Fact]
@@ -694,15 +688,16 @@ public class PlanetaryOperationsServiceTests
         Squad personnelPool = AddPlayerSquad(
             fixture, region, "Librarius", squadTypes: SquadTypes.PermitsIndividualDetachment);
 
-        RegionalEligibilityResult eligibility = RegionalOrderEligibilityService.Build(
-            fixture.Sector, region, MedicalReadinessDecisions.Instance);
-        List<ForceTreeSquad> roster = PlanetaryOperationsScreenController.BuildOrderTreeRoster(
-            eligibility);
+        // The mission force tree is now a projection: assert on the rows the screen actually gets.
+        IReadOnlyList<HierarchyTreeItem> tree =
+            Projections(fixture).QueryOrders(region.Id).ForceTree;
+        List<string> keys = tree.SelectMany(group => group.Children)
+            .Select(item => item.Key).ToList();
 
-        Assert.Contains(roster, item => item.Squad == line);
-        Assert.DoesNotContain(roster, item => item.Squad == hq);
-        Assert.DoesNotContain(roster, item => item.Squad == administrative);
-        Assert.DoesNotContain(roster, item => item.Squad == personnelPool);
+        Assert.Contains($"squad:{line.Id}", keys);
+        Assert.DoesNotContain($"squad:{hq.Id}", keys);
+        Assert.DoesNotContain($"squad:{administrative.Id}", keys);
+        Assert.DoesNotContain($"squad:{personnelPool.Id}", keys);
     }
 
     [Fact]
@@ -816,6 +811,53 @@ public class PlanetaryOperationsServiceTests
         Assert.Contains(casualty, ship.IndividuallyBoardedSoldiers);
         Assert.Same(region, squad.CurrentRegion);
         Assert.Contains(squad, GetPlayerPresence(fixture, region).LandedSquads);
+    }
+
+    /// <summary>
+    /// The Planetary Operations projections as the screen receives them. Every card, map and force
+    /// row below is asserted through the real application boundary rather than a builder the host
+    /// used to own.
+    /// </summary>
+    private static OperationsProjectionProbe Projections(SectorSimulationFixture fixture) =>
+        new(fixture);
+
+    private sealed class OperationsProjectionProbe
+    {
+        private readonly SectorSimulationFixture _fixture;
+        private readonly CampaignApplication _application;
+
+        internal OperationsProjectionProbe(SectorSimulationFixture fixture)
+        {
+            _fixture = fixture;
+            _application = new CampaignApplication(new SeededRNG(31));
+            _application.Install(new OnlyWar.Helpers.Simulation.GameSession(
+                GameDataSingleton.Instance.IsInitialized
+                    ? GameDataSingleton.Instance.GameRulesData : null,
+                fixture.Sector, fixture.CurrentDate, new SeededRNG(32)));
+        }
+
+        private OperationsWorkspaceQuery Query(
+            int regionId, PlanetMapOverlay overlay = PlanetMapOverlay.Control,
+            int? factionId = null, PlanetaryOperationsVerb verb = PlanetaryOperationsVerb.Order) =>
+            new(_fixture.Planet.Id, regionId, overlay, factionId, verb, null, null, "",
+                ForceTreeGrouping.Company, new HashSet<int>(), new HashSet<int>(),
+                new HashSet<int>(), null);
+
+        internal IReadOnlyList<DossierCardView> QueryRegionCards(int regionId) =>
+            _application.QueryRegionCards(regionId);
+
+        internal PlanetMapProjection QueryMap(PlanetMapOverlay overlay, int? factionId) =>
+            _application.QueryOperations(
+                Query(_fixture.Planet.Regions[0].Id, overlay, factionId)).Map;
+
+        internal OperationsHeaderView QueryHeader() =>
+            _application.QueryOperations(Query(_fixture.Planet.Regions[0].Id)).Header;
+
+        internal RegionalOperationsView QueryOrders(int regionId) =>
+            _application.QueryOperations(Query(regionId)).Orders;
+
+        internal WorldDossierView QueryWorldDossier(int planetId, int regionId) =>
+            _application.QueryWorldDossier(planetId, regionId);
     }
 
     private static Squad AddPlayerSquad(

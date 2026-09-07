@@ -112,7 +112,8 @@ namespace OnlyWar.Helpers
                     _session.Rules.BaseSkillMap,
                     _session.Rules.RatingConsumers),
                 ApplyDailyFieldCare = (order, report, skills, day, ratings) =>
-                    FieldCareService.ApplyDailyFieldCare(order, report, skills, day, ratings),
+                    FieldCareService.ApplyDailyFieldCare(
+                        _session.Random, order, report, skills, day, ratings),
                 RecordIntelGain = _planetIntelligenceProcessor.RecordIntelGain,
                 RecordTargetObservation = _planetIntelligenceProcessor.RecordTargetObservation,
                 RecordScenarioPdfLost = ScenarioMetricsCollector.RecordScenarioPdfLost,

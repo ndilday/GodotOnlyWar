@@ -103,6 +103,17 @@ public partial class ReleaseSceneWiringSmoke : Node
         CloseOpeningBriefingIfPresent(mainGame);
         await NextFrame();
 
+        Press(RequireNode<Button>(bottomMenu,
+            "Panel/MarginContainer/HBoxContainer/ApothecariumButton"));
+        ApothecariumScreenController medical = await WaitForVisible<ApothecariumScreenController>(mainGame);
+        if (Require(medical != null, "Apothecarium navigation did not open the application-backed screen."))
+        {
+            RequireNode<ApothecariumScreenView>(medical, "ApothecariumScreenView");
+            medical.RefreshFromExternalChange();
+            medical.RequestClose();
+            await NextFrame();
+        }
+
         VBoxContainer dossierSection = RequireNode<VBoxContainer>(systemInspector,
             "Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection");
         VBoxContainer dossierContent = RequireNode<VBoxContainer>(systemInspector,
@@ -112,13 +123,13 @@ public partial class ReleaseSceneWiringSmoke : Node
         Planet selectedPlanet = GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault();
         if (selectedPlanet != null)
         {
-            systemInspector.DisplayFleetContext(selectedPlanet);
+            systemInspector.DisplayFleetContext(selectedPlanet.Id);
             Require(!dossierSection.Visible,
                 "Selecting a non-planet map object left the world dossier visible.");
             systemInspector.DisplayEmptyState();
             Require(!dossierSection.Visible && dossierContent.GetChildCount() == 0,
                 "Clearing the map selection left dossier content visible.");
-            systemInspector.DisplayPlanet(selectedPlanet);
+            systemInspector.DisplayPlanet(selectedPlanet.Id);
         }
 
         Button systemOptionsButton = RequireNode<Button>(mainGame,

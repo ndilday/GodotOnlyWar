@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d0f0f"/>
+      <stop offset="1" stop-color="#070808"/>
+    </linearGradient>
+    <linearGradient id="iron" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b362e"/>
+      <stop offset=".45" stop-color="#24221e"/>
+      <stop offset="1" stop-color="#111211"/>
+    </linearGradient>
+    <linearGradient id="ironHover" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#524737"/>
+      <stop offset=".45" stop-color="#312b23"/>
+      <stop offset="1" stop-color="#171715"/>
+    </linearGradient>
+    <linearGradient id="ironPressed" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#121311"/>
+      <stop offset="1" stop-color="#2a241c"/>
+    </linearGradient>
+    <linearGradient id="agedBrass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b08b50"/>
+      <stop offset=".35" stop-color="#765d36"/>
+      <stop offset="1" stop-color="#403522"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="180%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#000000" flood-opacity=".82"/>
+    </filter>
+    <filter id="smallShadow" x="-20%" y="-30%" width="140%" height="180%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity=".78"/>
+    </filter>
+    <pattern id="scratches" width="24" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(-8)">
+      <path d="M2 4 H13 M17 13 H23" stroke="#d1b57b" stroke-opacity=".10" stroke-width="1"/>
+      <path d="M8 16 H12" stroke="#070807" stroke-opacity=".35" stroke-width="2"/>
+    </pattern>
+    <pattern id="crosshatch" width="12" height="12" patternUnits="userSpaceOnUse">
+      <path d="M0 0 L12 12 M12 0 L0 12" stroke="#c0a16b" stroke-opacity=".055" stroke-width="1"/>
+    </pattern>
+    <pattern id="hammered" width="42" height="24" patternUnits="userSpaceOnUse">
+      <rect width="42" height="24" fill="#30281e" fill-opacity=".62"/>
+      <path d="M2 5 l7 -2 l4 3 l-3 3 l-8 1 z M21 3 l5 1 l2 5 l-6 2 l-4 -4 z M34 14 l6 -3 l3 4 l-4 5 l-7 -2 z" fill="#8b6a3e" fill-opacity=".19"/>
+      <path d="M7 17 l5 -3 l6 2 l-2 4 l-8 2 z M27 11 l4 -2 l5 2 l-2 4 l-7 1 z" fill="#0d0e0d" fill-opacity=".60"/>
+      <path d="M2 12 h8 M18 20 h7 M31 5 h8" stroke="#c0a16b" stroke-opacity=".15" stroke-width="1"/>
+    </pattern>
+    <pattern id="edgeWear" width="54" height="12" patternUnits="userSpaceOnUse">
+      <path d="M2 4 h18 M29 8 h11 M46 3 h6" stroke="#e0c58a" stroke-opacity=".20" stroke-width="1"/>
+      <path d="M7 10 h9 M35 2 h8" stroke="#090a09" stroke-opacity=".72" stroke-width="2"/>
+    </pattern>
+    <path id="plaque" d="M18 2 H362 L378 18 V78 L362 94 H18 L2 78 V18 Z"/>
+    <path id="innerPlaque" d="M22 9 H358 L371 22 V74 L358 87 H22 L9 74 V22 Z"/>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#page)"/>
+  <text x="72" y="70" fill="#918269" font-family="Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">AGED GOTHIC BUTTON STUDY</text>
+  <text x="72" y="116" fill="#d0b77e" font-family="Arial, sans-serif" font-size="30" font-weight="700">A control cut from the same relic-metal language as the icons</text>
+  <text x="72" y="150" fill="#c3baa6" font-family="Arial, sans-serif" font-size="16">Dark iron body. Tarnished brass edge. Heraldic corners. A little color only where the command needs it.</text>
+
+  <g transform="translate(72 202)">
+    <rect width="510" height="530" rx="3" fill="#151717" stroke="#6d5938" stroke-opacity=".72"/>
+    <text x="24" y="40" fill="#d0b77e" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">SOURCE PLAQUE</text>
+    <text x="24" y="68" fill="#918269" font-family="Arial, sans-serif" font-size="13">384 × 96 transparent PNG · iron / aged brass</text>
+
+    <g transform="translate(65 112)" filter="url(#shadow)">
+      <use href="#plaque" fill="url(#iron)" stroke="url(#agedBrass)" stroke-width="3"/>
+      <use href="#innerPlaque" fill="url(#scratches)" stroke="#191815" stroke-width="2"/>
+      <use href="#innerPlaque" fill="url(#crosshatch)"/>
+      <use href="#innerPlaque" fill="url(#hammered)" opacity=".86"/>
+      <path d="M24 13 H356" stroke="#e0c58a" stroke-opacity=".20" stroke-width="1"/>
+      <path d="M24 16 H356 M24 79 H356" stroke="url(#edgeWear)" stroke-width="3" opacity=".75"/>
+      <path d="M20 83 H360" stroke="#090a09" stroke-opacity=".8" stroke-width="3"/>
+      <path d="M2 18 L18 2 L18 18 Z M362 2 L378 18 L362 18 Z M2 78 L18 94 L18 78 Z M362 94 L378 78 L362 78 Z" fill="#51402a" stroke="#bd995e" stroke-opacity=".45"/>
+      <path d="M9 38 L15 32 H31 V64 H15 L9 58 Z" fill="#1c1a15" stroke="#7e6138" stroke-width="2"/>
+      <rect x="15" y="40" width="12" height="16" fill="#0c0d0c" stroke="#b08b50" stroke-opacity=".55"/>
+      <circle cx="21" cy="48" r="2" fill="#d0b77e"/>
+      <path d="M371 38 L365 32 H349 V64 H365 L371 58 Z" fill="#1c1a15" stroke="#7e6138" stroke-width="2"/>
+      <rect x="353" y="40" width="12" height="16" fill="#0c0d0c" stroke="#b08b50" stroke-opacity=".55"/>
+      <circle cx="359" cy="48" r="2" fill="#d0b77e"/>
+      <path d="M188 23 L199 35 L194 35 L194 61 L182 61 L182 35 L177 35 Z" fill="#4c8b88" opacity=".9"/>
+      <text x="190" y="73" text-anchor="middle" fill="#e4d4ae" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">OPEN LOADOUTS</text>
+    </g>
+
+    <g transform="translate(65 112)">
+      <path d="M34 0 V96 M346 0 V96 M0 24 H380 M0 72 H380" fill="none" stroke="#62aaa7" stroke-width="2" stroke-dasharray="6 5" stroke-opacity=".92"/>
+      <text x="190" y="128" text-anchor="middle" fill="#62aaa7" font-family="Arial, sans-serif" font-size="12" font-weight="700">L 34 · T 24 · R 34 · B 24</text>
+    </g>
+
+    <g transform="translate(24 300)">
+      <rect width="14" height="14" fill="#8d6f43"/>
+      <text x="24" y="12" fill="#c3baa6" font-family="Arial, sans-serif" font-size="13">corners preserve the heraldic silhouette</text>
+      <rect y="36" width="14" height="14" fill="#62aaa7"/>
+      <text x="24" y="48" fill="#c3baa6" font-family="Arial, sans-serif" font-size="13">edges can stretch without losing the bevel</text>
+      <rect y="72" width="14" height="14" fill="#6e6656"/>
+      <text x="24" y="84" fill="#c3baa6" font-family="Arial, sans-serif" font-size="13">center carries restrained scratches / grain</text>
+    </g>
+  </g>
+
+  <g transform="translate(616 202)">
+    <rect width="912" height="530" rx="3" fill="#151717" stroke="#6d5938" stroke-opacity=".72"/>
+    <text x="24" y="40" fill="#d0b77e" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">NINE-SLICE INSTANCES</text>
+    <text x="24" y="68" fill="#918269" font-family="Arial, sans-serif" font-size="13">The ornament remains fixed while the dark iron center accommodates the label.</text>
+
+    <g transform="translate(30 110)" filter="url(#smallShadow)">
+      <path d="M18 2 H274 L290 18 V62 L274 78 H18 L2 62 V18 Z" fill="url(#iron)" stroke="url(#agedBrass)" stroke-width="3"/>
+      <rect x="34" y="9" width="224" height="62" fill="url(#scratches)"/>
+      <path d="M34 9 H258 M34 71 H258" stroke="#191815" stroke-width="2"/>
+      <rect x="34" y="9" width="224" height="62" fill="url(#hammered)" opacity=".86"/>
+      <path d="M24 13 H266 M34 16 H258 M34 70 H258" stroke="url(#edgeWear)" stroke-width="2" opacity=".75"/>
+      <path d="M9 31 L15 25 H31 V55 H15 L9 49 Z" fill="#1c1a15" stroke="#7e6138" stroke-width="2"/>
+      <rect x="15" y="35" width="12" height="12" fill="#0c0d0c" stroke="#b08b50" stroke-opacity=".55"/>
+      <circle cx="21" cy="41" r="2" fill="#d0b77e"/>
+      <path d="M281 31 L275 25 H259 V55 H275 L281 49 Z" fill="#1c1a15" stroke="#7e6138" stroke-width="2"/>
+      <rect x="263" y="35" width="12" height="12" fill="#0c0d0c" stroke="#b08b50" stroke-opacity=".55"/>
+      <circle cx="269" cy="41" r="2" fill="#d0b77e"/>
+      <path d="M34 4 V76 M258 4 V76" fill="none" stroke="#62aaa7" stroke-width="1" stroke-dasharray="4 4" stroke-opacity=".8"/>
+      <text x="148" y="45" text-anchor="middle" fill="#e4d4ae" font-family="Arial, sans-serif" font-size="14" font-weight="700">MUSTER</text>
+    </g>
+    <text x="30" y="226" fill="#918269" font-family="Arial, sans-serif" font-size="12">compact command · 292 px · corners remain fixed</text>
+
+    <g transform="translate(30 270)" filter="url(#smallShadow)">
+      <path d="M18 2 H802 L818 18 V62 L802 78 H18 L2 62 V18 Z" fill="url(#iron)" stroke="url(#agedBrass)" stroke-width="3"/>
+      <rect x="34" y="9" width="752" height="62" fill="url(#scratches)"/>
+      <path d="M34 9 H786 M34 71 H786" stroke="#191815" stroke-width="2"/>
+      <rect x="34" y="9" width="752" height="62" fill="url(#hammered)" opacity=".86"/>
+      <path d="M24 13 H796 M34 16 H786 M34 70 H786" stroke="url(#edgeWear)" stroke-width="2" opacity=".75"/>
+      <path d="M9 31 L15 25 H31 V55 H15 L9 49 Z" fill="#1c1a15" stroke="#7e6138" stroke-width="2"/>
+      <rect x="15" y="35" width="12" height="12" fill="#0c0d0c" stroke="#b08b50" stroke-opacity=".55"/>
+      <circle cx="21" cy="41" r="2" fill="#d0b77e"/>
+      <path d="M811 31 L805 25 H789 V55 H805 L811 49 Z" fill="#1c1a15" stroke="#7e6138" stroke-width="2"/>
+      <rect x="793" y="35" width="12" height="12" fill="#0c0d0c" stroke="#b08b50" stroke-opacity=".55"/>
+      <circle cx="799" cy="41" r="2" fill="#d0b77e"/>
+      <path d="M34 4 V76 M786 4 V76" fill="none" stroke="#62aaa7" stroke-width="1" stroke-dasharray="4 4" stroke-opacity=".8"/>
+      <path d="M404 22 L415 34 L410 34 L410 60 L398 60 L398 34 L393 34 Z" fill="#62aaa7" opacity=".9"/>
+      <text x="410" y="47" text-anchor="middle" fill="#e4d4ae" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="1">CONFIRM PERSONNEL TRANSFER</text>
+    </g>
+    <text x="30" y="386" fill="#918269" font-family="Arial, sans-serif" font-size="12">wide command · 820 px · only the center and edge bands expand</text>
+
+    <g transform="translate(30 438)">
+      <g>
+        <use href="#plaque" fill="url(#iron)" stroke="url(#agedBrass)" stroke-width="2" transform="scale(.48 .49)"/>
+        <text x="91" y="29" text-anchor="middle" fill="#e4d4ae" font-family="Arial, sans-serif" font-size="11" font-weight="700">NORMAL</text>
+      </g>
+      <g transform="translate(208)">
+        <use href="#plaque" fill="url(#ironHover)" stroke="#b08b50" stroke-width="2" transform="scale(.48 .49)"/>
+        <text x="91" y="29" text-anchor="middle" fill="#f2e2bd" font-family="Arial, sans-serif" font-size="11" font-weight="700">HOVER</text>
+      </g>
+      <g transform="translate(416 3)">
+        <use href="#plaque" fill="url(#ironPressed)" stroke="#80633b" stroke-width="2" transform="scale(.48 .49)"/>
+        <text x="91" y="29" text-anchor="middle" fill="#d0b77e" font-family="Arial, sans-serif" font-size="11" font-weight="700">PRESSED</text>
+      </g>
+      <g transform="translate(624)">
+        <use href="#plaque" fill="#252621" stroke="#5c574a" stroke-width="2" transform="scale(.48 .49)" opacity=".72"/>
+        <text x="91" y="29" text-anchor="middle" fill="#9d9788" font-family="Arial, sans-serif" font-size="11" font-weight="700">DISABLED</text>
+      </g>
+    </g>
+  </g>
+
+  <text x="72" y="785" fill="#918269" font-family="Arial, sans-serif" font-size="13">Godot mapping: StyleBoxTexture → texture margins → Button/styles/normal, hover, pressed, disabled.</text>
+  <text x="72" y="815" fill="#918269" font-family="Arial, sans-serif" font-size="13">The frame reads as an artifact from the setting; the dark center keeps the UI from becoming ornamental noise.</text>
+</svg>

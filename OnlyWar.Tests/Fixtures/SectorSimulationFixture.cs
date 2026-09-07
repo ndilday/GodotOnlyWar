@@ -29,6 +29,12 @@ internal sealed class SectorSimulationFixture
     public Planet Planet { get; private set; }
     public Sector Sector { get; private set; }
 
+    /// <summary>
+    /// The rules this fixture loaded, or null when it was created detached. Tests that drive a
+    /// policy needing rules pass this explicitly rather than reading the installed campaign.
+    /// </summary>
+    public GameRulesData Rules { get; private set; }
+
     /// <summary>The campaign date this fixture's session runs at.</summary>
     public Date CurrentDate { get; } = new Date(1, 1, 1);
 
@@ -106,6 +112,7 @@ internal sealed class SectorSimulationFixture
             // production sets low enough that a lone governor would almost never petition) so those
             // trait-driven expectations stay deterministic.
             rules.SupplyEconomyRules.RequestGenerationRate = 1m;
+            fixture.Rules = rules;
             GameDataSingleton.Instance.LoadGameDataFromBlob(rules, fixture.CurrentDate, fixture.Sector);
         }
 

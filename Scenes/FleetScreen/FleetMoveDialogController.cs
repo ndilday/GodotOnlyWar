@@ -1,8 +1,5 @@
 using Godot;
-using OnlyWar.Helpers.Fleets;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
+using OnlyWar.Application;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,9 +7,9 @@ using System.Linq;
 public partial class FleetMoveDialogController : DialogController
 {
     private FleetMoveDialogView _view;
-    private TaskForce _taskForce;
-    private Planet _selectedDestination;
-    private FleetRoute _selectedRoute;
+    private IFleetScreenApplication _application;
+    private int _fleetId;
+    private int? _selectedDestinationId;
 
     public event EventHandler CoursePlotted;
 
@@ -24,65 +21,39 @@ public partial class FleetMoveDialogController : DialogController
         _view.PlotCoursePressed += OnPlotCoursePressed;
     }
 
-    public void SetTaskForce(TaskForce taskForce)
+    public void Configure(IFleetScreenApplication application)
     {
-        _taskForce = taskForce;
-        _selectedDestination = null;
-        _selectedRoute = null;
+        _application = application;
+    }
 
-        _view.SetHeader($"Task Force {taskForce.Id} — Plot Course from {taskForce.Planet?.Name ?? "Unknown"}");
+    public void SetTaskForce(int fleetId)
+    {
+        _fleetId = fleetId;
+        _selectedDestinationId = null;
 
-        Sector sector = GameDataSingleton.Instance.Sector;
-        List<KeyValuePair<int, string>> destinations = sector.Planets.Values
-            .Where(planet => planet != taskForce.Planet)
-            .OrderBy(planet => FleetRouteCalculator.CalculateDistance(taskForce.Planet, planet))
-            .Select(planet => new KeyValuePair<int, string>(planet.Id, planet.Name))
-            .ToList();
-
-        _view.PopulateDestinations(destinations);
+        FleetMoveOptionsView options = _application.QueryFleetMoveOptions(fleetId);
+        _view.SetHeader(options.Header);
+        _view.PopulateDestinations(options.Destinations
+            .Select(destination => new KeyValuePair<int, string>(
+                destination.PlanetId, destination.Name))
+            .ToList());
     }
 
     private void OnDestinationSelected(object sender, int planetId)
     {
-        Sector sector = GameDataSingleton.Instance.Sector;
-        _selectedDestination = sector.Planets[planetId];
-
-        ushort maxDiameter = GameDataSingleton.Instance.GameRulesData
-            .SectorGenerationProfile.MaxSubsectorDiameter;
-        FleetRouteScope scope = FleetRouteCalculator.DetermineScope(
-            _taskForce.Planet, _selectedDestination, maxDiameter);
-
-        FleetRouteCalculator calculator = new FleetRouteCalculator();
-        _selectedRoute = calculator.CalculateBestRoute(
-            _taskForce.Planet, _selectedDestination, sector.WarpLanes, scope);
-
-        _view.SetRouteDetail(BuildRouteDescription(_selectedDestination, _selectedRoute), true);
-    }
-
-    private static string BuildRouteDescription(Planet destination, FleetRoute route)
-    {
-        string routeType = route.RouteType == FleetRouteType.WarpLane ? "Warp Lane" : "Direct";
-        string scope = route.Scope switch
-        {
-            FleetRouteScope.SameSubsector => "Same subsector",
-            FleetRouteScope.AdjacentSubsector => "Adjacent subsector",
-            _ => "Distant subsector"
-        };
-        string arrival = route.EstimatedMinTurns == route.EstimatedMaxTurns
-            ? $"{route.EstimatedMinTurns} weeks"
-            : $"{route.EstimatedMinTurns}–{route.EstimatedMaxTurns} weeks";
-
-        return $"Destination: {destination.Name}\n"
-            + $"Route: {routeType}\n"
-            + $"Distance: {scope} ({route.TotalDistance:0.0} ly)\n"
-            + $"Estimated transit: {arrival}";
+        FleetRouteView route = _application.QueryFleetRoute(_fleetId, planetId);
+        _selectedDestinationId = route.IsAvailable ? planetId : null;
+        _view.SetRouteDetail(route.Description, route.IsAvailable);
     }
 
     private void OnPlotCoursePressed(object sender, EventArgs e)
     {
-        if (_taskForce == null || _selectedDestination == null || _selectedRoute == null) return;
+        if (!_selectedDestinationId.HasValue) return;
 
-        _taskForce.OrderMoveTo(_selectedDestination, _selectedRoute);
+        FleetCommandResult result = _application.PlotCourse(
+            _application.SessionToken, _fleetId, _selectedDestinationId.Value);
+        if (!result.Succeeded) return;
+
         CoursePlotted?.Invoke(this, EventArgs.Empty);
     }
 }

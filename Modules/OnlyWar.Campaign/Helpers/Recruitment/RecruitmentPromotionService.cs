@@ -164,7 +164,7 @@ namespace OnlyWar.Helpers.Recruitment
             {
                 return PlanFailure("The Chapter has no recruitment program.");
             }
-            new RecruitmentStaffService().Synchronize(force, _session.Rules);
+            new RecruitmentStaffService().Synchronize(force, _session.Rules, _session.Sector);
             if (!force.Army.PlayerSoldierMap.TryGetValue(
                     soldierId, out PlayerSoldier neophyte)
                 || neophyte.Template != _session.Rules.ChapterDoctrine.ScoutMarine)

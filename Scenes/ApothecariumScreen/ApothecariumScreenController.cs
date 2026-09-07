@@ -1,26 +1,43 @@
 using Godot;
 using OnlyWar.Helpers;
-using OnlyWar.Models;
+using OnlyWar.Application;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 public partial class ApothecariumScreenController : MainScreenController
 {
-    private readonly ApothecariumMedicalRecordBuilder _recordBuilder = new();
-    private readonly MedicalProcedureService _procedureService = new();
-    private readonly RecoveryOperationsViewModelBuilder _recoveryBuilder = new();
-    private readonly RecoveryPlanService _recoveryPlans = new();
+    private IMedicalScreenApplication _application;
+    private Guid _sessionToken;
+    private ReplacementOption _displayedTreatment;
+
+    public void Configure(IMedicalScreenApplication application)
+    {
+        if (_application != null) _application.SessionChanged -= OnSessionChanged;
+        _application = application ?? throw new ArgumentNullException(nameof(application));
+        _application.SessionChanged += OnSessionChanged;
+        _sessionToken = application.SessionToken;
+    }
+
+    private void OnSessionChanged(object sender, EventArgs args)
+    {
+        _sessionToken = _application.SessionToken;
+        _selectedKind = ApothecariumSelectionKind.Vault;
+        _selectedId = null;
+        _showRecoveryOperations = false;
+        _recoveryDestination = null;
+        _recoveryMovement = RecoveryMovementChoice.None;
+        _recoveryHitLocationId = null;
+        _recoveryProcedureType = null;
+        _displayedTreatment = null;
+        if (_apothecariumView != null) Render();
+    }
     private ApothecariumScreenView _apothecariumView;
     private ApothecariumSelectionKind _selectedKind = ApothecariumSelectionKind.Vault;
     private int? _selectedId;
     private bool _showRecoveryOperations;
     private RecoverySortMode _recoverySort = RecoverySortMode.Severity;
     private bool _recoveryAscending;
-    private CampaignLocation _recoveryDestination;
+    private MedicalLocationId _recoveryDestination;
     private RecoveryMovementChoice _recoveryMovement;
     private int? _recoveryHitLocationId;
     private MedicalProcedureType? _recoveryProcedureType;
@@ -47,6 +64,7 @@ public partial class ApothecariumScreenController : MainScreenController
 
     public override void _ExitTree()
     {
+        if (_application != null) _application.SessionChanged -= OnSessionChanged;
         if (_apothecariumView != null)
         {
             _apothecariumView.VaultButtonPressed -= OnVaultButtonPressed;
@@ -82,19 +100,8 @@ public partial class ApothecariumScreenController : MainScreenController
 
     private void OnReplacementOptionPressed(object sender, ReplacementOption option)
     {
-        PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
-        Unit chapter = force?.Army?.OrderOfBattle;
-        if (force == null || chapter == null)
-        {
-            return;
-        }
-        ISoldier soldier = chapter.GetAllMembers().FirstOrDefault(s => s.Id == _selectedId);
-        if (soldier == null)
-        {
-            return;
-        }
+        if (option == null || _selectedId == null) return;
         _selectedKind = ApothecariumSelectionKind.Soldier;
-        _selectedId = soldier.Id;
         _recoveryHitLocationId = option.HitLocationId;
         _recoveryProcedureType = option.Type;
         _showRecoveryOperations = true;
@@ -132,7 +139,7 @@ public partial class ApothecariumScreenController : MainScreenController
         RenderRecoveryOperations();
     }
 
-    private void OnRecoveryDestinationSelected(object sender, CampaignLocation location)
+    private void OnRecoveryDestinationSelected(object sender, MedicalLocationId location)
     {
         _recoveryDestination = location;
         RenderRecoveryOperations();
@@ -154,54 +161,29 @@ public partial class ApothecariumScreenController : MainScreenController
 
     private void OnRecoveryConfirmPressed(object sender, EventArgs e)
     {
-        PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
-        PlayerSoldier patient = force?.Army?.PlayerSoldierMap?.GetValueOrDefault(_selectedId ?? -1);
-        if (patient?.IndividualPosting?.Kind == IndividualPostingKind.AwaitingReunion)
-        {
-            RecoveryPlanCommitResult reunion = _recoveryPlans.Rejoin(patient);
-            if (reunion.Succeeded) CampaignChanged?.Invoke(this, EventArgs.Empty);
-            RenderRecoveryOperations();
-            return;
-        }
-        ReplacementOption option = patient == null
-            ? null
-            : _recordBuilder.BuildSoldierSummary(patient, force).ReplacementOptions.FirstOrDefault(candidate =>
-                candidate.HitLocationId == _recoveryHitLocationId
-                && candidate.Type == _recoveryProcedureType)
-                ?? _recordBuilder.BuildSoldierSummary(patient, force).ReplacementOptions.FirstOrDefault();
-        RecoveryPlanCommitResult result = _recoveryPlans.Commit(
-            force,
-            patient,
-            option,
-            _recoveryDestination,
-            _recoveryMovement,
-            GameDataSingleton.Instance?.Date);
+        if (_selectedId == null) return;
+        RecoveryPlanCommitResult result = _application.ConfirmRecovery(new(
+            _sessionToken, _selectedId.Value, _recoveryDestination, _recoveryMovement,
+            _displayedTreatment?.HitLocationId, _displayedTreatment?.Type));
         if (result.Succeeded)
         {
             CampaignChanged?.Invoke(this, EventArgs.Empty);
             _recoveryDestination = null;
             _recoveryMovement = RecoveryMovementChoice.None;
         }
-        RenderRecoveryOperations();
+        RenderRecoveryOperations(result.Succeeded ? null : result.Message);
     }
 
-    private void RenderRecoveryOperations()
+    private void RenderRecoveryOperations(string failure = null)
     {
-        var data = GameDataSingleton.Instance;
-        PlayerForce force = data?.Sector?.PlayerForce;
-        if (force == null) return;
-        RecoveryOperationsViewModel model = _recoveryBuilder.Build(
-            force,
-            data.Sector.Planets.Values,
-            _selectedId,
-            _recoverySort,
-            _recoveryAscending,
-            _recoveryDestination,
-            _recoveryMovement,
-            _recoveryHitLocationId,
-            _recoveryProcedureType);
-        if (_selectedId == null && model.Patient != null) _selectedId = model.Patient.SoldierId;
-        _apothecariumView.ShowRecoveryOperations(model);
+        RecoveryScreenView projection = _application.QueryRecovery(new(
+            _selectedId, _recoverySort, _recoveryAscending, _recoveryDestination,
+            _recoveryMovement, _recoveryHitLocationId, _recoveryProcedureType));
+        _sessionToken = projection.SessionToken;
+        RecoveryOperationsViewModel model = projection.Model;
+        _displayedTreatment = model.SelectedTreatment;
+        _selectedId = model.Patient?.SoldierId;
+        _apothecariumView.ShowRecoveryOperations(failure == null ? model : model with { PlanStatus = failure });
     }
 
     /// <summary>
@@ -228,126 +210,30 @@ public partial class ApothecariumScreenController : MainScreenController
 
     private void Render()
     {
-        PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
-        Unit chapter = force?.Army?.OrderOfBattle;
-        if (force == null || chapter == null)
-        {
-            return;
-        }
-
+        if (_application == null || _apothecariumView == null) return;
         if (_showRecoveryOperations)
         {
             RenderRecoveryOperations();
             return;
         }
         _apothecariumView.HideRecoveryOperations();
+        MedicalScreenView projection = _application.QueryMedical(new(_selectedKind, _selectedId));
+        _sessionToken = projection.SessionToken;
+        _apothecariumView.SetTree(projection.Tree);
+        ShowDetail(projection);
+    }
+
+    private void RenderSelectedDetail()
+    {
+        ShowDetail(_application.QueryMedical(new(_selectedKind, _selectedId)));
+    }
+
+    private void ShowDetail(MedicalScreenView projection)
+    {
+        _sessionToken = projection.SessionToken;
         _apothecariumView.SetVaultSelected(_selectedKind == ApothecariumSelectionKind.Vault);
-        _apothecariumView.SetTree(_recordBuilder.BuildTree(
-            chapter, _selectedKind, _selectedId, woundedOnly: true, force: force));
-        RenderSelectedDetail(chapter, force);
-    }
-
-    private void RenderSelectedDetail(Unit chapter = null, PlayerForce force = null)
-    {
-        force ??= GameDataSingleton.Instance?.Sector?.PlayerForce;
-        chapter ??= force?.Army?.OrderOfBattle;
-        if (force == null || chapter == null)
-        {
-            return;
-        }
-
-        _apothecariumView.SetVaultSelected(_selectedKind == ApothecariumSelectionKind.Vault);
-        switch (_selectedKind)
-        {
-            case ApothecariumSelectionKind.Unit:
-                RenderUnit(chapter, force);
-                break;
-            case ApothecariumSelectionKind.Squad:
-                RenderSquad(chapter, force);
-                break;
-            case ApothecariumSelectionKind.Soldier:
-                RenderSoldier(chapter);
-                break;
-            default:
-                RenderVault(force);
-                break;
-        }
-    }
-
-    private void RenderVault(PlayerForce force)
-    {
-        _apothecariumView.ShowVault(_recordBuilder.BuildVault(force, GameDataSingleton.Instance.Date));
-    }
-
-    private void RenderUnit(Unit chapter, PlayerForce force)
-    {
-        Unit unit = chapter.Id == _selectedId ? chapter : chapter.ChildUnits.SelectMany(FlattenUnits).FirstOrDefault(u => u.Id == _selectedId);
-        if (unit == null)
-        {
-            RenderVault(GameDataSingleton.Instance.Sector.PlayerForce);
-            return;
-        }
-
-        _apothecariumView.ShowRollup(_recordBuilder.BuildUnitSummary(unit, force));
-    }
-
-    private void RenderSquad(Unit chapter, PlayerForce force)
-    {
-        Squad squad = chapter.GetAllSquads().FirstOrDefault(s => s.Id == _selectedId);
-        if (squad == null)
-        {
-            RenderVault(GameDataSingleton.Instance.Sector.PlayerForce);
-            return;
-        }
-
-        _apothecariumView.ShowRollup(_recordBuilder.BuildSquadSummary(squad, force));
-    }
-
-    private void RenderSoldier(Unit chapter)
-    {
-        ISoldier soldier = chapter.GetAllMembers().FirstOrDefault(s => s.Id == _selectedId);
-        if (soldier == null)
-        {
-            RenderVault(GameDataSingleton.Instance.Sector.PlayerForce);
-            return;
-        }
-
-        MedicalSoldierSummary summary = _recordBuilder.BuildSoldierSummary(
-            soldier, GameDataSingleton.Instance.Sector.PlayerForce);
-        summary = EnrichWithRequisites(GameDataSingleton.Instance.Sector.PlayerForce, soldier, summary);
-        _apothecariumView.ShowSoldier(summary);
-    }
-
-    // Fills each replacement option's requisite breakdown (rendered green/red by the view)
-    // and drops any location already under an active procedure.
-    private MedicalSoldierSummary EnrichWithRequisites(PlayerForce force, ISoldier soldier, MedicalSoldierSummary summary)
-    {
-        if (summary.ReplacementOptions.Count == 0)
-        {
-            return summary;
-        }
-        List<ReplacementOption> enriched = [];
-        foreach (ReplacementOption option in summary.ReplacementOptions)
-        {
-            if (_procedureService.HasProcedureInProgress(force, soldier.Id, option.HitLocationId))
-            {
-                continue;
-            }
-            IReadOnlyList<ProcedureRequisite> requisites = _procedureService.EvaluateRequisites(force, soldier, option);
-            enriched.Add(option with { Requisites = requisites, CanAssign = requisites.All(r => r.IsMet) });
-        }
-        return summary with { ReplacementOptions = enriched };
-    }
-
-    private static System.Collections.Generic.IEnumerable<Unit> FlattenUnits(Unit unit)
-    {
-        yield return unit;
-        foreach (Unit child in unit.ChildUnits ?? [])
-        {
-            foreach (Unit descendant in FlattenUnits(child))
-            {
-                yield return descendant;
-            }
-        }
+        if (projection.Soldier != null) _apothecariumView.ShowSoldier(projection.Soldier);
+        else if (projection.Rollup != null) _apothecariumView.ShowRollup(projection.Rollup);
+        else if (projection.Vault != null) _apothecariumView.ShowVault(projection.Vault);
     }
 }

@@ -28,7 +28,7 @@ namespace OnlyWar.Helpers.Recruitment
                     == rules?.ChapterDoctrine?.ScoutCompanyHeadquarters);
         }
 
-        public void Synchronize(PlayerForce force, GameRulesData rules, Sector sector = null,
+        public void Synchronize(PlayerForce force, GameRulesData rules, Sector sector,
             IReadinessDecisions readiness = null)
         {
             RecruitmentProgram program = force?.RecruitmentProgram;
@@ -37,7 +37,6 @@ namespace OnlyWar.Helpers.Recruitment
                 return;
             }
 
-            sector ??= CampaignRuntimeDefaults.Sector;
             Order taskOrder = EnsureTaskOrder(force, program, sector);
             program.StaffAssignments.Clear();
             Squad administrative = GetAdministrativeSquad(force, rules);

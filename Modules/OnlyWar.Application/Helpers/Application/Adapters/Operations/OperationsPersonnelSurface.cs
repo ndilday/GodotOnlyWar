@@ -57,8 +57,9 @@ public sealed class OperationsPersonnelSurface : IOperationsPersonnelSurface
         CampaignLocation location,
         Order order,
         out string reason,
-        ChapterOperationalDoctrine doctrine = null) =>
-        _postings.CanCreate(soldier, kind, location, order, out reason, doctrine);
+        ChapterOperationalDoctrine doctrine = null,
+        RecruitmentProgram program = null) =>
+        _postings.CanCreate(soldier, kind, location, order, out reason, doctrine, program);
 
     public IndividualPosting Restore(
         PlayerSoldier soldier,
@@ -66,8 +67,9 @@ public sealed class OperationsPersonnelSurface : IOperationsPersonnelSurface
         CampaignLocation location,
         Date startedDate,
         Order order = null,
-        ChapterOperationalDoctrine doctrine = null) =>
-        _postings.Restore(soldier, kind, location, startedDate, order, doctrine);
+        ChapterOperationalDoctrine doctrine = null,
+        RecruitmentProgram program = null) =>
+        _postings.Restore(soldier, kind, location, startedDate, order, doctrine, program);
 
     public IndividualPosting RestorePhysical(
         PlayerSoldier soldier,

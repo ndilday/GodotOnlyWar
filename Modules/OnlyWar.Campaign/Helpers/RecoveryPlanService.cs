@@ -35,6 +35,14 @@ namespace OnlyWar.Helpers
             {
                 return new(false, "Select patient or whole-squad movement.");
             }
+            if (movement != RecoveryMovementChoice.DetachCasualty
+                && movement != RecoveryMovementChoice.MoveWholeSquad)
+                return new(false, "Select patient or whole-squad movement.");
+            HitLocation hitLocation = patient.Body.HitLocations.FirstOrDefault(
+                location => location.Template.Id == option.HitLocationId);
+            if (hitLocation?.IsReplacementEligible != true || hitLocation.IsCybernetic
+                || _procedures.HasProcedureInProgress(force, patient.Id, option.HitLocationId))
+                return new(false, "The selected treatment is no longer available.");
             if (movement == RecoveryMovementChoice.MoveWholeSquad
                 && patient.AssignedSquad?.CanMoveAsFormation != true)
             {
@@ -53,7 +61,7 @@ namespace OnlyWar.Helpers
             if (movement == RecoveryMovementChoice.MoveWholeSquad
                 && destination.Ship != null
                 && !ShipCapacityService.CanBoard(destination.Ship,
-                    SoldierPresenceService.PresentCount(patient.AssignedSquad)))
+                    SoldierPresenceService.PresentMembers(patient.AssignedSquad).Count))
             {
                 return new(false, "The destination lacks capacity for the whole squad.");
             }
@@ -70,6 +78,28 @@ namespace OnlyWar.Helpers
                 PlayerSoldier staff = FindMovableStaff(force, MedicalProcedureService.IsTechmarine);
                 if (staff == null) return new(false, "No Techmarine can be moved to the destination.");
                 staffToMove.Add(staff);
+            }
+
+            // Validate every posting and the combined manifest before changing any order,
+            // physical location, staff assignment, or resource balance.
+            foreach (PlayerSoldier staff in staffToMove.Distinct())
+            {
+                if (!_postings.CanCreate(staff, IndividualPostingKind.IndependentDeployment,
+                    destination, null, out string reason)) return new(false, reason);
+            }
+            if (movement == RecoveryMovementChoice.DetachCasualty
+                && !_postings.CanCreate(patient, IndividualPostingKind.MedicalDetachment,
+                    destination, null, out string patientReason)) return new(false, patientReason);
+            if (destination.Ship != null)
+            {
+                int incomingStaff = staffToMove.Distinct().Count(staff =>
+                    CampaignLocationService.ForSoldier(staff)?.IsSamePlace(destination) != true);
+                int incomingPatients = movement == RecoveryMovementChoice.DetachCasualty
+                    ? (CampaignLocationService.ForSoldier(patient)?.IsSamePlace(destination) == true ? 0 : 1)
+                    : (ReferenceEquals(patient.AssignedSquad.BoardedLocation, destination.Ship)
+                        ? 0 : SoldierPresenceService.PresentMembers(patient.AssignedSquad).Count);
+                if (incomingStaff + incomingPatients > destination.Ship.AvailableCapacity)
+                    return new(false, "The destination lacks capacity for the patient and required staff.");
             }
 
             try
@@ -113,7 +143,7 @@ namespace OnlyWar.Helpers
                 && role(staff)
                 && staff.AssignedSquad?.PermitsIndividualDeployment == true
                 && !RecruitmentPromotionService.IsReservedForProcedure(
-                    CampaignRuntimeDefaults.PlayerForce?.RecruitmentProgram,
+                    force.RecruitmentProgram,
                     staff.Id));
 
         private static void MoveWholeSquad(Squad squad, CampaignLocation destination)

@@ -16,7 +16,6 @@ public class FactionStrategyController
 {
     private readonly IRNG _random;
     private readonly FactionBehaviorRulesProfile _behaviorRules;
-    private readonly bool _hasExplicitDependencies;
     private readonly FactionReinforcementPlanner _reinforcementPlanner = new();
     private readonly FactionDevelopmentPlanner _developmentPlanner = new();
     private readonly FactionConsumptionPlanner _consumptionPlanner = new();
@@ -24,25 +23,16 @@ public class FactionStrategyController
     private readonly FactionOffensiveOrderBuilder _offensiveOrderBuilder = new();
 
     /// <summary>
-    /// Legacy adapter. Defaults are resolved when planning starts so the global campaign data is not
-    /// captured by constructing the facade early.
-    /// </summary>
-    public FactionStrategyController()
-    {
-    }
-
-    /// <summary>
     /// Explicit planning dependencies used by session-owned production callers and isolated tests.
     /// A missing behavior profile is intentionally allowed; the existing ratio fallback remains in
     /// the capability-specific decision below.
     /// </summary>
-    internal FactionStrategyController(
+    public FactionStrategyController(
         IRNG random,
-        FactionBehaviorRulesProfile behaviorRules)
+        FactionBehaviorRulesProfile behaviorRules = null)
     {
         _random = random ?? throw new ArgumentNullException(nameof(random));
         _behaviorRules = behaviorRules;
-        _hasExplicitDependencies = true;
     }
 
     private const int MaxMissionPlanningIterations = 24;
@@ -58,10 +48,8 @@ public class FactionStrategyController
     public List<Order> GenerateFactionOrders(Faction faction, Sector sector, Planet onlyPlanet = null, bool defensiveOnly = false)
     {
         var allNewOrders = new List<Order>();
-        IRNG random = _hasExplicitDependencies ? _random : StaticRNG.Instance;
-        FactionBehaviorRulesProfile behaviorRules = _hasExplicitDependencies
-            ? _behaviorRules
-            : CampaignRuntimeDefaults.Rules?.FactionBehaviorRules;
+        IRNG random = _random;
+        FactionBehaviorRulesProfile behaviorRules = _behaviorRules;
 
         // Discard last turn's transient screens and recon parties before planning this turn's (they
         // are not persisted roster squads, so they would otherwise pile up in the regions'

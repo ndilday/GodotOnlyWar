@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Application;
 using OnlyWar.Helpers.Diagnostics;
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Storage;
@@ -46,7 +47,8 @@ public partial class MainGameScene
 
 	public override void _ExitTree()
 	{
-		GameDataSingleton.Instance.Recoverability.StateChanged -= OnRecoverabilityStateChanged;
+		if (_campaignApplication != null)
+			_campaignApplication.CampaignStatusChanged -= OnRecoverabilityStateChanged;
 	}
 
 	private void InitializeCampaignControls()
@@ -101,6 +103,9 @@ public partial class MainGameScene
 			GameStorage.InitializeUserStorage();
 			_saveGameManager = new SaveGameManager(GameStorage.SaveDirectory);
 			_saveCatalog = new SaveGameCatalog(GameStorage.SaveDirectory);
+			// Startup composition is the only place the host hands a concrete adapter to the
+			// application; from here every write goes through SaveCampaign.
+			_campaignApplication.ConfigureStorage(_saveGameManager);
 		}
 		catch (Exception exception)
 		{
@@ -108,7 +113,7 @@ public partial class MainGameScene
 			_lastSaveStatus = "Save storage is unavailable. See the game log for details.";
 		}
 
-		GameDataSingleton.Instance.Recoverability.StateChanged += OnRecoverabilityStateChanged;
+		_campaignApplication.CampaignStatusChanged += OnRecoverabilityStateChanged;
 		UpdateSystemMenuState();
 
 		if (!string.IsNullOrWhiteSpace(_startupWarning))
@@ -301,23 +306,19 @@ public partial class MainGameScene
 
 		ShowActivity("SAVING CAMPAIGN", "Writing an atomic recovery point...");
 		await YieldForActivityOverlay();
-		CampaignRecoverabilityTracker tracker = GameDataSingleton.Instance.Recoverability;
-		CampaignRevision revision = tracker.CaptureRevision();
 		bool continueAfterSave = false;
 
-		try
+		SaveCampaignResult result = _campaignApplication.SaveCampaign(new(
+			_campaignApplication.SessionToken,
+			args.OverwriteTarget == null ? SaveCampaignKind.Manual : SaveCampaignKind.Overwrite,
+			args.Name,
+			args.OverwriteTarget?.FilePath));
+		HideActivity();
+
+		if (result.Succeeded)
 		{
-			SaveGameEntry saved = args.OverwriteTarget == null
-				? _saveGameManager.CreateManualSave(
-					args.Name, GetCampaignName(), CurrentCampaignSaveWriter.Write)
-				: _saveGameManager.OverwriteManualSave(
-					args.OverwriteTarget.FilePath,
-					args.Name,
-					GetCampaignName(),
-					CurrentCampaignSaveWriter.Write);
-			tracker.MarkSaveSucceeded(revision);
-			_lastSaveStatus = $"Saved {saved.DisplayName} at {saved.LastWriteTimeLocal:t}.";
-			_feedbackOverlay.ShowSuccess($"Campaign saved as {saved.DisplayName}.");
+			_lastSaveStatus = $"Saved {result.DisplayName} at {result.WrittenLocal:t}.";
+			_feedbackOverlay.ShowSuccess(result.Message);
 			_saveLoadChooser.Visible = false;
 			UpdateSystemMenuState();
 
@@ -330,15 +331,11 @@ public partial class MainGameScene
 				_systemMenu.CloseMenu();
 			}
 		}
-		catch (Exception exception)
+		else
 		{
-			GD.PushError($"Manual save failed: {exception}");
-			_saveLoadChooser.SetOperationError($"Save failed: {exception.Message}");
+			GD.PushError($"Manual save failed: {result.Message}");
+			_saveLoadChooser.SetOperationError($"Save failed: {result.Message}");
 			_feedbackOverlay.ShowError("Save failed. The previous recovery point remains intact.");
-		}
-		finally
-		{
-			HideActivity();
 		}
 
 		if (continueAfterSave)
@@ -394,7 +391,7 @@ public partial class MainGameScene
 		_pendingNavigation = kind;
 		_pendingLoadPath = loadPath;
 		_pendingLoadName = loadName;
-		if (!GameDataSingleton.Instance.Recoverability.IsDirty)
+		if (!_campaignApplication.QueryStatus().IsDirty)
 		{
 			ExecutePendingNavigation();
 			return;
@@ -480,7 +477,7 @@ public partial class MainGameScene
 	private void ReturnToTitle()
 	{
 		GetTree().AutoAcceptQuit = true;
-		GameDataSingleton.Instance.ClearCampaign();
+		_campaignApplication.Close();
 		PackedScene titleScene = GD.Load<PackedScene>("res://Scenes/StartMenu/StartMenu.tscn");
 		Control title = titleScene.Instantiate<Control>();
 		Node parent = GetParent();
@@ -498,7 +495,7 @@ public partial class MainGameScene
 
 	private void MarkCampaignChanged()
 	{
-		GameDataSingleton.Instance.Recoverability.MarkChanged();
+		_campaignApplication.MarkChanged();
 	}
 
 	private void OnCampaignChanged(object sender, EventArgs e)
@@ -519,7 +516,8 @@ public partial class MainGameScene
 	{
 		if (_systemMenu == null) return;
 
-		bool canSave = _saveGameManager != null && GameDataSingleton.Instance.IsInitialized;
+		CampaignStatusView status = _campaignApplication.QueryStatus();
+		bool canSave = _saveGameManager != null && status.HasCampaign;
 		bool canLoad = false;
 		if (_saveCatalog != null)
 		{
@@ -534,28 +532,20 @@ public partial class MainGameScene
 		}
 
 		_systemMenu.SetSaveAvailability(canSave, canLoad);
-		string status = _lastSaveStatus;
-		if (string.IsNullOrWhiteSpace(status))
+		string message = _lastSaveStatus;
+		if (string.IsNullOrWhiteSpace(message))
 		{
-			status = GameDataSingleton.Instance.Recoverability.IsDirty
+			message = status.IsDirty
 				? "Campaign has changes that are not yet recoverable."
 				: "Current campaign state has a recovery point.";
 		}
-		_systemMenu.SetLastSaveStatus(status);
-	}
-
-	private string GetCampaignName()
-	{
-		return GameDataSingleton.Instance.Sector?.PlayerForce?.Army?.OrderOfBattle?.Name
-			?? GameDataSingleton.Instance.Sector?.PlayerForce?.Army?.ForceName
-			?? "Unknown Chapter";
+		_systemMenu.SetLastSaveStatus(message);
 	}
 
 	private void RequestEndTurn()
 	{
 		if (_isProcessingTurn) return;
-		if (GameDataSingleton.Instance.Sector?.PlayerForce?.RecruitmentProgram
-			is { IsSetupComplete: false })
+		if (_campaignApplication.RequiresRecruitmentSetup())
 		{
 			PushVisibleOverlaySurface();
 			OpenTrainingUnitScreen(mandatorySetup: true);
@@ -564,10 +554,8 @@ public partial class MainGameScene
 			return;
 		}
 
-		EndTurnPreflightReport report = EndTurnPreflight.EvaluateWithRules(
-			GameDataSingleton.Instance.Sector,
-			_warningPreferences,
-			GameDataSingleton.Instance.GameRulesData);
+		EndTurnPreflightReport report =
+			_campaignApplication.QueryEndTurnPreflight(_warningPreferences);
 		if (!report.RequiresConfirmation)
 		{
 			ResolveEndTurnWithProtection();
@@ -611,37 +599,29 @@ public partial class MainGameScene
 		ShowActivity("PROTECTING CAMPAIGN", "Writing the protected pre-turn recovery point...");
 		await YieldForActivityOverlay();
 
-		CampaignRecoverabilityTracker tracker = GameDataSingleton.Instance.Recoverability;
-		CampaignRevision preTurnRevision = tracker.CaptureRevision();
-		try
+		SaveCampaignResult protectedSave = _campaignApplication.SaveCampaign(new(
+			_campaignApplication.SessionToken, SaveCampaignKind.ProtectedPreTurn));
+		if (!protectedSave.Succeeded)
 		{
-			SaveGameEntry protectedSave = _saveGameManager.SaveProtectedPreTurn(
-				GetCampaignName(),
-				CurrentCampaignSaveWriter.Write);
-			tracker.MarkSaveSucceeded(preTurnRevision);
-			_lastSaveStatus = $"Protected before turn at {protectedSave.LastWriteTimeLocal:t}.";
-		}
-		catch (Exception exception)
-		{
-			GD.PushError($"Protected pre-turn save failed: {exception}");
+			GD.PushError($"Protected pre-turn save failed: {protectedSave.Message}");
 			HideActivity();
 			_isProcessingTurn = false;
 			_feedbackOverlay.ShowError(
-				$"Turn not advanced: the protected pre-turn save failed. {exception.Message}",
+				$"Turn not advanced: the protected pre-turn save failed. {protectedSave.Message}",
 				8.0);
 			UpdateSystemMenuState();
 			return;
 		}
+		_lastSaveStatus = $"Protected before turn at {protectedSave.WrittenLocal:t}.";
 
-		tracker.MarkChanged();
+		_campaignApplication.MarkChanged();
 		ShowActivity("RESOLVING TURN", "Processing orders, movement, and the wider war...");
 		await YieldForActivityOverlay();
 
 		bool turnCompleted = false;
 		try
 		{
-			ProcessTurnCore();
-			turnCompleted = true;
+			turnCompleted = ProcessTurnCore();
 		}
 		catch (Exception exception)
 		{
@@ -655,19 +635,16 @@ public partial class MainGameScene
 		{
 			ShowActivity("AUTOSAVING CAMPAIGN", "Securing the resolved turn...");
 			await YieldForActivityOverlay();
-			CampaignRevision postTurnRevision = tracker.CaptureRevision();
-			try
+			SaveCampaignResult autosave = _campaignApplication.SaveCampaign(new(
+				_campaignApplication.SessionToken, SaveCampaignKind.PostTurnAutosave));
+			if (autosave.Succeeded)
 			{
-				SaveGameEntry autosave = _saveGameManager.SavePostTurnAutosave(
-					GetCampaignName(),
-					CurrentCampaignSaveWriter.Write);
-				tracker.MarkSaveSucceeded(postTurnRevision);
-				_lastSaveStatus = $"Autosaved resolved turn at {autosave.LastWriteTimeLocal:t}.";
+				_lastSaveStatus = $"Autosaved resolved turn at {autosave.WrittenLocal:t}.";
 				_feedbackOverlay.ShowSuccess("Turn resolved and autosaved.");
 			}
-			catch (Exception exception)
+			else
 			{
-				GD.PushError($"Post-turn autosave failed: {exception}");
+				GD.PushError($"Post-turn autosave failed: {autosave.Message}");
 				_feedbackOverlay.ShowError(
 					"The turn resolved, but its autosave failed. Save manually before leaving the campaign.",
 					8.0);
@@ -779,7 +756,9 @@ public partial class MainGameScene
 		string path = Path.Combine(directory, $"campaign-{Guid.NewGuid():N}.s3db");
 		try
 		{
-			CurrentCampaignSaveWriter.Write(path);
+			// A diagnostic capture is still a write of the active campaign, so it goes through the
+			// application rather than reaching for the current-campaign writer.
+			_campaignApplication.WriteDiagnosticCapture(path);
 			return new DiagnosticAttachment("current-campaign.s3db", File.ReadAllBytes(path));
 		}
 		finally

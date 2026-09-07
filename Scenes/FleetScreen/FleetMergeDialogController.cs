@@ -1,6 +1,5 @@
 using Godot;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
+using OnlyWar.Application;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,8 +7,9 @@ using System.Linq;
 public partial class FleetMergeDialogController : DialogController
 {
     private FleetMergeDialogView _view;
-    private TaskForce _taskForce;
-    private TaskForce _selectedTarget;
+    private IFleetScreenApplication _application;
+    private int _fleetId;
+    private int? _selectedTargetId;
 
     public event EventHandler FleetsMerged;
 
@@ -21,43 +21,37 @@ public partial class FleetMergeDialogController : DialogController
         _view.MergePressed += OnMergePressed;
     }
 
-    public void SetTaskForce(TaskForce taskForce)
+    public void Configure(IFleetScreenApplication application)
     {
-        _taskForce = taskForce;
-        _selectedTarget = null;
-        _view.SetHeader($"Task Force {taskForce.Id} — Merge");
-
-        List<KeyValuePair<int, string>> targets = GetMergeCandidates(taskForce)
-            .Select(candidate => new KeyValuePair<int, string>(
-                candidate.Id, $"Task Force {candidate.Id} ({candidate.Ships.Count} ship(s))"))
-            .ToList();
-        _view.PopulateTargets(targets);
+        _application = application;
     }
 
-    public static IEnumerable<TaskForce> GetMergeCandidates(TaskForce taskForce)
+    public void SetTaskForce(int fleetId)
     {
-        return GameDataSingleton.Instance.Sector.Fleets.Values
-            .Where(other => other.Id != taskForce.Id
-                && other.Faction == taskForce.Faction
-                && other.Planet == taskForce.Planet
-                && other.TravelPhase == FleetTravelPhase.InOrbit)
-            .OrderBy(other => other.Id);
+        _fleetId = fleetId;
+        _selectedTargetId = null;
+        FleetMergeOptionsView options = _application.QueryFleetMergeOptions(fleetId);
+        _view.SetHeader(options.Header);
+        _view.PopulateTargets(options.Targets
+            .Select(target => new KeyValuePair<int, string>(target.FleetId, target.Label))
+            .ToList());
     }
 
     private void OnTargetSelected(object sender, int fleetId)
     {
-        _selectedTarget = GameDataSingleton.Instance.Sector.Fleets[fleetId];
-        _view.SetDetail(
-            $"Merge Task Force {_selectedTarget.Id} ({_selectedTarget.Ships.Count} ship(s)) "
-            + $"into Task Force {_taskForce.Id}.", true);
+        FleetMergeSelectionView selection = _application.EvaluateMergeSelection(_fleetId, fleetId);
+        _selectedTargetId = selection.CanMerge ? fleetId : null;
+        _view.SetDetail(selection.Detail, selection.CanMerge);
     }
 
     private void OnMergePressed(object sender, EventArgs e)
     {
-        if (_taskForce == null || _selectedTarget == null) return;
+        if (!_selectedTargetId.HasValue) return;
 
-        // The clicked task force is retained; the selected target is folded into it.
-        GameDataSingleton.Instance.Sector.CombineFleets(_taskForce, _selectedTarget);
+        FleetCommandResult result = _application.MergeFleet(
+            _application.SessionToken, _fleetId, _selectedTargetId.Value);
+        if (!result.Succeeded) return;
+
         FleetsMerged?.Invoke(this, EventArgs.Empty);
     }
 }

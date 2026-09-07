@@ -10,9 +10,9 @@ namespace OnlyWar.Helpers.Readiness;
 /// only to that force's own squads — a squad of another faction gets neither, which is what keeps
 /// an NPC formation from being judged against the Chapter's deployment doctrine.
 ///
-/// This is the explicit-input form of the same predicate the transitional
-/// <c>CurrentCampaignReadinessContext</c> adapter applies to the installed campaign; the adapter
-/// now delegates here, so there is one rule rather than two (SB-05a).
+/// This is the only form of the predicate. The transitional
+/// <c>CurrentCampaignReadinessContext</c> adapter that used to apply it to whichever campaign was
+/// installed was removed at SB-12; a caller with no force to name gets no doctrine and no program.
 /// </summary>
 public static class ForceReadinessInputs
 {

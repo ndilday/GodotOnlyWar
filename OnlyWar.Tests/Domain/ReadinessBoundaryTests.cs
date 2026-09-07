@@ -52,8 +52,11 @@ public sealed class ReadinessBoundaryTests
         Assert.True(OrderForceService.AssignSquad(order, squad, MedicalReadinessDecisions.Instance, doctrine, program));
     }
 
+    // SB-12: the compatibility readiness adapter is gone. A row built without explicit inputs
+    // resolves nothing at all -- not even for the squad belonging to the installed campaign --
+    // so the live Black Carapace procedure below can only reach a row that is handed the program.
     [Fact]
-    public void PolicyDoesNotSelectTheActiveCampaignAndAdapterRejectsUnrelatedFactionInstances()
+    public void ReadinessNeverResolvesTheInstalledCampaignWithoutExplicitInputs()
     {
         GameDataSingleton active = GameDataSingleton.Instance;
         var oldRules = active.GameRulesData;
@@ -78,13 +81,16 @@ public sealed class ReadinessBoundaryTests
 
             Assert.True(DutyReadinessService.Evaluate(liveMember).IsDutyReady);
             Assert.True(DutyReadinessService.Evaluate(detachedMember).IsDutyReady);
-            Assert.Null(CurrentCampaignReadinessContext.ResolveProgram(detachedSquad));
-            Assert.Null(CurrentCampaignReadinessContext.ResolveDoctrine(detachedSquad));
             Assert.Equal(5, new SquadRowViewModelBuilder().Build(detachedSquad).Strength.DutyReady);
-            Assert.Equal(4, new SquadRowViewModelBuilder().Build(liveSquad).Strength.DutyReady);
+            Assert.Equal(5, new SquadRowViewModelBuilder().Build(liveSquad).Strength.DutyReady);
+
+            // The same squad, given the installed campaign's program explicitly, does hold the
+            // recruit back: the input decides the answer, never the installed campaign.
+            Assert.Equal(4, new SquadRowViewModelBuilder().Build(
+                liveSquad,
+                program: live.Sector.PlayerForce.RecruitmentProgram).Strength.DutyReady);
 
             active.LoadGameDataFromBlob(null, new Date(42, 1, 2), detached.Sector);
-            Assert.Null(CurrentCampaignReadinessContext.ResolveProgram(liveSquad));
             Assert.Equal(5, new SquadRowViewModelBuilder().Build(liveSquad).Strength.DutyReady);
         }
         finally

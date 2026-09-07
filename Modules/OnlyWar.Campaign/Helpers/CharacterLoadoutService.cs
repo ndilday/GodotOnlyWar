@@ -83,14 +83,11 @@ namespace OnlyWar.Helpers
             return new EffectiveCharacterLoadout(fallback, CharacterLoadoutSource.Template);
         }
 
-        public static EffectiveCharacterLoadout Resolve(ISoldier soldier) =>
-            Resolve(soldier, CampaignRuntimeDefaults.PlayerForce);
-
         /// <summary>
         /// The set this soldier carries, or null if pooled squad allocation should equip him.
         /// </summary>
-        public static WeaponSet GetEffectiveWeaponSet(ISoldier soldier) =>
-            Resolve(soldier)?.WeaponSet;
+        public static WeaponSet GetEffectiveWeaponSet(ISoldier soldier, PlayerForce playerForce) =>
+            Resolve(soldier, playerForce)?.WeaponSet;
 
         /// <summary>
         /// Resolves the chapter-wide kit for an element's role with no individual in mind — used
@@ -115,25 +112,22 @@ namespace OnlyWar.Helpers
         }
 
         public static void SetPersonalLoadout(
-            ISoldier soldier, WeaponSet weaponSet, PlayerForce playerForce = null)
+            ISoldier soldier, WeaponSet weaponSet, PlayerForce playerForce)
         {
             if (!IsCharacter(soldier)) return;
-            playerForce ??= CampaignRuntimeDefaults.PlayerForce;
             playerForce?.Army?.CharacterLoadoutDoctrine.SetPersonalLoadout(soldier.Id, weaponSet);
         }
 
-        public static void ClearPersonalLoadout(ISoldier soldier, PlayerForce playerForce = null)
+        public static void ClearPersonalLoadout(ISoldier soldier, PlayerForce playerForce)
         {
             if (soldier == null) return;
-            playerForce ??= CampaignRuntimeDefaults.PlayerForce;
             playerForce?.Army?.CharacterLoadoutDoctrine.ClearPersonalLoadout(soldier.Id);
         }
 
         public static void SetRoleDefault(
-            SquadTemplateElement element, WeaponSet weaponSet, PlayerForce playerForce = null)
+            SquadTemplateElement element, WeaponSet weaponSet, PlayerForce playerForce)
         {
             if (element?.TryGetQuota(CommandWeaponGroup, out _) != true) return;
-            playerForce ??= CampaignRuntimeDefaults.PlayerForce;
             playerForce?.Army?.CharacterLoadoutDoctrine.SetRoleDefault(element.SoldierTemplate.Id, weaponSet);
         }
 

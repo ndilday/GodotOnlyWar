@@ -56,9 +56,9 @@ namespace OnlyWar.Models
         RequestSeverity Severity { get; }
         RequestHazard Hazard { get; }
         bool HasPlayerResponded { get; }
-        bool IsRequestStarted();
+        bool IsRequestStarted(GameRulesData rules);
         bool IsRequestCompleted();
-        void ProcessTurn(Date currentDate);
+        void ProcessTurn(Date currentDate, GameRulesData rules);
         void Fail(Date currentDate);
     }
 

@@ -70,10 +70,8 @@ namespace OnlyWar.Helpers
             }
             DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
                 character,
-                doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(
-                    character.AssignedSquad, doctrine),
-                recruitmentProgram: program
-                    ?? CurrentCampaignReadinessContext.ResolveProgram(character.AssignedSquad));
+                doctrine: doctrine,
+                recruitmentProgram: program);
             if (!duty.IsDutyReady)
             {
                 return Reject(MapDutyReason(duty.ReasonCode),
@@ -122,10 +120,8 @@ namespace OnlyWar.Helpers
             }
             DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
                 character,
-                doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(
-                    character.AssignedSquad, doctrine),
-                recruitmentProgram: program
-                    ?? CurrentCampaignReadinessContext.ResolveProgram(character.AssignedSquad));
+                doctrine: doctrine,
+                recruitmentProgram: program);
             if (!duty.IsDutyReady)
             {
                 return Reject(MapDutyReason(duty.ReasonCode),
@@ -195,10 +191,13 @@ namespace OnlyWar.Helpers
         public CharacterAvailabilityEvaluation EvaluateContinuousTask(
             PlayerSoldier character,
             Order taskOrder,
-            Region taskLocation)
+            Region taskLocation,
+            ChapterOperationalDoctrine doctrine = null,
+            RecruitmentProgram program = null)
         {
             CharacterAvailabilityEvaluation baseEvaluation =
-                EvaluateOrderAssignment(character, taskOrder, taskLocation);
+                EvaluateOrderAssignment(character, taskOrder, taskLocation,
+                    doctrine: doctrine, program: program);
             if (!baseEvaluation.IsAllowed) return baseEvaluation;
             return CharacterAvailabilityEvaluation.Allowed;
         }

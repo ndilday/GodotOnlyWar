@@ -1,17 +1,18 @@
 using Godot;
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Extensions;
+using OnlyWar.Application;
 using OnlyWar.Helpers.UI;
-using OnlyWar.Helpers.PlanetaryOperations;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 public partial class SystemInspector : Control
 {
+    // The inspector renders one application projection; which fleets are in orbit, which one is
+    // selected and whether its actions are legal are all decided behind that boundary.
+    private ISystemInspectorApplication _application;
+
+    public void Configure(ISystemInspectorApplication application) =>
+        _application = application ?? throw new ArgumentNullException(nameof(application));
+
     public event EventHandler<int> OpenSystemPressed;
     public event EventHandler<int> PlotCoursePressed;
     public event EventHandler<int> DivideFleetPressed;
@@ -35,9 +36,10 @@ public partial class SystemInspector : Control
     private Button _answerRequestButton;
     private VBoxContainer _dossierSection;
     private VBoxContainer _dossierContent;
-    private Planet _selectedPlanet;
-    private readonly List<TaskForce> _orbitingFleets = [];
+    private int? _selectedPlanetId;
     private int? _selectedFleetId;
+    private bool _showDossier;
+    private SystemInspectorView _current = SystemInspectorView.Empty;
     private bool _isRefreshingFleetList;
 
     public override void _Ready()
@@ -66,7 +68,7 @@ public partial class SystemInspector : Control
         _fleetList.ItemSelected += OnFleetListItemSelected;
         _openSystemButton.Pressed += () =>
         {
-            if (_selectedPlanet != null) OpenSystemPressed?.Invoke(this, _selectedPlanet.Id);
+            if (_selectedPlanetId.HasValue) OpenSystemPressed?.Invoke(this, _selectedPlanetId.Value);
         };
         _plotCourseButton.Pressed += () => InvokeSelectedFleetAction(PlotCoursePressed);
         _divideButton.Pressed += () => InvokeSelectedFleetAction(DivideFleetPressed);
@@ -75,66 +77,54 @@ public partial class SystemInspector : Control
         _loadSquadsButton.Pressed += () => InvokeSelectedFleetAction(LoadSquadsPressed);
         _answerRequestButton.Pressed += () =>
         {
-            if (_selectedPlanet != null) AnswerGovernorRequestPressed?.Invoke(this, _selectedPlanet.Id);
+            if (_selectedPlanetId.HasValue)
+                AnswerGovernorRequestPressed?.Invoke(this, _selectedPlanetId.Value);
         };
         DisplayEmptyState();
     }
 
-    public void DisplayPlanet(Planet planet, int? selectedFleetId = null) =>
-        DisplaySystemContext(planet, selectedFleetId, showDossier: true);
+    public void DisplayPlanet(int? planetId, int? selectedFleetId = null) =>
+        DisplaySystemContext(planetId, selectedFleetId, showDossier: true);
 
-    public void DisplayFleetContext(Planet planet, int? selectedFleetId = null) =>
-        DisplaySystemContext(planet, selectedFleetId, showDossier: false);
+    public void DisplayFleetContext(int? planetId, int? selectedFleetId = null) =>
+        DisplaySystemContext(planetId, selectedFleetId, showDossier: false);
 
-    private void DisplaySystemContext(
-        Planet planet,
-        int? selectedFleetId,
-        bool showDossier)
+    /// <summary>True when the last requested selection resolved to a live world.</summary>
+    public bool HasSystem => _current.HasSystem;
+
+    private void DisplaySystemContext(int? planetId, int? selectedFleetId, bool showDossier)
     {
-        if (planet == null)
+        _selectedPlanetId = planetId;
+        _selectedFleetId = selectedFleetId;
+        _showDossier = showDossier;
+        Render();
+    }
+
+    private void Render()
+    {
+        _current = _application == null
+            ? SystemInspectorView.Empty
+            : _application.QuerySystemInspector(_selectedPlanetId, _selectedFleetId, _showDossier);
+        if (!_current.HasSystem)
         {
-            DisplayEmptyState();
+            RenderEmptyState();
             return;
         }
 
-        _selectedPlanet = planet;
-        _selectedFleetId = selectedFleetId;
-        Faction controllingFaction = planet.GetControllingFaction();
-        _orbitingFleets.Clear();
-        _orbitingFleets.AddRange(GameDataSingleton.Instance.Sector.Fleets.Values
-            .Where(fleet => fleet.Planet == planet && fleet.TravelPhase == FleetTravelPhase.InOrbit)
-            .OrderByDescending(fleet => fleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction)
-            .ThenBy(fleet => fleet.Id));
-        int openRequests = GameDataSingleton.Instance.Sector.PlayerForce.Requests
-            .Count(request => request.TargetPlanet == planet
-                && request.Status is RequestStatus.Open or RequestStatus.InProgress);
-
-        _nameLabel.Text = BuildSystemNameLabel(planet);
-        _controlLabel.Text = controllingFaction != null
-            ? $"Controlled by {controllingFaction.Name}"
-            : "Control unknown";
-        _orbitDetailLabel.Text = _orbitingFleets.Count == 1 ? "1 task force in orbit" : $"{_orbitingFleets.Count} task forces in orbit";
-        _requestDetailLabel.Text = openRequests == 1 ? "1 active request" : $"{openRequests} active requests";
-        _answerRequestButton.Visible = planet.Governor?.ActiveRequest is IRequest request
-            && request.Status is RequestStatus.Open or RequestStatus.InProgress;
-        _dossierSection.Visible = showDossier;
-        if (showDossier)
+        _selectedFleetId = _current.SelectedFleetId;
+        _nameLabel.Text = _current.SystemName;
+        _controlLabel.Text = _current.ControlText;
+        _orbitDetailLabel.Text = _current.OrbitDetailText;
+        _requestDetailLabel.Text = _current.RequestDetailText;
+        _answerRequestButton.Visible = _current.HasAnswerableRequest;
+        _dossierSection.Visible = _showDossier;
+        if (_showDossier && _current.Dossier != null)
         {
-            RenderDossier(PlanetaryOperationsViewModelBuilder.BuildWorld(
-                GameDataSingleton.Instance.Sector, planet, null));
+            RenderDossier(_current.Dossier);
         }
         else
         {
             Clear(_dossierContent);
-        }
-
-        if (_selectedFleetId.HasValue && !_orbitingFleets.Any(fleet => fleet.Id == _selectedFleetId.Value))
-        {
-            _selectedFleetId = null;
-        }
-        if (!_selectedFleetId.HasValue)
-        {
-            _selectedFleetId = _orbitingFleets.FirstOrDefault(IsActionablePlayerFleet)?.Id;
         }
 
         _isRefreshingFleetList = true;
@@ -144,28 +134,24 @@ public partial class SystemInspector : Control
         RefreshActionState();
     }
 
-    private static string BuildSystemNameLabel(Planet planet)
-    {
-        Subsector subsector = GameDataSingleton.Instance.Sector.Subsectors
-            .FirstOrDefault(s => s.Planets.Contains(planet));
-        if (subsector == null)
-        {
-            return planet.Name;
-        }
-        Planet capital = WarpLaneBuilder.SelectCapital(subsector);
-        return $"{planet.Name}, Subsector {capital.Name}";
-    }
-
     public void DisplayEmptyState()
     {
-        _selectedPlanet = null;
+        _selectedPlanetId = null;
         _selectedFleetId = null;
-        _orbitingFleets.Clear();
+        _showDossier = false;
+        _current = SystemInspectorView.Empty;
+        RenderEmptyState();
+    }
+
+    private void RenderEmptyState()
+    {
+        _selectedFleetId = null;
         _nameLabel.Text = "No System Selected";
         _controlLabel.Text = "Select a star system on the sector map";
         _orbitDetailLabel.Text = "Orbital task forces will appear here.";
         _requestDetailLabel.Text = "Active requests will appear here.";
-        if (_selectedFleetDetailLabel != null) _selectedFleetDetailLabel.Text = "Select a task force for fleet actions.";
+        if (_selectedFleetDetailLabel != null)
+            _selectedFleetDetailLabel.Text = "No task forces are in orbit.";
         _fleetList?.Clear();
         if (_answerRequestButton != null) _answerRequestButton.Visible = false;
         if (_dossierSection != null) _dossierSection.Visible = false;
@@ -190,10 +176,14 @@ public partial class SystemInspector : Control
         GetViewport().SetInputAsHandled();
     }
 
-    private void RenderDossier(WorldDossierViewModel dossier)
+    private void RenderDossier(WorldDossierView dossier)
     {
         Clear(_dossierContent);
-        foreach (DossierCardData card in dossier.ProfileCards.Concat(dossier.StrengthCards))
+        foreach (DossierCardView card in dossier.ProfileCards)
+        {
+            _dossierContent.AddChild(DossierCard.Create(card));
+        }
+        foreach (DossierCardView card in dossier.StrengthCards)
         {
             _dossierContent.AddChild(DossierCard.Create(card));
         }
@@ -212,15 +202,13 @@ public partial class SystemInspector : Control
     private void PopulateFleetList()
     {
         _fleetList.Clear();
-        foreach (TaskForce fleet in _orbitingFleets)
+        foreach (OrbitingFleetRow fleet in _current.OrbitingFleets)
         {
-            string ownership = fleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction ? "Chapter" : fleet.Faction.Name;
-            string shipText = fleet.Ships.Count == 1 ? "1 ship" : $"{fleet.Ships.Count} ships";
-            int capacity = fleet.Ships.Sum(ship => ship.Template.SoldierCapacity);
-            string prefix = fleet.Id == _selectedFleetId ? "> " : "";
-            int index = _fleetList.AddItem($"{prefix}TF {fleet.Id} | {ownership} | {shipText} | Cap {capacity}", IconAtlas.GetIcon("fleet"), true);
-            _fleetList.SetItemMetadata(index, fleet.Id);
-            if (fleet.Faction != GameDataSingleton.Instance.Sector.PlayerForce.Faction)
+            string prefix = fleet.FleetId == _selectedFleetId ? "> " : "";
+            int index = _fleetList.AddItem(
+                $"{prefix}{fleet.Label}", IconAtlas.GetIcon("fleet"), true);
+            _fleetList.SetItemMetadata(index, fleet.FleetId);
+            if (!fleet.IsPlayerFleet)
             {
                 _fleetList.SetItemCustomFgColor(index, Color.Color8(204, 83, 71));
             }
@@ -231,125 +219,82 @@ public partial class SystemInspector : Control
     {
         if (!_selectedFleetId.HasValue) return;
 
-        int index = _orbitingFleets.FindIndex(fleet => fleet.Id == _selectedFleetId.Value);
-        if (index >= 0)
+        IReadOnlyList<OrbitingFleetRow> fleets = _current.OrbitingFleets;
+        for (int index = 0; index < fleets.Count; index++)
         {
-            _fleetList.Select(index);
+            if (fleets[index].FleetId == _selectedFleetId.Value)
+            {
+                _fleetList.Select(index);
+                return;
+            }
         }
-        else
-        {
-            _selectedFleetId = null;
-        }
+
+        _selectedFleetId = null;
     }
 
     private void OnFleetListItemSelected(long index)
     {
         if (_isRefreshingFleetList) return;
 
-        if (index < 0 || index >= _fleetList.ItemCount)
-        {
-            _selectedFleetId = null;
-        }
-        else
-        {
-            _selectedFleetId = _fleetList.GetItemMetadata((int)index).AsInt32();
-        }
-
-        _isRefreshingFleetList = true;
-        PopulateFleetList();
-        SelectFleetListRow();
-        _isRefreshingFleetList = false;
-        RefreshActionState();
+        _selectedFleetId = index < 0 || index >= _fleetList.ItemCount
+            ? null
+            : _fleetList.GetItemMetadata((int)index).AsInt32();
+        Render();
     }
 
     private void RefreshActionState()
     {
-        TaskForce selectedFleet = GetSelectedFleet();
-        bool hasPlanet = _selectedPlanet != null;
-        bool hasActionableFleet = selectedFleet != null && IsActionablePlayerFleet(selectedFleet);
-        bool canDivide = hasActionableFleet && selectedFleet.Ships.Count > 1;
-        bool canMerge = hasActionableFleet && FleetMergeDialogController.GetMergeCandidates(selectedFleet).Any();
+        FleetActionAvailability actions = _current.SelectedFleetActions;
+        bool hasPlanet = _current.HasSystem;
 
         if (_openSystemButton != null) _openSystemButton.Disabled = !hasPlanet;
-        if (_plotCourseButton != null) _plotCourseButton.Disabled = !hasActionableFleet;
-        if (_divideButton != null) _divideButton.Disabled = !canDivide;
-        if (_mergeButton != null) _mergeButton.Disabled = !canMerge;
-        if (_landSquadsButton != null) _landSquadsButton.Disabled = !hasActionableFleet;
-        if (_loadSquadsButton != null) _loadSquadsButton.Disabled = !hasActionableFleet;
+        if (_plotCourseButton != null) _plotCourseButton.Disabled = !actions.CanPlotCourse;
+        if (_divideButton != null) _divideButton.Disabled = !actions.CanDivide;
+        if (_mergeButton != null) _mergeButton.Disabled = !actions.CanMerge;
+        if (_landSquadsButton != null) _landSquadsButton.Disabled = !actions.IsActionable;
+        if (_loadSquadsButton != null) _loadSquadsButton.Disabled = !actions.IsActionable;
 
-        RefreshSelectedFleetDetail(selectedFleet);
-        RefreshActionTooltips(selectedFleet, hasPlanet, hasActionableFleet, canDivide, canMerge);
-    }
-
-    private TaskForce GetSelectedFleet()
-    {
-        if (!_selectedFleetId.HasValue) return null;
-        return _orbitingFleets.FirstOrDefault(fleet => fleet.Id == _selectedFleetId.Value);
-    }
-
-    private static bool IsActionablePlayerFleet(TaskForce fleet)
-    {
-        return fleet != null
-            && fleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction
-            && fleet.TravelPhase == FleetTravelPhase.InOrbit
-            && fleet.Planet != null;
+        if (_selectedFleetDetailLabel != null && _current.HasSystem)
+        {
+            _selectedFleetDetailLabel.Text = _current.SelectedFleetDetail;
+        }
+        RefreshActionTooltips(hasPlanet, actions);
     }
 
     private void InvokeSelectedFleetAction(EventHandler<int> handler)
     {
-        TaskForce fleet = GetSelectedFleet();
-        if (!IsActionablePlayerFleet(fleet)) return;
-        handler?.Invoke(this, fleet.Id);
-    }
-
-    private void RefreshSelectedFleetDetail(TaskForce selectedFleet)
-    {
-        if (_selectedFleetDetailLabel == null) return;
-
-        if (selectedFleet == null)
+        if (!_current.SelectedFleetActions.IsActionable || !_current.SelectedFleetId.HasValue)
         {
-            _selectedFleetDetailLabel.Text = _orbitingFleets.Count == 0
-                ? "No task forces are in orbit."
-                : "Select a task force for fleet actions.";
             return;
         }
 
-        string ownership = selectedFleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction
-            ? "Chapter fleet"
-            : selectedFleet.Faction.Name;
-        int capacity = selectedFleet.Ships.Sum(ship => ship.Template.SoldierCapacity);
-        int loaded = selectedFleet.Ships.Sum(ship => ship.LoadedSoldierCount);
-        _selectedFleetDetailLabel.Text =
-            $"TF {selectedFleet.Id} | {ownership} | {selectedFleet.Ships.Count} ships | {loaded}/{capacity} aboard";
+        handler?.Invoke(this, _current.SelectedFleetId.Value);
     }
 
-    private void RefreshActionTooltips(TaskForce selectedFleet, bool hasPlanet, bool hasActionableFleet, bool canDivide, bool canMerge)
+    private void RefreshActionTooltips(bool hasPlanet, FleetActionAvailability actions)
     {
         string noSystem = "Select a star system first.";
-        string noFleet = selectedFleet == null
+        string noFleet = _current.SelectedFleetId == null
             ? "Select one of your task forces in orbit first."
             : "Only chapter task forces in orbit can receive orders here.";
 
-        _openSystemButton.TooltipText = hasPlanet ? "Open the selected system's tactical screen." : noSystem;
-        _plotCourseButton.TooltipText = hasActionableFleet ? "Plot a warp route for the selected task force." : noFleet;
-        _divideButton.TooltipText = canDivide ? "Split ships out of the selected task force." :
-            hasActionableFleet ? "This task force needs more than one ship to divide." : noFleet;
-        _mergeButton.TooltipText = canMerge ? "Merge this task force with another compatible force in orbit." :
-            hasActionableFleet ? "No compatible merge candidates are in orbit." : noFleet;
-        _landSquadsButton.TooltipText = hasActionableFleet ? "Open the tactical screen to land squads." : noFleet;
-        _loadSquadsButton.TooltipText = hasActionableFleet ? "Open the tactical screen to load squads." : noFleet;
-    }
-
-    private static string FormatPopulation(long population)
-    {
-        if (population >= 1_000_000_000)
-        {
-            return $"{population / 1_000_000_000.0:0.##}B";
-        }
-        if (population >= 1_000_000)
-        {
-            return $"{population / 1_000_000.0:0.##}M";
-        }
-        return $"{population:N0}";
+        _openSystemButton.TooltipText = hasPlanet
+            ? "Open the selected system's tactical screen."
+            : noSystem;
+        _plotCourseButton.TooltipText = actions.CanPlotCourse
+            ? "Plot a warp route for the selected task force."
+            : noFleet;
+        _divideButton.TooltipText = actions.CanDivide
+            ? "Split ships out of the selected task force."
+            : actions.IsActionable ? "This task force needs more than one ship to divide." : noFleet;
+        _mergeButton.TooltipText = actions.CanMerge
+            ? "Merge this task force with another compatible force in orbit."
+            : actions.IsActionable ? "No compatible merge candidates are in orbit." : noFleet;
+        _landSquadsButton.TooltipText = actions.IsActionable
+            ? "Open the tactical screen to land squads."
+            : noFleet;
+        _loadSquadsButton.TooltipText = actions.IsActionable
+            ? "Open the tactical screen to load squads."
+            : noFleet;
     }
 }

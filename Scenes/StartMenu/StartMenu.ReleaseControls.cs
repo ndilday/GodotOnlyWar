@@ -170,20 +170,15 @@ public partial class StartMenu
 
 	private string TryCreateInitialAutosave(string campaignName)
 	{
-		CampaignRecoverabilityTracker tracker = GameDataSingleton.Instance.Recoverability;
-		CampaignRevision revision = tracker.CaptureRevision();
-		try
-		{
-			SaveGameManager manager = new(GameStorage.SaveDirectory);
-			manager.SaveInitialAutosave(campaignName, CurrentCampaignSaveWriter.Write);
-			tracker.MarkSaveSucceeded(revision);
-			return null;
-		}
-		catch (Exception exception)
-		{
-			GD.PushError($"Initial campaign autosave failed: {exception}");
-			return "The campaign opened, but its initial autosave failed. Save manually before leaving the campaign.";
-		}
+		// The application owns the write and the recoverability bookkeeping; the title screen only
+		// composes the storage manager and reports the outcome.
+		_campaignApplication.ConfigureStorage(new SaveGameManager(GameStorage.SaveDirectory));
+		SaveCampaignResult result = _campaignApplication.SaveCampaign(new(
+			_campaignApplication.SessionToken, SaveCampaignKind.InitialAutosave));
+		if (result.Succeeded) return null;
+
+		GD.PushError($"Initial campaign autosave failed: {result.Message}");
+		return "The campaign opened, but its initial autosave failed. Save manually before leaving the campaign.";
 	}
 
 	private void OnTitleWarningPreferencesChanged(

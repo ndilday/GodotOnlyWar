@@ -1,5 +1,6 @@
 using Godot;
 using System.Collections.Generic;
+using OnlyWar.Helpers.UI;
 
 public partial class DiplomacyScreenView : MainScreenView
 {

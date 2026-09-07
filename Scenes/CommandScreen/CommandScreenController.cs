@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Application;
 using OnlyWar.Helpers.Command;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Models;
@@ -12,7 +13,8 @@ using System.Linq;
 public partial class CommandScreenController : MainScreenController
 {
     private CommandScreenView _view;
-    private readonly CommandBriefBuilder _briefBuilder = new();
+    private ICommandScreenApplication _command;
+    private Guid _sessionToken;
     private CommandLens _lens = CommandLens.Brief;
     private CommandBriefCategory? _briefFilter;
     private ChronicleFilter _chronicleFilter = ChronicleFilter.All;
@@ -24,6 +26,27 @@ public partial class CommandScreenController : MainScreenController
 
     public event EventHandler<CampaignNavigationTarget> NavigationRequested;
     public event EventHandler LastTurnReportRequested;
+
+    public void Configure(ICommandScreenApplication command)
+    {
+        if (_command != null) _command.SessionChanged -= OnSessionChanged;
+        _command = command ?? throw new ArgumentNullException(nameof(command));
+        _command.SessionChanged += OnSessionChanged;
+        _sessionToken = command.SessionToken;
+    }
+
+    // A replaced campaign has its own brief and chronicle; drop the previous filters and focus.
+    private void OnSessionChanged(object sender, EventArgs args)
+    {
+        _sessionToken = _command.SessionToken;
+        _briefFilter = null;
+        _chronicleFilter = ChronicleFilter.All;
+        _chroniclePages.Clear();
+        _scrollOffsets.Clear();
+        _focusedStableKey = null;
+        HasRenderedBrief = false;
+        if (_view != null) RefreshFromExternalChange();
+    }
 
     public override void _Ready()
     {
@@ -42,6 +65,7 @@ public partial class CommandScreenController : MainScreenController
 
     public override void _ExitTree()
     {
+        if (_command != null) _command.SessionChanged -= OnSessionChanged;
         if (_view == null) return;
         _view.LensSelected -= OnLensSelected;
         _view.BriefFilterSelected -= OnBriefFilterSelected;
@@ -55,10 +79,9 @@ public partial class CommandScreenController : MainScreenController
 
     public void RefreshFromExternalChange()
     {
-        if (_view == null || !GameDataSingleton.Instance.IsInitialized) return;
+        if (_view == null || _command == null || !_command.HasCampaign) return;
         _view.SetLens(_lens);
-        _view.SetLastTurnReportState(
-            GameDataSingleton.Instance.Sector.PlayerForce.LastTurnReportSnapshot != null);
+        _view.SetLastTurnReportState(_command.HasLastTurnReport);
         if (_lens == CommandLens.Brief)
         {
             RenderBrief();
@@ -151,54 +174,23 @@ public partial class CommandScreenController : MainScreenController
 
     private void RenderChronicle()
     {
-        PlayerForce force = GameDataSingleton.Instance.Sector.PlayerForce;
-        IReadOnlyList<ChronicleFilter> available = ChapterChronicleBrowser.GetAvailableFilters(
-            force.ChapterChronicle,
-            force.CampaignEventLedger);
-        List<(ChronicleFilter Filter, string Label, int Count)> filters = available
-            .Select(filter =>
-            {
-                int count = CountChronicleEntries(force, filter);
-                return (filter, GetChronicleFilterLabel(filter), count);
-            })
-            .ToList();
-        if (!available.Contains(_chronicleFilter)) _chronicleFilter = ChronicleFilter.All;
-        _view.SetChronicleFilters(filters, _chronicleFilter);
-        int page = GetChroniclePage();
-        IReadOnlyList<ChronicleEntryViewModel> entries = ChapterChronicleBrowser.GetPage(
-            force.ChapterChronicle,
-            force.CampaignEventLedger,
-            GameDataSingleton.Instance.Sector,
-            _chronicleFilter,
-            page);
+        ChronicleView chronicle = _command.QueryChronicle(_chronicleFilter, GetChroniclePage());
+        _chronicleFilter = chronicle.Filter;
+        _view.SetChronicleFilters(
+            chronicle.Filters
+                .Select(option => (option.Filter, option.Label, option.Count)).ToList(),
+            _chronicleFilter);
         _view.SetChronicle(
-            entries,
+            chronicle.Entries,
             _chronicleFilter,
-            ChapterChronicleBrowser.HasPage(
-                force.ChapterChronicle,
-                force.CampaignEventLedger,
-                _chronicleFilter,
-                page + 1),
-            force.ChapterChronicle.Entries.Count > 0);
+            chronicle.HasOlder,
+            chronicle.HasAnyEntries);
     }
 
-    private CommandBriefModel BuildBrief() => _briefBuilder.Build(
-        GameDataSingleton.Instance.Date,
-        GameDataSingleton.Instance.Sector,
-        GameDataSingleton.Instance.GameRulesData,
-        GameDataSingleton.Instance.Sector.PlayerForce.LastTurnReportSnapshot,
-        GameDataSingleton.Instance.Sector.PlayerForce.CampaignEventLedger.GetEventsInWeekRange(
-            GameDataSingleton.Instance.Date.GetTotalWeeks(),
-            GameDataSingleton.Instance.Date.GetTotalWeeks()));
+    private CommandBriefModel BuildBrief() => _command.QueryBrief();
 
     private int GetChroniclePage() =>
         _chroniclePages.GetValueOrDefault(_chronicleFilter, 0);
-
-    private static int CountChronicleEntries(PlayerForce force, ChronicleFilter filter) =>
-        ChapterChronicleBrowser.Count(
-            force.ChapterChronicle,
-            force.CampaignEventLedger,
-            filter);
 
     private void SaveScrollOffset()
     {
@@ -220,15 +212,5 @@ public partial class CommandScreenController : MainScreenController
         CommandBriefCategory.StrategicSituation => "Strategic Situation",
         CommandBriefCategory.Mandates => "Mandates",
         _ => category.ToString()
-    };
-
-    private static string GetChronicleFilterLabel(ChronicleFilter filter) => filter switch
-    {
-        ChronicleFilter.Defining => "Defining",
-        ChronicleFilter.Battles => "Battles",
-        ChronicleFilter.Brothers => "Brothers",
-        ChronicleFilter.Worlds => "Worlds",
-        ChronicleFilter.Chapter => "Chapter",
-        _ => "All"
     };
 }

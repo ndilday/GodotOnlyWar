@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.UI;
 using Xunit;
 
 namespace OnlyWar.Tests.UI;

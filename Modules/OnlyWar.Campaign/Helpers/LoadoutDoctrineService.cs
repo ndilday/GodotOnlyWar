@@ -52,20 +52,15 @@ namespace OnlyWar.Helpers
             return new EffectiveLoadout([], LoadoutDoctrineSource.Template);
         }
 
-        public static EffectiveLoadout Resolve(Squad squad)
-        {
-            PlayerForce force = CampaignRuntimeDefaults.PlayerForce;
-            return Resolve(squad, force);
-        }
+        public static IReadOnlyList<WeaponSet> GetEffectiveLoadout(
+            Squad squad,
+            PlayerForce playerForce = null) =>
+            Resolve(squad, playerForce).WeaponSets;
 
-        public static IReadOnlyList<WeaponSet> GetEffectiveLoadout(Squad squad) =>
-            Resolve(squad).WeaponSets;
-
-        public static void Customize(Squad squad, PlayerForce playerForce = null)
+        public static void Customize(Squad squad, PlayerForce playerForce)
         {
             if (squad == null || !squad.UsesLoadoutDoctrine) return;
 
-            playerForce ??= CampaignRuntimeDefaults.PlayerForce;
             squad.Loadout = Resolve(squad, playerForce).WeaponSets.ToList();
             squad.UsesLoadoutDoctrine = false;
         }

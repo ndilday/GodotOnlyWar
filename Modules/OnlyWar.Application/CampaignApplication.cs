@@ -13,7 +13,7 @@ namespace OnlyWar.Application;
 /// Generation, loading and turn resolution return detached session state first; only Install
 /// publishes a successful result to the legacy host compatibility surface.
 /// </summary>
-public sealed class CampaignApplication
+public sealed partial class CampaignApplication : IMedicalScreenApplication
 {
     private readonly IRNG _random;
     private GameSession _activeSession;
@@ -21,6 +21,11 @@ public sealed class CampaignApplication
     public CampaignApplication(IRNG random)
     {
         _random = random ?? throw new ArgumentNullException(nameof(random));
+        // Compose the Operations personnel capability here rather than leaving it to whichever
+        // type happens to be touched first: a screen that constructed an Operations service before
+        // any turn had run used to fail with an unconfigured-capability exception.
+        Contracts.Operations.OperationsPersonnelDefaults.Configure(
+            Helpers.Application.Adapters.Operations.OperationsPersonnelSurface.Instance);
     }
 
     public GameSession ActiveSession => _activeSession;
@@ -46,7 +51,20 @@ public sealed class CampaignApplication
         {
             UpgradePending = game.UpgradePending
         };
+        NotifySessionChanged();
         return _activeSession;
+    }
+
+    /// <summary>
+    /// Adopts a legacy-bootstrapped campaign when there is one, and reports rather than throws
+    /// when there is not. A host scene opened without a campaign asks this instead of inspecting
+    /// the compatibility singleton itself.
+    /// </summary>
+    public bool TryAttachCurrentCampaign()
+    {
+        if (!GameDataSingleton.Instance.IsInitialized) return false;
+        AttachCurrentCampaign();
+        return true;
     }
 
     public GameSession CreateNewCampaign(
@@ -109,6 +127,7 @@ public sealed class CampaignApplication
         {
             GameDataSingleton.Instance.Recoverability.BeginNewCampaign();
         }
+        NotifySessionChanged();
     }
 
     public TurnResolutionResult AdvanceTurn(GameSession session = null)
@@ -129,5 +148,6 @@ public sealed class CampaignApplication
     {
         _activeSession = null;
         GameDataSingleton.Instance.ClearCampaign();
+        NotifySessionChanged();
     }
 }

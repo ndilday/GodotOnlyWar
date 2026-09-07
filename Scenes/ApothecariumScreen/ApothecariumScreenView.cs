@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Application;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Soldiers;
@@ -37,7 +38,7 @@ public partial class ApothecariumScreenView : MainScreenView
     public event EventHandler RecoveryBackPressed;
     public event EventHandler<int> RecoveryPatientSelected;
     public event EventHandler<RecoverySortRequest> RecoverySortChanged;
-    public event EventHandler<OnlyWar.Models.CampaignLocation> RecoveryDestinationSelected;
+    public event EventHandler<MedicalLocationId> RecoveryDestinationSelected;
     public event EventHandler<RecoveryMovementChoice> RecoveryMovementSelected;
     public event EventHandler<ReplacementOption> RecoveryTreatmentSelected;
     public event EventHandler RecoveryConfirmPressed;
@@ -588,7 +589,7 @@ public partial class ApothecariumScreenView : MainScreenView
             item.Subtitle,
             selectable: true,
             isSelected: item.IsSelected,
-            badgeColor: ColorFor(item.Severity),
+            badgeAccent: AccentFor(item.Severity),
             iconMaxWidth: RosterRowStyle.IconSize,
             rowHeight: RosterRowStyle.GetRowHeight(
                 item.Kind == ApothecariumSelectionKind.Soldier,
@@ -621,17 +622,17 @@ public partial class ApothecariumScreenView : MainScreenView
         }
     }
 
+    private static UiAccent AccentFor(MedicalSeverity severity) => severity switch
+    {
+        MedicalSeverity.Lost or MedicalSeverity.Critical => UiAccent.Critical,
+        MedicalSeverity.Serious or MedicalSeverity.Watch => UiAccent.Warning,
+        MedicalSeverity.Stable => UiAccent.Stable,
+        _ => UiAccent.Body
+    };
+
     private static Color ColorFor(MedicalSeverity severity, float alpha = 1f)
     {
-        Color color = severity switch
-        {
-            MedicalSeverity.Lost => OnlyWarStyle.Critical,
-            MedicalSeverity.Critical => OnlyWarStyle.Critical,
-            MedicalSeverity.Serious => OnlyWarStyle.MedicalWarning,
-            MedicalSeverity.Watch => OnlyWarStyle.MedicalWarning,
-            MedicalSeverity.Stable => OnlyWarStyle.MedicalStable,
-            _ => OnlyWarStyle.BodyText
-        };
+        Color color = OnlyWarStyle.Resolve(AccentFor(severity));
         color.A = alpha;
         return color;
     }

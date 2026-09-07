@@ -1,26 +1,21 @@
-using OnlyWar.Helpers.Readiness;
 using Godot;
-using OnlyWar.Helpers;
+using OnlyWar.Application;
 using OnlyWar.Helpers.UI;
-using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Recruitment;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 /// <summary>
-/// Shared modal editor for chapter defaults and sparse planetary theater overrides.
+/// Shared modal editor for chapter defaults and sparse planetary theater overrides. Every
+/// doctrine fact and every write goes through <see cref="ILoadoutScreenApplication"/>; the dialog
+/// owns only the staged edit the player has not saved yet.
 /// </summary>
 public partial class LoadoutDoctrineDialog : Control
 {
-    private PlayerForce _force;
-    private Planet _planet;
-    private LoadoutDoctrine _doctrine;
-    private SquadTemplate _selectedTemplate;
+    private ILoadoutScreenApplication _application;
+    private int? _planetId;
+    private LoadoutDoctrineScopeView _scope;
+    private int? _selectedTemplateId;
     private VBoxContainer _templateList;
     private Label _title;
     private Label _subtitle;
@@ -39,23 +34,29 @@ public partial class LoadoutDoctrineDialog : Control
     private PanelContainer _listPanel;
     private VBoxContainer _squadEditorStack;
     private HBoxContainer _footer;
-    // Character rows are keyed by the stable PersonalEquipmentRole id. The element is retained
-    // here because its SoldierTemplate supplies the validation context for the shared editor.
-    private Dictionary<int, SquadTemplateElement> _characterRoleElements = new();
     private int? _editingRoleId;
     // Characters are equipped by role rather than by squad type, so they get their own mode
     // instead of a row in the squad-template list. Chapter scope only: there is no theater tier
     // for characters (see CharacterLoadoutDoctrine).
     private bool _charactersMode;
     private bool _doctrineMode;
-    private ChapterOperationalDoctrine _operationalDoctrine;
     private VBoxContainer _doctrineEditorStack;
     private OptionButton _injuryThresholdButton;
     private CheckButton _requireLeaderButton;
     private SpinBox _minimumStrengthSpinBox;
     private Label _doctrineSummary;
+    // The staged operational doctrine the player is editing but has not saved.
+    private int _stagedInjuryThresholdIndex;
+    private bool _stagedRequireLeader;
+    private int _stagedMinimumStrength = 1;
+    private bool _isPopulatingDoctrine;
 
     public event EventHandler DoctrineChanged;
+
+    public void Configure(ILoadoutScreenApplication application)
+    {
+        _application = application;
+    }
 
     public override void _Ready()
     {
@@ -212,59 +213,38 @@ public partial class LoadoutDoctrineDialog : Control
         Visible = false;
     }
 
-    public void OpenChapter(PlayerForce force)
-    {
-        Open(force, null, force?.Army?.LoadoutDoctrine);
-    }
+    public void OpenChapter() => Open(null);
 
-    public void OpenPlanet(PlayerForce force, Planet planet)
-    {
-        Open(force, planet, planet?.LoadoutDoctrine);
-    }
+    public void OpenPlanet(int planetId) => Open(planetId);
 
-    private void Open(PlayerForce force, Planet planet, LoadoutDoctrine doctrine)
+    private void Open(int? planetId)
     {
-        _force = force;
-        _planet = planet;
-        _doctrine = doctrine;
-        _operationalDoctrine = force?.Army?.ChapterOperationalDoctrine?.DeepCopy()
-            ?? new ChapterOperationalDoctrine();
-        _saveButton.Text = planet == null ? "Save Chapter Default" : "Save Theater Override";
-        _inheritButton.Visible = planet != null;
+        _planetId = planetId;
+        _scope = _application?.QueryDoctrineScope(planetId);
+        if (_scope == null || !_scope.IsAvailable) return;
+
+        _saveButton.Text = _scope.SaveButtonText;
+        _inheritButton.Visible = planetId != null;
         // Characters have no theater tier, so the mode switch only appears at chapter scope.
-        _modeRow.Visible = planet == null;
-        SetMode(_charactersMode && planet == null, _doctrineMode && planet == null);
+        _modeRow.Visible = planetId == null;
+        SetMode(_charactersMode && planetId == null, _doctrineMode && planetId == null);
         Visible = true;
     }
 
     private void SetMode(bool charactersMode, bool doctrineMode)
     {
+        if (_scope == null) return;
         _charactersMode = charactersMode;
-        _doctrineMode = doctrineMode && _planet == null;
-        _saveButton.Text = _doctrineMode
-            ? "Save Operational Doctrine"
-            : _planet == null ? "Save Chapter Default" : "Save Theater Override";
+        _doctrineMode = doctrineMode && _planetId == null;
+        _saveButton.Text = _doctrineMode ? "Save Operational Doctrine" : _scope.SaveButtonText;
         OnlyWarStyle.ApplyListRow(_squadModeButton, !charactersMode);
         OnlyWarStyle.ApplyListRow(_characterModeButton, charactersMode);
         OnlyWarStyle.ApplyListRow(_doctrineModeButton, _doctrineMode);
 
-        _title.Text = _planet == null ? "Chapter Loadouts" : $"{_planet.Name} Theater Loadouts";
-        if (_doctrineMode)
-        {
-            _subtitle.Text = "Choose the Chapter's operational standard. Physical incapacity, untreated severance, "
-                + "procedure reservations, and fewer than two functioning arms remain unconditional exclusions.";
-        }
-        else if (charactersMode)
-        {
-            _subtitle.Text = "Set the chapter-wide kit for each command and specialist role. "
-                + "Individuals equipped from their squad screen keep their personal loadout.";
-        }
-        else
-        {
-            _subtitle.Text = _planet == null
-                ? "Set the chapter-wide baseline for each squad type. Squads with a theater override or custom loadout are unaffected."
-                : "Create only the overrides this theater needs. Unmodified squad types continue to inherit chapter doctrine.";
-        }
+        _title.Text = _scope.Title;
+        _subtitle.Text = _doctrineMode
+            ? _scope.DoctrineModeSubtitle
+            : charactersMode ? _scope.CharacterModeSubtitle : _scope.SquadModeSubtitle;
 
         _listPanel.Visible = !charactersMode && !_doctrineMode;
         _squadEditorStack.Visible = !charactersMode && !_doctrineMode;
@@ -272,10 +252,10 @@ public partial class LoadoutDoctrineDialog : Control
         _doctrineEditorStack.Visible = _doctrineMode;
         // Character picks apply on selection; squad and Doctrine modes stage an edit to be saved.
         _footer.Visible = !charactersMode;
-        _inheritButton.Visible = !_doctrineMode && _planet != null;
+        _inheritButton.Visible = !_doctrineMode && _planetId != null;
         if (_doctrineMode)
         {
-            PopulateDoctrineEditor();
+            LoadStagedDoctrine();
         }
         else if (charactersMode)
         {
@@ -296,7 +276,7 @@ public partial class LoadoutDoctrineDialog : Control
         };
         stack.AddThemeConstantOverride("separation", 12);
 
-        Label heading = new Label
+        Label heading = new()
         {
             Text = "UNFIT FOR DUTY",
             AutowrapMode = TextServer.AutowrapMode.WordSmart
@@ -305,7 +285,7 @@ public partial class LoadoutDoctrineDialog : Control
         heading.AddThemeFontSizeOverride("font_size", 20);
         stack.AddChild(heading);
 
-        Label explanation = new Label
+        Label explanation = new()
         {
             Text = "The threshold is inclusive and uses the soldier's worst active wound band. "
                 + "Incapacitated removes only the extra wound restriction; incapacitated soldiers, "
@@ -320,16 +300,10 @@ public partial class LoadoutDoctrineDialog : Control
         {
             TooltipText = "Withhold soldiers at or above this inclusive worst-wound band."
         };
-        foreach (WoundLevel? threshold in ChapterOperationalDoctrine.InjuryThresholdOptions)
-        {
-            _injuryThresholdButton.AddItem(ChapterOperationalDoctrine.DescribeThreshold(threshold));
-        }
         _injuryThresholdButton.ItemSelected += index =>
         {
-            if (_operationalDoctrine == null) return;
-            int selected = (int)Math.Clamp(
-                index, 0L, (long)ChapterOperationalDoctrine.InjuryThresholdOptions.Count - 1);
-            _operationalDoctrine.InjuryThreshold = ChapterOperationalDoctrine.InjuryThresholdOptions[selected];
+            if (_isPopulatingDoctrine) return;
+            _stagedInjuryThresholdIndex = (int)index;
             RefreshDoctrineSummary();
         };
         stack.AddChild(LabeledControl("Injury threshold", _injuryThresholdButton));
@@ -341,8 +315,8 @@ public partial class LoadoutDoctrineDialog : Control
         };
         _requireLeaderButton.Toggled += enabled =>
         {
-            if (_operationalDoctrine == null) return;
-            _operationalDoctrine.RequireDutyReadySquadLeader = enabled;
+            if (_isPopulatingDoctrine) return;
+            _stagedRequireLeader = enabled;
             RefreshDoctrineSummary();
         };
         stack.AddChild(_requireLeaderButton);
@@ -357,8 +331,8 @@ public partial class LoadoutDoctrineDialog : Control
         };
         _minimumStrengthSpinBox.ValueChanged += value =>
         {
-            if (_operationalDoctrine == null) return;
-            _operationalDoctrine.MinimumDutyReadySquadStrength = (int)value;
+            if (_isPopulatingDoctrine) return;
+            _stagedMinimumStrength = (int)value;
             RefreshDoctrineSummary();
         };
         stack.AddChild(LabeledControl("Minimum squad strength", _minimumStrengthSpinBox));
@@ -371,131 +345,65 @@ public partial class LoadoutDoctrineDialog : Control
 
     private static HBoxContainer LabeledControl(string labelText, Control control)
     {
-        HBoxContainer row = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        HBoxContainer row = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         row.AddThemeConstantOverride("separation", 12);
         Label label = new()
         {
             Text = labelText,
             CustomMinimumSize = new Vector2(220, 0),
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
         };
         row.AddChild(label);
         row.AddChild(control);
         return row;
     }
 
-    private void PopulateDoctrineEditor()
+    private void LoadStagedDoctrine()
     {
-        if (_operationalDoctrine == null) return;
-        int selected = ChapterOperationalDoctrine.InjuryThresholdOptions
-            .Select((threshold, index) => (threshold, index))
-            .FirstOrDefault(item => item.threshold == _operationalDoctrine.InjuryThreshold).index;
-        _injuryThresholdButton.Select(selected);
-        _requireLeaderButton.ButtonPressed = _operationalDoctrine.RequireDutyReadySquadLeader;
-        _minimumStrengthSpinBox.Value = _operationalDoctrine.MinimumDutyReadySquadStrength;
+        OperationalDoctrineView doctrine = _application?.QueryOperationalDoctrine();
+        if (doctrine == null) return;
+
+        _isPopulatingDoctrine = true;
+        _injuryThresholdButton.Clear();
+        foreach (string label in doctrine.InjuryThresholdLabels)
+        {
+            _injuryThresholdButton.AddItem(label);
+        }
+        _stagedInjuryThresholdIndex = doctrine.InjuryThresholdIndex;
+        _stagedRequireLeader = doctrine.RequireDutyReadySquadLeader;
+        _stagedMinimumStrength = doctrine.MinimumDutyReadySquadStrength;
+        _injuryThresholdButton.Select(_stagedInjuryThresholdIndex);
+        _requireLeaderButton.ButtonPressed = _stagedRequireLeader;
+        _minimumStrengthSpinBox.Value = _stagedMinimumStrength;
+        _isPopulatingDoctrine = false;
         RefreshDoctrineSummary();
     }
 
     private void RefreshDoctrineSummary()
     {
-        if (_doctrineSummary == null || _operationalDoctrine == null || _force?.Army == null) return;
-        RecruitmentProgram recruitment = _force.RecruitmentProgram;
-        List<Squad> squads = _force.Army.OrderOfBattle?.GetAllSquads()
-            .Where(squad => squad?.Faction?.IsPlayerFaction == true
-                && squad.IsPresentOperationalForce)
-            .ToList() ?? [];
-        int withheld = squads.Sum(squad =>
-            SquadStrengthSnapshotBuilder.Build(squad, program: recruitment, doctrine: _operationalDoctrine)
-                .DoctrineWithholdingCount);
-        int unable = squads.Count(squad =>
-            SquadReadinessService.Evaluate(squad, program: CurrentCampaignReadinessContext.ResolveProgram(squad), doctrine: _operationalDoctrine)
-                .StructuralBlockers.Count > 0);
-        _doctrineSummary.Text = $"Current roster consequence: {withheld} soldier(s) withheld by injury doctrine; "
-            + $"{unable} squad(s) unable to deploy under these structural rules."
-            + $"\nOperational fractions use duty-ready members and the leader counts toward the minimum.";
+        if (_doctrineSummary == null || _application == null) return;
+        _doctrineSummary.Text = _application.DescribeOperationalDoctrineConsequence(
+            _stagedInjuryThresholdIndex, _stagedRequireLeader, _stagedMinimumStrength);
     }
 
-    // Every personal-equipment role the chapter actually fields, gathered from the order of
-    // battle so a chapter without (say) a Judiciar never shows one. Administrative formations are
-    // excluded because they never deploy as units. Roles are keyed by the stable role id, not by
-    // SoldierTemplate.Id: the same template may be pooled in one formation and personally
-    // equipped in another.
     private void PopulateCharacterRoles()
     {
-        List<SquadTemplateElement> elements = _force?.Army?.OrderOfBattle?.GetAllSquads()
-            .Where(squad => squad.IsPresentOperationalForce)
-            .SelectMany(squad => squad.SquadTemplate.Elements)
-            .Where(element => element.PersonalEquipmentRole != null)
-            .GroupBy(element => element.PersonalEquipmentRole.Id)
-            .Select(group => group.First())
-            .OrderBy(element => element.PersonalEquipmentRole.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList() ?? [];
-
-        _characterRoleElements = elements.ToDictionary(element => element.PersonalEquipmentRole.Id);
-
-        EquipmentRulesCatalog catalog = GameDataSingleton.Instance?.GameRulesData?.EquipmentCatalog;
-        EquipmentLoadoutDoctrine equipmentDoctrine = _force?.Army?.EquipmentLoadoutDoctrine;
-        CharacterLoadoutDoctrine doctrine = _force?.Army?.CharacterLoadoutDoctrine;
-        _characterEditor.SetData(elements.Select(element =>
-        {
-            PersonalEquipmentRole role = element.PersonalEquipmentRole;
-            if (catalog?.PersonalEquipmentRoles.ContainsKey(role.Id) == true
-                && catalog.EquipmentKits.TryGetValue(role.DefaultKitId, out EquipmentKitTemplate authoredKit))
-            {
-                EquipmentLoadout resolvedLoadout = equipmentDoctrine?.TryGetRoleDefault(
-                    role.Id, out EquipmentLoadout roleLoadout) == true
-                    ? roleLoadout
-                    : authoredKit.ToLoadout();
-                string source = equipmentDoctrine?.RoleDefaults.ContainsKey(role.Id) == true
-                    ? "Chapter role override"
-                    : "Authored role kit";
-                return new CharacterLoadoutRowData(
-                    role.Id,
-                    role.Name,
-                    $"{source} · {DescribeEquipmentLoadout(resolvedLoadout, BuildEquipmentContext(element))}",
-                    [],
-                    null,
-                    equipmentDoctrine?.RoleDefaults.ContainsKey(role.Id) == true);
-            }
-
-            // Compatibility display for a focused fixture that predates the itemized rules
-            // tables. Production uses the branch above and the shared editor.
-            EffectiveCharacterLoadout resolved = CharacterLoadoutService.ResolveRole(element, _force);
-            return new CharacterLoadoutRowData(
-                role.Id,
-                role.Name,
-                CharacterLoadoutService.DescribeSource(resolved),
-                element.GetMenu(CharacterLoadoutService.CommandWeaponGroup),
-                resolved?.WeaponSet,
-                doctrine?.RoleDefaults.ContainsKey(element.SoldierTemplate.Id) == true);
-        }).ToList(), [], []);
+        _characterEditor.SetData(_application?.QueryCharacterRoles() ?? [], [], []);
     }
 
     private void OnCharacterRoleSelected(object sender, (int Key, WeaponSet WeaponSet) change)
     {
-        if (_characterRoleElements.TryGetValue(change.Key, out SquadTemplateElement element))
+        if (_application?.SetCharacterRoleWeaponSet(
+            _application.SessionToken, change.Key, change.WeaponSet)?.Succeeded == true)
         {
-            CharacterLoadoutService.SetRoleDefault(element, change.WeaponSet, _force);
             DoctrineChanged?.Invoke(this, EventArgs.Empty);
         }
         PopulateCharacterRoles();
     }
 
-    private void OnCharacterRoleReset(object sender, int soldierTemplateId)
+    private void OnCharacterRoleReset(object sender, int roleId)
     {
-        EquipmentRulesCatalog catalog = GameDataSingleton.Instance?.GameRulesData?.EquipmentCatalog;
-        if (catalog?.PersonalEquipmentRoles.ContainsKey(soldierTemplateId) == true)
-        {
-            _force?.Army?.EquipmentLoadoutDoctrine.ClearRoleDefault(soldierTemplateId);
-            DoctrineChanged?.Invoke(this, EventArgs.Empty);
-            PopulateCharacterRoles();
-            return;
-        }
-
-        if (_force?.Army?.CharacterLoadoutDoctrine.ClearRoleDefault(
-                _characterRoleElements.TryGetValue(soldierTemplateId, out SquadTemplateElement element)
-                    ? element.SoldierTemplate.Id
-                    : soldierTemplateId) == true)
+        if (_application?.ResetCharacterRole(_application.SessionToken, roleId)?.Succeeded == true)
         {
             DoctrineChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -504,81 +412,34 @@ public partial class LoadoutDoctrineDialog : Control
 
     private void OnCharacterRoleCustomize(object sender, int roleId)
     {
-        if (!_characterRoleElements.TryGetValue(roleId, out SquadTemplateElement element)) return;
-        EquipmentRulesCatalog catalog = GameDataSingleton.Instance?.GameRulesData?.EquipmentCatalog;
-        if (catalog == null || !catalog.PersonalEquipmentRoles.TryGetValue(roleId, out PersonalEquipmentRole role))
-        {
-            return;
-        }
-        if (!catalog.EquipmentKits.TryGetValue(role.DefaultKitId, out EquipmentKitTemplate authoredKit))
-        {
-            return;
-        }
+        EquipmentEditorView editor = _application?.QueryRoleEquipmentEditor(roleId);
+        if (editor?.IsAvailable != true) return;
 
-        EquipmentLoadoutDoctrine doctrine = _force?.Army?.EquipmentLoadoutDoctrine;
-        EquipmentLoadout loadout = doctrine?.TryGetRoleDefault(roleId, out EquipmentLoadout stored) == true
-            ? stored
-            : authoredKit.ToLoadout();
         _editingRoleId = roleId;
         _equipmentEditor.Open(
-            $"{role.Name} equipment",
-            "Save a complete role default. Individual soldiers may later save their own complete personal override.",
-            catalog,
-            loadout,
-            BuildEquipmentContext(element),
-            catalog.EquipmentKits.Values);
+            editor.Title,
+            editor.Subtitle,
+            editor.Catalog,
+            editor.Loadout,
+            editor.Context,
+            editor.Catalog.EquipmentKits.Values);
     }
 
     private void OnEquipmentLoadoutSaved(EquipmentLoadout loadout)
     {
-        if (!_editingRoleId.HasValue
-            || !_characterRoleElements.TryGetValue(_editingRoleId.Value, out SquadTemplateElement element))
+        if (!_editingRoleId.HasValue || _application == null) return;
+
+        LoadoutCommandResult result = _application.SaveRoleEquipment(
+            _application.SessionToken, _editingRoleId.Value, loadout);
+        _editingRoleId = null;
+        if (!result.Succeeded)
         {
+            GD.PushWarning(result.Message);
             return;
         }
 
-        try
-        {
-            EquipmentLoadoutService.SetRoleDefault(
-                _force.Army.EquipmentLoadoutDoctrine,
-                element.PersonalEquipmentRole,
-                loadout,
-                BuildEquipmentContext(element));
-            DoctrineChanged?.Invoke(this, EventArgs.Empty);
-            PopulateCharacterRoles();
-        }
-        catch (ArgumentException exception)
-        {
-            GD.PushWarning($"Equipment role loadout was not saved: {exception.Message}");
-        }
-        finally
-        {
-            _editingRoleId = null;
-        }
-    }
-
-    private EquipmentValidationContext BuildEquipmentContext(SquadTemplateElement element) => new()
-    {
-        FactionId = _force?.Faction?.Id,
-        SpeciesId = element?.SoldierTemplate?.Species?.Id,
-        SoldierTemplateId = element?.SoldierTemplate?.Id,
-        PersonalEquipmentRole = element?.PersonalEquipmentRole,
-        Strength = element?.SoldierTemplate?.Species?.Strength?.BaseValue ?? 0,
-        HandGroups = 2,
-        BaseCapacity = element?.SoldierTemplate?.Species?.BaseCapacity ?? 16
-    };
-
-    private static string DescribeEquipmentLoadout(
-        EquipmentLoadout loadout,
-        EquipmentValidationContext context)
-    {
-        if (loadout == null) return "No loadout";
-        string armor = loadout.Armor?.Name ?? "No armor";
-        string items = string.Join(", ", loadout.Items.Select(item =>
-            item.Quantity > 1 ? $"{item.Equipment.Name} ×{item.Quantity}" : item.Equipment.Name));
-        return $"{armor} · {(string.IsNullOrEmpty(items) ? "No carried items" : items)} · "
-            + $"{EquipmentLoadoutValidator.GetUsedCapacity(loadout):0.##}/"
-            + $"{EquipmentLoadoutValidator.GetAvailableCapacity(loadout, context):0.##} load";
+        DoctrineChanged?.Invoke(this, EventArgs.Empty);
+        PopulateCharacterRoles();
     }
 
     private void PopulateTemplateList()
@@ -589,101 +450,95 @@ public partial class LoadoutDoctrineDialog : Control
             child.QueueFree();
         }
 
-        List<SquadTemplate> templates = _force?.Army?.OrderOfBattle?.GetAllSquads()
-            // A squad type belongs here if it has any pooled group to spend, which is every group
-            // other than Command Weapon — not every group with a maximum above 1. Tactical Squad's
-            // two groups are both (0,1) and it is still very much a squad type worth a doctrine.
-            .Where(squad => squad.IsPresentOperationalForce
-                && squad.SquadTemplate.Elements.Any(
-                    element => element.PersonalEquipmentRole == null
-                        && element.Quotas.Count > 0))
-            .Select(squad => squad.SquadTemplate)
-            .GroupBy(template => template.Id)
-            .Select(group => group.First())
-            .OrderBy(template => template.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList() ?? [];
-
-        _selectedTemplate = templates.FirstOrDefault(template => template.Id == _selectedTemplate?.Id)
-            ?? templates.FirstOrDefault();
-        foreach (SquadTemplate template in templates)
+        _scope = _application?.QueryDoctrineScope(_planetId) ?? _scope;
+        IReadOnlyList<LoadoutTemplateOption> templates = _scope?.Templates ?? [];
+        bool selectionStillListed = false;
+        foreach (LoadoutTemplateOption template in templates)
         {
-            bool configured = _doctrine?.Loadouts.ContainsKey(template.Id) == true;
+            selectionStillListed |= template.TemplateId == _selectedTemplateId;
+        }
+        if (!selectionStillListed)
+        {
+            _selectedTemplateId = templates.Count > 0 ? templates[0].TemplateId : null;
+        }
+
+        foreach (LoadoutTemplateOption template in templates)
+        {
             Button button = new()
             {
-                Text = _planet != null && !configured ? $"{template.Name}\nInherits chapter" : template.Name,
+                Text = template.Label,
                 Alignment = HorizontalAlignment.Left,
                 CustomMinimumSize = new Vector2(0, 48),
-                TooltipText = template.Name
+                TooltipText = template.Label
             };
-            OnlyWarStyle.ApplyListRow(button, template.Id == _selectedTemplate?.Id);
-            button.Pressed += () => SelectTemplate(template);
+            OnlyWarStyle.ApplyListRow(button, template.TemplateId == _selectedTemplateId);
+            int templateId = template.TemplateId;
+            button.Pressed += () => SelectTemplate(templateId);
             _templateList.AddChild(button);
         }
         ShowSelectedTemplate();
     }
 
-    private void SelectTemplate(SquadTemplate template)
+    private void SelectTemplate(int templateId)
     {
-        _selectedTemplate = template;
+        _selectedTemplateId = templateId;
         PopulateTemplateList();
     }
 
     private void ShowSelectedTemplate()
     {
-        if (_selectedTemplate == null)
+        LoadoutTemplateDetailView detail = _selectedTemplateId.HasValue
+            ? _application?.QueryTemplateLoadout(_planetId, _selectedTemplateId.Value)
+            : null;
+        if (detail?.Exists != true)
         {
-            _selectionTitle.Text = "No operational squad types";
+            _selectionTitle.Text = LoadoutTemplateDetailView.Missing.Name;
             _selectionSource.Text = "";
             _saveButton.Disabled = true;
             return;
         }
 
         _saveButton.Disabled = false;
-        bool hasLocal = _doctrine.TryGetLoadout(_selectedTemplate.Id, out IReadOnlyList<WeaponSet> loadout);
-        if (!hasLocal && _planet != null)
-        {
-            hasLocal = _force.Army.LoadoutDoctrine.TryGetLoadout(
-                _selectedTemplate.Id, out loadout);
-        }
-        loadout ??= [];
-        _selectionTitle.Text = _selectedTemplate.Name;
-        _selectionSource.Text = _planet == null
-            ? (_doctrine.Loadouts.ContainsKey(_selectedTemplate.Id)
-                ? "Explicit chapter default"
-                : "Template standard; save to establish a chapter default")
-            : (_planet.LoadoutDoctrine.Loadouts.ContainsKey(_selectedTemplate.Id)
-                ? "Planetary theater override"
-                : "Inherited from chapter doctrine");
-        // No live roster at template scope, so capacity is each element's own MaximumNumber
-        // rather than an able-bodied count.
-        _editor.SetData(
-            [],
-            ElementLoadoutSections.Build(_selectedTemplate, element => element.MaximumNumber),
-            loadout);
-        _inheritButton.Disabled = _planet == null
-            || !_planet.LoadoutDoctrine.Loadouts.ContainsKey(_selectedTemplate.Id);
+        _selectionTitle.Text = detail.Name;
+        _selectionSource.Text = detail.SourceText;
+        _editor.SetData([], detail.CountSections, detail.Loadout);
+        _inheritButton.Disabled = !detail.CanInherit;
     }
 
     private void OnSavePressed()
     {
+        if (_application == null) return;
         if (_doctrineMode)
         {
-            if (_force?.Army?.ChapterOperationalDoctrine == null || _operationalDoctrine == null) return;
-            _force.Army.ChapterOperationalDoctrine.ReplaceWith(_operationalDoctrine);
-            DoctrineChanged?.Invoke(this, EventArgs.Empty);
-            PopulateDoctrineEditor();
+            if (_application.SaveOperationalDoctrine(
+                _application.SessionToken,
+                _stagedInjuryThresholdIndex,
+                _stagedRequireLeader,
+                _stagedMinimumStrength).Succeeded)
+            {
+                DoctrineChanged?.Invoke(this, EventArgs.Empty);
+            }
+            LoadStagedDoctrine();
             return;
         }
-        if (_selectedTemplate == null) return;
-        _doctrine.SetLoadout(_selectedTemplate.Id, _editor.WorkingLoadout);
-        DoctrineChanged?.Invoke(this, EventArgs.Empty);
+
+        if (!_selectedTemplateId.HasValue) return;
+        if (_application.SaveTemplateLoadout(
+            _application.SessionToken,
+            _planetId,
+            _selectedTemplateId.Value,
+            _editor.WorkingLoadout).Succeeded)
+        {
+            DoctrineChanged?.Invoke(this, EventArgs.Empty);
+        }
         PopulateTemplateList();
     }
 
     private void OnInheritPressed()
     {
-        if (_planet == null || _selectedTemplate == null) return;
-        if (_planet.LoadoutDoctrine.RemoveLoadout(_selectedTemplate.Id))
+        if (_application == null || !_planetId.HasValue || !_selectedTemplateId.HasValue) return;
+        if (_application.InheritTemplateLoadout(
+            _application.SessionToken, _planetId.Value, _selectedTemplateId.Value).Succeeded)
         {
             DoctrineChanged?.Invoke(this, EventArgs.Empty);
         }

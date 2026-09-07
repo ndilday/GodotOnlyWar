@@ -1,14 +1,8 @@
 using Godot;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Orders;
+using OnlyWar.Application;
 using OnlyWar.Helpers.PlanetaryOperations;
 using OnlyWar.Helpers.UI;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,8 +25,8 @@ public partial class PlanetaryOperationsScreenView : Control
         new Dictionary<string, bool>();
     private int _forceTreeScrollVertical;
 
-    public event EventHandler<Region> RegionSelected;
-    public event EventHandler<Region> RegionActivated;
+    public event EventHandler<int> RegionSelected;
+    public event EventHandler<int> RegionActivated;
     public event EventHandler<PlanetaryOperationsVerb> VerbSelected;
     public event EventHandler<string> ForceNodePressed;
     public event EventHandler<string> ForceNodeActivated;
@@ -55,7 +49,7 @@ public partial class PlanetaryOperationsScreenView : Control
 
     public override void _Ready() => BuildShell();
 
-    public void SetHeader(PlanetaryOperationsHeaderViewModel model)
+    public void SetHeader(OperationsHeaderView model)
     {
         _aggregateStrip.Text = $"REGIONS {model.ImperialRegions}/{model.TotalRegions}  ·  "
             + $"LANDED {model.Landed}  ·  ORBIT {model.InOrbit}  ·  {model.RequestClock.ToUpperInvariant()}";
@@ -72,34 +66,28 @@ public partial class PlanetaryOperationsScreenView : Control
         }
     }
 
-    public void DisplayMap(PlanetRegionMapViewModel model, Region selectedRegion) =>
-        _map.Display(model, selectedRegion);
+    public void DisplayMap(PlanetMapProjection model, int selectedRegionId) =>
+        _map.Display(model, selectedRegionId);
 
     public void DisplayOrders(
-        RegionalOperationsViewModel model,
-        IReadOnlyList<HierarchyTreeItem> forceTree,
+        RegionalOperationsView model,
         string filter,
-        string selectedMissionKey,
-        Order selectedOrder,
-        IReadOnlyList<SpecialistOption> specialists,
         string undoDescription)
     {
         CaptureForceTreeState();
         Clear(_leftContent);
         Clear(_rightContent);
-        AddForceTree(_leftContent, "REGIONAL FORCE", forceTree, filter, false,
+        AddForceTree(_leftContent, "REGIONAL FORCE", model.ForceTree, filter, false,
             ForceTreeGrouping.Company);
 
         AddCaption(_rightContent, "SELECTED REGION");
         AddCards(_rightContent, model.SelectedRegionCards);
         AddCaption(_rightContent, "ACTIVE ORDERS");
-        if (model.ActiveOrders.Count == 0) AddHint(_rightContent, "No Chapter orders target this region.");
-        else AddHint(_rightContent, "Select an active order to edit or reinforce it.");
-        IReadOnlyList<AvailableMission> missionOptions = model.OrdinaryMissions
-            .Concat(model.SpecialMissions)
-            .ToList();
-        foreach (Order order in model.ActiveOrders)
-            AddOrderChoice(order, selectedOrder?.Id == order.Id, missionOptions);
+        AddHint(_rightContent, model.ActiveOrders.Count == 0
+            ? "No Chapter orders target this region."
+            : "Select an active order to edit or reinforce it.");
+        foreach (ActiveOrderView order in model.ActiveOrders)
+            AddOrderChoice(order, model.SelectedOrderId == order.OrderId);
 
         AddCaption(_rightContent, "AVAILABLE ORDERS");
         GridContainer ordinary = new()
@@ -110,13 +98,13 @@ public partial class PlanetaryOperationsScreenView : Control
         };
         ordinary.AddThemeConstantOverride("h_separation", 5);
         ordinary.AddThemeConstantOverride("v_separation", 5);
-        List<AvailableMission> availableOrdinary = model.OrdinaryMissions
-            .Where(mission => !IsActiveMission(mission, model.ActiveOrders)).ToList();
+        List<MissionOptionView> availableOrdinary = model.OrdinaryMissions
+            .Where(mission => !mission.IsAlreadyActive).ToList();
         if (availableOrdinary.Count == 0 && model.OrdinaryMissions.Count > 0)
             AddHint(_rightContent, "All ordinary order types are already active here.");
-        foreach (AvailableMission mission in availableOrdinary)
+        foreach (MissionOptionView mission in availableOrdinary)
         {
-            Button button = MissionButton(mission, selectedMissionKey);
+            Button button = MissionButton(mission, model.SelectedMissionKey);
             button.CustomMinimumSize = new Vector2(0, 56);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             ordinary.AddChild(button);
@@ -124,81 +112,74 @@ public partial class PlanetaryOperationsScreenView : Control
         _rightContent.AddChild(ordinary);
 
         AddCaption(_rightContent, "SPECIAL MISSIONS");
-        List<AvailableMission> availableSpecial = model.SpecialMissions
-            .Where(mission => !IsActiveMission(mission, model.ActiveOrders)).ToList();
+        List<MissionOptionView> availableSpecial = model.SpecialMissions
+            .Where(mission => !mission.IsAlreadyActive).ToList();
         if (availableSpecial.Count == 0)
         {
-            string message = model.SpecialMissions.Count == 0
+            AddHint(_rightContent, model.SpecialMissions.Count == 0
                 ? "No intelligence-discovered opportunities are active here."
-                : "All discovered special missions are already active here.";
-            AddHint(_rightContent, message);
+                : "All discovered special missions are already active here.");
         }
-        foreach (AvailableMission mission in availableSpecial)
+        foreach (MissionOptionView mission in availableSpecial)
         {
-            Button button = MissionButton(mission, selectedMissionKey);
+            Button button = MissionButton(mission, model.SelectedMissionKey);
             button.CustomMinimumSize = new Vector2(0, 52);
-            button.Text += "\n" + SpecialMissionPresentation.FormatRecommendedForce(
-                mission.SpecialMission, GameDataSingleton.Instance?.Date?.GetTotalWeeks() ?? 0);
+            button.Text += "\n" + mission.RecommendedForce;
             _rightContent.AddChild(button);
         }
 
-        if (selectedOrder != null) AddLiveOrderEditor(selectedOrder, specialists);
+        if (model.Editor != null) AddLiveOrderEditor(model.Editor);
         else
         {
             AddCaption(_rightContent, "ORDER REPORTING");
-            AddHint(_rightContent, selectedMissionKey == null
+            AddHint(_rightContent, model.SelectedMissionKey == null
                 ? "Select an active order or an available mission."
                 : "Click an eligible participant or company in the force tree. The first participant creates the order immediately.");
         }
-        DisplayReportingBar(selectedOrder, undoDescription);
+        DisplayReportingBar(model.Editor, undoDescription);
     }
 
     public void DisplayMovement(
         PlanetaryOperationsVerb verb,
-        IReadOnlyList<DossierCardData> regionCards,
-        IReadOnlyList<HierarchyTreeItem> forceTree,
+        MovementOperationsView model,
         string filter,
-        ForceTreeGrouping grouping,
-        IReadOnlyList<ShipCapacityChoice> ships,
-        int? selectedShipId,
-        int selectedCount)
+        ForceTreeGrouping grouping)
     {
         CaptureForceTreeState();
         Clear(_leftContent);
         Clear(_rightContent);
         AddForceTree(_leftContent,
             verb == PlanetaryOperationsVerb.Land ? "ORBITING FORCE" : "SURFACE FORCE",
-            forceTree, filter, verb == PlanetaryOperationsVerb.Land, grouping);
+            model.ForceTree, filter, verb == PlanetaryOperationsVerb.Land, grouping);
         if (verb == PlanetaryOperationsVerb.Land)
         {
-            DisplayLandingDestination(regionCards);
+            DisplayLandingDestination(model.RegionCards);
         }
         else
         {
             AddCaption(_rightContent, "EMBARKATION ORIGIN");
-            AddCards(_rightContent, regionCards);
+            AddCards(_rightContent, model.RegionCards);
             AddCaption(_rightContent, "DESTINATION SHIP");
-            AddShipChoices(ships, selectedShipId);
+            AddShipChoices(model.Ships, model.SelectedShipId);
         }
-        bool canCommit = selectedCount > 0
-            && (verb == PlanetaryOperationsVerb.Land
-                || selectedShipId.HasValue && ships.Any(choice => choice.Ship.Id == selectedShipId && choice.Fits));
-        DisplayMovementBar(selectedCount, canCommit,
-            selectedCount == 0 ? "Select at least one participant."
-            : verb == PlanetaryOperationsVerb.Embark && !selectedShipId.HasValue
+        bool canCommit = model.SelectedCount > 0
+            && (verb == PlanetaryOperationsVerb.Land || model.SelectedShipId.HasValue);
+        DisplayMovementBar(model.SelectedCount, canCommit,
+            model.SelectedCount == 0 ? "Select at least one participant."
+            : verb == PlanetaryOperationsVerb.Embark && !model.SelectedShipId.HasValue
                 ? "Choose a ship with enough capacity." : "Confirm the selected squads.");
     }
 
     // Region changes during Land only affect the destination panel. The orbiting force tree and
     // its multi-selection are independent of the highlighted destination, so leave _leftContent
     // untouched here.
-    public void UpdateLandingDestination(IReadOnlyList<DossierCardData> regionCards)
+    public void UpdateLandingDestination(IReadOnlyList<DossierCardView> regionCards)
     {
         Clear(_rightContent);
         DisplayLandingDestination(regionCards);
     }
 
-    private void DisplayLandingDestination(IReadOnlyList<DossierCardData> regionCards)
+    private void DisplayLandingDestination(IReadOnlyList<DossierCardView> regionCards)
     {
         AddCaption(_rightContent, "LANDING DESTINATION");
         AddCards(_rightContent, regionCards);
@@ -206,33 +187,29 @@ public partial class PlanetaryOperationsScreenView : Control
         AddHint(_rightContent, "Landing changes location only. Select orders after the force reaches the surface.");
     }
 
-    public void DisplayDetach(
-        IReadOnlyList<DossierCardData> regionCards,
-        IReadOnlyList<PlayerSoldier> casualties,
-        IReadOnlySet<int> selectedIds,
-        IReadOnlyList<ShipCapacityChoice> ships,
-        int? selectedShipId)
+    public void DisplayDetach(DetachOperationsView model, IReadOnlySet<int> selectedIds)
     {
         CaptureForceTreeState();
         Clear(_leftContent);
         Clear(_rightContent);
         AddCaption(_leftContent, "REGIONAL CASUALTIES");
         AddHint(_leftContent, "Detach wounded individuals to a ship in orbit; their squad remains on the surface.");
-        foreach (PlayerSoldier soldier in casualties) AddCasualtyRow(soldier, selectedIds.Contains(soldier.Id));
-        if (casualties.Count == 0) AddHint(_leftContent, "No wounded, undetached personnel are present in this region.");
+        foreach (CasualtyRowView casualty in model.Casualties)
+            AddCasualtyRow(casualty, selectedIds.Contains(casualty.SoldierId));
+        if (model.Casualties.Count == 0)
+            AddHint(_leftContent, "No wounded, undetached personnel are present in this region.");
         AddCaption(_rightContent, "SOURCE REGION");
-        AddCards(_rightContent, regionCards);
+        AddCards(_rightContent, model.RegionCards);
         AddCaption(_rightContent, "SHIP IN ORBIT");
-        AddShipChoices(ships, selectedShipId);
+        AddShipChoices(model.Ships, model.SelectedShipId);
         AddHint(_rightContent, "Treatment choice and onward care remain in Recovery Operations.");
-        bool canCommit = selectedIds.Count > 0 && selectedShipId.HasValue
-            && ships.Any(choice => choice.Ship.Id == selectedShipId && choice.Fits);
+        bool canCommit = selectedIds.Count > 0 && model.SelectedShipId.HasValue;
         DisplayMovementBar(selectedIds.Count, canCommit,
             selectedIds.Count == 0 ? "Select at least one casualty."
-            : !selectedShipId.HasValue ? "Choose a ship with enough berths." : "Confirm the selected casualties.");
+            : !model.SelectedShipId.HasValue ? "Choose a ship with enough berths." : "Confirm the selected casualties.");
     }
 
-    public void ShowWorldDossier(WorldDossierViewModel model)
+    public void ShowWorldDossier(WorldDossierView model)
     {
         Clear(_dossierContent);
         AddCaption(_dossierContent, "WORLD DOSSIER");
@@ -475,7 +452,7 @@ public partial class PlanetaryOperationsScreenView : Control
         }
     }
 
-    private void AddLiveOrderEditor(Order order, IReadOnlyList<SpecialistOption> specialists)
+    private void AddLiveOrderEditor(OrderEditorView order)
     {
         AddCaption(_rightContent, "LIVE ORDER");
         PanelContainer panel = new()
@@ -491,8 +468,8 @@ public partial class PlanetaryOperationsScreenView : Control
         panel.AddChild(stack);
         stack.AddChild(new Label
         {
-            Text = $"{MissionAvailability.GetOrderLabel(order.Mission).ToUpperInvariant()}\n"
-                + $"{order.AssignedSquads.Count} squads · {order.AssignedCharacters.Count} characters"
+            Text = $"{order.Label.ToUpperInvariant()}\n"
+                + $"{order.SquadCount} squads · {order.CharacterCount} characters"
         });
         AddHint(stack, "Edits take effect immediately and are free before turn resolution.");
         AddCaption(stack, "AGGRESSION");
@@ -509,7 +486,7 @@ public partial class PlanetaryOperationsScreenView : Control
             {
                 Text = level.ToString().ToUpperInvariant(),
                 ButtonGroup = aggressionGroup,
-                ButtonPressed = order.LevelOfAggression == level,
+                ButtonPressed = order.Aggression == level,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 CustomMinimumSize = new Vector2(0, 26)
             };
@@ -523,7 +500,7 @@ public partial class PlanetaryOperationsScreenView : Control
         stack.AddChild(aggression);
         AddCaption(stack, "ASSIGNED SQUADS");
         AddHint(stack, "Use UNASSIGN beside a squad to release it from this order.");
-        foreach (var squad in order.AssignedSquads.ToList())
+        foreach (OrderParticipantView squad in order.AssignedSquads)
         {
             HBoxContainer row = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             row.AddChild(new Label
@@ -535,48 +512,40 @@ public partial class PlanetaryOperationsScreenView : Control
             });
             Button remove = ActionButton("UNASSIGN", "close");
             remove.CustomMinimumSize = new Vector2(140, 34);
-            remove.TooltipText = $"Release {squad.Name} from this order.";
+            remove.TooltipText = squad.Tooltip;
             int id = squad.Id;
             remove.Pressed += () => RemoveSquadRequested?.Invoke(this, id);
             row.AddChild(remove);
             stack.AddChild(row);
         }
         AddCaption(stack, "ASSIGNED CHARACTERS");
-        List<SpecialistOption> attachedSpecialists = specialists
-            .Where(option => ReferenceEquals(option.Soldier.CurrentOrder, order))
-            .ToList();
-        if (attachedSpecialists.Count == 0)
+        if (order.AssignedCharacters.Count == 0)
             AddHint(stack, "No characters assigned.");
-        foreach (SpecialistOption option in attachedSpecialists)
+        foreach (OrderParticipantView character in order.AssignedCharacters)
         {
             HBoxContainer row = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            Label label = new()
+            row.AddChild(new Label
             {
-                Text = option.Soldier.Name,
+                Text = character.Name,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 VerticalAlignment = VerticalAlignment.Center,
                 ClipText = true,
                 TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-                TooltipText = $"{option.Label}\nAssigned to this order."
-            };
-            row.AddChild(label);
+                TooltipText = character.Tooltip
+            });
             Button detach = ActionButton("DETACH", "close");
             detach.CustomMinimumSize = new Vector2(96, 32);
-            int id = option.Soldier.Id;
+            int id = character.Id;
             detach.Pressed += () => SpecialistToggleRequested?.Invoke(this, id);
             row.AddChild(detach);
             stack.AddChild(row);
         }
         AddCaption(stack, "AVAILABLE SPECIALISTS");
-        List<SpecialistOption> availableSpecialists = specialists
-            .Where(option => option.IsAvailable
-                && !ReferenceEquals(option.Soldier.CurrentOrder, order))
-            .ToList();
-        if (availableSpecialists.Count == 0)
+        if (order.AvailableSpecialists.Count == 0)
         {
-            AddHint(stack, specialists.Count == 0
-                ? "No co-located specialist pool is available."
-                : "No specialists are currently available.");
+            AddHint(stack, order.HasSpecialistPool
+                ? "No specialists are currently available."
+                : "No co-located specialist pool is available.");
         }
         else
         {
@@ -587,8 +556,8 @@ public partial class PlanetaryOperationsScreenView : Control
                 TooltipText = "Select a character to assign immediately."
             };
             picker.AddItem("SELECT SPECIALIST TO ATTACH…");
-            foreach (SpecialistOption option in availableSpecialists)
-                picker.AddItem(option.Soldier.Name, option.Soldier.Id);
+            foreach (OrderParticipantView option in order.AvailableSpecialists)
+                picker.AddItem(option.Name, option.Id);
             picker.ItemSelected += index =>
             {
                 if (index <= 0) return;
@@ -598,21 +567,18 @@ public partial class PlanetaryOperationsScreenView : Control
             stack.AddChild(picker);
         }
         Button cancel = ActionButton("CANCEL ORDER", "alert");
-        cancel.Pressed += () => CancelOrderRequested?.Invoke(this, order.Id);
+        cancel.Pressed += () => CancelOrderRequested?.Invoke(this, order.OrderId);
         stack.AddChild(cancel);
         _rightContent.AddChild(panel);
     }
 
-    private void AddOrderChoice(
-        Order order,
-        bool selected,
-        IReadOnlyList<AvailableMission> missionOptions)
+    private void AddOrderChoice(ActiveOrderView order, bool selected)
     {
         Button button = new()
         {
-            Text = $"{MissionAvailability.GetOrderLabel(order.Mission).ToUpperInvariant()} · "
-                + $"{order.AssignedSquads.Count} SQUADS · {order.AssignedCharacters.Count} CHARACTERS · "
-                + $"{order.LevelOfAggression.ToString().ToUpperInvariant()}",
+            Text = $"{order.Label.ToUpperInvariant()} · "
+                + $"{order.SquadCount} SQUADS · {order.CharacterCount} CHARACTERS · "
+                + $"{order.Aggression.ToString().ToUpperInvariant()}",
             Alignment = HorizontalAlignment.Left,
             CustomMinimumSize = new Vector2(0, 34),
             AutowrapMode = TextServer.AutowrapMode.Off,
@@ -620,57 +586,52 @@ public partial class PlanetaryOperationsScreenView : Control
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
         };
         button.AddThemeFontSizeOverride("font_size", 11);
-        button.TooltipText = BuildMissionTooltip(order, missionOptions);
-        int id = order.Id;
+        button.TooltipText = order.Tooltip;
+        int id = order.OrderId;
         button.Pressed += () => OrderSelected?.Invoke(this, id);
         OnlyWarStyle.ApplyListRow(button, selected);
-        IconAtlas.Apply(button, MissionIconKey(order.Mission), 112);
+        IconAtlas.Apply(button, order.IconKey, 112);
         _rightContent.AddChild(button);
     }
 
-    private Button MissionButton(AvailableMission mission, string selectedKey)
+    private Button MissionButton(MissionOptionView mission, string selectedKey)
     {
-        Button button = SelectableButton(mission.Label.ToUpperInvariant(), mission.IdentityKey == selectedKey);
+        Button button = SelectableButton(mission.Label.ToUpperInvariant(), mission.Key == selectedKey);
         button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         button.ClipText = false;
         button.TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming;
         button.AddThemeFontSizeOverride("font_size", 11);
-        button.TooltipText = BuildMissionTooltip(mission);
-        IconAtlas.Apply(button, MissionIconKey(mission), 112);
+        button.TooltipText = mission.Tooltip;
+        IconAtlas.Apply(button, mission.IconKey, 112);
         button.AddThemeConstantOverride("icon_max_width", 40);
-        string key = mission.IdentityKey;
+        string key = mission.Key;
         button.Pressed += () => MissionSelected?.Invoke(this, key);
         return button;
     }
 
-    private static bool IsActiveMission(
-        AvailableMission mission,
-        IReadOnlyList<Order> activeOrders) =>
-        mission != null && activeOrders?.Any(order => mission.RepresentsOrder(order)) == true;
-
-    private void AddShipChoices(IReadOnlyList<ShipCapacityChoice> ships, int? selectedId)
+    private void AddShipChoices(IReadOnlyList<ShipChoiceView> ships, int? selectedId)
     {
         if (ships.Count > 0)
         {
             IReadOnlyList<HierarchyTreeItem> entries = ships
-                .GroupBy(choice => choice.Ship.Fleet?.Id ?? -1)
+                .GroupBy(choice => choice.FleetId)
                 .Select(group => new HierarchyTreeItem(
                     $"fleet:{group.Key}",
-                    group.First().Ship.Fleet == null ? "UNASSIGNED SHIPS" : $"TASK FORCE {group.Key}",
+                    group.First().FleetName,
                     group.Select(choice =>
                     {
                         string capacity = $"{choice.CurrentPassengers}/{choice.Capacity} + "
                             + $"{choice.SelectedPassengers} = {choice.ResultingPassengers}/{choice.Capacity}";
                         return new HierarchyTreeItem(
-                            $"ship:{choice.Ship.Id}",
-                            choice.Ship.Name,
+                            $"ship:{choice.ShipId}",
+                            choice.Name,
                             iconKey: "ship",
                             badge: choice.Fits ? capacity : $"{capacity} · SHORT {choice.Shortfall}",
                             tooltip: choice.Fits ? "The complete selection fits."
                                 : $"Short by {choice.Shortfall} passenger spaces.",
                             selectable: choice.Fits,
-                            isSelected: choice.Ship.Id == selectedId,
-                            badgeColor: choice.Fits ? OnlyWarStyle.BodyText : OnlyWarStyle.MedicalWarning,
+                            isSelected: choice.ShipId == selectedId,
+                            badgeAccent: choice.Fits ? UiAccent.Body : UiAccent.Warning,
                             rowHeight: 36);
                     }).ToList(),
                     iconKey: "fleet",
@@ -679,10 +640,10 @@ public partial class PlanetaryOperationsScreenView : Control
                     collapsedByDefault: true))
                 .ToList();
             int selectedFleetId = selectedId.HasValue
-                ? ships.FirstOrDefault(choice => choice.Ship.Id == selectedId.Value)?.Ship.Fleet?.Id ?? -1
+                ? ships.FirstOrDefault(choice => choice.ShipId == selectedId.Value)?.FleetId ?? -1
                 : int.MinValue;
             int expandedShipCount = selectedId.HasValue
-                ? ships.Count(choice => (choice.Ship.Fleet?.Id ?? -1) == selectedFleetId)
+                ? ships.Count(choice => choice.FleetId == selectedFleetId)
                 : 0;
             int visibleRows = entries.Count + expandedShipCount;
             HierarchyTreeView tree = new()
@@ -709,7 +670,7 @@ public partial class PlanetaryOperationsScreenView : Control
         }
     }
 
-    private void AddCasualtyRow(PlayerSoldier soldier, bool selected)
+    private void AddCasualtyRow(CasualtyRowView casualty, bool selected)
     {
         PanelContainer panel = new();
         OnlyWarStyle.ApplyListRow(panel, selected);
@@ -717,12 +678,12 @@ public partial class PlanetaryOperationsScreenView : Control
         panel.AddChild(row);
         Button toggle = new()
         {
-            Text = $"{soldier.Name}\n{soldier.AssignedSquad?.Name} · WOUNDED",
+            Text = $"{casualty.Name}\n{casualty.SquadName} · WOUNDED",
             Flat = true,
             Alignment = HorizontalAlignment.Left,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        int id = soldier.Id;
+        int id = casualty.SoldierId;
         toggle.Pressed += () => CasualtyToggled?.Invoke(this, id);
         row.AddChild(toggle);
         Button recovery = ActionButton("RECOVERY OPS", "medical");
@@ -731,7 +692,7 @@ public partial class PlanetaryOperationsScreenView : Control
         _leftContent.AddChild(panel);
     }
 
-    private void DisplayReportingBar(Order order, string undoDescription)
+    private void DisplayReportingBar(OrderEditorView order, string undoDescription)
     {
         _bottomPanel.Visible = true;
         Clear(_bottomContent);
@@ -744,7 +705,7 @@ public partial class PlanetaryOperationsScreenView : Control
         {
                 Text = order == null
                 ? "Select a mission, then add participants"
-                : $"LIVE · {order.AssignedSquads.Count} squads · {order.AssignedCharacters.Count} characters · {order.LevelOfAggression}",
+                : $"LIVE · {order.SquadCount} squads · {order.CharacterCount} characters · {order.Aggression}",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             VerticalAlignment = VerticalAlignment.Center,
@@ -803,85 +764,6 @@ public partial class PlanetaryOperationsScreenView : Control
             ? noun
             : noun == "CASUALTY" ? "CASUALTIES" : "PARTICIPANTS";
         return $"CONFIRM {verb} {selectedCount} {plural}";
-    }
-
-    private static string MissionIconKey(AvailableMission mission)
-    {
-        if (mission?.Kind == MissionAvailabilityKind.Special)
-            return MissionIconKey(mission.SpecialMission);
-        return mission?.Kind switch
-        {
-            MissionAvailabilityKind.Recon => "mission_recon",
-            MissionAvailabilityKind.Defend => "mission_defend",
-            MissionAvailabilityKind.Patrol => "mission_patrol",
-            MissionAvailabilityKind.Attack => "mission_attack",
-            MissionAvailabilityKind.Diversion => "mission_diversion",
-            MissionAvailabilityKind.FortifyEntrenchment => "fortification_entrenchment",
-            MissionAvailabilityKind.BuildListeningPost => "fortification_listening_post",
-            MissionAvailabilityKind.BuildAntiAir => "fortification_anti_air",
-            MissionAvailabilityKind.Move => "route",
-            _ => "objective"
-        };
-    }
-
-    private static string MissionIconKey(OnlyWar.Models.Missions.Mission mission)
-    {
-        if (mission is OnlyWar.Models.Missions.ConstructionMission construction)
-        {
-            return construction.ConstructionType switch
-            {
-                OnlyWar.Models.Missions.DefenseType.Entrenchment => "fortification_entrenchment",
-                OnlyWar.Models.Missions.DefenseType.ListeningPost => "fortification_listening_post",
-                OnlyWar.Models.Missions.DefenseType.AntiAir => "fortification_anti_air",
-                _ => "objective"
-            };
-        }
-
-        return mission?.MissionType switch
-        {
-            OnlyWar.Models.Missions.MissionType.Recon => "mission_recon",
-            OnlyWar.Models.Missions.MissionType.DefenseInDepth => "mission_defend",
-            OnlyWar.Models.Missions.MissionType.Patrol => "mission_patrol",
-            OnlyWar.Models.Missions.MissionType.Advance =>
-                mission.TargetFaction?.IsPlayerFaction == true ? "route" : "mission_attack",
-            OnlyWar.Models.Missions.MissionType.Diversion => "mission_diversion",
-            OnlyWar.Models.Missions.MissionType.Ambush => "mission_ambush",
-            OnlyWar.Models.Missions.MissionType.Extermination => "mission_ambush",
-            OnlyWar.Models.Missions.MissionType.Sabotage => "mission_sabotage",
-            OnlyWar.Models.Missions.MissionType.ShowOfForce => "mission_show_of_force",
-            _ => "objective"
-        };
-    }
-
-    internal static string BuildMissionTooltip(AvailableMission mission)
-    {
-        if (mission?.SpecialMission == null) return mission?.Label ?? "";
-        string recommended = SpecialMissionPresentation.FormatRecommendedForce(
-            mission.SpecialMission, GameDataSingleton.Instance?.Date?.GetTotalWeeks() ?? 0);
-        return $"{mission.Label}\n{recommended}";
-    }
-
-    internal static string BuildMissionTooltip(
-        Order order,
-        IReadOnlyList<AvailableMission> missionOptions)
-    {
-        AvailableMission mission = missionOptions?.FirstOrDefault(
-            option => option.RepresentsOrder(order));
-        if (mission != null) return BuildMissionTooltip(mission);
-
-        // Keep the active row useful if an already-created order is no longer represented by
-        // the current availability snapshot (for example, after intelligence changes).
-        OnlyWar.Models.Missions.Mission orderMission = order?.Mission;
-        if (orderMission == null) return "";
-        Region region = orderMission.RegionFaction?.Region;
-        bool isSpecial = region?.SpecialMissions?.Any(
-            candidate => candidate?.Id == orderMission.Id) == true;
-        if (!isSpecial) return MissionAvailability.GetOrderLabel(orderMission);
-
-        return BuildMissionTooltip(new AvailableMission(
-            SpecialMissionPresentation.Format(orderMission, region),
-            MissionAvailabilityKind.Special,
-            orderMission));
     }
 
     private static ScrollContainer CreateSidePanel(Container parent, float width, float ratio)
@@ -946,9 +828,9 @@ public partial class PlanetaryOperationsScreenView : Control
         return button;
     }
 
-    private static void AddCards(VBoxContainer parent, IReadOnlyList<DossierCardData> cards)
+    private static void AddCards(VBoxContainer parent, IReadOnlyList<DossierCardView> cards)
     {
-        foreach (DossierCardData card in cards ?? [])
+        foreach (DossierCardView card in cards ?? [])
             parent.AddChild(DossierCard.Create(card, extraBottomSpacing: 5));
     }
 

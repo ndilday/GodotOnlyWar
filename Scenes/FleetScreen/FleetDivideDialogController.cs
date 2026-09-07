@@ -1,6 +1,5 @@
 using Godot;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
+using OnlyWar.Application;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +7,8 @@ using System.Linq;
 public partial class FleetDivideDialogController : DialogController
 {
     private FleetDivideDialogView _view;
-    private TaskForce _taskForce;
+    private IFleetScreenApplication _application;
+    private int _fleetId;
 
     public event EventHandler FleetDivided;
 
@@ -20,47 +20,34 @@ public partial class FleetDivideDialogController : DialogController
         _view.DividePressed += OnDividePressed;
     }
 
-    public void SetTaskForce(TaskForce taskForce)
+    public void Configure(IFleetScreenApplication application)
     {
-        _taskForce = taskForce;
-        _view.SetHeader($"Task Force {taskForce.Id} — Divide");
-        List<KeyValuePair<int, string>> ships = taskForce.Ships
-            .OrderBy(ship => ship.Template.Id)
-            .Select(ship => new KeyValuePair<int, string>(
-                ship.Id, $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})"))
-            .ToList();
-        _view.PopulateShips(ships);
+        _application = application;
+    }
+
+    public void SetTaskForce(int fleetId)
+    {
+        _fleetId = fleetId;
+        FleetDivideOptionsView options = _application.QueryFleetDivideOptions(fleetId);
+        _view.SetHeader(options.Header);
+        _view.PopulateShips(options.Ships
+            .Select(ship => new KeyValuePair<int, string>(ship.ShipId, ship.Label))
+            .ToList());
     }
 
     private void OnSelectionChanged(object sender, EventArgs e)
     {
-        int selectedCount = _view.GetSelectedShipIds().Count;
-        int total = _taskForce.Ships.Count;
-
-        if (selectedCount == 0)
-        {
-            _view.SetDetail("Select the ships to peel off into a new task force.", false);
-        }
-        else if (selectedCount >= total)
-        {
-            _view.SetDetail("At least one ship must remain in the original task force.", false);
-        }
-        else
-        {
-            _view.SetDetail(
-                $"{selectedCount} ship(s) will form a new task force; {total - selectedCount} will remain.", true);
-        }
+        FleetDivideSelectionView selection = _application.EvaluateDivideSelection(
+            _fleetId, _view.GetSelectedShipIds());
+        _view.SetDetail(selection.Detail, selection.CanDivide);
     }
 
     private void OnDividePressed(object sender, EventArgs e)
     {
-        IReadOnlyList<int> selectedIds = _view.GetSelectedShipIds();
-        if (selectedIds.Count == 0 || selectedIds.Count >= _taskForce.Ships.Count) return;
+        FleetCommandResult result = _application.DivideFleet(
+            _application.SessionToken, _fleetId, _view.GetSelectedShipIds());
+        if (!result.Succeeded) return;
 
-        HashSet<int> idSet = selectedIds.ToHashSet();
-        List<Ship> shipsToSplit = _taskForce.Ships.Where(ship => idSet.Contains(ship.Id)).ToList();
-
-        GameDataSingleton.Instance.Sector.SplitOffNewFleet(_taskForce, shipsToSplit);
         FleetDivided?.Invoke(this, EventArgs.Empty);
     }
 }

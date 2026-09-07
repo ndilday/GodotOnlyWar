@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Application;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.PlanetaryOperations;
 using OnlyWar.Helpers.UI;
@@ -22,7 +23,7 @@ public partial class RegionMapCardView : Button
         Color.Color8(29, 42, 39)
     ];
 
-    private Region _region;
+    private int _regionId = -1;
     private TextureRect _backgroundTexture;
     private Label _regionNameLabel;
     private HBoxContainer _badgeStrip;
@@ -31,8 +32,8 @@ public partial class RegionMapCardView : Button
     private bool _drawContestedBorder;
     private bool _selected;
     private Color _controlBorderColor;
-    public event EventHandler<Region> RegionPressed;
-    public event EventHandler<Region> RegionActivated;
+    public event EventHandler<int> RegionPressed;
+    public event EventHandler<int> RegionActivated;
 
     public override void _Ready()
     {
@@ -165,15 +166,15 @@ public partial class RegionMapCardView : Button
         AddChild(footerBand);
 
         Resized += QueueRedraw;
-        Pressed += () => RegionPressed?.Invoke(this, _region);
+        Pressed += () => RegionPressed?.Invoke(this, _regionId);
         GuiInput += OnGuiInput;
     }
 
     public void Configure(
-        RegionMapCardViewModel model,
+        MapRegionCard model,
         bool selected)
     {
-        _region = model.Region;
+        _regionId = model.RegionId;
         TooltipText = BuildTooltip(model);
         Text = string.Empty;
         _regionNameLabel.Text = model.Name.ToUpperInvariant();
@@ -210,7 +211,7 @@ public partial class RegionMapCardView : Button
         AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
         AddThemeColorOverride("font_hover_color", OnlyWarStyle.Gold);
 
-        Color border = model.ControlBorderColor;
+        Color border = PlanetRegionMapView.BorderColor(model);
         _drawContestedBorder = model.Control == RegionControlState.Contested;
         _selected = selected;
         _controlBorderColor = border;
@@ -381,12 +382,12 @@ public partial class RegionMapCardView : Button
             && mouse.Pressed
             && mouse.DoubleClick)
         {
-            RegionActivated?.Invoke(this, _region);
+            RegionActivated?.Invoke(this, _regionId);
             AcceptEvent();
         }
     }
 
-    internal static string BuildTooltip(RegionMapCardViewModel model)
+    internal static string BuildTooltip(MapRegionCard model)
     {
         List<string> rows =
         [
@@ -407,7 +408,7 @@ public partial class RegionMapCardView : Button
         return string.Join("\n", rows);
     }
 
-    private static string ControlLabel(RegionMapCardViewModel model) => model.Control switch
+    private static string ControlLabel(MapRegionCard model) => model.Control switch
     {
         RegionControlState.Contested => "Contested",
         _ => string.IsNullOrWhiteSpace(model.ControlFactionName)
@@ -470,10 +471,10 @@ public partial class PlanetRegionMapView : PanelContainer
     private HBoxContainer _presenceLegend;
     private readonly List<RegionMapCardView> _cards = [];
     private readonly Dictionary<int, RegionMapCardView> _cardsByRegionId = [];
-    private Region _selectedRegion;
+    private int _selectedRegionId = -1;
 
-    public event EventHandler<Region> RegionSelected;
-    public event EventHandler<Region> RegionActivated;
+    public event EventHandler<int> RegionSelected;
+    public event EventHandler<int> RegionActivated;
     public event EventHandler BackgroundPressed;
 
     public ulong PersistentInstanceId => GetInstanceId();
@@ -508,24 +509,22 @@ public partial class PlanetRegionMapView : PanelContainer
         stack.AddChild(legends);
     }
 
-    public void Display(PlanetRegionMapViewModel model, Region selectedRegion)
+    public void Display(PlanetMapProjection model, int selectedRegionId)
     {
-        _selectedRegion = selectedRegion;
+        _selectedRegionId = selectedRegionId;
         ConfigureControlLegend(model.Rows.SelectMany(row => row).ToList());
         EnsureCardGeometry(model.Rows.Select(row => row.Count).ToList());
 
         _cardsByRegionId.Clear();
         int cursor = 0;
-        foreach (IReadOnlyList<RegionMapCardViewModel> row in model.Rows)
+        foreach (IReadOnlyList<MapRegionCard> row in model.Rows)
         {
-            foreach (RegionMapCardViewModel cardModel in row)
+            foreach (MapRegionCard cardModel in row)
             {
                 RegionMapCardView card = _cards[cursor++];
                 card.Visible = true;
-                card.Configure(
-                    cardModel,
-                    cardModel.Region?.Id == selectedRegion?.Id);
-                _cardsByRegionId[cardModel.Region.Id] = card;
+                card.Configure(cardModel, cardModel.RegionId == selectedRegionId);
+                _cardsByRegionId[cardModel.RegionId] = card;
             }
         }
         while (cursor < _cards.Count)
@@ -537,8 +536,7 @@ public partial class PlanetRegionMapView : PanelContainer
 
     public void FocusSelectedRegion()
     {
-        if (_selectedRegion != null
-            && _cardsByRegionId.TryGetValue(_selectedRegion.Id, out RegionMapCardView card))
+        if (_cardsByRegionId.TryGetValue(_selectedRegionId, out RegionMapCardView card))
         {
             card.GrabFocus();
         }
@@ -570,41 +568,20 @@ public partial class PlanetRegionMapView : PanelContainer
         }
     }
 
-    private void ConfigureAdjacencyFocus(
-        IReadOnlyList<RegionMapCardViewModel> cardModels)
+    private void ConfigureAdjacencyFocus(IReadOnlyList<MapRegionCard> cardModels)
     {
-        foreach (RegionMapCardViewModel model in cardModels)
+        foreach (MapRegionCard model in cardModels)
         {
-            if (!_cardsByRegionId.TryGetValue(model.Region.Id, out RegionMapCardView card)) continue;
-            List<Region> neighbours = model.Region.GetAdjacentRegions();
-            int rowKey = PlanetRegionMapViewModelBuilder.GetVisualRowKey(model.Region);
-            Region north = neighbours
-                .Where(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) < rowKey)
-                .OrderByDescending(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region))
-                .ThenBy(region => Math.Abs(region.Coordinates.X - model.Region.Coordinates.X))
-                .FirstOrDefault();
-            Region south = neighbours
-                .Where(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) > rowKey)
-                .OrderBy(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region))
-                .ThenBy(region => Math.Abs(region.Coordinates.X - model.Region.Coordinates.X))
-                .FirstOrDefault();
-            Region west = neighbours.Where(region => region.Coordinates.X < model.Region.Coordinates.X)
-                .OrderByDescending(region => region.Coordinates.X)
-                .ThenBy(region => Math.Abs(PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) - rowKey))
-                .FirstOrDefault();
-            Region east = neighbours.Where(region => region.Coordinates.X > model.Region.Coordinates.X)
-                .OrderBy(region => region.Coordinates.X)
-                .ThenBy(region => Math.Abs(PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) - rowKey))
-                .FirstOrDefault();
-            card.FocusNeighborTop = CardPath(north);
-            card.FocusNeighborBottom = CardPath(south);
-            card.FocusNeighborLeft = CardPath(west);
-            card.FocusNeighborRight = CardPath(east);
+            if (!_cardsByRegionId.TryGetValue(model.RegionId, out RegionMapCardView card)) continue;
+            card.FocusNeighborTop = CardPath(model.NorthRegionId);
+            card.FocusNeighborBottom = CardPath(model.SouthRegionId);
+            card.FocusNeighborLeft = CardPath(model.WestRegionId);
+            card.FocusNeighborRight = CardPath(model.EastRegionId);
         }
     }
 
-    private NodePath CardPath(Region region) =>
-        region != null && _cardsByRegionId.TryGetValue(region.Id, out RegionMapCardView card)
+    private NodePath CardPath(int? regionId) =>
+        regionId is int id && _cardsByRegionId.TryGetValue(id, out RegionMapCardView card)
             ? card.GetPath()
             : new NodePath();
 
@@ -621,8 +598,17 @@ public partial class PlanetRegionMapView : PanelContainer
         }
     }
 
+    /// <summary>
+    /// The card's control border. The projection classifies the state and, for an enemy holder,
+    /// names that faction's own colour; turning either into a Godot colour is the host's job.
+    /// </summary>
+    internal static Color BorderColor(MapRegionCard card) =>
+        card.ControlBorderFactionArgb is int argb
+            ? System.Drawing.Color.FromArgb(argb).ToGodotColor()
+            : OnlyWarStyle.Resolve(card.ControlBorderAccent);
+
     private void ConfigureControlLegend(
-        IReadOnlyList<RegionMapCardViewModel> cardModels)
+        IReadOnlyList<MapRegionCard> cardModels)
     {
         foreach (Node child in _controlLegend.GetChildren())
         {
@@ -632,7 +618,7 @@ public partial class PlanetRegionMapView : PanelContainer
 
         _controlLegend.AddChild(LegendText("CONTROL BORDER:"));
         AddBorderLegend(_controlLegend, OnlyWarStyle.Gold, "IMPERIAL");
-        foreach (RegionMapCardViewModel card in cardModels
+        foreach (MapRegionCard card in cardModels
             .Where(card => card.Control == RegionControlState.Enemy
                 && card.ControlFactionId.HasValue
                 && !string.IsNullOrWhiteSpace(card.ControlFactionName))
@@ -643,7 +629,7 @@ public partial class PlanetRegionMapView : PanelContainer
         {
             AddBorderLegend(
                 _controlLegend,
-                card.ControlBorderColor,
+                BorderColor(card),
                 card.ControlFactionName.ToUpperInvariant());
         }
         AddBorderLegend(_controlLegend, OnlyWarStyle.MapContested, "CONTESTED", dashed: true);

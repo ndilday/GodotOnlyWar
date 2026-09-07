@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1011"/>
+      <stop offset="1" stop-color="#07090a"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5d686"/>
+      <stop offset=".35" stop-color="#a77d3a"/>
+      <stop offset="1" stop-color="#63461d"/>
+    </linearGradient>
+    <linearGradient id="buttonGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#725a27"/>
+      <stop offset=".5" stop-color="#57451e"/>
+      <stop offset="1" stop-color="#3a2d15"/>
+    </linearGradient>
+    <linearGradient id="buttonHover" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a27c36"/>
+      <stop offset=".5" stop-color="#765b24"/>
+      <stop offset="1" stop-color="#4f3b18"/>
+    </linearGradient>
+    <linearGradient id="buttonPressed" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#35260f"/>
+      <stop offset="1" stop-color="#654719"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity=".75"/>
+    </filter>
+    <filter id="smallShadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000000" flood-opacity=".7"/>
+    </filter>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#f5d686" stroke-opacity=".08" stroke-width="2"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#page)"/>
+  <text x="72" y="70" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">RASTER BUTTON STUDY</text>
+  <text x="72" y="116" fill="#f5d686" font-family="Arial, sans-serif" font-size="30" font-weight="700">A framed control that scales without losing its character</text>
+  <text x="72" y="150" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="16">The corners carry the ornament. The edges and center are allowed to stretch or tile.</text>
+
+  <g transform="translate(72 202)">
+    <rect width="510" height="530" rx="3" fill="#15191b" stroke="#8b6e3f" stroke-opacity=".82"/>
+    <text x="24" y="40" fill="#f5d686" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">SOURCE ASSET</text>
+    <text x="24" y="68" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">384 × 96 transparent PNG · normal state</text>
+
+    <g transform="translate(65 112)" filter="url(#shadow)">
+      <rect width="380" height="104" rx="16" fill="url(#buttonGold)" stroke="url(#brass)" stroke-width="3"/>
+      <rect x="4" y="4" width="372" height="96" rx="13" fill="url(#hatch)"/>
+      <path d="M22 16 H358" stroke="#fff0b2" stroke-opacity=".22" stroke-width="2"/>
+      <circle cx="22" cy="52" r="5" fill="#d8b763" stroke="#36270f" stroke-width="2"/>
+      <circle cx="358" cy="52" r="5" fill="#d8b763" stroke="#36270f" stroke-width="2"/>
+      <text x="190" y="60" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1">OPEN LOADOUTS</text>
+    </g>
+
+    <g transform="translate(65 112)">
+      <path d="M34 0 V104 M346 0 V104 M0 24 H380 M0 80 H380" fill="none" stroke="#63c7d7" stroke-width="2" stroke-dasharray="6 5" stroke-opacity=".95"/>
+      <text x="190" y="132" text-anchor="middle" fill="#63c7d7" font-family="Arial, sans-serif" font-size="12" font-weight="700">L 34 · T 24 · R 34 · B 24</text>
+    </g>
+
+    <g transform="translate(24 300)">
+      <rect width="14" height="14" fill="#f5d686" fill-opacity=".78"/>
+      <text x="24" y="12" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="13">corners stay pixel-perfect</text>
+      <rect y="36" width="14" height="14" fill="#63c7d7" fill-opacity=".78"/>
+      <text x="24" y="48" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="13">edges stretch or tile</text>
+      <rect y="72" width="14" height="14" fill="#a99a7c" fill-opacity=".78"/>
+      <text x="24" y="84" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="13">center fills the remaining space</text>
+    </g>
+  </g>
+
+  <g transform="translate(616 202)">
+    <rect width="912" height="530" rx="3" fill="#15191b" stroke="#8b6e3f" stroke-opacity=".82"/>
+    <text x="24" y="40" fill="#f5d686" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">NINE-SLICE INSTANCES</text>
+    <text x="24" y="68" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">Same frame, different widths. Corners and rivets remain intact.</text>
+
+    <g transform="translate(30 110)" filter="url(#smallShadow)">
+      <rect width="292" height="88" rx="14" fill="url(#buttonGold)" stroke="url(#brass)" stroke-width="3"/>
+      <path d="M18 15 H274" stroke="#fff0b2" stroke-opacity=".22" stroke-width="2"/>
+      <circle cx="20" cy="44" r="4" fill="#d8b763" stroke="#36270f" stroke-width="2"/>
+      <circle cx="272" cy="44" r="4" fill="#d8b763" stroke="#36270f" stroke-width="2"/>
+      <text x="146" y="52" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="15" font-weight="700">MUSTER</text>
+    </g>
+    <text x="30" y="226" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">compact instance · 292 px</text>
+
+    <g transform="translate(30 270)" filter="url(#smallShadow)">
+      <rect width="820" height="88" rx="14" fill="url(#buttonGold)" stroke="url(#brass)" stroke-width="3"/>
+      <rect x="4" y="4" width="812" height="80" rx="11" fill="url(#hatch)"/>
+      <path d="M18 15 H802" stroke="#fff0b2" stroke-opacity=".22" stroke-width="2"/>
+      <circle cx="20" cy="44" r="4" fill="#d8b763" stroke="#36270f" stroke-width="2"/>
+      <circle cx="800" cy="44" r="4" fill="#d8b763" stroke="#36270f" stroke-width="2"/>
+      <text x="410" y="52" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="1">CONFIRM PERSONNEL TRANSFER</text>
+    </g>
+    <text x="30" y="386" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">wide instance · 820 px · center texture tiled to avoid blur</text>
+
+    <g transform="translate(30 438)">
+      <rect width="180" height="46" rx="9" fill="url(#buttonGold)" stroke="#f5d686" stroke-width="2"/>
+      <rect x="208" width="180" height="46" rx="9" fill="url(#buttonHover)" stroke="#f5d686" stroke-width="2"/>
+      <rect x="416" width="180" height="46" rx="9" fill="url(#buttonPressed)" stroke="#c3984b" stroke-width="2" transform="translate(0 3)"/>
+      <rect x="624" width="180" height="46" rx="9" fill="#343535" stroke="#77705e" stroke-width="2" opacity=".72"/>
+      <text x="90" y="29" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">NORMAL</text>
+      <text x="298" y="29" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">HOVER</text>
+      <text x="506" y="32" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">PRESSED</text>
+      <text x="714" y="29" text-anchor="middle" fill="#b5ad99" font-family="Arial, sans-serif" font-size="12" font-weight="700">DISABLED</text>
+    </g>
+  </g>
+
+  <text x="72" y="785" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">Godot mapping: StyleBoxTexture → texture margins → Button/styles/normal, hover, pressed, disabled.</text>
+  <text x="72" y="815" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">The visual identity lives in the preserved corners; sizing remains driven by layout and text.</text>
+</svg>

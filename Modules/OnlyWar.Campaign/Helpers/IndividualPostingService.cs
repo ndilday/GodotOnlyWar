@@ -2,6 +2,7 @@ using OnlyWar.Contracts.Operations;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
+using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
@@ -36,7 +37,8 @@ namespace OnlyWar.Helpers
             CampaignLocation location,
             Order order,
             out string reason,
-            ChapterOperationalDoctrine doctrine = null)
+            ChapterOperationalDoctrine doctrine = null,
+            RecruitmentProgram program = null)
         {
             reason = null;
             if (soldier?.AssignedSquad == null)
@@ -69,7 +71,8 @@ namespace OnlyWar.Helpers
             }
             if (kind == IndividualPostingKind.OperationalAttachment)
             {
-                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(soldier, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(soldier.AssignedSquad, doctrine), recruitmentProgram: CurrentCampaignReadinessContext.ResolveProgram(soldier.AssignedSquad));
+                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                    soldier, doctrine: doctrine, recruitmentProgram: program);
                 if (!duty.IsDutyReady)
                 {
                     reason = duty.Reason ?? "The specialist is not fit and available for operational duty.";
@@ -105,9 +108,10 @@ namespace OnlyWar.Helpers
             CampaignLocation location,
             Date startedDate,
             Order order = null,
-            ChapterOperationalDoctrine doctrine = null)
+            ChapterOperationalDoctrine doctrine = null,
+            RecruitmentProgram program = null)
         {
-            if (!CanCreate(soldier, kind, location, order, out string reason, doctrine))
+            if (!CanCreate(soldier, kind, location, order, out string reason, doctrine, program))
             {
                 throw new InvalidOperationException(reason);
             }
@@ -129,7 +133,8 @@ namespace OnlyWar.Helpers
             CampaignLocation location,
             Date startedDate,
             Order order = null,
-            ChapterOperationalDoctrine doctrine = null)
+            ChapterOperationalDoctrine doctrine = null,
+            RecruitmentProgram program = null)
         {
             if (soldier?.AssignedSquad == null)
                 throw new InvalidOperationException("The posting soldier has no organizational home.");
@@ -141,7 +146,8 @@ namespace OnlyWar.Helpers
                 throw new InvalidOperationException("A non-operational posting targets an order.");
             if (kind == IndividualPostingKind.OperationalAttachment)
             {
-                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(soldier, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(soldier.AssignedSquad, doctrine), recruitmentProgram: CurrentCampaignReadinessContext.ResolveProgram(soldier.AssignedSquad));
+                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
+                    soldier, doctrine: doctrine, recruitmentProgram: program);
                 if (!duty.IsDutyReady)
                     throw new InvalidOperationException(
                         duty.Reason ?? "The specialist is not fit and available for operational duty.");
@@ -225,13 +231,14 @@ namespace OnlyWar.Helpers
         PlayerSoldier soldier,
         Order order,
         Date startedDate,
-        ChapterOperationalDoctrine doctrine = null)
+        ChapterOperationalDoctrine doctrine = null,
+        RecruitmentProgram program = null)
         {
             if (soldier == null || order == null) return;
             CampaignLocation destination = CampaignLocation.Landed(order.Mission?.RegionFaction?.Region);
             if (destination == null) throw new InvalidOperationException("Order has no physical region.");
             Create(soldier, IndividualPostingKind.OperationalAttachment, destination,
-                startedDate ?? new Date(1), order, doctrine);
+                startedDate ?? new Date(1), order, doctrine, program);
         }
 
         public void ReleaseFromOrder(PlayerSoldier soldier)

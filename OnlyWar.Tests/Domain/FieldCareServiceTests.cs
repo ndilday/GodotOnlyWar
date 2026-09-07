@@ -117,7 +117,7 @@ public class FieldCareServiceTests
 
         byte before = Torso(patient).Wounds.RecoveryTimeLeft();
         Assert.Equal(10, before);
-        FieldCareService.ApplyDailyFieldCare(order, new FieldCareReport());
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, new FieldCareReport());
 
         Assert.True(Torso(patient).Wounds.RecoveryTimeLeft() < before);
         Assert.Equal(0, Torso(patient).Wounds.CriticalWounds);
@@ -138,7 +138,7 @@ public class FieldCareServiceTests
         {
             GameLog.MinimumLevel = GameLogLevel.Debug;
             GameLog.Sink = (level, message) => logs.Add(message);
-            FieldCareService.ApplyDailyFieldCare(order, report, day: 3);
+            FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report, day: 3);
         }
         finally
         {
@@ -166,7 +166,7 @@ public class FieldCareServiceTests
         Assert.False(Torso(patient).IsCrippled);
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(OrderFor(apothecary, patient), report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, OrderFor(apothecary, patient), report);
 
         Assert.Equal(0, Torso(patient).Wounds.CriticalWounds);
         Assert.Equal(2, Torso(patient).Wounds.MajorWounds);
@@ -186,7 +186,7 @@ public class FieldCareServiceTests
         Order order = OrderFor(apothecary, light, grave);
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(order, report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
 
         Assert.Equal(grave.Id, report.Treatments[0].SoldierId);
     }
@@ -203,7 +203,7 @@ public class FieldCareServiceTests
         Order order = OrderFor(apothecary, junior, senior, sergeant);
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(order, report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
 
         Assert.Equal(3, report.TreatmentCount);
         // Rank first (the sergeant outranks both brothers), then subrank (senior over junior).
@@ -234,7 +234,7 @@ public class FieldCareServiceTests
             Torso(a).Wounds.AddWound(WoundLevel.Moderate);
             Torso(b).Wounds.AddWound(WoundLevel.Moderate);
             FieldCareReport report = new();
-            FieldCareService.ApplyDailyFieldCare(order, report);
+            FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
             return report.Treatments.Select(t => t.SoldierId).ToArray();
         }
 
@@ -253,13 +253,13 @@ public class FieldCareServiceTests
         Order order = OrderFor(apothecary, dayOne, dayFour);
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(order, report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
         Assert.Equal(dayOne.Id, report.Treatments[0].SoldierId);
 
         // Day 4: a fresh, far worse casualty arrives and takes the head of the queue.
         Torso(dayFour).Wounds.AddWound(WoundLevel.Critical);
         FieldCareReport dayFourReport = new();
-        FieldCareService.ApplyDailyFieldCare(order, dayFourReport);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, dayFourReport);
 
         Assert.Equal(dayFour.Id, dayFourReport.Treatments[0].SoldierId);
     }
@@ -279,7 +279,7 @@ public class FieldCareServiceTests
         Order order = OrderFor(apothecary, patient);
 
         FieldCareReport oneCall = new();
-        FieldCareService.ApplyDailyFieldCare(order, oneCall);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, oneCall);
         float spentOnce = oneCall.CapacitySpent;
         Assert.True(spentOnce > 0f);
 
@@ -291,7 +291,7 @@ public class FieldCareServiceTests
         FieldCareReport threeCalls = new();
         for (int i = 0; i < 3; i++)
         {
-            FieldCareService.ApplyDailyFieldCare(order2, threeCalls);
+            FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order2, threeCalls);
         }
 
         // Three calls really do treat three times as much -- which is exactly why the CALLER must
@@ -316,7 +316,7 @@ public class FieldCareServiceTests
         apothecary.AttachedOrder = order;
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(order, report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
 
         Assert.NotEmpty(report.Treatments);
         Assert.Equal(patient.Id, report.Treatments[0].SoldierId);
@@ -331,7 +331,7 @@ public class FieldCareServiceTests
         uint before = Torso(patient).Wounds.WoundTotal;
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(order, report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
 
         Assert.Equal(before, Torso(patient).Wounds.WoundTotal);
         Assert.False(report.HasApothecary);
@@ -354,7 +354,7 @@ public class FieldCareServiceTests
 
         Order order = OrderFor(apothecary, patient);
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(order, report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
 
         Assert.Equal(before, leg.Wounds.WoundTotal);
         Assert.Equal(0, report.TreatmentCount);
@@ -370,7 +370,7 @@ public class FieldCareServiceTests
         uint before = cyberneticTorso.Wounds.WoundTotal;
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(OrderFor(apothecary, patient), report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, OrderFor(apothecary, patient), report);
 
         Assert.Equal(before, cyberneticTorso.Wounds.WoundTotal);
         Assert.Equal(0, report.TreatmentCount);
@@ -384,7 +384,7 @@ public class FieldCareServiceTests
         PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Minor);
 
         FieldCareReport report = new();
-        FieldCareService.ApplyDailyFieldCare(OrderFor(apothecary, patient), report);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, OrderFor(apothecary, patient), report);
 
         Assert.Equal(0, report.TreatmentCount);
     }
@@ -402,13 +402,13 @@ public class FieldCareServiceTests
         PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Critical);
         Order order = OrderFor(apothecary, patient);
 
-        FieldCareService.ApplyDailyFieldCare(order, new FieldCareReport());
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, new FieldCareReport());
         uint afterDayTwo = Torso(patient).Wounds.WoundTotal;
         Assert.Equal(1, Torso(patient).Wounds.MajorWounds);
         Assert.Equal(0, Torso(patient).Wounds.CriticalWounds);
 
         // Day 3 opens on the treated body, and keeps going down.
-        FieldCareService.ApplyDailyFieldCare(order, new FieldCareReport());
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, new FieldCareReport());
         Assert.True(Torso(patient).Wounds.WoundTotal < afterDayTwo);
     }
 
@@ -422,7 +422,7 @@ public class FieldCareServiceTests
         PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Critical);
         PlaceInRegion(region, apothecary, patient);
 
-        IReadOnlyList<FieldCareReport> reports = FieldCareService.ApplyGarrisonFieldCare(
+        IReadOnlyList<FieldCareReport> reports = FieldCareService.ApplyGarrisonFieldCare(StaticRNG.Instance, 
             [apothecary, patient]);
 
         Assert.Single(reports);
@@ -441,7 +441,7 @@ public class FieldCareServiceTests
         PlaceInRegion(TestRegion(8), patient);
         uint before = Torso(patient).Wounds.WoundTotal;
 
-        FieldCareService.ApplyGarrisonFieldCare([apothecary, patient]);
+        FieldCareService.ApplyGarrisonFieldCare(StaticRNG.Instance, [apothecary, patient]);
 
         Assert.Equal(before, Torso(patient).Wounds.WoundTotal);
     }
@@ -464,7 +464,7 @@ public class FieldCareServiceTests
         apothecary.AttachedOrder = order;
 
         uint before = Torso(homeWounded).Wounds.WoundTotal;
-        FieldCareService.ApplyGarrisonFieldCare([apothecary, homeWounded]);
+        FieldCareService.ApplyGarrisonFieldCare(StaticRNG.Instance, [apothecary, homeWounded]);
 
         Assert.Equal(before, Torso(homeWounded).Wounds.WoundTotal);
     }
@@ -485,13 +485,13 @@ public class FieldCareServiceTests
         // of a point, and the skill-value curve reads a fraction of a point as still worse than
         // untrained. The learn-by-doing question is whether the practice was banked.
         Assert.Equal(0f, PointsIn(apothecary, firstAid));
-        FieldCareService.ApplyDailyFieldCare(order, new FieldCareReport(), [firstAid]);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, new FieldCareReport(), [firstAid]);
         Assert.True(PointsIn(apothecary, firstAid) > 0f, "a day spent treating must teach something");
 
         // A day with nobody left to treat teaches nothing.
         PlayerSoldier idle = Apothecary("Idle", 100f);
         Order idleOrder = OrderFor(idle, Healthy("Fit", BrotherTemplate));
-        FieldCareService.ApplyDailyFieldCare(idleOrder, new FieldCareReport(), [firstAid]);
+        FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, idleOrder, new FieldCareReport(), [firstAid]);
         Assert.Equal(0f, PointsIn(idle, firstAid));
     }
 
@@ -547,7 +547,7 @@ public class FieldCareServiceTests
                 .ToList();
             Order order = OrderFor(apothecary, patients.ToArray());
             FieldCareReport report = new();
-            FieldCareService.ApplyDailyFieldCare(order, report);
+            FieldCareService.ApplyDailyFieldCare(StaticRNG.Instance, order, report);
             return report.TreatmentCount;
         }
 

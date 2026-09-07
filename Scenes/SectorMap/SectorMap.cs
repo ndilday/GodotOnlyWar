@@ -1,10 +1,7 @@
 using Godot;
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Extensions;
+using OnlyWar.Application;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
 using OnlyWar.Scenes.MainGameScreen;
 using System;
 using System.Collections.Generic;
@@ -93,8 +90,8 @@ public partial class SectorMap : Node2D
     private const float SeamSimplificationMaxBridgeCellFraction = 8.0f;
     private const int SeamCurveSamplesPerSegment = 10;
 
-    // PROTOTYPE: when true, subsector regions are drawn from a constrained Voronoi
-    // tessellation (VoronoiSubsectorMapper) instead of the grid-traced/smoothed polygons.
+    // PROTOTYPE: when true, subsector regions are drawn from the constrained Voronoi
+    // tessellation the geometry projection supplies, instead of the grid-traced/smoothed polygons.
     private const bool UseVoronoiBorders = true;
 
     public event EventHandler<int> PlanetClicked;
@@ -124,11 +121,20 @@ public partial class SectorMap : Node2D
     private Dictionary<ushort, List<Vector2[]>> _voronoiSubsectorLoops = [];
 	private Dictionary<ushort, HashSet<ushort>> _subsectorAdjacencyMap = [];
 	private Dictionary<ushort, int> _subsectorColorIndexMap = [];
-    private List<Subsector> _subsectors = [];
+    private IReadOnlyList<SectorMapSubsector> _subsectors = [];
     private readonly List<LabelDrawInfo> _subsectorLabels = [];
     private readonly List<LabelDrawInfo> _planetLabelsBandB = [];
     private readonly List<LabelDrawInfo> _planetLabelsBandC = [];
     private int? _selectedPlanetId;
+    // The sector map draws only detached geometry and markers; every campaign fact it shows
+    // comes from this projection.
+    private ISectorMapApplication _application;
+
+    public void Configure(ISectorMapApplication application)
+    {
+        _application = application;
+        EnsureMapMetricsInitialized();
+    }
 
     public override void _EnterTree()
     {
@@ -138,11 +144,9 @@ public partial class SectorMap : Node2D
     public bool EnsureMapMetricsInitialized()
     {
         if (GridDimensions != Vector2I.Zero && CellSize != Vector2I.Zero) return true;
-        if (!GameDataSingleton.Instance.IsInitialized) return false;
+        if (_application?.TryQuerySectorGrid(out int width, out int height) != true) return false;
 
-        GridDimensions = new(
-            GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.SectorWidth,
-            GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.SectorHeight);
+        GridDimensions = new(width, height);
         CellSize = new(
             PresentationMetrics.SectorMapCellWidth,
             PresentationMetrics.SectorMapCellHeight);
@@ -161,23 +165,26 @@ public partial class SectorMap : Node2D
             return;
         }
 
+        SectorMapGeometryView geometry = _application.QuerySectorMapGeometry(UseVoronoiBorders);
+        if (!geometry.HasCampaign)
+        {
+            GD.PushError("SectorMap requires initialized game data before the scene is readied.");
+            return;
+        }
+
         LayoutBackground();
 		SectorIds = new ushort[GridDimensions.X * GridDimensions.Y];
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
-		PlacePlanets();
+		PlacePlanets(geometry.Planets);
 		RefreshFleets();
-        _subsectors = SubsectorBuilder.BuildSubsectors(
-            GameDataSingleton.Instance.Sector.Planets.Values,
-            new OnlyWar.Models.Geometry.GridCell(GridDimensions.X, GridDimensions.Y),
-            GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.MaxSubsectorDiameter);
-        foreach(Subsector subsector in _subsectors)
+        _subsectors = geometry.Subsectors;
+        foreach (SectorMapSubsector subsector in _subsectors)
         {
             foreach (Vector2I cell in subsector.Cells.Select(cell => new Vector2I(cell.X, cell.Y)))
             {
                 SectorIds[GridPositionToIndex(cell)] = subsector.Id;
             }
         }
-        CopyGovernanceSeatsFromSectorData();
         _subsectorAdjacencyMap = DetermineSubsectorAdjacency(_subsectors.Select(subsector => subsector.Id));
         _subsectorColorIndexMap = AssignSubsectorColorIndexes(_subsectorAdjacencyMap);
         ValidateSubsectorColoring(_subsectorAdjacencyMap, _subsectorColorIndexMap);
@@ -185,32 +192,27 @@ public partial class SectorMap : Node2D
         _subsectorBoundaryPaths = DetermineSubsectorBoundaryPaths();
         if (UseVoronoiBorders)
         {
-            Dictionary<ushort, List<Planet>> subsectorPlanetMap =
-                _subsectors.ToDictionary(subsector => subsector.Id, subsector => subsector.Planets);
-            var voronoiBorders = OnlyWar.Helpers.VoronoiSubsectorMapper.BuildSubsectorLoops(
-                subsectorPlanetMap,
-                new OnlyWar.Models.Geometry.GridCell(GridDimensions.X, GridDimensions.Y),
-                GameDataSingleton.Instance.GameRulesData.SectorGenerationProfile.MaxSubsectorDiameter);
-            _voronoiSubsectorLoops = voronoiBorders.Loops.ToDictionary(
-                pair => pair.Key, pair => pair.Value.Select(loop =>
-                    loop.Select(point => new Vector2(point.X, point.Y)).ToArray()).ToList());
+            _voronoiSubsectorLoops = geometry.VoronoiLoops
+                .GroupBy(loop => loop.SubsectorId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(loop => loop.Points
+                        .Select(point => new Vector2(point.X, point.Y)).ToArray()).ToList());
 
             // Recolor from the Voronoi adjacency (shared border edges) so that
             // neighboring subsectors never share a palette color.
-            EnsureAdjacencyEntries(voronoiBorders.Adjacency, _subsectors.Select(subsector => subsector.Id));
-            _subsectorAdjacencyMap = voronoiBorders.Adjacency;
+            _subsectorAdjacencyMap = geometry.SubsectorAdjacency.ToDictionary(
+                pair => pair.Key, pair => pair.Value.ToHashSet());
+            EnsureAdjacencyEntries(
+                _subsectorAdjacencyMap, _subsectors.Select(subsector => subsector.Id));
             _subsectorColorIndexMap = AssignSubsectorColorIndexes(_subsectorAdjacencyMap);
             ValidateSubsectorColoring(_subsectorAdjacencyMap, _subsectorColorIndexMap);
         }
-        TaskForce centerFleet = GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces.FirstOrDefault();
-        Coordinate? centerPosition = centerFleet?.Planet?.Position ?? centerFleet?.Position;
-        if (centerPosition == null)
-        {
-            centerPosition = GameDataSingleton.Instance.Sector.Planets.Values.First().Position;
-        }
 
-        Vector2I gridPosition = new Vector2I(centerPosition.Value.X, centerPosition.Value.Y);
-        Vector2I mapPosition = CalculateMapPosition(gridPosition);
+        Vector2I mapPosition = CalculateMapPosition(
+            geometry.OpeningCenter is SectorMapCell center
+                ? new Vector2I(center.X, center.Y)
+                : Vector2I.Zero);
         RebuildLabelLayouts();
         _camera.ZoomTo(1, mapPosition);
     }
@@ -239,19 +241,6 @@ public partial class SectorMap : Node2D
                 && sprite.IsPixelOpaque(sprite.GetLocalMousePosition()));
     }
 
-    private void CopyGovernanceSeatsFromSectorData()
-    {
-        IReadOnlyList<Subsector> sectorSubsectors = GameDataSingleton.Instance.Sector.Subsectors;
-        foreach (Subsector subsector in _subsectors)
-        {
-            Subsector source = sectorSubsectors.FirstOrDefault(candidate => candidate.Id == subsector.Id);
-            if (source != null)
-            {
-                subsector.SetGovernanceSeat(source.GovernanceSeat);
-            }
-        }
-    }
-
     private void LayoutBackground()
     {
         if (_background?.Texture == null) return;
@@ -266,7 +255,7 @@ public partial class SectorMap : Node2D
 	public override void _Draw()
 	{
 		base._Draw();
-        if (!GameDataSingleton.Instance.IsInitialized) return;
+        if (_application?.HasCampaign != true) return;
 
         if (UseVoronoiBorders && _voronoiSubsectorLoops.Count > 0)
         {
@@ -313,7 +302,7 @@ public partial class SectorMap : Node2D
     /// </summary>
     public void RefreshLabels()
     {
-        if (!GameDataSingleton.Instance.IsInitialized || _subsectors.Count == 0) return;
+        if (_application?.HasCampaign != true || _subsectors.Count == 0) return;
 
         BuildPlanetLabelLayouts();
         QueueRedraw();
@@ -426,7 +415,7 @@ public partial class SectorMap : Node2D
         List<SectorMapLabelCandidate> candidates = [];
         Dictionary<int, (string Text, int FontSize, float Scale)> metadata = [];
 
-        foreach (Subsector subsector in _subsectors.OrderBy(subsector => subsector.Id))
+        foreach (SectorMapSubsector subsector in _subsectors.OrderBy(subsector => subsector.Id))
         {
             string sourceText = string.IsNullOrWhiteSpace(subsector.Name)
                 ? $"Subsector {subsector.Id}"
@@ -488,7 +477,7 @@ public partial class SectorMap : Node2D
     {
         _planetLabelsBandB.Clear();
         _planetLabelsBandC.Clear();
-        if (!GameDataSingleton.Instance.IsInitialized) return;
+        if (_application?.HasCampaign != true) return;
 
         BuildPlanetLabelLayout(GetLabelStyle(SectorMapLabelBand.B), _planetLabelsBandB);
         BuildPlanetLabelLayout(GetLabelStyle(SectorMapLabelBand.C), _planetLabelsBandC);
@@ -499,24 +488,26 @@ public partial class SectorMap : Node2D
         List<LabelDrawInfo> output)
     {
         List<SectorMapLabelCandidate> candidates = [];
-        Dictionary<int, (Planet Planet, int FontSize, float Scale)> metadata = [];
-        IEnumerable<Planet> planets = GameDataSingleton.Instance.Sector.Planets.Values
-            .Where(planet => !string.IsNullOrWhiteSpace(planet.Name))
-            .OrderBy(planet => planet.Id);
+        Dictionary<int, (SectorMapPlanetLabelFacts Facts, int FontSize, float Scale)> metadata = [];
 
-        foreach (Planet planet in planets)
+        foreach (SectorMapPlanetLabelFacts facts in _application.QuerySectorMapPlanetLabels())
         {
-            SectorMapPlanetLabelPriority priority = GetPlanetLabelPriority(planet);
-            (NumericsVector2 extent, int fontSize, float scale) = MeasureLabel(style, planet.Name, 0);
+            SectorMapPlanetLabelPriority priority = new(
+                facts.PlanetId,
+                facts.HasActiveWork,
+                facts.RequestSeverity,
+                facts.IsGovernanceSeat,
+                facts.Importance);
+            (NumericsVector2 extent, int fontSize, float scale) = MeasureLabel(style, facts.Name, 0);
             if (extent == NumericsVector2.Zero) continue;
 
             candidates.Add(new SectorMapLabelCandidate(
-                planet.Id,
-                ToNumerics(CalculateMapPosition(new Vector2I(planet.Position.X, planet.Position.Y))),
+                facts.PlanetId,
+                ToNumerics(CalculateMapPosition(new Vector2I(facts.X, facts.Y))),
                 priority.Rank,
                 extent,
                 scale));
-            metadata[planet.Id] = (planet, fontSize, scale);
+            metadata[facts.PlanetId] = (facts, fontSize, scale);
         }
 
         foreach (SectorMapLabelPlacement placement in SectorMapLabelLayout.Place(
@@ -527,57 +518,26 @@ public partial class SectorMap : Node2D
 
             output.Add(new LabelDrawInfo
             {
-                Text = data.Planet.Name,
+                Text = data.Facts.Name,
                 Position = ToGodot(placement.Position),
                 FontSize = data.FontSize,
                 Style = style,
-                Color = GetPlanetLabelColor(data.Planet, style)
+                Color = GetPlanetLabelColor(data.Facts, style)
             });
         }
     }
 
-    private SectorMapPlanetLabelPriority GetPlanetLabelPriority(Planet planet)
+    private static Color GetPlanetLabelColor(
+        SectorMapPlanetLabelFacts facts, SectorLabelBandStyle style)
     {
-        bool hasActiveRequest = false;
-        RequestSeverity severity = RequestSeverity.Concerned;
-        foreach (IRequest request in GameDataSingleton.Instance.Sector.PlayerForce?.Requests ?? [])
-        {
-            if (request.TargetPlanet != planet
-                || request.Status is not (RequestStatus.Open or RequestStatus.InProgress))
-            {
-                continue;
-            }
+        if (!facts.HasController) return style.FontColor;
 
-            hasActiveRequest = true;
-            severity = (RequestSeverity)Math.Max((int)severity, (int)request.Severity);
-        }
-
-        bool hasActiveMission = planet.Regions
-            .Where(region => region != null)
-            .Any(region => region.SpecialMissions.Count > 0);
-        bool hasActiveOrder = GameDataSingleton.Instance.Sector.Orders.Values
-            .Any(order => order.Mission?.RegionFaction?.Region?.Planet == planet);
-        bool isGovernanceSeat = _subsectors.Any(subsector =>
-            subsector.GovernanceSeat?.Id == planet.Id);
-
-        return new SectorMapPlanetLabelPriority(
-            planet.Id,
-            hasActiveRequest || hasActiveMission || hasActiveOrder,
-            severity,
-            isGovernanceSeat,
-            planet.Importance);
-    }
-
-    private static Color GetPlanetLabelColor(Planet planet, SectorLabelBandStyle style)
-    {
-        Faction controller = planet.GetControllingFaction();
-        if (controller == null) return style.FontColor;
-
-        System.Drawing.Color color = controller.Color;
+        System.Drawing.Color color = System.Drawing.Color.FromArgb(facts.ControllerColorArgb);
         return new Color(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f, 1.0f);
     }
 
-    private (Vector2 Anchor, float InscribedWidth) GetSubsectorLabelGeometry(Subsector subsector)
+    private (Vector2 Anchor, float InscribedWidth) GetSubsectorLabelGeometry(
+        SectorMapSubsector subsector)
     {
         if (subsector.Cells.Count > 0)
         {
@@ -599,18 +559,19 @@ public partial class SectorMap : Node2D
             return (sum / subsector.Cells.Count, Mathf.Max(CellSize.X, (maxX - minX) * 0.82f));
         }
 
-        if (subsector.Planets.Count > 0)
+        if (subsector.PlanetPositions.Count > 0)
         {
-            Vector2 sum = subsector.Planets
-                .Select(planet => CalculateMapPosition(new Vector2I(planet.Position.X, planet.Position.Y)))
+            Vector2 sum = subsector.PlanetPositions
+                .Select(position => CalculateMapPosition(new Vector2I(position.X, position.Y)))
                 .Aggregate(Vector2.Zero, (current, point) => current + point);
-            return (sum / subsector.Planets.Count, CellSize.X * 0.82f);
+            return (sum / subsector.PlanetPositions.Count, CellSize.X * 0.82f);
         }
 
         return (Vector2.Zero, 0);
     }
 
-    private IReadOnlyList<IReadOnlyList<NumericsVector2>> GetSubsectorLabelRegions(Subsector subsector)
+    private IReadOnlyList<IReadOnlyList<NumericsVector2>> GetSubsectorLabelRegions(
+        SectorMapSubsector subsector)
     {
         if (!_voronoiSubsectorLoops.TryGetValue(subsector.Id, out List<Vector2[]> loops))
             return [];
@@ -867,9 +828,12 @@ public partial class SectorMap : Node2D
     public void CenterOnSelectedPlanet()
     {
         if (!_selectedPlanetId.HasValue) return;
-        if (!GameDataSingleton.Instance.Sector.Planets.TryGetValue(_selectedPlanetId.Value, out Planet planet)) return;
+        SectorMapSelectionView selection =
+            _application?.QuerySectorMapSelection(_selectedPlanetId.Value)
+            ?? SectorMapSelectionView.Missing;
+        if (!selection.Exists) return;
 
-        Vector2I gridPosition = new(planet.Position.X, planet.Position.Y);
+        Vector2I gridPosition = new(selection.X, selection.Y);
         _camera.ZoomTo(_camera.Zoom.X, CalculateMapPosition(gridPosition));
     }
 
@@ -1363,19 +1327,19 @@ public partial class SectorMap : Node2D
     private void DrawSelectedSystemOverlay()
     {
         if (!_selectedPlanetId.HasValue) return;
-        if (!GameDataSingleton.Instance.Sector.Planets.TryGetValue(_selectedPlanetId.Value, out Planet planet)) return;
+        SectorMapSelectionView selection =
+            _application?.QuerySectorMapSelection(_selectedPlanetId.Value)
+            ?? SectorMapSelectionView.Missing;
+        if (!selection.Exists) return;
 
-        Vector2 center = CalculateMapPosition(new Vector2I(planet.Position.X, planet.Position.Y));
+        Vector2 center = CalculateMapPosition(new Vector2I(selection.X, selection.Y));
         float baseRadius = Mathf.Min(CellSize.X, CellSize.Y) * 0.42f;
         Color ringColor = Color.Color8(99, 199, 215);
         DrawArc(center, baseRadius, 0, Mathf.Tau, 96, WithAlpha(ringColor, 0.72f), 2.0f, true);
         DrawArc(center, baseRadius * 1.45f, 0, Mathf.Tau, 96, WithAlpha(ringColor, 0.28f), 1.2f, true);
         DrawArc(center, baseRadius * 1.9f, 0, Mathf.Tau, 96, WithAlpha(ringColor, 0.16f), 1.0f, true);
 
-        List<TaskForce> orbitingFleets = GameDataSingleton.Instance.Sector.Fleets.Values
-            .Where(fleet => fleet.Planet == planet && fleet.TravelPhase == FleetTravelPhase.InOrbit)
-            .OrderBy(fleet => fleet.Id)
-            .ToList();
+        IReadOnlyList<SectorMapOrbitingFleet> orbitingFleets = selection.OrbitingFleets;
 
         // The fleet's ship sprite is placed up-and-to-the-right of the planet by
         // half a cell (see PlaceFleets), so anchor the highlight there rather than
@@ -1387,7 +1351,7 @@ public partial class SectorMap : Node2D
             // Fan multiple orbiting fleets horizontally so their markers don't fully overlap.
             float fanOffset = (i - (orbitingFleets.Count - 1) / 2.0f) * 7.0f;
             Vector2 fleetPosition = fleetAnchor + new Vector2(fanOffset, 0.0f);
-            bool isPlayerFleet = orbitingFleets[i].Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction;
+            bool isPlayerFleet = orbitingFleets[i].IsPlayerFleet;
             Color fleetColor = isPlayerFleet ? Color.Color8(99, 199, 215) : Color.Color8(204, 83, 71);
             DrawCircle(fleetPosition, 5.0f, WithAlpha(fleetColor, 0.85f), true, -1.0f, true);
             DrawArc(fleetPosition, 8.0f, 0, Mathf.Tau, 24, WithAlpha(fleetColor, 0.55f), 1.0f, true);
@@ -1422,20 +1386,20 @@ public partial class SectorMap : Node2D
         return new Vector2I(x, y);
     }
 
-    private void PlacePlanets()
+    private void PlacePlanets(IReadOnlyList<SectorMapPlanetMarker> markers)
 	{
 		var starTexture = (Texture2D)GD.Load("res://Assets/UICircle.png");
 		Vector2 starTextureScale = new Vector2(0.05f, 0.05f);
-		foreach(var kvp in GameDataSingleton.Instance.Sector.Planets)
+		foreach (SectorMapPlanetMarker marker in markers)
 		{
-			Vector2I gridPosition = new(kvp.Value.Position.X, kvp.Value.Position.Y);
+			Vector2I gridPosition = new(marker.X, marker.Y);
 			int index = GridPositionToIndex(gridPosition);
 			HasPlanet[index] = true;
-            Faction controller = kvp.Value.GetControllingFaction();
-            var color = controller?.Color ?? System.Drawing.Color.Gray;
+            System.Drawing.Color color =
+                System.Drawing.Color.FromArgb(marker.ControllerColorArgb);
             ClickableSprite2D planet = DrawTexture(starTexture, starTextureScale, gridPosition, new Color(color.R, color.G, color.B, color.A));
-            planet.Pressed += (object sender, EventArgs e) => PlanetClicked?.Invoke(planet, kvp.Key);
-            planet.DoublePressed += (object sender, EventArgs e) => PlanetDoubleClicked?.Invoke(planet, kvp.Key);
+            planet.Pressed += (object sender, EventArgs e) => PlanetClicked?.Invoke(planet, marker.PlanetId);
+            planet.DoublePressed += (object sender, EventArgs e) => PlanetDoubleClicked?.Invoke(planet, marker.PlanetId);
 		}
 	}
 
@@ -1454,62 +1418,19 @@ public partial class SectorMap : Node2D
 	{
 		var shipTexture = GD.Load<AtlasTexture>(("res://Assets/shipAtlasTexture.tres"));
 		Vector2 shipTextureScale = new Vector2(0.2f, 0.2f);
-		foreach(var taskForceKvp in GameDataSingleton.Instance.Sector.Fleets)
+		foreach (SectorMapFleetMarker marker in
+			_application?.QuerySectorMapFleets() ?? [])
 		{
-            TaskForce taskForce = taskForceKvp.Value;
-			if (!IsFleetVisibleOnMap(taskForce)) continue;
-
-            // Determine the position for the fleet's sprite
-            Vector2I gridPosition;
-            bool isRealspaceTransit = taskForce.TravelPhase == FleetTravelPhase.OutboundSystemTransit
-                || taskForce.TravelPhase == FleetTravelPhase.InboundSystemTransit;
-            if (taskForce.Planet != null)
-            {
-                // Fleet is in orbit around a planet
-
-                // Assuming you have a way to get the planet's position
-                // You'll need to implement GetPlanetSpritePosition or similar
-                gridPosition = new(taskForce.Planet.Position.X, taskForce.Planet.Position.Y);
-            }
-            else if (isRealspaceTransit && GetTransitAnchorPosition(taskForce) is Coordinate transitPosition)
-            {
-                gridPosition = new Vector2I(transitPosition.X, transitPosition.Y);
-            }
-            else
-            {
-                // Fleet is in space, use its map coordinates
-                gridPosition = new Vector2I(taskForce.Position.Value.X, taskForce.Position.Value.Y);
-            }
-
+			Vector2I gridPosition = new(marker.X, marker.Y);
 			// Make sure you are the owner of the new node, or it will not save properly
-			Vector2I fleetOffset = isRealspaceTransit
+			Vector2I fleetOffset = marker.IsRealspaceTransit
 				? new Vector2I(1, 1)
 				: new Vector2I(1, -1);
 			ClickableSprite2D fleet = DrawTexture(shipTexture, shipTextureScale, gridPosition, Color.Color8(255, 255, 255), 2, fleetOffset);
-            fleet.Pressed += (object sender, EventArgs e) => FleetClicked?.Invoke(fleet, taskForceKvp.Key);
-            fleet.RightPressed += (object sender, EventArgs e) => FleetRightClicked?.Invoke(fleet, taskForceKvp.Key);
+            fleet.Pressed += (object sender, EventArgs e) => FleetClicked?.Invoke(fleet, marker.FleetId);
+            fleet.RightPressed += (object sender, EventArgs e) => FleetRightClicked?.Invoke(fleet, marker.FleetId);
 			_fleetSprites.Add(fleet);
         }
-    }
-
-	private static Coordinate? GetTransitAnchorPosition(TaskForce taskForce)
-	{
-		return taskForce.TravelPhase switch
-		{
-			FleetTravelPhase.OutboundSystemTransit => taskForce.Origin?.Position ?? taskForce.Position,
-			FleetTravelPhase.InboundSystemTransit => taskForce.Destination?.Position ?? taskForce.Position,
-			_ => taskForce.Position
-		};
-	}
-
-	private static bool IsFleetVisibleOnMap(TaskForce taskForce)
-	{
-		return taskForce.TravelPhase != FleetTravelPhase.InWarp;
-	}
-
-    private void Fleet_Pressed(object sender, EventArgs e)
-    {
-        throw new NotImplementedException();
     }
 
     private List<Vector2[]> DetermineSubsectorBoundaryPaths()
@@ -1660,10 +1581,11 @@ public partial class SectorMap : Node2D
         return paths;
     }
 
-    private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(IEnumerable<Subsector> subsectors)
+    private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(
+        IEnumerable<SectorMapSubsector> subsectors)
     {
         Dictionary<ushort, List<Vector2I>> subsectorVertexListMap = [];
-        foreach(Subsector subsector in subsectors)
+        foreach (SectorMapSubsector subsector in subsectors)
         {
             List<Vector2I> vertexList = [];
             subsectorVertexListMap[subsector.Id] = vertexList;

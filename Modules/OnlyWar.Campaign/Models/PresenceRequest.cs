@@ -1,4 +1,5 @@
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
@@ -117,12 +118,17 @@ namespace OnlyWar.Models {
                     : null;
         }
 
-        public bool IsRequestStarted() =>
-            Status != RequestStatus.Open || IsPlayerPresent();
+        public bool IsRequestStarted(GameRulesData rules) =>
+            Status != RequestStatus.Open || IsPlayerPresent(rules);
 
         public bool IsRequestCompleted() => Status == RequestStatus.Fulfilled;
 
-        public void ProcessTurn(Date currentDate)
+        /// <summary>
+        /// Advances the petition one week. <paramref name="rules"/> supplies the player faction and
+        /// chapter doctrine the qualifying-strength rule reads; it may be omitted only when the
+        /// request can be resolved without measuring presence at all — an expired deadline.
+        /// </summary>
+        public void ProcessTurn(Date currentDate, GameRulesData rules)
         {
             if (Status is RequestStatus.Fulfilled or RequestStatus.Failed)
             {
@@ -137,6 +143,7 @@ namespace OnlyWar.Models {
             }
 
             long weeklyStrength = CalculateQualifyingPresenceBattleValue(
+                rules,
                 requireShowOfForce: FulfillmentKind == RequestFulfillmentKind.ForceCommitment);
             if (weeklyStrength > 0)
             {
@@ -206,9 +213,12 @@ namespace OnlyWar.Models {
         /// request. An outcome-based commitment still counts any landed squad planet-wide, since
         /// what it measures is whether the Chapter turned up at all.
         /// </summary>
-        private long CalculateQualifyingPresenceBattleValue(bool requireShowOfForce)
+        private long CalculateQualifyingPresenceBattleValue(
+            GameRulesData rules,
+            bool requireShowOfForce)
         {
-            Faction playerFaction = CampaignRuntimeDefaults.Rules?.PlayerFaction;
+            if (rules == null) throw new ArgumentNullException(nameof(rules));
+            Faction playerFaction = rules.PlayerFaction;
             IEnumerable<Planets.Region> regions = requireShowOfForce
                 ? [Helpers.Turns.GovernorTurnProcessor.GetCapitalRegion(TargetPlanet)]
                 : TargetPlanet.Regions;
@@ -219,11 +229,14 @@ namespace OnlyWar.Models {
                 .Distinct()
                 .Where(squad => !requireShowOfForce
                     || squad.CurrentOrders?.Mission.MissionType == Missions.MissionType.ShowOfForce)
-                .Where(SquadMatchesQualifications)
+                .Where(squad => SquadMatchesQualifications(
+                    squad, rules.ChapterDoctrine?.Techmarine))
                 .Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
         }
 
-        private bool SquadMatchesQualifications(Models.Squads.Squad squad)
+        private bool SquadMatchesQualifications(
+            Models.Squads.Squad squad,
+            SoldierTemplate techmarine)
         {
             foreach (string tag in Commitment.QualificationTags)
             {
@@ -237,14 +250,14 @@ namespace OnlyWar.Models {
                 if (tag.Equals("Techmarine", StringComparison.OrdinalIgnoreCase)
                     && !squad.Members.Any(member =>
                         ReferenceEquals(member.Template,
-                            CampaignRuntimeDefaults.Rules?.ChapterDoctrine?.Techmarine)))
+                            techmarine)))
                     return false;
             }
             return true;
         }
 
-        private bool IsPlayerPresent() =>
-            CalculateQualifyingPresenceBattleValue(requireShowOfForce: false) > 0;
+        private bool IsPlayerPresent(GameRulesData rules) =>
+            CalculateQualifyingPresenceBattleValue(rules, requireShowOfForce: false) > 0;
 
         private static Date Copy(Date date) => new(date.Millenium, date.Year, date.Week);
 

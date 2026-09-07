@@ -28,7 +28,9 @@ public class SupplyRequestLifecycleTests
 
         // The threat disappears, but only after the agreed deadline.
         fixture.Planet.PlanetFactionMap.Remove(threat.Id);
-        request.ProcessTurn(new Date(1, 1, 3));
+        // The deadline has already passed, so this resolves without measuring presence and needs
+        // no rules — the detached fixture deliberately has none to lend.
+        request.ProcessTurn(new Date(1, 1, 3), fixture.Rules);
 
         Assert.Equal(RequestStatus.Failed, request.Status);
         Assert.False(request.IsRequestCompleted());

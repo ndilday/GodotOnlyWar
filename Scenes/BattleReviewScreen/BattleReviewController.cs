@@ -73,12 +73,10 @@ public partial class BattleReviewController : DialogController
         };
         _view.ReplayPressed += (_, mapPosition) => SelectFormationAt(mapPosition);
 
-        if (GameDataSingleton.Instance?.IsInitialized == true)
-        {
-            _pixelsPerGrid = new(
-                PresentationMetrics.BattleGridCellWidth,
-                PresentationMetrics.BattleGridCellHeight);
-        }
+        // Grid metrics are presentation constants; they never depended on a loaded campaign.
+        _pixelsPerGrid = new(
+            PresentationMetrics.BattleGridCellWidth,
+            PresentationMetrics.BattleGridCellHeight);
 
         _markerTexture = GD.Load<Texture2D>("res://Assets/UICircle.png");
         if (_markerTexture != null)

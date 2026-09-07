@@ -420,7 +420,7 @@ public partial class CommandWorkspaceView : MainScreenView
             node.IconKey,
             node.Badge,
             selectable: node.Selectable,
-            badgeColor: node.Badge == null ? null : OnlyWarStyle.MutedText);
+            badgeAccent: node.Badge == null ? null : UiAccent.Muted);
     }
 
     private static void ClearContainer(Container container)

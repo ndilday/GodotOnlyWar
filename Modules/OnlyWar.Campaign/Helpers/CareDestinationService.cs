@@ -71,12 +71,12 @@ namespace OnlyWar.Helpers
             }
 
             IReadOnlyList<PlayerSoldier> roster = force?.Army?.PlayerSoldierMap?.Values.ToList() ?? [];
-            PlayerSoldier apothecary = FindStaff(roster, location, MedicalProcedureService.IsApothecary);
-            PlayerSoldier techmarine = FindStaff(roster, location, MedicalProcedureService.IsTechmarine);
+            PlayerSoldier apothecary = FindStaff(force, roster, location, MedicalProcedureService.IsApothecary);
+            PlayerSoldier techmarine = FindStaff(force, roster, location, MedicalProcedureService.IsTechmarine);
             bool movableApothecary = apothecary != null || roster.Any(member =>
-                CanMoveStaff(member, MedicalProcedureService.IsApothecary));
+                CanMoveStaff(force, member, MedicalProcedureService.IsApothecary));
             bool movableTechmarine = techmarine != null || roster.Any(member =>
-                CanMoveStaff(member, MedicalProcedureService.IsTechmarine));
+                CanMoveStaff(force, member, MedicalProcedureService.IsTechmarine));
             if (apothecary == null)
             {
                 reasons.Add(new("apothecary", "No fit, unreserved Apothecary is present.", movableApothecary));
@@ -117,24 +117,25 @@ namespace OnlyWar.Helpers
                 reasons);
         }
 
-        private static PlayerSoldier FindStaff(
+        private static PlayerSoldier FindStaff(PlayerForce force,
             IEnumerable<PlayerSoldier> roster,
             CampaignLocation location,
             System.Func<ISoldier, bool> role) => roster.FirstOrDefault(member =>
-                IsAvailableStaff(member, role)
+                IsAvailableStaff(force, member, role)
                 && CampaignLocationService.ForSoldier(member)?.IsSamePlace(location) == true);
 
-        private static bool IsAvailableStaff(
+        private static bool IsAvailableStaff(PlayerForce force,
             PlayerSoldier soldier,
             System.Func<ISoldier, bool> role) => soldier?.IsCombatEffective == true
+                && soldier.AssignedSquad?.MayProvideLocalSupport == true
                 && role(soldier)
                 && !RecruitmentPromotionService.IsReservedForProcedure(
-                    CampaignRuntimeDefaults.PlayerForce?.RecruitmentProgram,
+                    force?.RecruitmentProgram,
                     soldier.Id);
 
-        private static bool CanMoveStaff(
+        private static bool CanMoveStaff(PlayerForce force,
             PlayerSoldier soldier,
-            System.Func<ISoldier, bool> role) => IsAvailableStaff(soldier, role)
+            System.Func<ISoldier, bool> role) => IsAvailableStaff(force, soldier, role)
                 && soldier.AssignedSquad?.PermitsIndividualDeployment == true;
     }
 }

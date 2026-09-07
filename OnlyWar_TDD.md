@@ -2,7 +2,7 @@
 
 **Version:** Alpha 0.8
 
-**Last Updated:** September 5, 2026
+**Last Updated:** September 6, 2026
 
 **Author:** Nathan Dilday
 
@@ -187,8 +187,11 @@ Every Godot scene that has meaningful logic is split into two C# classes:
 
 The singleton is now a compatibility publication boundary rather than the application API. `CampaignApplication`
 creates or reconstructs a detached `GameSession`, installs it only after successful generation/load,
-and advances/saves that explicit session. The main start/load/turn host paths enter through that API;
-legacy scene projections and compatibility callers still read the singleton during SB-11/SB-12.
+and advances/saves that explicit session. Every host path — start, load, turn and all gameplay
+screens — enters through that API. SB-12 fixed the remaining readers as an enforced allowlist —
+`CampaignApplication`, `SessionControlApplication`, `TurnController`, the two storage entry points
+and the two debug scene bootstraps, checked by `ModuleBoundaryEnforcementTests` — and removing the
+type itself remains open (§8.6).
 The default `TurnController` constructor remains a transitional adapter that captures the loaded rules,
 sector, date and production `IRNG` in a `GameSession`; tests and future simulations can construct a
 session directly without making the singleton their source of truth.
@@ -1023,16 +1026,19 @@ founding generation and ordinary transfers do not emit it.
 
 ### 6.1 Turn Controller
 
-`CampaignApplication.AdvanceTurn` is the host entry point for end-of-turn processing; it delegates to
-`TurnController`, while `MainGameScene.OnEndTurnButtonPressed` remains responsible for presentation.
+`CampaignApplication.ResolveTurn` is the host entry point for end-of-turn processing; it advances the
+turn through `AdvanceTurn`/`TurnController`, builds and persists the turn report, and returns a
+`TurnReportView`, while `MainGameScene.OnEndTurnButtonPressed` remains responsible for presentation.
+`AdvanceTurn` stays available for tests and headless callers that want resolution without a report.
 `TurnController` is an orchestration facade: phase behavior lives in focused processors under
 `Helpers/Turns`. Two context objects separate lifetime and responsibility:
 
 - `GameSession` is the stable dependency set for simulations belonging to one loaded game: rules, sector, mutable campaign date, and `IRNG`. `CampaignApplication` creates it for new/load workflows and attaches an existing published campaign during scene replacement; the default controller constructor remains a compatibility adapter over `GameDataSingleton` plus `StaticRNG`. An explicit session constructor supports isolated tests and alternate simulations.
 - `TurnController` constructs `FactionStrategyController` with `_session.Random` and
   `_session.Rules.FactionBehaviorRules`, so campaign planning uses the session's stream and
-  behavior profile. The facade's parameterless compatibility constructor resolves
-  `StaticRNG.Instance` and the current singleton behavior profile at each planning call.
+  behavior profile. SB-12 removed the parameterless compatibility constructor: the controller has
+  one constructor, `(IRNG, FactionBehaviorRulesProfile = null)`, and callers that want the
+  process-wide stream must name `StaticRNG.Instance` themselves.
 - `SimulationContext` is per-run state: the session, `TurnResolutionResult`, `TurnIntelligenceLedger`, separate player/all-order lists, and an optional planet scope for generation-time forward simulation.
 
 `ProcessTurn(Sector)` returns the run's `TurnResolutionResult`; the retained sector parameter must be the same object owned by the session, preventing rules/date/RNG from one game being combined with another sector. The controller's `MissionContexts`, `SpecialMissions`, `StrategicCombatResults`, and `ScenarioNotification` properties remain as compatibility views for existing tests.
@@ -1120,8 +1126,8 @@ not transactional guarantees or balance changes.
 Phase 1 extracted the shared planning data types to `Helpers/Strategy/FactionPlanningModels.cs`:
 `RegionForceState`, `PotentialOffensive`, `OffensivePlan`, and `MissionCandidate`. Their mutable
 reference and collection semantics are unchanged. The runtime planning path uses those shared types
-directly; no duplicate nested strategy models or facade policy forwarders remain. Its internal
-explicit construction path is `FactionStrategyController(IRNG, FactionBehaviorRulesProfile)`, with
+directly; no duplicate nested strategy models or facade policy forwarders remain. Its only
+construction path is the public `FactionStrategyController(IRNG, FactionBehaviorRulesProfile)`, with
 a nullable profile preserving the existing `DefendedLandingRatio` fallback. Recon, tactical
 assault/raid generation, and patrol generation all receive the resolved planning `IRNG`.
 
@@ -1534,11 +1540,12 @@ adapters for the live campaign model. Mission materialization and engagement ref
 session's doctrine and reservations into the battle factory, preserving frozen in-battle
 participants.
 
-Legacy application/host callers explicitly use `CurrentCampaignReadinessContext` at
-execution. This temporary application adapter is physically in Campaign and accepts the
-active force only when the squad shares that exact faction instance; a reused numeric ID
-in another campaign cannot inherit its reservations or doctrine. Its removal belongs to
-the Medical/Application/UI migrations. It is not invoked inside core readiness policy.
+SB-12 removed `CurrentCampaignReadinessContext`, the temporary adapter that resolved doctrine and
+reservations from whichever campaign was installed. Every caller now names the force it means, and
+`ForceReadinessInputs` is the single rule: it applies a force's doctrine and recruitment program to
+that force's own squads only — matched on the faction instance, so a reused numeric ID in another
+campaign cannot inherit reservations or doctrine — and yields nothing when there is no force to
+name. `CampaignRuntimeDefaults`, the ambient rules/sector accessor it read, went with it.
 
 `Army.ChapterOperationalDoctrine` is mutable campaign state, distinct from rules-data loadout
 doctrine. `ChapterOperationalDoctrine.InjuryThreshold` is nullable: null is the explicit
@@ -1669,7 +1676,9 @@ multi-entity changes staged until confirmation and revalidate against live state
 historical and disposable empty Scouts. `SquadDesignationFormatter` and `FormationOrdinalAllocator`
 provide stable non-Scout line identities. `MusterPlanService` stages transfers, promotions, role changes,
 and new or reconstituted formations, while `ChapterMusterViewModelBuilder` supplies candidate,
-formation, roster-delta, and constraint rows. `FleetCapacityPlanService` returns typed direct-placement,
+formation, roster-delta, and constraint rows. Both live behind `IMusterScreenApplication`, which
+owns the plan instance for the active session and addresses formations by selection key rather than
+handing the screen a live transfer option. `FleetCapacityPlanService` returns typed direct-placement,
 rebalance-required, or impossible results; it never splits a squad. Commit is all-or-nothing after
 revalidation, and canceled provisional formations do not consume ordinals.
 
@@ -1706,9 +1715,8 @@ another faction's squads. Order lifecycle policy resolves that force from `Order
 at command entry, from the `Sector` a service was already given, or from `Order.RegisteredSector`
 inside the participant-mutation boundary — an order records the sector that registered it, so it can
 answer for itself. An order still being assembled has no registration, so `OrderAssignment` resolves
-and passes the inputs explicitly for that case. `CurrentCampaignReadinessContext` remains only as the
-host-facing adapter for callers with no session argument, and now delegates to `ForceReadinessInputs`
-so the rule exists once.
+and passes the inputs explicitly for that case. There is no ambient fallback behind any of this: a
+caller with no force to name gets no doctrine and no program (SB-12).
 `AdministrativeStationService` owns duty-station seating and relocation, while `FlagshipService` owns
 the unique flagship and deterministic succession. `RecruitmentStaffService` maintains the 10th Company
 continuous task from physically present assigned characters. `PlanetRegionMapViewModelBuilder` and the shared
@@ -1864,6 +1872,130 @@ validation tests, save/load tests, and planetary-operations presentation tests c
 
 See Section 3.1. All events flow View → Controller → Model → Controller → View. Controllers never call Godot node APIs directly.
 
+The Apothecarium/Recovery controller consumes `IMedicalScreenApplication`, injected before the
+scene enters the tree. `CampaignApplication` resolves the active session for each medical query
+and confirmation. Queries expose detached medical records and destination IDs/names, never
+soldiers, ships, regions or postings. The application rebuilds the selected treatment from its
+hit-location/type identity at command execution, rejects a stale session token before mutation,
+and owns procedure requisite evaluation and recovery/reunion dispatch. Session replacement
+notifies the controller to discard patient, destination and treatment selections. A rejected
+confirmation displays the command's reason in the recovery plan status.
+
+Portable medical projections/builders and shared squad row projections live under
+`Modules/OnlyWar.Application/Queries/`; Godot textures and rendering remain in the host. Medical
+queries supply explicit force doctrine and recruitment inputs. The shared squad row builder still
+has a named legacy-context option for unmigrated screens; that option is disabled by medical
+queries. `CareDestinationService` and `RecoveryPlanService` resolve staffing reservations from
+the supplied force. Recovery validates the combined staff/patient berth requirement and posting
+eligibility before movement. This boundary does not complete the Operations or remaining screen
+migrations, and the broader transitional assembly graph remains technical debt.
+
+`MedicalScreenApplicationTests` cover session replacement with reused patient IDs, detached
+values, invalid treatment rejection, combined capacity rejection, successful treatment and
+repeat-command rejection. A recursive public-projection audit includes a deliberately unsafe
+nested soldier-list fixture to prove detection. The Godot smoke includes medical open/refresh/close
+navigation; its broader preflight-close failure remains unresolved. Manual medical interaction
+verification remains an integration gate.
+
+`PlanetaryOperationsScreenController` consumes `IOperationsScreenApplication` through the same
+`Configure`/`SessionChanged` pattern. Order issue, reinforcement, participant release, squad
+removal, cancellation, aggression, specialist attachment/detachment, landing, embarkation and
+casualty detachment are commands carrying only entity IDs and the caller's session token; the
+controller holds no mutation service and no undo closure. A successful command returns an
+application-issued undo token that is single-use, bound to the session that produced it and
+discarded when the session is replaced, so a queued undo cannot reach a campaign that merely reuses
+the same order IDs. Order-formation rules — the character add-versus-release toggle, the diversion
+target-faction fallback, mission-to-order equivalence and eligible-squad filtering — belong to the
+application. The Operations *read* path is not yet migrated: its presentation builders still take a
+live `Sector` and read the current campaign for the week, doctrine and recruitment program, and the
+specialist/movable-character rosters are still evaluated in the host. That projection work, the
+Godot smoke and manual order/movement/casualty verification remain open.
+
+The Operations *read* path is migrated too. `QueryOperations` returns one detached workspace —
+header, map, region dossier, active orders, mission options, live-order editor, force tree, ship
+choices and casualty rows — and `QueryWorldDossier`, `QueryRegionCards`, `QueryEntry`,
+`QueryGovernorRequestEntry` and `ResolveForceSelection` cover the rest. Presentation stayed in the
+host by separating classification from colour: projections carry a `UiAccent` and, for factions, an
+ARGB value, and `OnlyWarStyle.Resolve` is the only place either becomes a Godot colour. Portable
+projection sources — `HierarchyTreeItem`, `PlanetaryForceTreeBuilder`, `RegionPresentation`,
+`ForceOrdering`, `MapIconKeys`, `MissionIconKeys`, `SquadIconKeys` — live under
+`Modules/OnlyWar.Application/Queries/`, while the icon atlas, styles and `DossierCard` rendering stay
+in the host. Region adjacency travels on the map card, so the map control no longer walks the region
+graph.
+
+Session lifetime and reporting follow the same shape. `ISessionControlApplication` owns campaign
+identity, recoverability and every save (manual, overwrite, protected pre-turn, post-turn autosave,
+initial autosave, diagnostic capture); it captures the revision before writing so a failed write
+cannot mark a later state recoverable, and refuses a token from a replaced session. The host's only
+remaining concrete wiring is composing `SaveGameManager` at startup. `ICommandScreenApplication`
+supplies the Command Brief and a `ChronicleView`. `MainGameScene.CampaignControls`,
+`StartMenu.ReleaseControls`, `CommandScreenController` and `BattleReviewController` name neither
+`GameDataSingleton` nor `CurrentCampaignSaveWriter`, and `SessionControlApplicationTests` asserts it.
+`IMainScreenApplication` completes the main screen. `QueryHeader` supplies the formatted date and
+requisition, `QueryStartup` decides which world the campaign opens on and whether the founding
+directive is outstanding, `AcknowledgeOpeningBrief` performs that one-shot write, `ResolveTurn`
+advances the turn and — only once resolution and report construction both succeed — replaces the
+persisted `LastTurnReportSnapshot` and hands back a `TurnReportView`, `QueryLastTurnReport` restores
+the saved one, and `QueryNeophytePlacementTargets`/`PlaceNeophyte` own scout-squad eligibility and
+the promotion itself. Every one of these is session-token guarded.
+
+Turn-report *content* moved with them. `TurnReportProjector` (Application) decides what the player
+is told about each mission, NPC operation, strategic combat, construction, fortification handover,
+governor request, recruitment week and campaign event, including the intel-tier redaction of enemy
+activity and which battles may be reviewed; `ConstructionReportBuilder`,
+`MissionReportHeadlineBuilder`, `MissionReportSummaryBuilder`, `NpcMissionReportBuilder`,
+`ReconOperationReportBuilder` and `LastTurnReportSnapshotBuilder` moved to
+`Modules/OnlyWar.Application/Queries/` with it. `EndOfTurnDialogController` now only renders a
+`TurnReportView`, opens the debrief and hands a `BattleHistory` to Battle Review;
+`MissionDebriefLineGrouper` and `BattleReplaySummaryBuilder` remain host presentation.
+`MainScreenApplicationTests` cover the header, startup, the stale-token refusals for the brief, the
+turn and placement, the saved/empty report, a detached-boundary audit and source audits that the
+dialog no longer names a mission and the scene no longer resolves those facts itself.
+
+The roster, fleet, training and map screens complete the boundary. `IFleetScreenApplication` owns
+the Classis tree, transfer legality and the three fleet dialogs, with route planning and the
+divide/merge rules behind ID-and-token commands; `FleetTransferService` (Campaign) holds the
+berth/shared-location rules the screen used to apply. `ISystemInspectorApplication` returns one
+`SystemInspectorView` per selection, deciding which task forces are in orbit, which is chosen when
+the player has not chosen, and whether its actions are legal. `ISectorMapApplication` supplies the
+map's geometry (subsector partitioning, the Voronoi tessellation and its adjacency), planet and
+fleet markers, the turn-varying label facts and the selected system's orbiting fleets; palette,
+smoothing and drawing stay in the host. `IChapterScreenApplication` builds the whole chapter
+browser — breadcrumbs, menus, detail, transfer options and the ordered context list — and owns the
+transfer, Black Carapace and recall prompts and commands. `IMusterScreenApplication` owns the
+staged Muster plan itself, so the plan is session-bound and dropped with the campaign it was drawn
+against. `ILoadoutScreenApplication` covers the squad loadout screen and the chapter/theater
+doctrine dialog; the operational doctrine is staged in the dialog as three plain values and only
+the application writes it. `ITrainingScreenApplication` owns the 10th Company snapshot, forecast,
+staff validation and scout-training writes. `ICampaignNavigationApplication` resolves Command
+navigation targets and squad locations to the surface they land on, which is what let
+`MainGameScene` drop its `TryGetPlayerFleet`/`Squad`/`Soldier` and `TryGetPlanet`/`Region`/
+`Mission`/`Order` helpers.
+
+Portable projection sources moved with them: `TreeNode`, `FleetScreenProjector`,
+`DiplomacyScreenProjector`, `ChapterBrowserModels`, `SoldierDetailBuilder` (now taking an explicit
+`SoldierDetailContext`), `ChapterMusterViewModelBuilder`, `ElementLoadoutSections` and the
+recruitment screen models all live under `Modules/OnlyWar.Application/Queries/`. The loadout
+surfaces still exchange authored rules templates — `WeaponSet`, `EquipmentLoadout`,
+`EquipmentRulesCatalog` and the validation context built from them — which are immutable reference
+data rather than the campaign graph; no live squad, soldier, force or doctrine crosses that
+boundary. Every screen projection now passes the recruitment program and operational doctrine into
+`SquadRowViewModelBuilder.Build` explicitly. SB-12 deleted the `resolveLegacyContext` fallback and
+its parameter: `BuildBattleSnapshot`, the last caller, renders a historical battle formation and has
+no live force to be given, so it now simply passes none. The compatibility singleton survives only
+in the debug bootstraps (`Scenes/Debug/MainGamePreviewBootstrap.cs`,
+`Scenes/Debug/ReleaseSceneWiringSmoke.cs`), which is startup composition, and in the Application
+sources listed in §9's allowlist; removing the singleton itself remains open (see §9).
+`Scenes/BattleMap` is an empty stub and carries no campaign access.
+
+The Operations personnel capability is composed by `CampaignApplication`'s constructor rather than
+as a side effect of first use, with `TestPersonnelComposition` as the test assembly's equivalent;
+mission execution's tactical squad factory is composed by `TurnController` in production and by
+`TestExecutionContextFactory` in tests. `OperationsScreenApplicationTests` cover issue-then-undo,
+single-use tokens, replaced-session rejection of a queued undo and cancellation, cancellation-undo
+participant restore, ineligible-squad rejection leaving no commitment, a detached-boundary audit and
+a source audit that the controller names no mutation service.
+
 ### 7.2 Screen Inventory
 
 | Scene | Controller | View | Purpose |
@@ -1941,15 +2073,16 @@ by the current-session presentation path only; it is never serialized by this fe
 
 #### Build and runtime flow
 
-`TurnController.ProcessTurn` resolves the week and returns one `TurnResolutionResult`. After the
-result has returned, `LastTurnReportSnapshotBuilder.Build` runs the existing report-entry builders
-once and returns both the persisted `LastTurnReportSnapshot` and the live
-`EndOfTurnReportEntry` presentation list. This keeps immediate post-turn wording and reloaded latest-report
-wording on one construction path.
+`CampaignApplication.ResolveTurn` runs `TurnController.ProcessTurn`, which resolves the week and
+returns one `TurnResolutionResult`. After the result has returned,
+`LastTurnReportSnapshotBuilder.Build` runs `TurnReportProjector` once and returns both the persisted
+`LastTurnReportSnapshot` and the live `EndOfTurnReportEntry` presentation list. This keeps immediate
+post-turn wording and reloaded latest-report wording on one construction path.
 
-On a successful resolution, `MainGameScene` gives the build to `EndOfTurnDialogController` and then
-stores the snapshot on `Sector.PlayerForce.LastTurnReportSnapshot`. The assignment occurs only after
-report construction succeeds. The post-turn autosave and later manual saves therefore serialize the
+On a successful resolution, `ResolveTurn` stores the snapshot on
+`Sector.PlayerForce.LastTurnReportSnapshot` and returns the presentation entries to the scene as a
+`TurnReportView`, which `MainGameScene` passes to `EndOfTurnDialogController.SetReport`. The
+assignment occurs only after report construction succeeds. The post-turn autosave and later manual saves therefore serialize the
 new report, while the protected pre-turn save—written before `ProcessTurn` mutates state—preserves the
 previous report. If resolution, report construction, or save fails, the prior in-memory/database
 snapshot remains available.
@@ -2217,7 +2350,25 @@ Operational and generation code has now joined them. Order lifecycle policy take
 
 Generation is now also structurally unable to reach the singleton: `OnlyWar.Generation` references only Domain, Contracts and Runtime, so the compiler enforces what was previously a convention.
 
-The remaining singleton readers in Campaign are the campaign/loadout/recruitment/medical policies (`PresenceRequest`, `LoadoutDoctrineService`, `CharacterLoadoutService`, `CareDestinationService`, `RecoveryPlanService`, `RecruitmentStaffService`), the compatibility storage entry points (`CampaignLoader`, `CurrentCampaignSaveWriter`), the default `TurnController` constructor, and the two named compatibility adapters `CurrentCampaignReadinessContext` (now host- and presentation-facing only; no order, mission or generation code uses it) and the parameterless `FactionStrategyController`. `CampaignApplication` is the explicit session API used by the host's new/load/turn paths. Scene controllers such as `PlanetaryOperationsScreenController` remain host-side adapters for the remaining SB-11 command/query migration.
+**SB-12 state.** No Campaign source reads the singleton any more. `CampaignRuntimeDefaults` — the
+ambient rules/sector accessor the campaign policies read through — and `CurrentCampaignReadinessContext`
+are deleted, and the campaign/loadout/recruitment/medical policies that used them
+(`PresenceRequest`, `LoadoutDoctrineService`, `CharacterLoadoutService`, `CareDestinationService`,
+`RecoveryPlanService`, `RecruitmentStaffService`, `SoldierPresenceService`,
+`CommandAttentionEvaluator`) take the rules, force, doctrine or recruitment program they need as
+arguments. The parameterless `FactionStrategyController` facade is gone, and `FieldCareService` and
+`StrategicCombatResolver` take the session's `IRNG` instead of falling back to `StaticRNG`.
+
+What remains, and is now an enforced allowlist rather than a convention: the singleton is named only
+by `GameDataSingleton` itself, `CampaignApplication`, `SessionControlApplication`, `TurnController`,
+`CampaignLoader`, `CurrentCampaignSaveWriter` and the two debug scene bootstraps; `StaticRNG` is
+named only by its own definition, the Runtime name-generator facade, `NewChapterBuilder` (sector
+generation is seeded globally on purpose), the Application composition sources and the host's three
+composition roots. `OnlyWar.Tests/Architecture/ModuleBoundaryEnforcementTests.cs` checks both lists
+against the sources, ignoring comment lines, and proves it can detect a violation. Retiring the
+singleton type itself is still open: `CampaignApplication` already owns the active session, but
+`CampaignRecoverabilityTracker` lives on the singleton and 35 test files install campaigns through
+it.
 
 ### 8.7 IdGenerator Global Compatibility State — Low
 
@@ -2282,7 +2433,7 @@ Covered by `SectorEntityLogicTests` and `MultiTurnSmokeTests`.
 
 **Location:** `GameSession`, `StaticRNG`, simulation processors
 
-Production simulation consumes the `IRNG` supplied by `GameSession`; the production composition boundary supplies the shared `StaticRNG` adapter. Random draw ordering belongs to the evolving simulation execution, not to a persisted replay contract. Reloading the same save and submitting the same orders is not guaranteed to reproduce identical outcomes, and draws in one subsystem may affect later randomized outcomes. Tests may still inject fixed or seeded implementations when deterministic test setup is useful. Persisted `CampaignIdentity` remains part of event and narrative presentation; it does not define production simulation streams.
+Production simulation consumes the `IRNG` supplied by `GameSession`; the production composition boundary supplies the shared `StaticRNG` adapter. Since SB-12 that is enforced rather than intended: outside sector generation — which is seeded globally by design (`SectorBuilder` calls `RNG.Reset(seed)`) — and the named composition roots, no shipping source may name `StaticRNG` (`ModuleBoundaryEnforcementTests`). A policy needing randomness takes an `IRNG`, and passing null throws rather than silently substituting the process stream. Random draw ordering belongs to the evolving simulation execution, not to a persisted replay contract. Reloading the same save and submitting the same orders is not guaranteed to reproduce identical outcomes, and draws in one subsystem may affect later randomized outcomes. Tests may still inject fixed or seeded implementations when deterministic test setup is useful. Persisted `CampaignIdentity` remains part of event and narrative presentation; it does not define production simulation streams.
 
 ### 8.14 PlanetTurnProcessor Breadth — RESOLVED
 
@@ -2352,7 +2503,11 @@ The `OnlyWar.Tests` xUnit project covers the pure domain and helper logic increm
 ### 9.1 Setup
 
 `OnlyWar.Tests` references both the host and the headless projects, preserving the mixed
-regression suite. `OnlyWar.HeadlessTests` references the headless feature assemblies, Campaign
+regression suite. Architecture enforcement is split by what each project can see:
+`OnlyWar.Tests/Architecture/ModuleBoundaryEnforcementTests.cs` reads the shipping sources and holds
+the SB-12 allowlists for the compatibility singleton, the process-wide RNG, SQL and Godot, each
+entry naming a file and a reason; a negative case proves the scanner detects a violation and honors
+its allowlist. `OnlyWar.HeadlessTests` references the headless feature assemblies, Campaign
 and Application, and runs without loading `OnlyWarGodot` or `GodotSharp`. Its smoke tests check
 the reference allowlist, narrow test/composition friend access,
 explicit readiness/reservations, in-memory catalog, atomic file behavior, runtime construction,
@@ -2382,7 +2537,7 @@ All of the targets below are now implemented; they are retained as a record of t
 4. **`IMissionCheck` implementations** — Requires a minimal `BattleSquad` mock with a soldier list. No game state needed.
 5. **`ForceGenerator`** — Requires a `Faction` object with squad templates. No Godot dependencies.
 6. **`SubsectorBuilder`** — Pure spatial algorithm. Provide a list of positioned planets and assert subsector membership.
-7. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. *(Implemented — `FactionStrategyControllerTests`, `PatrolAndReconPlanningTests`, and `FactionStrategyCharacterizationTests`; the public facade takes `(faction, sector)`, while the internal explicit path accepts `IRNG` and a nullable `FactionBehaviorRulesProfile`. The legacy parameterless path reads the singleton profile at planning-call time — see §9.2.1 #4.)*
+7. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. *(Implemented — `FactionStrategyControllerTests`, `PatrolAndReconPlanningTests`, and `FactionStrategyCharacterizationTests`; planning is `GenerateFactionOrders(faction, sector)` on a controller constructed with `IRNG` and a nullable `FactionBehaviorRulesProfile`. SB-12 removed the parameterless path, so those tests name `StaticRNG.Instance` themselves.)*
 8. **`BattleSoldier` clone round-trip** — Construct a fully populated `BattleSoldier`, clone it, and assert field-by-field equality. Catches 8.4 above. *(Implemented — `BattleSoldierCloneTests`.)*
 
 ### 9.2.1 Next Test Targets

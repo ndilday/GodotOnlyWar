@@ -1,9 +1,5 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace OnlyWar.Helpers.UI
 {
@@ -65,28 +61,6 @@ namespace OnlyWar.Helpers.UI
             Text = text;
             IconKey = iconKey;
             Enabled = enabled;
-        }
-    }
-
-    public static class RosterFormat
-    {
-        public static string SquadLabel(Squad squad)
-        {
-            SquadStrengthSnapshot strengthSnapshot = SquadStrengthSnapshotBuilder.Build(squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad));
-            string strength = $"{strengthSnapshot.DutyReady}/{strengthSnapshot.Full}";
-            string order = squad.CurrentOrders != null ? squad.CurrentOrders.Mission.MissionType.ToString() : "Unassigned";
-            return $"{squad.Name} | {strength} | {order}";
-        }
-
-        public static bool MatchesFilter(Squad squad, string filterKey)
-        {
-            return filterKey switch
-            {
-                "unassigned" => squad.CurrentOrders == null,
-                "injured" => SquadStrengthSnapshotBuilder.Build(squad, program: GameDataSingleton.Instance?.Sector?.PlayerForce?.RecruitmentProgram, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad))
-                    .Unavailable > 0,
-                _ => true
-            };
         }
     }
 }

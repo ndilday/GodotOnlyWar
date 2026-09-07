@@ -364,7 +364,8 @@ public partial class HierarchyTreeView : ScrollContainer
                 TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming,
                 MouseFilter = MouseFilterEnum.Ignore
             };
-            badge.AddThemeColorOverride("font_color", entry.BadgeColor ?? primaryColor);
+            badge.AddThemeColorOverride(
+                "font_color", OnlyWarStyle.Resolve(entry.BadgeAccent, primaryColor));
             content.AddChild(badge);
         }
 

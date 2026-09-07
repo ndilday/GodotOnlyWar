@@ -1,3 +1,5 @@
+using OnlyWar.Application;
+using OnlyWar.Helpers.UI;
 ﻿using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Models.Missions;
@@ -24,7 +26,7 @@ public class TrainingUnitScreenControllerTests
             0,
             0.9f);
 
-        Assert.True(TrainingUnitScreenController.IsDoctrineValid(doctrine));
+        Assert.True(CampaignApplication.IsDoctrineValid(doctrine));
     }
 
     [Theory]
@@ -41,7 +43,7 @@ public class TrainingUnitScreenControllerTests
             0,
             0.9f);
 
-        Assert.False(TrainingUnitScreenController.IsDoctrineValid(doctrine));
+        Assert.False(CampaignApplication.IsDoctrineValid(doctrine));
     }
 
     [Theory]
@@ -58,7 +60,7 @@ public class TrainingUnitScreenControllerTests
             0,
             threshold);
 
-        Assert.False(TrainingUnitScreenController.IsDoctrineValid(doctrine));
+        Assert.False(CampaignApplication.IsDoctrineValid(doctrine));
     }
 
     [Fact]
@@ -70,9 +72,9 @@ public class TrainingUnitScreenControllerTests
             "Scout Company HQ",
             SquadTypes.Scout | SquadTypes.HQ);
 
-        Assert.True(TrainingUnitScreenController.IsTrainingSquad(
+        Assert.True(CampaignApplication.IsTrainingSquad(
             new Squad(1, "Alpha Scouts", null, trainingTemplate)));
-        Assert.False(TrainingUnitScreenController.IsTrainingSquad(
+        Assert.False(CampaignApplication.IsTrainingSquad(
             new Squad(2, "10th Company HQ", null, hqTemplate)));
     }
 
@@ -84,7 +86,7 @@ public class TrainingUnitScreenControllerTests
             IsAdministrative = true
         };
 
-        Assert.False(TrainingUnitScreenController.IsTrainingSquad(squad));
+        Assert.False(CampaignApplication.IsTrainingSquad(squad));
     }
 
     [Fact]
@@ -104,7 +106,7 @@ public class TrainingUnitScreenControllerTests
         Squad beta = AddSquad(company, 3, "Beta Scouts", scoutTemplate);
         Squad neophyte = AddSquad(company, 4, "Aquila Neophytes", neophyteTemplate);
 
-        List<Squad> ordered = TrainingUnitScreenController
+        List<Squad> ordered = CampaignApplication
             .OrderScoutSquads([neophyte, beta, alpha])
             .ToList();
 
@@ -121,7 +123,7 @@ public class TrainingUnitScreenControllerTests
             TrainingOptionKey = ScoutTrainingOptionKeys.Melee
         };
 
-        Assert.Equal("Alpha Scouts (Melee)", TrainingUnitScreenController.GetSquadListLabel(squad));
+        Assert.Equal("Alpha Scouts (Melee)", CampaignApplication.DescribeSquadListLabel(squad));
     }
 
     [Fact]
@@ -134,7 +136,7 @@ public class TrainingUnitScreenControllerTests
         Mission mission = new(MissionType.Patrol, null, 1);
         _ = new Order([squad], false, true, Aggression.Normal, mission);
 
-        Assert.Equal("Alpha Scouts (On Mission)", TrainingUnitScreenController.GetSquadListLabel(squad));
+        Assert.Equal("Alpha Scouts (On Mission)", CampaignApplication.DescribeSquadListLabel(squad));
     }
 
     private static SquadTemplate CreateScoutTemplate(

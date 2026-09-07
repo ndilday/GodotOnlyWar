@@ -42,7 +42,13 @@ internal static class TestExecutionContextFactory
             new TacticalEntityIdAllocator(),
             new MissionCampaignInputs(
                 new Date(1, 1, 1),
-                Personnel: OperationsPersonnelSurface.Instance));
+                Personnel: OperationsPersonnelSurface.Instance),
+            // Mission steps that raise an interception or an assault screen build tactical squads
+            // through this factory. Production composes it in TurnController; without it here the
+            // step throws instead of exercising the sizing rule under test.
+            (isPlayer, squad, doctrine, program) => BattleSquadFactory.Create(
+                isPlayer, squad, doctrine, program,
+                new CampaignBattleEquipmentSource(rules, null)));
     }
 
     private sealed class NoOpPlayerBattleAftermathSink : IPlayerBattleAftermathSink

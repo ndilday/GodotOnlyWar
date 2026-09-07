@@ -85,9 +85,6 @@ namespace OnlyWar.Models
 
         private GameDataSingleton()
         {
-            CampaignRuntimeDefaults.Configure(
-                () => GameRulesData,
-                () => Sector);
         }
     }
 }

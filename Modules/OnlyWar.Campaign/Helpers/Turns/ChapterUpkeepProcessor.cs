@@ -72,6 +72,7 @@ namespace OnlyWar.Helpers.Turns
             //
             // Run BEFORE the weekly cascade so the week's demotions are in place when it ticks.
             FieldCareService.ApplyGarrisonFieldCare(
+                _session.Random,
                 members?.OfType<PlayerSoldier>(),
                 FieldCareService.ResolveMedicalSkills(
                     _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap,

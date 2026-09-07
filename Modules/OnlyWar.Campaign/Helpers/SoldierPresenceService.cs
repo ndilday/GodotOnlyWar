@@ -1,6 +1,7 @@
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
+using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System.Collections.Generic;
@@ -17,9 +18,13 @@ namespace OnlyWar.Helpers
             squad?.Members?.Where(member =>
                 member is not PlayerSoldier player || player.IndividualPosting == null).ToList() ?? [];
 
-        public static IReadOnlyList<ISoldier> DeployableMembers(Squad squad) =>
+        public static IReadOnlyList<ISoldier> DeployableMembers(
+            Squad squad,
+            RecruitmentProgram program = null,
+            ChapterOperationalDoctrine doctrine = null) =>
             PresentMembers(squad)
-                .Where(member => DutyReadinessService.Evaluate(member, doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad), recruitmentProgram: CurrentCampaignReadinessContext.ResolveProgram(squad)).IsDutyReady)
+                .Where(member => DutyReadinessService.Evaluate(
+                    member, doctrine: doctrine, recruitmentProgram: program).IsDutyReady)
                 .ToList();
 
         public static IReadOnlyList<PlayerSoldier> OrderParticipants(Order order)
@@ -29,13 +34,16 @@ namespace OnlyWar.Helpers
         }
 
         public static int NominalCount(Squad squad) =>
-            SquadStrengthSnapshotBuilder.Build(squad, program: CurrentCampaignReadinessContext.ResolveProgram(squad), doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad)).Rostered;
+            squad?.Members?.Count ?? 0;
 
         public static int PresentCount(Squad squad) =>
-            SquadStrengthSnapshotBuilder.Build(squad, program: CurrentCampaignReadinessContext.ResolveProgram(squad), doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad)).Present;
+            PresentMembers(squad).Count;
 
-        public static int DeployableCount(Squad squad) =>
-            SquadStrengthSnapshotBuilder.Build(squad, program: CurrentCampaignReadinessContext.ResolveProgram(squad), doctrine: CurrentCampaignReadinessContext.ResolveDoctrine(squad)).DutyReady;
+        public static int DeployableCount(
+            Squad squad,
+            RecruitmentProgram program = null,
+            ChapterOperationalDoctrine doctrine = null) =>
+            DeployableMembers(squad, program, doctrine).Count;
 
     }
 }

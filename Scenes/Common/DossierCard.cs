@@ -1,7 +1,9 @@
 using Godot;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 // One card in a dossier-style detail panel (hostile faction / local force / region / squad ...).
 // Shared by the Region Ops dossier and the Planet Detail context panel so both read identically.
@@ -25,6 +27,24 @@ public class DossierCardData
 
 public static class DossierCard
 {
+    /// <summary>
+    /// Renders an application-supplied card. The projection classifies the accent and may name a
+    /// faction colour; only this host mapping turns either into a Godot colour.
+    /// </summary>
+    public static Control Create(
+        OnlyWar.Application.DossierCardView card, float extraBottomSpacing = 0) =>
+        Create(ToData(card), extraBottomSpacing);
+
+    public static DossierCardData ToData(OnlyWar.Application.DossierCardView card) => new(
+        card.Title,
+        card.Subtitle,
+        card.Rows.Select(row => new ValueTuple<string, string>(row.Label, row.Value)).ToList(),
+        card.AccentFactionArgb is int argb
+            ? System.Drawing.Color.FromArgb(argb).ToGodotColor()
+            : OnlyWarStyle.Resolve(card.Accent),
+        card.BarFraction);
+
+
     // Builds the accent-tinted card panel shared by the Region Ops dossier and the Planet Detail
     // right-hand panel: uppercase muted category title, accent-colored subtitle, muted label/value
     // rows, and an optional accent strength bar. An empty subtitle is skipped so category-only cards

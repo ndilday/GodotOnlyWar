@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <filter id="buttonShadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#000000" flood-opacity=".62"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="900" fill="#0a0c0d"/>
+  <text x="78" y="70" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">UI TREATMENT STUDY</text>
+  <text x="78" y="115" fill="#f5d686" font-family="Arial, sans-serif" font-size="30" font-weight="700">Surfaces should tell the player what they are for</text>
+  <text x="78" y="150" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="16">Read-only information recedes into the deck. Actions rise above it and respond when approached.</text>
+
+  <g transform="translate(78 190)">
+    <rect width="470" height="620" rx="3" fill="#15191b" stroke="#8b6e3f" stroke-opacity=".82"/>
+    <text x="22" y="38" fill="#f5d686" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">DATA / RECESSED</text>
+    <text x="22" y="68" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">No hover. No implied action. Quiet brass rule.</text>
+    <g transform="translate(18 100)">
+      <rect width="434" height="112" rx="2" fill="#030506" fill-opacity=".94" stroke="#594b31" stroke-opacity=".60"/>
+      <text x="16" y="27" fill="#a99a7c" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="1">REQUISITION</text>
+      <text x="16" y="59" fill="#f5d686" font-family="Arial, sans-serif" font-size="22" font-weight="700">1,240</text>
+      <text x="16" y="86" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="13">Available for current campaign operations.</text>
+    </g>
+    <g transform="translate(18 226)">
+      <rect width="434" height="112" rx="2" fill="#030506" fill-opacity=".94" stroke="#594b31" stroke-opacity=".60"/>
+      <text x="16" y="27" fill="#a99a7c" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="1">ACTIVE THEATER</text>
+      <text x="16" y="59" fill="#f5d686" font-family="Arial, sans-serif" font-size="22" font-weight="700">Vigilus Fringe</text>
+      <text x="16" y="86" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="13">Three regions under observation · 14 known contacts</text>
+    </g>
+    <g transform="translate(18 352)">
+      <rect width="434" height="112" rx="2" fill="#030506" fill-opacity=".94" stroke="#594b31" stroke-opacity=".60"/>
+      <text x="16" y="27" fill="#a99a7c" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="1">FORMATION STATUS</text>
+      <text x="16" y="59" fill="#f5d686" font-family="Arial, sans-serif" font-size="22" font-weight="700">Operational</text>
+      <text x="16" y="86" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="13">Morale stable · Supply line intact · Review in 3 days</text>
+    </g>
+  </g>
+
+  <g transform="translate(565 190)">
+    <rect width="470" height="620" rx="3" fill="#15191b" stroke="#8b6e3f" stroke-opacity=".82"/>
+    <text x="22" y="38" fill="#f5d686" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">ACTIONS / RAISED</text>
+    <text x="22" y="68" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">Clear affordance. Brass response. Pressed state shifts down.</text>
+    <g transform="translate(18 100)">
+      <rect width="434" height="58" rx="9" fill="#57451e" stroke="#f5d686" stroke-opacity=".98" filter="url(#buttonShadow)"/>
+      <text x="18" y="36" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">▣  OPEN CHAPTER LOADOUTS</text>
+      <text x="18" y="78" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Review and configure available squad equipment.</text>
+    </g>
+    <g transform="translate(18 202)">
+      <rect width="434" height="58" rx="9" fill="#20515c" stroke="#63c7d7" stroke-opacity=".98" filter="url(#buttonShadow)"/>
+      <text x="18" y="36" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">✦  TRANSFER PERSONNEL</text>
+      <text x="18" y="78" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Move selected soldiers between eligible formations.</text>
+    </g>
+    <g transform="translate(18 304)">
+      <rect width="434" height="58" rx="9" fill="#622921" stroke="#e98274" stroke-opacity=".98" filter="url(#buttonShadow)"/>
+      <text x="18" y="36" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">⚔  END TURN</text>
+      <text x="18" y="78" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Commit orders and resolve the next campaign cycle.</text>
+    </g>
+    <text x="22" y="490" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Hover: warmer fill + brighter border</text>
+    <text x="22" y="514" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Pressed: deeper fill + lowered content margin</text>
+  </g>
+
+  <g transform="translate(1052 190)">
+    <rect width="470" height="620" rx="3" fill="#15191b" stroke="#8b6e3f" stroke-opacity=".82"/>
+    <text x="22" y="38" fill="#f5d686" font-family="Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">ROWS / SELECTABLE</text>
+    <text x="22" y="68" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">Flat at rest, explicit on hover and selection.</text>
+    <g transform="translate(18 100)">
+      <rect width="434" height="68" rx="2" fill="#050606" fill-opacity=".92" stroke="#594b31" stroke-opacity=".72"/>
+      <text x="16" y="30" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="14" font-weight="700">1ST COMPANY</text>
+      <text x="16" y="52" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Captain · 48 effectives</text>
+    </g>
+    <g transform="translate(18 182)">
+      <rect width="434" height="68" rx="2" fill="#21180a" fill-opacity=".96" stroke="#f5d686" stroke-opacity=".95"/>
+      <text x="16" y="30" fill="#f5d686" font-family="Arial, sans-serif" font-size="14" font-weight="700">2ND COMPANY  ◀ SELECTED</text>
+      <text x="16" y="52" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Lieutenant · 36 effectives</text>
+    </g>
+    <g transform="translate(18 264)">
+      <rect width="434" height="68" rx="2" fill="#050606" fill-opacity=".92" stroke="#594b31" stroke-opacity=".72"/>
+      <text x="16" y="30" fill="#d6ccb5" font-family="Arial, sans-serif" font-size="14" font-weight="700">SCOUT DETACHMENT</text>
+      <text x="16" y="52" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Sergeant · 12 effectives</text>
+    </g>
+    <text x="22" y="490" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">Rows remain information-dense</text>
+    <text x="22" y="514" fill="#a99a7c" font-family="Arial, sans-serif" font-size="12">until selection changes their emphasis</text>
+  </g>
+
+  <text x="78" y="850" fill="#a99a7c" font-family="Arial, sans-serif" font-size="13">The rule: panels recede, buttons respond, rows select.</text>
+</svg>

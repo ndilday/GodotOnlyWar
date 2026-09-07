@@ -1,3 +1,4 @@
+using OnlyWar.Application;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
@@ -37,7 +38,7 @@ public class ChapterControllerTests
             TestModelFactory.CreateSoldier(juniorRole, "Gaius Boreas")
         ];
 
-        List<string> orderedNames = ChapterController.OrderFilteredSoldiers(soldiers)
+        List<string> orderedNames = CampaignApplication.OrderFilteredSoldiers(soldiers)
             .Select(soldier => soldier.Name)
             .ToList();
 

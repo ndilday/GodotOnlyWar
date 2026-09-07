@@ -27,7 +27,7 @@ public class ShowOfForceRequestTests
         PresenceRequest request = CreateEffortRequest(fixture, governor);
         LandSquadWithOrder(fixture, CapitalRegion(fixture), MissionType.ShowOfForce);
 
-        request.ProcessTurn(new Date(1, 1, 2));
+        request.ProcessTurn(new Date(1, 1, 2), fixture.Rules);
 
         Assert.True(request.ProgressBattleValueTime > 0);
         Assert.Equal(RequestStatus.InProgress, request.Status);
@@ -42,7 +42,7 @@ public class ShowOfForceRequestTests
         // The rule this replaced would have counted exactly this squad.
         LandSquadWithOrder(fixture, CapitalRegion(fixture), missionType: null);
 
-        request.ProcessTurn(new Date(1, 1, 2));
+        request.ProcessTurn(new Date(1, 1, 2), fixture.Rules);
 
         Assert.Equal(0, request.ProgressBattleValueTime);
         Assert.Equal(RequestStatus.Open, request.Status);
@@ -58,7 +58,7 @@ public class ShowOfForceRequestTests
             CapitalRegion(fixture) == fixture.Planet.Regions[0] ? 1 : 0];
         LandSquadWithOrder(fixture, elsewhere, MissionType.ShowOfForce);
 
-        request.ProcessTurn(new Date(1, 1, 2));
+        request.ProcessTurn(new Date(1, 1, 2), fixture.Rules);
 
         Assert.Equal(0, request.ProgressBattleValueTime);
     }
@@ -71,11 +71,11 @@ public class ShowOfForceRequestTests
         PresenceRequest request = CreateEffortRequest(fixture, governor, serviceWeeks: 3);
         LandSquadWithOrder(fixture, CapitalRegion(fixture), MissionType.ShowOfForce);
 
-        request.ProcessTurn(new Date(1, 1, 2));
+        request.ProcessTurn(new Date(1, 1, 2), fixture.Rules);
         Assert.Equal(RequestStatus.InProgress, request.Status);
-        request.ProcessTurn(new Date(1, 1, 3));
+        request.ProcessTurn(new Date(1, 1, 3), fixture.Rules);
         Assert.Equal(RequestStatus.InProgress, request.Status);
-        request.ProcessTurn(new Date(1, 1, 4));
+        request.ProcessTurn(new Date(1, 1, 4), fixture.Rules);
 
         Assert.Equal(RequestStatus.Fulfilled, request.Status);
         Assert.True(request.IsRequestCompleted());
@@ -116,7 +116,7 @@ public class ShowOfForceRequestTests
     private static Squad LandSquadWithOrder(
         SectorSimulationFixture fixture, Region region, MissionType? missionType)
     {
-        Faction playerFaction = GameDataSingleton.Instance.GameRulesData.PlayerFaction;
+        Faction playerFaction = fixture.Rules.PlayerFaction;
         if (!fixture.Planet.PlanetFactionMap.TryGetValue(
             playerFaction.Id, out PlanetFaction playerPlanetFaction))
         {

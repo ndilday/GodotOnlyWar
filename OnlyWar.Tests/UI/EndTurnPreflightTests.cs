@@ -456,6 +456,11 @@ public class EndTurnPreflightTests
             unitTemplate);
         Unit rootUnit = new("Test Chapter", unitTemplate);
         Army army = new("Test Army", null, null, rootUnit, []);
+        // The preflight now reads this campaign's own doctrine rather than whichever campaign
+        // happened to be installed (SB-12), and these squads are deliberately one or two brothers
+        // so the assertions stay about location and orders. State the minimum they are meant to
+        // clear rather than padding every squad out to the default full-strength rule.
+        army.ChapterOperationalDoctrine.MinimumDutyReadySquadStrength = 1;
         Fleet fleet = new("Test Fleet", null, null);
         PlayerForce playerForce = new(player, army, fleet);
 

@@ -34,7 +34,7 @@ public sealed class FactionStrategyCharacterizationTests
         Squad unselectedGarrison = AddLandedSquad(unselectedFaction, MissionType.DefenseInDepth);
         Sector sector = new(CreatePlayerForce(), [], [selectedPlanet, unselectedPlanet], []);
 
-        List<Order> orders = new FactionStrategyController()
+        List<Order> orders = new FactionStrategyController(StaticRNG.Instance)
             .GenerateFactionOrders(faction, sector, selectedPlanet);
 
         Assert.Empty(orders);
@@ -59,7 +59,7 @@ public sealed class FactionStrategyCharacterizationTests
         planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetB, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<StrategicCombatMission> offensives = new FactionStrategyController()
+        List<StrategicCombatMission> offensives = new FactionStrategyController(StaticRNG.Instance)
             .GenerateFactionOrders(attacker, sector)
             .Select(order => order.Mission)
             .OfType<StrategicCombatMission>()
@@ -90,7 +90,7 @@ public sealed class FactionStrategyCharacterizationTests
         AddRegionFaction(planet, region, defenderB, 1_000, garrison: 1_000);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<StrategicCombatMission> offensives = new FactionStrategyController()
+        List<StrategicCombatMission> offensives = new FactionStrategyController(StaticRNG.Instance)
             .GenerateFactionOrders(attacker, sector)
             .Select(order => order.Mission)
             .OfType<StrategicCombatMission>()
@@ -148,7 +148,7 @@ public sealed class FactionStrategyCharacterizationTests
         AddRegionFaction(planet, region, enemy, 1_000);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController()
+        List<Order> orders = new FactionStrategyController(StaticRNG.Instance)
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
 
         Assert.NotEmpty(orders);

@@ -151,34 +151,10 @@ namespace OnlyWar.Helpers.UI
 			return "hostile";
 		}
 
-		public static string GetPlanetaryOperationsFactionIconKey(Faction faction)
-		{
-			if (faction == null) return null;
-			if (faction.IsPlayerFaction) return "map_player";
-			if (faction.IsDefaultFaction) return "map_imperial";
+		public static string GetPlanetaryOperationsFactionIconKey(Faction faction) =>
+			MapIconKeys.ForFaction(faction);
 
-			string name = faction.Name?.ToLowerInvariant() ?? "";
-			if (name.Contains("tyranid")) return "map_tyranids";
-			if (name.Contains("genestealer")) return "map_genestealer_cult";
-			if (name.Contains("ork")) return "map_orks";
-			// Faction art is required content. Returning no key makes the missing-art path loud in
-			// RegionMapCardView instead of falsely representing a new faction as an existing faction.
-			return null;
-		}
-
-		public static string GetSquadIconKey(SquadTemplate template)
-		{
-			if (template == null) return "infantry";
-
-			SquadTypes type = template.SquadType;
-			if (type.HasFlag(SquadTypes.HQ)) return "hq";
-			if (type.HasFlag(SquadTypes.Elite)) return "elite";
-			if (type.HasFlag(SquadTypes.Bodyguard)) return "bodyguard";
-			if (type.HasFlag(SquadTypes.Heavy)) return "devastator";
-			if (type.HasFlag(SquadTypes.Fast)) return "assault";
-			if (type.HasFlag(SquadTypes.Scout)) return "scout";
-			return "tactical";
-		}
+		public static string GetSquadIconKey(SquadTemplate template) => SquadIconKeys.For(template);
 
 		// One AtlasTexture per key, shared by every node that draws it. A list page previously
 		// allocated one Resource per icon per row (~280 for a full Muster candidate page), which
