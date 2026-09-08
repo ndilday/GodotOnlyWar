@@ -1,6 +1,4 @@
-using OnlyWar.Contracts.Operations;
 using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -18,8 +16,8 @@ namespace OnlyWar.Helpers.Orders
     // an engagement element; the attachment itself still does not bind him to a standing squad or add
     // specialist battlefield effects.
     //
-    // This type owns BOTH halves of the pointer pair -- Order.AttachedSoldiers and
-    // PlayerSoldier.AttachedOrder -- so nothing anywhere can leave a soldier half-attached.
+    // This type owns BOTH halves of the pointer pair -- Order.AssignedCharacters and
+    // PlayerSoldier.CurrentOrder -- so nothing anywhere can leave a soldier half-attached.
     // Everything else in the codebase should call Attach/Detach/ReleaseAll rather than
     // touching either side.
     //
@@ -28,9 +26,6 @@ namespace OnlyWar.Helpers.Orders
     // soldier as a FALLEN BROTHER on load -- so evicting him would kill him on the next save.
     public static class OrderAttachment
     {
-        private static IOperationsPersonnelSurface Personnel =>
-            OperationsPersonnelDefaults.Current;
-
         // Readiness inputs come from the campaign the order belongs to, recorded on the order when
         // the sector registered it, rather than from whichever campaign is installed (SB-05a). An
         // order still being assembled has none, so the command owner resolves and passes them.
@@ -38,16 +33,11 @@ namespace OnlyWar.Helpers.Orders
 
         // Attaches an individual to an operation. Idempotent for the same order; re-attaching
         // a soldier who is on a different order moves him.
-        // currentDate stamps the operational posting this attachment creates. It is explicit rather
-        // than read from the active campaign (SB-05a); callers without a campaign date in hand fall
-        // back to the epoch, which is what an unstamped posting already meant.
         public static void Attach(
             PlayerSoldier soldier,
             Order order,
             IReadinessDecisions readiness,
-            ChapterOperationalDoctrine doctrine = null,
-            Date currentDate = null,
-            IOperationsPersonnelSurface personnel = null)
+            ChapterOperationalDoctrine doctrine = null)
         {
             if (soldier == null || order == null)
             {
@@ -62,14 +52,8 @@ namespace OnlyWar.Helpers.Orders
                 return;
             }
 
-            // Some legacy test/migration objects predate organizational squad ownership. Keep
-            // the facade tolerant of those incomplete objects; production posting creation still
-            // enforces a home formation through IndividualPostingService.CanCreate.
             if (soldier.AssignedSquad == null)
             {
-                Detach(soldier);
-                soldier.CurrentOrder = order;
-                order.AssignedCharacters.Add(soldier);
                 return;
             }
 
@@ -91,48 +75,23 @@ namespace OnlyWar.Helpers.Orders
                 Detach(soldier);
             }
 
-            if (soldier.AssignedSquad.PermitsIndividualDeployment)
-            {
-                OrderForceService.AssignCharacter(order, soldier, readiness, doctrine);
-                return;
-            }
-
-            (personnel ?? Personnel).Restore(
-                soldier,
-                IndividualPostingKind.OperationalAttachment,
-                CampaignLocation.Landed(order.Mission?.RegionFaction?.Region)
-                    ?? CampaignLocationService.ForSquad(soldier.AssignedSquad),
-                currentDate ?? new Date(1),
-                order,
-                doctrine);
+            OrderForceService.AssignCharacter(order, soldier, readiness, doctrine);
         }
 
         // Releases one individual from whatever operation he is on. Safe on an unattached man.
-        public static void Detach(
-            PlayerSoldier soldier,
-            IOperationsPersonnelSurface personnel = null)
+        public static void Detach(PlayerSoldier soldier)
         {
             if (soldier?.CurrentOrder == null)
             {
                 return;
             }
-            if (soldier.IndividualPosting?.Location == null)
-            {
-                soldier.CurrentOrder.AssignedCharacters.Remove(soldier);
-                soldier.CurrentOrder = null;
-            }
-            else
-            {
-                (personnel ?? Personnel).ReleaseFromOrder(soldier);
-            }
+            OrderForceService.RemoveCharacter(soldier);
         }
 
         // Releases every individual attached to an order. Called wherever an order ends:
         // player unassignment, end-of-turn cleanup of resolved orders, and the last-squad-left
         // teardown in OrderAssignment.
-        public static void ReleaseAll(
-            Order order,
-            IOperationsPersonnelSurface personnel = null)
+        public static void ReleaseAll(Order order)
         {
             if (order == null)
             {
@@ -140,14 +99,7 @@ namespace OnlyWar.Helpers.Orders
             }
             foreach (PlayerSoldier soldier in order.AssignedCharacters.ToList())
             {
-                if (soldier.IndividualPosting == null)
-                {
-                    OrderForceService.RemoveCharacter(order, soldier);
-                }
-                else
-                {
-                    (personnel ?? Personnel).ReleaseFromOrder(soldier);
-                }
+                OrderForceService.RemoveCharacter(order, soldier);
             }
         }
 
@@ -214,8 +166,7 @@ namespace OnlyWar.Helpers.Orders
 
             // 1. Only formations whose function is to supply specialists may give a man up.
             Squad squad = soldier.AssignedSquad;
-            if (squad?.PermitsIndividualDeployment != true
-                && squad?.SquadTemplate?.PermitsIndividualDetachment != true)
+            if (squad?.PermitsIndividualDeployment != true)
             {
                 reason = $"{soldier.Name} belongs to a formation that deploys as a unit.";
                 return false;

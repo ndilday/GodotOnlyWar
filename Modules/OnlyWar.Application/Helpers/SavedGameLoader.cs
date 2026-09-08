@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OnlyWar.Builders;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
@@ -26,7 +26,10 @@ namespace OnlyWar.Helpers
     /// </summary>
     internal static class SavedGameLoader
     {
-        internal static Sector BuildSectorFromBlob(GameStateDataBlob gameState, GameRulesData gameRulesData)
+        internal static Sector BuildSectorFromBlob(
+            GameStateDataBlob gameState,
+            GameRulesData gameRulesData,
+            IOrderCommitmentSurface commitments)
         {
             // The loaded root units are not registered on their faction by the data access
             // layer, but both the Army construction below and the in-game save path
@@ -141,7 +144,7 @@ namespace OnlyWar.Helpers
                 sector.AddNewOrder(order);
             }
             RestoreOrderCharacters(gameState, playerForce);
-            RestoreIndividualPostings(gameState, playerForce, sector);
+            RestoreIndividualPostings(gameState, playerForce, sector, commitments);
             if (playerForce.RecruitmentProgram != null)
             {
                 playerForce.RecruitmentProgram.TaskOrder = sector.Orders.Values.FirstOrDefault(order =>
@@ -246,7 +249,8 @@ namespace OnlyWar.Helpers
         private static void RestoreIndividualPostings(
             GameStateDataBlob gameState,
             PlayerForce playerForce,
-            Sector sector)
+            Sector sector,
+            IOrderCommitmentSurface commitments)
         {
             Dictionary<int, PlayerSoldier> soldiers = playerForce.Army.PlayerSoldierMap
                 .Concat(playerForce.Army.FallenBrothers)
@@ -257,7 +261,8 @@ namespace OnlyWar.Helpers
             Dictionary<int, Region> regions = sector.Planets.Values
                 .SelectMany(planet => planet.Regions)
                 .ToDictionary(region => region.Id);
-            IndividualPostingService service = new(OrderCommitmentSurface.Instance);
+            if (commitments == null) throw new ArgumentNullException(nameof(commitments));
+            IndividualPostingService service = new(commitments);
             foreach (IndividualPostingRecord record in gameState.IndividualPostings ?? [])
             {
                 if (!soldiers.TryGetValue(record.SoldierId, out PlayerSoldier soldier))

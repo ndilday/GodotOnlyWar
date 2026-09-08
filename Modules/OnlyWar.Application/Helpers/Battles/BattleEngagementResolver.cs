@@ -1,8 +1,10 @@
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Battles.Placers;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
@@ -22,13 +24,16 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
 {
     private readonly BattleExecutionContext _execution;
     private readonly IBattleEquipmentSource _equipment;
+    private readonly Func<int, Region> _regionResolver;
 
     public BattleEngagementResolver(
         BattleExecutionContext execution,
-        IBattleEquipmentSource equipment = null)
+        IBattleEquipmentSource equipment = null,
+        Func<int, Region> regionResolver = null)
     {
         _execution = execution ?? throw new ArgumentNullException(nameof(execution));
         _equipment = equipment;
+        _regionResolver = regionResolver;
     }
 
     public IRNG Random => _execution.Random;
@@ -72,13 +77,13 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
     }
 
     public int GetPreferredOpeningRange(
-        OperationalMissionElement element,
-        IReadOnlyList<OperationalMissionElement> opposingElements)
+        EngagementParticipant element,
+        IReadOnlyList<EngagementParticipant> opposingElements)
     {
         if (element == null) throw new ArgumentNullException(nameof(element));
-        List<BattleSquad> opposing = (opposingElements ?? Array.Empty<OperationalMissionElement>())
+        List<BattleSquad> opposing = (opposingElements ?? Array.Empty<EngagementParticipant>())
             .Where(opposingElement => opposingElement != null)
-            .Select(opposingElement => Materialize(opposingElement.ToEngagementParticipant()))
+            .Select(Materialize)
             .Where(squad => squad != null)
             .ToList();
         if (opposing.Count == 0)
@@ -87,13 +92,14 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
                 "An opening-range query requires at least one opposing element.");
         }
 
-        return Materialize(element.ToEngagementParticipant()).GetPreferredOpeningRange(opposing);
+        return Materialize(element).GetPreferredOpeningRange(opposing);
     }
 
     public EngagementResult Resolve(EngagementInput input)
     {
         if (input == null) throw new ArgumentNullException(nameof(input));
         input.Validate();
+        Region region = ResolveRegion(input.Location);
 
         List<BattleSquad> firstSide = input.EffectiveFirstSide
             .Select(Materialize)
@@ -125,7 +131,7 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
             grid,
             firstSide,
             secondSide,
-            input.Region,
+            region,
             _execution,
             ToBattleProfile(input.FirstProfile),
             ToBattleProfile(input.SecondProfile));
@@ -154,6 +160,17 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
 
         throw new InvalidOperationException(
             "Engagement participants must carry an Application-created operational element state.");
+    }
+
+    private Region ResolveRegion(EngagementLocation location)
+    {
+        Region region = _regionResolver?.Invoke(location.RegionId);
+        if (region == null)
+        {
+            throw new InvalidOperationException(
+                $"No live Region was registered for engagement location {location.RegionId}.");
+        }
+        return region;
     }
 
     private static void ApplyParticipantSelection(
@@ -327,7 +344,13 @@ public static class BattleEngagementInputBuilder
         return new EngagementParticipant(
             squad.Id,
             squad.Name,
-            squad.Faction,
+            squad.Faction == null
+                ? null
+                : new EngagementFactionFacts(
+                    squad.Faction.Id,
+                    squad.Faction.Name,
+                    squad.Faction.IsPlayerFaction,
+                    squad.Faction.IsDefaultFaction),
             squad.Soldiers.Select(soldier => soldier.Soldier).ToArray(),
             squad.EngagementParticipantIds?.ToArray(),
             squad.IsPlayerSquad,
@@ -335,8 +358,6 @@ public static class BattleEngagementInputBuilder
                 squad.Traits.ProvidesCommandAura,
                 squad.Traits.ProvidesSynapse,
                 squad.Traits.IsHeadquarters),
-            squad.CampaignSquad,
-            squad.CampaignCharacter,
             new BattleEngagementResolver.BattleSquadEngagementState(squad));
     }
 
@@ -357,7 +378,7 @@ public static class BattleEngagementInputBuilder
         new(
             From(firstSide),
             From(secondSide),
-            region,
+            new EngagementLocation(region.Id, region.Name, region.Planet?.Name),
             openingRange,
             firstProfile,
             secondProfile,

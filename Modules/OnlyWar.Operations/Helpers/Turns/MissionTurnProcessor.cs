@@ -1,8 +1,8 @@
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Builders;
-using OnlyWar.Contracts.Battles;
-using OnlyWar.Contracts.Medical;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Medical.Abstractions;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
@@ -43,10 +43,10 @@ namespace OnlyWar.Helpers.Turns
         private readonly IReadOnlyList<StrategicInvasionForce> _invasionForces;
         private readonly FactionBehaviorRulesProfile _factionRules;
         // Readiness policy arrives as a capability (SB-05b-1): mission scheduling consumes the
-        // decisions in Contracts and never names the Medical policy that produces them.
+        // decisions in Medical.Abstractions and never names the Medical policy that produces them.
         private readonly IReadinessDecisions _readiness;
         private readonly IEngagementResolver _engagements;
-        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IPhysicalPostingCommands _personnel;
         private readonly Func<StrategicInvasionForce, Region, float, IRNG, FactionBehaviorRulesProfile, bool> _strategicCommanderCanBeReached;
         private readonly IEngagementElementFactory _engagementElements;
         private readonly Action<IEnumerable<ISoldier>> _applyDailyHealing;
@@ -334,7 +334,7 @@ namespace OnlyWar.Helpers.Turns
                         _random,
                         _engagements,
                         new TacticalEntityIdAllocator(),
-                        new OnlyWar.Contracts.Operations.MissionCampaignInputs(_currentDate,
+                        new OnlyWar.Operations.Contracts.MissionCampaignInputs(_currentDate,
                             _sector.PlayerForce?.Army?.ChapterOperationalDoctrine ?? _doctrine,
                             _recruitment,
                             _invasionForces,

@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Missions;
 using System.Collections.Generic;
@@ -59,7 +59,7 @@ namespace OnlyWar.Helpers.Missions
                     new EngagementInput(
                         context.MissionParticipants,
                         context.OpposingParticipants,
-                        context.Order.Mission.RegionFaction.Region,
+                        context.Order.Mission.RegionFaction.Region.ToEngagementLocation(),
                     range,
                     context.CreateMissionEngagementProfile(EngagementRole.Ambushed),
                     MissionContext.CreateOpposingEngagementProfile(opposingSquads, EngagementRole.Ambusher),

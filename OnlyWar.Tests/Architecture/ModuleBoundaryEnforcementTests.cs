@@ -2,6 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Medical.Abstractions;
+using OnlyWar.Models;
+using OnlyWar.Models.Orders;
+using OnlyWar.Models.Planets;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -23,7 +32,28 @@ public class ModuleBoundaryEnforcementTests
     // tests may name the static RNG for deterministic setup, but production sources are scanned
     // independently from the fixtures.
     private static readonly string[] ProductionRoots =
-        ["Modules", "Scenes", "Helpers", "Composition", "Builders", "Models"];
+        ["Modules", "Scenes", "Host"];
+
+    [Fact]
+    public void LegacyRootProductionFoldersDoNotContainShippingSources()
+    {
+        string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
+        string[] legacyRoots = ["Helpers", "Models", "Builders", "Composition"];
+
+        string[] offenders = legacyRoots
+            .SelectMany(directory =>
+            {
+                string path = Path.Combine(repositoryRoot, directory);
+                return Directory.Exists(path)
+                    ? Directory.EnumerateFiles(path, "*.cs", SearchOption.AllDirectories)
+                    : [];
+            })
+            .Select(path => Path.GetRelativePath(repositoryRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
 
     [Fact]
     public void TheRetiredCampaignSingletonDoesNotAppearInProductionSources()
@@ -82,6 +112,60 @@ public class ModuleBoundaryEnforcementTests
             .ToList();
 
         Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void SharedQueryPortsDoNotExposeCampaignAggregates()
+    {
+        Type[] queryPorts =
+        [
+            typeof(IPersonnelAvailabilityQueries),
+            typeof(PersonnelMovementRequest),
+            typeof(PersonnelOrderAssignmentRequest),
+            typeof(PersonnelFormationSnapshot),
+            typeof(PersonnelCharacterSnapshot),
+            typeof(EngagementInput),
+            typeof(EngagementParticipant),
+            typeof(EngagementLocation),
+            typeof(EngagementFactionFacts),
+            typeof(IReadinessDecisions)
+        ];
+
+        Type[] forbidden =
+        [
+            typeof(PlayerSoldier),
+            typeof(Squad),
+            typeof(Order),
+            typeof(Region),
+            typeof(CampaignLocation)
+        ];
+
+        string[] offenders = PublicSurface(queryPorts)
+            .Where(type => forbidden.Contains(type))
+            .Select(type => type.FullName)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void RetiredContractsHubIsAbsentFromTheCurrentProjectGraph()
+    {
+        string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
+        Assert.False(File.Exists(Path.Combine(
+            repositoryRoot, "Modules", "OnlyWar.Contracts", "OnlyWar.Contracts.csproj")));
+
+        IEnumerable<string> graphFiles =
+            new[] { Path.Combine(repositoryRoot, "OnlyWarGodot.sln") }
+            .Concat(Directory.EnumerateFiles(
+                Path.Combine(repositoryRoot, "Modules"), "*.csproj", SearchOption.TopDirectoryOnly))
+            .Append(Path.Combine(repositoryRoot, "OnlyWarGodot.csproj"));
+
+        Assert.DoesNotContain(graphFiles,
+            path => File.Exists(path)
+                && File.ReadAllText(path).Contains("OnlyWar.Contracts", StringComparison.Ordinal));
     }
 
     // The negative half of the fixture: a check that cannot fail proves nothing, so run the same
@@ -165,4 +249,36 @@ public class ModuleBoundaryEnforcementTests
 
     private static bool ContainsAny(string source, params string[] needles) =>
         needles.Any(needle => source.Contains(needle, StringComparison.Ordinal));
+
+    private static IEnumerable<Type> PublicSurface(IEnumerable<Type> roots) =>
+        roots.SelectMany(type => new[] { type }
+            .Concat(type.GetConstructors(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .SelectMany(constructor => constructor.GetParameters()
+                    .Select(parameter => parameter.ParameterType)))
+            .Concat(type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .SelectMany(method => new[] { method.ReturnType }
+                    .Concat(method.GetParameters().Select(parameter => parameter.ParameterType))))
+            .Concat(type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .Select(property => property.PropertyType)))
+        .SelectMany(UnwrapTypes)
+        .Distinct();
+
+    private static IEnumerable<Type> UnwrapTypes(Type type)
+    {
+        if (type.IsByRef || type.IsPointer || type.IsArray)
+        {
+            foreach (Type nested in UnwrapTypes(type.GetElementType())) yield return nested;
+            yield break;
+        }
+        if (type.IsGenericType)
+        {
+            yield return type.GetGenericTypeDefinition();
+            foreach (Type argument in type.GetGenericArguments())
+            {
+                foreach (Type nested in UnwrapTypes(argument)) yield return nested;
+            }
+            yield break;
+        }
+        yield return type;
+    }
 }

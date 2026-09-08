@@ -1,5 +1,5 @@
 using OnlyWar.Models.Recruitment;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models;
 ﻿using System;
 using System.Collections.Generic;

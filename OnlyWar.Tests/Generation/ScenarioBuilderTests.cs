@@ -27,7 +27,7 @@ public class ScenarioBuilderTests
     public ScenarioBuilderTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
     }
 
     private Faction Tyranids => _data.Factions.Single(f => f.Name == "Tyranids");
@@ -179,8 +179,10 @@ public class ScenarioBuilderTests
         Planet other = first.Planets.Values.First(p => p.Id != promised.Id);
         List<((int, int), long)> before = RegionFactionPopulations(other);
 
-        new TurnController(new GameSession(
-            firstData, first, _date, StaticRNG.Instance)).SimulatePlanetForward(
+        TestPersonnelComposition.CreateCampaign(new StaticRNG())
+            .CreateTurnController(new GameSession(
+                firstData, first, _date, new StaticRNG()))
+            .SimulatePlanetForward(
                 first, promised, turns: 5);
 
         Assert.Equal(before, RegionFactionPopulations(other));
@@ -208,7 +210,7 @@ public class ScenarioBuilderTests
     private (GameRulesData Data, Sector Sector) GenerateFreshSector(int seed)
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Sector sector = TestGeneration.GenerateSector(seed, data, _date, "Deterministic Chapter");
         return (data, sector);
     }

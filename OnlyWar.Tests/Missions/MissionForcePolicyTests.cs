@@ -1,6 +1,6 @@
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models.Missions;
 using OnlyWar.Tests.Fixtures;

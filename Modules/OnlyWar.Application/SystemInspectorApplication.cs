@@ -8,12 +8,26 @@ using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Application;
 
-public sealed partial class CampaignApplication : ISystemInspectorApplication
+public sealed class SystemInspectorApplication : CampaignScreenApplication,
+    ISystemInspectorApplication
 {
+    private readonly IOperationsScreenQueries _operationsQueries;
+    private readonly IFleetScreenApplication _fleet;
+
+    public SystemInspectorApplication(
+        CampaignApplicationContext context,
+        IOperationsScreenQueries operationsQueries,
+        IFleetScreenApplication fleet) : base(context)
+    {
+        _operationsQueries = operationsQueries
+            ?? throw new System.ArgumentNullException(nameof(operationsQueries));
+        _fleet = fleet ?? throw new System.ArgumentNullException(nameof(fleet));
+    }
+
     public SystemInspectorView QuerySystemInspector(
         int? planetId, int? selectedFleetId, bool includeDossier)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null
             || !planetId.HasValue
             || !session.Sector.Planets.TryGetValue(planetId.Value, out Planet planet))
@@ -66,14 +80,14 @@ public sealed partial class CampaignApplication : ISystemInspectorApplication
             DescribeSelectedFleet(chosen, orbiting.Count, playerFaction),
             chosen == null
                 ? FleetActionAvailability.None
-                : QueryFleetActions(chosen.Id),
-            includeDossier ? QueryWorldDossier(planet.Id, -1) : null);
+                : _fleet.QueryFleetActions(chosen.Id),
+            includeDossier ? _operationsQueries.QueryWorldDossier(planet.Id, -1) : null);
     }
 
     public int? QueryFleetContextPlanet(int fleetId)
     {
-        if (_activeSession == null
-            || !_activeSession.Sector.Fleets.TryGetValue(fleetId, out TaskForce fleet))
+        if (ActiveSession == null
+            || !ActiveSession.Sector.Fleets.TryGetValue(fleetId, out TaskForce fleet))
         {
             return null;
         }

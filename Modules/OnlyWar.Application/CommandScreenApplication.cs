@@ -33,24 +33,27 @@ public interface ICommandScreenApplication
     ChronicleView QueryChronicle(ChronicleFilter filter, int page);
 }
 
-public sealed partial class CampaignApplication : ICommandScreenApplication
+public sealed class CommandScreenApplication : CampaignScreenApplication,
+    ICommandScreenApplication
 {
     private readonly CommandBriefBuilder _briefBuilder = new();
 
-    public bool HasCampaign => _activeSession != null;
+    public CommandScreenApplication(CampaignApplicationContext context) : base(context) { }
+
+    public bool HasCampaign => ActiveSession != null;
 
     public bool HasLastTurnReport =>
-        _activeSession?.Sector.PlayerForce?.LastTurnReportSnapshot != null;
+        ActiveSession?.Sector.PlayerForce?.LastTurnReportSnapshot != null;
 
     public CommandBriefModel QueryBrief()
     {
-        if (_activeSession == null) return new CommandBriefModel([]);
-        Sector sector = _activeSession.Sector;
-        Date date = _activeSession.CurrentDate;
+        if (ActiveSession == null) return new CommandBriefModel([]);
+        Sector sector = ActiveSession.Sector;
+        Date date = ActiveSession.CurrentDate;
         return _briefBuilder.Build(
             date,
             sector,
-            _activeSession.Rules,
+            ActiveSession.Rules,
             sector.PlayerForce.LastTurnReportSnapshot,
             sector.PlayerForce.CampaignEventLedger.GetEventsInWeekRange(
                 date.GetTotalWeeks(), date.GetTotalWeeks()));
@@ -58,9 +61,9 @@ public sealed partial class CampaignApplication : ICommandScreenApplication
 
     public ChronicleView QueryChronicle(ChronicleFilter filter, int page)
     {
-        if (_activeSession == null)
+        if (ActiveSession == null)
             return new ChronicleView([], ChronicleFilter.All, [], false, false);
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         IReadOnlyList<ChronicleFilter> available = ChapterChronicleBrowser.GetAvailableFilters(
             force.ChapterChronicle, force.CampaignEventLedger);
         // A filter the campaign no longer offers falls back to All rather than showing nothing.
@@ -74,7 +77,7 @@ public sealed partial class CampaignApplication : ICommandScreenApplication
             effective,
             ChapterChronicleBrowser.GetPage(
                 force.ChapterChronicle, force.CampaignEventLedger,
-                _activeSession.Sector, effective, page),
+                ActiveSession.Sector, effective, page),
             ChapterChronicleBrowser.HasPage(
                 force.ChapterChronicle, force.CampaignEventLedger, effective, page + 1),
             force.ChapterChronicle.Entries.Count > 0);

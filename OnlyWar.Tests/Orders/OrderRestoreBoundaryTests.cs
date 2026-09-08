@@ -20,25 +20,23 @@ public class OrderRestoreBoundaryTests
 {
     [Theory]
     [InlineData(SquadTypes.Administrative)]
-    [InlineData(SquadTypes.PermitsIndividualDetachment)]
-    public void Restore_Character_RestoresMembershipWithLegacyPostingCompatibility(SquadTypes kind)
+    public void Restore_Character_RestoresCanonicalMembership(SquadTypes kind)
     {
         var fixture = SectorSimulationFixture.Create();
         Squad squad = CreateSquad(fixture, "First", true);
         PlayerSoldier character = CreateCharacter(fixture, kind);
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [squad], [character], MedicalReadinessDecisions.Instance);
+        var result = OrderMutationService.RestoreParticipants(
+            fixture.Sector, order, [squad], [character], new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Same(order, squad.CurrentOrders);
         Assert.Same(order, character.CurrentOrder);
         Assert.Contains(character, order.AssignedCharacters);
         Assert.Contains(character, character.AssignedSquad.Members);
-        if (kind == SquadTypes.PermitsIndividualDetachment)
-            Assert.Same(order, character.IndividualPosting.Order);
-        else
-            Assert.Null(character.IndividualPosting);
+        Assert.Null(character.IndividualPosting);
     }
 
     [Fact]
@@ -52,7 +50,9 @@ public class OrderRestoreBoundaryTests
         character.CurrentOrder = other;
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [squad], [character], MedicalReadinessDecisions.Instance);
+        var result = OrderMutationService.RestoreParticipants(
+            fixture.Sector, order, [squad], [character], new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.False(result.Succeeded);
         Assert.Null(squad.CurrentOrders);
@@ -77,12 +77,16 @@ public class OrderRestoreBoundaryTests
         Assert.True(OrderMutationService.Cancel(fixture.Sector, order).Succeeded);
         Assert.Null(squad.CurrentOrders);
         Assert.Empty(order.AssignedSquads);
-        var restored = OrderMutationService.Restore(fixture.Sector, token, MedicalReadinessDecisions.Instance);
+        var restored = OrderMutationService.Restore(
+            fixture.Sector, token, new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.True(restored.Succeeded, restored.Message);
         Assert.Same(order, squad.CurrentOrders);
         Assert.Single(order.AssignedSquads);
-        Assert.False(OrderMutationService.Restore(fixture.Sector, token, MedicalReadinessDecisions.Instance).Succeeded);
+        Assert.False(OrderMutationService.Restore(
+            fixture.Sector, token, new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel()).Succeeded);
         Assert.Single(order.AssignedSquads);
     }
 
@@ -99,7 +103,9 @@ public class OrderRestoreBoundaryTests
         Assert.True(OrderMutationService.Cancel(original.Sector, order).Succeeded);
         var replacement = SectorSimulationFixture.Create();
 
-        Assert.False(OrderMutationService.Restore(replacement.Sector, token, MedicalReadinessDecisions.Instance).Succeeded);
+        Assert.False(OrderMutationService.Restore(
+            replacement.Sector, token, new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel()).Succeeded);
 
         Assert.Null(squad.CurrentOrders);
         Assert.Empty(order.AssignedSquads);
@@ -115,7 +121,9 @@ public class OrderRestoreBoundaryTests
         Squad second = CreateSquad(fixture, "Second", false);
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [first, second], [], MedicalReadinessDecisions.Instance);
+        var result = OrderMutationService.RestoreParticipants(
+            fixture.Sector, order, [first, second], [], new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.False(result.Succeeded);
         Assert.Null(first.CurrentOrders);
@@ -132,7 +140,9 @@ public class OrderRestoreBoundaryTests
         Squad second = CreateSquad(fixture, "Second", true);
         Order order = CancelledOrder(fixture);
 
-        var result = OrderMutationService.RestoreParticipants(fixture.Sector, order, [first, second], [], MedicalReadinessDecisions.Instance);
+        var result = OrderMutationService.RestoreParticipants(
+            fixture.Sector, order, [first, second], [], new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Same(order, first.CurrentOrders);
@@ -149,7 +159,9 @@ public class OrderRestoreBoundaryTests
         Order order = CancelledOrder(original);
         var replacement = SectorSimulationFixture.Create();
 
-        var result = OrderMutationService.RestoreParticipants(replacement.Sector, order, [squad], [], MedicalReadinessDecisions.Instance);
+        var result = OrderMutationService.RestoreParticipants(
+            replacement.Sector, order, [squad], [], new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.False(result.Succeeded);
         Assert.Null(squad.CurrentOrders);

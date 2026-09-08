@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 
@@ -12,9 +12,6 @@ namespace OnlyWar.Helpers.Orders;
 /// </summary>
 public sealed class OrderCommitmentSurface : IOrderCommitmentSurface
 {
-    /// <summary>Shared because the order services are stateless statics.</summary>
-    public static OrderCommitmentSurface Instance { get; } = new();
-
     public bool ReleaseCharacter(PlayerSoldier character) =>
         OrderForceService.RemoveCharacter(character);
 

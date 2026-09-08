@@ -5,6 +5,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Operations.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,7 +28,17 @@ namespace OnlyWar.Helpers
     public sealed class AdministrativeStationService
     {
         private readonly FlagshipService _flagships = new();
-        private readonly IndividualPostingService _postings = new(OrderCommitmentSurface.Instance);
+        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IndividualPostingService _postings;
+
+        public AdministrativeStationService(
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments)
+        {
+            _personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
+            _postings = new IndividualPostingService(
+                commitments ?? throw new ArgumentNullException(nameof(commitments)));
+        }
         public AdministrativeStationResult SeatFormation(
             Squad formation,
             CampaignLocation station)
@@ -54,7 +65,7 @@ namespace OnlyWar.Helpers
                 int oldStationed = formation.DutyStation?.Ship == station.Ship
                     ? SoldierPresenceService.PresentCount(formation)
                     : 0;
-                if (ShipCapacityService.AvailableCapacity(station.Ship) + oldStationed
+                if (ShipCapacityService.AvailableCapacity(station.Ship, _personnel) + oldStationed
                     < SoldierPresenceService.PresentCount(formation))
                 {
                     return AdministrativeStationResult.Failure(
@@ -136,7 +147,7 @@ namespace OnlyWar.Helpers
                 .Where(squad => squad.PermitsIndividualDeployment)
                 .ToList();
             int incoming = stranded.Sum(SoldierPresenceService.PresentCount);
-            if (ShipCapacityService.AvailableCapacity(successor) < incoming)
+            if (ShipCapacityService.AvailableCapacity(successor, _personnel) < incoming)
             {
                 return AdministrativeStationResult.Failure(
                     $"{successor.Name} cannot seat all administrative survivors atomically.");
@@ -166,7 +177,7 @@ namespace OnlyWar.Helpers
                 int incoming = distinct
                     .Where(squad => squad.DutyStation?.Ship != destination.Ship)
                     .Sum(SoldierPresenceService.PresentCount);
-                if (ShipCapacityService.AvailableCapacity(destination.Ship) < incoming)
+                if (ShipCapacityService.AvailableCapacity(destination.Ship, _personnel) < incoming)
                 {
                     return AdministrativeStationResult.Failure(
                         $"{destination.Ship.Name} cannot seat all administrative formations atomically.");

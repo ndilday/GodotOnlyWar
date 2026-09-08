@@ -3,6 +3,7 @@ using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers;
+using OnlyWar.Operations.Contracts;
 using System;
 using System.Linq;
 
@@ -13,23 +14,38 @@ namespace OnlyWar.Helpers.Storage
     /// load has succeeded. Both the title screen and the in-campaign Load action use this path,
     /// so choosing a file never falls back to an implicit "newest save" policy.
     /// </summary>
-    public static class CampaignLoader
+    public sealed class CampaignLoader
     {
+        private readonly GameStorage _storage;
+        private readonly GameStateDataAccess _dataAccess;
+
+        public CampaignLoader(GameStorage storage, GameStateDataAccess dataAccess)
+        {
+            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            _dataAccess = dataAccess ?? throw new ArgumentNullException(nameof(dataAccess));
+        }
+
         /// <summary>
         /// Reconstructs a detached session. Callers decide whether and when the fully validated
         /// result becomes active.
         /// </summary>
-        public static GameSession LoadSession(string savePath, IRNG random)
+        public GameSession LoadSession(
+            string savePath,
+            IRNG random,
+            IOrderCommitmentSurface commitments)
         {
             if (string.IsNullOrWhiteSpace(savePath))
             {
                 throw new ArgumentException("A save file must be selected.", nameof(savePath));
             }
             if (random == null) throw new ArgumentNullException(nameof(random));
+            if (commitments == null) throw new ArgumentNullException(nameof(commitments));
 
-            GameRulesData gameRulesData = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(GameStorage.RulesDatabasePath);
+            GameRulesData gameRulesData = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(
+                _storage.RulesDatabasePath);
             GameStateDataBlob gameState = LoadGameData(gameRulesData, savePath);
-            Sector sector = SavedGameLoader.BuildSectorFromBlob(gameState, gameRulesData);
+            Sector sector = SavedGameLoader.BuildSectorFromBlob(
+                gameState, gameRulesData, commitments);
 
             // Subsectors and warp lanes are derived deterministically from planet positions
             // rather than persisted, so rebuild them before returning the detached session.
@@ -41,7 +57,7 @@ namespace OnlyWar.Helpers.Storage
             return session;
         }
 
-        private static GameStateDataBlob LoadGameData(
+        private GameStateDataBlob LoadGameData(
             GameRulesData gameRulesData,
             string savePath)
         {
@@ -66,7 +82,7 @@ namespace OnlyWar.Helpers.Storage
                 .SelectMany(faction => faction.SoldierTemplates.Values)
                 .ToDictionary(template => template.Id);
 
-            return GameStateDataAccess.Instance.GetData(
+            return _dataAccess.GetData(
                 savePath,
                 gameRulesData.Factions.ToDictionary(faction => faction.Id),
                 gameRulesData.PlanetTemplateMap,

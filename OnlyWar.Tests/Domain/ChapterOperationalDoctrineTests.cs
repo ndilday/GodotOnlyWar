@@ -190,7 +190,8 @@ public class ChapterOperationalDoctrineTests
             new List<SquadWeaponOption>(),
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
-            SquadTypes.PermitsIndividualDetachment)
+            SquadTypes.Administrative,
+            FormationMobilityPolicy.MembersOnly)
         {
             Faction = fixture.Sector.PlayerForce.Faction
         };

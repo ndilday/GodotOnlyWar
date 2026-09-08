@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-using OnlyWar.Contracts.Generation;
+using OnlyWar.Generation.Contracts;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Helpers;
@@ -118,7 +118,7 @@ namespace OnlyWar.Builders
                 foundingSoldierCount,
                 soldierTemplate.Species,
                 data.SkillTemplateList,
-                StaticRNG.Instance);
+                new StaticRNG());
 
             // A founding starts a fresh, shuffled draw from each name pool. With the
             // production 1,000-soldier chapter, neither component repeats.

@@ -14,13 +14,19 @@ using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Application;
 
-public sealed partial class CampaignApplication : ILoadoutScreenApplication
+public sealed class LoadoutScreenApplication : CampaignScreenApplication,
+    ILoadoutScreenApplication
 {
+    private const string NoCampaignMessage = "No campaign is active.";
+    private const string StaleSessionMessage = "This campaign is no longer active.";
+
     private readonly SoldierDossierService _dossierService = new();
+
+    public LoadoutScreenApplication(CampaignApplicationContext context) : base(context) { }
 
     public SquadLoadoutView QuerySquadLoadout(int squadId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         Squad squad = FindPlayerSquad(squadId);
         if (squad == null) return SquadLoadoutView.Missing;
 
@@ -63,7 +69,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         Squad squad = FindPlayerSquad(squadId);
         if (squad == null) return LoadoutCommandResult.Failed("That squad is no longer available.");
 
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         if (squad.UsesLoadoutDoctrine)
         {
             LoadoutDoctrineService.Customize(squad, force);
@@ -90,7 +96,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         if (soldier == null) return LoadoutCommandResult.Failed("That brother is no longer here.");
 
         CharacterLoadoutService.SetPersonalLoadout(
-            soldier, weaponSet, _activeSession.Sector.PlayerForce);
+            soldier, weaponSet, ActiveSession.Sector.PlayerForce);
         return LoadoutCommandResult.Ok();
     }
 
@@ -101,9 +107,9 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         ISoldier soldier = FindSquadMember(squadId, soldierId);
         if (soldier == null) return LoadoutCommandResult.Failed("That brother is no longer here.");
 
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         SquadTemplateElement element = FindPersonalElement(soldier);
-        EquipmentRulesCatalog catalog = _activeSession.Rules?.EquipmentCatalog;
+        EquipmentRulesCatalog catalog = ActiveSession.Rules?.EquipmentCatalog;
         // An itemized role clears its personal override in the equipment doctrine; the legacy
         // weapon-set path clears the character loadout instead.
         if (element?.PersonalEquipmentRole != null
@@ -122,7 +128,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         ISoldier soldier = FindSquadMember(squadId, soldierId);
         Squad squad = FindPlayerSquad(squadId);
         SquadTemplateElement element = FindPersonalElement(soldier);
-        EquipmentRulesCatalog catalog = _activeSession?.Rules?.EquipmentCatalog;
+        EquipmentRulesCatalog catalog = ActiveSession?.Rules?.EquipmentCatalog;
         if (soldier == null || squad == null || element?.PersonalEquipmentRole == null
             || catalog == null)
         {
@@ -143,7 +149,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
                 EquipmentRulesCatalog.GetKitId(squad.SquadTemplate.DefaultWeapons.Id));
         EquipmentValidationContext context = BuildSoldierEquipmentContext(squad, soldier, role);
         EquipmentLoadoutDoctrine doctrine = squad.Faction?.IsPlayerFaction == true
-            ? _activeSession.Sector.PlayerForce?.Army?.EquipmentLoadoutDoctrine
+            ? ActiveSession.Sector.PlayerForce?.Army?.EquipmentLoadoutDoctrine
             : null;
         ResolvedEquipmentLoadout resolved = EquipmentLoadoutService.Resolve(
             soldier.Id, element, doctrine, authoredRoleKit, elementFallbackKit,
@@ -166,7 +172,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         ISoldier soldier = FindSquadMember(squadId, soldierId);
         Squad squad = FindPlayerSquad(squadId);
         SquadTemplateElement element = FindPersonalElement(soldier);
-        EquipmentRulesCatalog catalog = _activeSession.Rules?.EquipmentCatalog;
+        EquipmentRulesCatalog catalog = ActiveSession.Rules?.EquipmentCatalog;
         if (soldier == null || squad == null || element?.PersonalEquipmentRole == null
             || catalog == null)
         {
@@ -176,7 +182,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         try
         {
             EquipmentLoadoutService.SetPersonalLoadout(
-                _activeSession.Sector.PlayerForce.Army.EquipmentLoadoutDoctrine,
+                ActiveSession.Sector.PlayerForce.Army.EquipmentLoadoutDoctrine,
                 soldier.Id,
                 loadout,
                 BuildSoldierEquipmentContext(squad, soldier, element.PersonalEquipmentRole));
@@ -191,7 +197,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
 
     public LoadoutDoctrineScopeView QueryDoctrineScope(int? planetId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         PlayerForce force = session?.Sector.PlayerForce;
         if (force?.Army == null) return null;
         Planet planet = ResolveDoctrinePlanet(planetId);
@@ -223,7 +229,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
 
     public LoadoutTemplateDetailView QueryTemplateLoadout(int? planetId, int templateId)
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         if (force?.Army == null) return LoadoutTemplateDetailView.Missing;
         Planet planet = ResolveDoctrinePlanet(planetId);
         if (planetId.HasValue && planet == null) return LoadoutTemplateDetailView.Missing;
@@ -261,7 +267,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         Guid sessionToken, int? planetId, int templateId, IReadOnlyList<WeaponSet> loadout)
     {
         if (RejectLoadoutCommand(sessionToken) is LoadoutCommandResult rejection) return rejection;
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         Planet planet = ResolveDoctrinePlanet(planetId);
         if (force?.Army == null || (planetId.HasValue && planet == null))
         {
@@ -296,10 +302,10 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
     // equipped in another.
     public IReadOnlyList<CharacterLoadoutRowData> QueryCharacterRoles()
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         if (force?.Army == null) return [];
 
-        EquipmentRulesCatalog catalog = _activeSession.Rules?.EquipmentCatalog;
+        EquipmentRulesCatalog catalog = ActiveSession.Rules?.EquipmentCatalog;
         EquipmentLoadoutDoctrine equipmentDoctrine = force.Army.EquipmentLoadoutDoctrine;
         CharacterLoadoutDoctrine doctrine = force.Army.CharacterLoadoutDoctrine;
 
@@ -347,7 +353,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         Guid sessionToken, int roleId, WeaponSet weaponSet)
     {
         if (RejectLoadoutCommand(sessionToken) is LoadoutCommandResult rejection) return rejection;
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         if (!CharacterRoleElements(force).TryGetValue(roleId, out SquadTemplateElement element))
         {
             return LoadoutCommandResult.Failed("The chapter no longer fields that role.");
@@ -360,8 +366,8 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
     public LoadoutCommandResult ResetCharacterRole(Guid sessionToken, int roleId)
     {
         if (RejectLoadoutCommand(sessionToken) is LoadoutCommandResult rejection) return rejection;
-        PlayerForce force = _activeSession.Sector.PlayerForce;
-        EquipmentRulesCatalog catalog = _activeSession.Rules?.EquipmentCatalog;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
+        EquipmentRulesCatalog catalog = ActiveSession.Rules?.EquipmentCatalog;
         if (catalog?.PersonalEquipmentRoles.ContainsKey(roleId) == true)
         {
             force.Army.EquipmentLoadoutDoctrine.ClearRoleDefault(roleId);
@@ -379,8 +385,8 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
 
     public EquipmentEditorView QueryRoleEquipmentEditor(int roleId)
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
-        EquipmentRulesCatalog catalog = _activeSession?.Rules?.EquipmentCatalog;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
+        EquipmentRulesCatalog catalog = ActiveSession?.Rules?.EquipmentCatalog;
         if (force?.Army == null || catalog == null
             || !CharacterRoleElements(force).TryGetValue(roleId, out SquadTemplateElement element)
             || !catalog.PersonalEquipmentRoles.TryGetValue(roleId, out PersonalEquipmentRole role)
@@ -407,7 +413,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         Guid sessionToken, int roleId, EquipmentLoadout loadout)
     {
         if (RejectLoadoutCommand(sessionToken) is LoadoutCommandResult rejection) return rejection;
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         if (force?.Army == null
             || !CharacterRoleElements(force).TryGetValue(roleId, out SquadTemplateElement element))
         {
@@ -433,7 +439,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
     public OperationalDoctrineView QueryOperationalDoctrine()
     {
         ChapterOperationalDoctrine doctrine =
-            _activeSession?.Sector.PlayerForce?.Army?.ChapterOperationalDoctrine
+            ActiveSession?.Sector.PlayerForce?.Army?.ChapterOperationalDoctrine
             ?? new ChapterOperationalDoctrine();
         return new OperationalDoctrineView(
             InjuryThresholdLabels,
@@ -445,7 +451,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
     public string DescribeOperationalDoctrineConsequence(
         int injuryThresholdIndex, bool requireDutyReadySquadLeader, int minimumStrength)
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         if (force?.Army == null) return string.Empty;
 
         ChapterOperationalDoctrine staged = StageDoctrine(
@@ -474,7 +480,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
     {
         if (RejectLoadoutCommand(sessionToken) is LoadoutCommandResult rejection) return rejection;
         ChapterOperationalDoctrine live =
-            _activeSession.Sector.PlayerForce?.Army?.ChapterOperationalDoctrine;
+            ActiveSession.Sector.PlayerForce?.Army?.ChapterOperationalDoctrine;
         if (live == null) return LoadoutCommandResult.Failed("No chapter doctrine is loaded.");
 
         live.ReplaceWith(StageDoctrine(
@@ -510,15 +516,15 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
 
     private LoadoutCommandResult RejectLoadoutCommand(Guid sessionToken)
     {
-        if (_activeSession == null) return LoadoutCommandResult.Failed(NoCampaignMessage);
+        if (ActiveSession == null) return LoadoutCommandResult.Failed(NoCampaignMessage);
         if (sessionToken != SessionToken) return LoadoutCommandResult.Failed(StaleSessionMessage);
         return null;
     }
 
     private Planet ResolveDoctrinePlanet(int? planetId) =>
         planetId.HasValue
-            && _activeSession != null
-            && _activeSession.Sector.Planets.TryGetValue(planetId.Value, out Planet planet)
+            && ActiveSession != null
+            && ActiveSession.Sector.Planets.TryGetValue(planetId.Value, out Planet planet)
                 ? planet
                 : null;
 
@@ -547,7 +553,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
             ?? [];
 
     private Squad FindPlayerSquad(int squadId) =>
-        _activeSession?.Sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
+        ActiveSession?.Sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
             .FirstOrDefault(squad => squad.Id == squadId);
 
     private ISoldier FindSquadMember(int squadId, int soldierId) =>
@@ -563,7 +569,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
     {
         List<CharacterLoadoutRowData> rows = [];
         if (squad?.Members == null) return rows;
-        EquipmentRulesCatalog catalog = _activeSession?.Rules?.EquipmentCatalog;
+        EquipmentRulesCatalog catalog = ActiveSession?.Rules?.EquipmentCatalog;
 
         foreach (ISoldier soldier in squad.Members
                      .Where(member => FindPersonalElement(member)?.PersonalEquipmentRole != null)
@@ -624,7 +630,7 @@ public sealed partial class CampaignApplication : ILoadoutScreenApplication
         }
 
         IReadOnlyList<string> honors = _dossierService.BuildCombatHonorNames(
-            playerSoldier, _activeSession?.Rules?.AwardCatalog);
+            playerSoldier, ActiveSession?.Rules?.AwardCatalog);
         return honors.Count == 0 ? source : $"{source} · {string.Join(" · ", honors)}";
     }
 

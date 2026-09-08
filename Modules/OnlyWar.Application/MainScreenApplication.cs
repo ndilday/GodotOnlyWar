@@ -18,16 +18,21 @@ namespace OnlyWar.Application;
 /// turn resolution with its report, and neophyte placement. The scene keeps navigation and dialogs
 /// and no longer reads or writes the campaign to answer any of these.
 /// </summary>
-public sealed partial class CampaignApplication : IMainScreenApplication
+public sealed class MainScreenApplication : CampaignScreenApplication, IMainScreenApplication
 {
+    private const string StaleSessionMessage =
+        "The campaign changed. Reopen the campaign and try again.";
+
     private static readonly TurnReportView EmptyTurnReport = new(
         null,
         "No previous turn report is available for this save.",
         []);
 
+    public MainScreenApplication(CampaignApplicationContext context) : base(context) { }
+
     public CampaignHeaderView QueryHeader()
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null) return new CampaignHeaderView("", 0);
         return new CampaignHeaderView(
             session.CurrentDate?.ToString() ?? "",
@@ -36,7 +41,7 @@ public sealed partial class CampaignApplication : IMainScreenApplication
 
     public MainScreenStartupView QueryStartup()
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null) return new MainScreenStartupView(null, false);
 
         // Open on the world the chapter fleet is orbiting - the promised world at game start -
@@ -54,27 +59,27 @@ public sealed partial class CampaignApplication : IMainScreenApplication
 
     public void AcknowledgeOpeningBrief(Guid sessionToken)
     {
-        if (_activeSession == null || sessionToken != SessionToken) return;
-        CampaignScenario scenario = _activeSession.Sector.Scenario;
+        if (ActiveSession == null || sessionToken != SessionToken) return;
+        CampaignScenario scenario = ActiveSession.Sector.Scenario;
         if (scenario == null || scenario.BriefingAcknowledged) return;
 
         scenario.BriefingAcknowledged = true;
-        MarkChanged();
+        RecordChange();
     }
 
     public TurnReportView QueryLastTurnReport() =>
-        BuildReportView(_activeSession?.Sector.PlayerForce?.LastTurnReportSnapshot);
+        BuildReportView(ActiveSession?.Sector.PlayerForce?.LastTurnReportSnapshot);
 
     public ResolveTurnView ResolveTurn(Guid sessionToken)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null || sessionToken != SessionToken)
         {
             return new ResolveTurnView(
-                false, "The campaign changed. Reopen the campaign and try again.");
+                false, StaleSessionMessage);
         }
 
-        TurnResolutionResult result = AdvanceTurn(session);
+        TurnResolutionResult result = Context.AdvanceTurn(session);
         LastTurnReportBuildResult build = LastTurnReportSnapshotBuilder.Build(
             session.CurrentDate, result);
 
@@ -98,7 +103,7 @@ public sealed partial class CampaignApplication : IMainScreenApplication
 
     public NeophytePlacementOptions QueryNeophytePlacementTargets()
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         PlayerForce force = session?.Sector.PlayerForce;
         if (force?.RecruitmentProgram == null)
         {
@@ -131,7 +136,7 @@ public sealed partial class CampaignApplication : IMainScreenApplication
 
     public NeophytePlacementResult PlaceNeophyte(Guid sessionToken, int aspirantId, int squadId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null || sessionToken != SessionToken)
         {
             return new NeophytePlacementResult(
@@ -142,7 +147,7 @@ public sealed partial class CampaignApplication : IMainScreenApplication
             new RecruitmentPromotionService(session).PromoteAspirantToNeophyte(aspirantId, squadId);
         if (result.Succeeded)
         {
-            MarkChanged();
+            RecordChange();
         }
         return new NeophytePlacementResult(result.Succeeded, result.Message);
     }
@@ -159,4 +164,8 @@ public sealed partial class CampaignApplication : IMainScreenApplication
         snapshot?.ResolvedDate > 0
             ? Date.FromTotalWeeks(snapshot.ResolvedDate).ToString()
             : null;
+
+    private bool RequiresRecruitmentSetup() =>
+        ActiveSession?.Sector.PlayerForce?.RecruitmentProgram
+            is RecruitmentProgram { IsSetupComplete: false };
 }

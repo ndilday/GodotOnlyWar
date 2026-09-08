@@ -165,7 +165,7 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
     private static GameRulesData LoadFreshRulesData()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         return data;
     }
 }
@@ -178,7 +178,7 @@ public sealed class GovernanceHierarchyFixture
     public GovernanceHierarchyFixture()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        Data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        Data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         SeedOneSector = TestGeneration.GenerateSector(1, Data, new Date(39, 500, 1), "Governance Fixture Chapter");
     }
 }

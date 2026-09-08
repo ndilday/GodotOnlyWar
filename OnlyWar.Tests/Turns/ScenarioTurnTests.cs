@@ -35,7 +35,7 @@ public class ScenarioTurnTests
     public ScenarioTurnTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
     }
 
     private Faction Tyranids => _data.SectorFactions.Invader;
@@ -125,7 +125,7 @@ public class ScenarioTurnTests
         Assert.True(sector.PlayerForce.Army.OrderOfBattle.ChildUnits
             .Single(unit => unit.UnitTemplate == _data.ChapterDoctrine.ScoutCompany)
             .HQSquad
-            .IsAdministrative);
+            .SquadTemplate.IsAdministrative);
         // The current Sector Lord's opinion rises (resolved at resolution time).
         float opinionReward = _data.ScenarioProfiles
             .GetRequired(ScenarioKeys.PromisedWorld).SectorLordOpinionReward;
@@ -335,8 +335,10 @@ public class ScenarioTurnTests
                                       Aggression.Cautious, mission);
         sector.AddNewOrder(constructionOrder);
 
-        new TurnController(new GameSession(
-            _data, sector, _date, StaticRNG.Instance)).ProcessTurn(sector);
+        TestPersonnelComposition.CreateCampaign(new StaticRNG())
+            .CreateTurnController(new GameSession(
+                _data, sector, _date, new StaticRNG()))
+            .ProcessTurn(sector);
 
         Assert.Contains(constructionOrder.Id, sector.Orders.Keys);
         Assert.Same(constructionOrder, squad.CurrentOrders);
@@ -422,8 +424,10 @@ public class ScenarioTurnTests
                 }
             };
 
-            new TurnController(new GameSession(
-                _data, fixture.Sector, _date, StaticRNG.Instance)).ProcessTurn(fixture.Sector);
+            TestPersonnelComposition.CreateCampaign(new StaticRNG())
+                .CreateTurnController(new GameSession(
+                    _data, fixture.Sector, _date, new StaticRNG()))
+                .ProcessTurn(fixture.Sector);
         }
         finally
         {
@@ -495,8 +499,12 @@ public class ScenarioTurnTests
 
     private string ProcessScenario(Sector sector)
     {
-        ScenarioTurnProcessor processor = new(new GameSession(
-            _data, sector, _date, StaticRNG.Instance));
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(new StaticRNG());
+        ScenarioTurnProcessor processor = new(
+            new GameSession(_data, sector, _date, new StaticRNG()),
+            composition.Services.Operations.Personnel,
+            composition.Services.Operations.Commitments);
         return processor.TryResolve(sector, out string notification) ? notification : null;
     }
 

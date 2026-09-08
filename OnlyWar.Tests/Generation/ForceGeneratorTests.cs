@@ -417,7 +417,7 @@ public class ForceGeneratorTests
         squads.Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
 
     private static List<Squad> GenerateForce(ForceGenerationRequest request) =>
-        ForceGenerator.GenerateForce(request, StaticRNG.Instance);
+        ForceGenerator.GenerateForce(request, new StaticRNG());
 
     private static Faction CreateFaction(params SquadTemplate[] squadTemplates)
     {

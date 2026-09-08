@@ -4,6 +4,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Operations.Contracts;
 using System;
 using System.Linq;
 
@@ -15,10 +16,17 @@ namespace OnlyWar.Helpers.Turns
     internal sealed class ScenarioTurnProcessor
     {
         private readonly ICampaignSession _session;
+        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IOrderCommitmentSurface _commitments;
 
-        internal ScenarioTurnProcessor(ICampaignSession session)
+        internal ScenarioTurnProcessor(
+            ICampaignSession session,
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
+            _personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
+            _commitments = commitments ?? throw new ArgumentNullException(nameof(commitments));
         }
 
         internal bool TryResolve(Sector sector, out string notification)
@@ -142,7 +150,8 @@ namespace OnlyWar.Helpers.Turns
             Region capital = homeWorld.Regions.FirstOrDefault(
                 region => region.Id == homeWorld.CapitalRegionId)
                 ?? homeWorld.Regions.First();
-            AdministrativeStationResult result = new AdministrativeStationService()
+            AdministrativeStationResult result = new AdministrativeStationService(
+                    _personnel, _commitments)
                 .MoveAllToRegion(sector.PlayerForce.Army.OrderOfBattle, capital);
             if (!result.Succeeded)
             {

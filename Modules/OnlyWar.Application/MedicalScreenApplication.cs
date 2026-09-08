@@ -8,32 +8,21 @@ using OnlyWar.Models.Units;
 
 namespace OnlyWar.Application;
 
-public sealed partial class CampaignApplication
+public sealed class MedicalScreenApplication : CampaignScreenApplication,
+    IMedicalScreenApplication
 {
     private readonly ApothecariumMedicalRecordBuilder _medicalRecords = new();
     private readonly RecoveryOperationsViewModelBuilder _recoveryViews = new();
-    private readonly RecoveryPlanService _recoveryPlans = new();
+    private RecoveryPlanService _recoveryPlans =>
+        new(Services.Operations.Personnel, Services.Operations.Commitments);
     private readonly MedicalProcedureService _medicalProcedures = new();
 
-    public Guid SessionToken { get; private set; } = Guid.NewGuid();
-    public event EventHandler SessionChanged;
-
-    private void NotifySessionChanged()
-    {
-        SessionToken = Guid.NewGuid();
-        // A queued undo describes commitments in the campaign being replaced. Drop it here rather
-        // than relying on the token check alone, so nothing holds those entities alive. The staged
-        // Muster plan is the same kind of debt: it names soldiers and formations of the old roster.
-        _undo = null;
-        _musterPlan.Clear();
-        _musterBuilder = null;
-        SessionChanged?.Invoke(this, EventArgs.Empty);
-    }
+    public MedicalScreenApplication(CampaignApplicationContext context) : base(context) { }
 
     public MedicalScreenView QueryMedical(MedicalScreenQuery query)
     {
         ArgumentNullException.ThrowIfNull(query);
-        var session = _activeSession;
+        var session = ActiveSession;
         var force = session?.Sector.PlayerForce;
         Unit chapter = force?.Army?.OrderOfBattle;
         if (chapter == null) return new(SessionToken, [], null, null, null);
@@ -76,7 +65,7 @@ public sealed partial class CampaignApplication
     public RecoveryScreenView QueryRecovery(RecoveryQuery query)
     {
         ArgumentNullException.ThrowIfNull(query);
-        var session = _activeSession;
+        var session = ActiveSession;
         return new(SessionToken, _recoveryViews.Build(session?.Sector.PlayerForce,
             session?.Sector.Planets.Values, query.SoldierId, query.Sort, query.Ascending,
             ResolveMedicalLocation(query.Destination), query.Movement, query.HitLocationId, query.ProcedureType));
@@ -85,12 +74,12 @@ public sealed partial class CampaignApplication
     public RecoveryPlanCommitResult ConfirmRecovery(ConfirmRecoveryCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        if (_activeSession == null || command.SessionToken != SessionToken)
+        if (ActiveSession == null || command.SessionToken != SessionToken)
             return new(false, "The campaign changed. Review the current recovery plan.");
-        var force = _activeSession.Sector.PlayerForce;
+        var force = ActiveSession.Sector.PlayerForce;
         var patient = force?.Army?.PlayerSoldierMap.GetValueOrDefault(command.SoldierId);
         if (patient == null) return new(false, "The patient is no longer available.");
-        if (patient.IndividualPosting?.Kind == IndividualPostingKind.AwaitingReunion)
+        if (IsAwaitingReunion(patient))
             return _recoveryPlans.Rejoin(patient);
         // Resolve the exact displayed treatment again; never silently substitute another option.
         var option = _medicalRecords.BuildSoldierSummary(patient, force).ReplacementOptions
@@ -98,13 +87,13 @@ public sealed partial class CampaignApplication
         if (option == null || _medicalProcedures.HasProcedureInProgress(force, patient.Id, option.HitLocationId))
             return new(false, "The selected treatment is no longer available.");
         return _recoveryPlans.Commit(force, patient, option, ResolveMedicalLocation(command.Destination),
-            command.Movement, _activeSession.CurrentDate);
+            command.Movement, ActiveSession.CurrentDate);
     }
 
     private CampaignLocation ResolveMedicalLocation(MedicalLocationId id)
     {
-        if (id == null || _activeSession == null) return null;
-        var sector = _activeSession.Sector;
+        if (id == null || ActiveSession == null) return null;
+        var sector = ActiveSession.Sector;
         return id.Kind switch
         {
             MedicalLocationKind.Ship => CampaignLocation.Aboard(sector.PlayerForce.Fleet.TaskForces
@@ -114,6 +103,12 @@ public sealed partial class CampaignApplication
             _ => null
         };
     }
+
+    private static bool IsAwaitingReunion(PlayerSoldier soldier) =>
+        soldier?.IndividualPosting?.Purpose == IndividualPostingPurpose.Medical
+        && !soldier.IsUndergoingMedicalProcedure
+        && soldier.Body?.HitLocations.All(location =>
+            location.Wounds.WoundTotal == 0 && !location.IsSevered) == true;
 
     private static IEnumerable<Unit> FlattenUnits(Unit unit)
     {

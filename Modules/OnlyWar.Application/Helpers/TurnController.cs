@@ -6,8 +6,8 @@ using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Application.Adapters.Operations;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
-using OnlyWar.Contracts.Battles;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -18,6 +18,7 @@ using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Events;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Application;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -41,12 +42,24 @@ namespace OnlyWar.Helpers
         private readonly TurnIntelligenceLedger _intelLedger;
         private readonly OrganicPopulationGrowthLedger _organicPopulationGrowthLedger;
         private readonly TurnResolutionResult _lastResult;
+        private readonly IReadinessDecisions _readiness;
+        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IOrderCommitmentSurface _commitments;
+        private readonly BattleServices _battle;
 
         public TurnController(
             GameSession session,
+            IReadinessDecisions readiness,
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments,
+            BattleServices battle,
             ISoldierTrainingService trainingService = null)
         {
             _session = session ?? throw new System.ArgumentNullException(nameof(session));
+            _readiness = readiness ?? throw new System.ArgumentNullException(nameof(readiness));
+            _personnel = personnel ?? throw new System.ArgumentNullException(nameof(personnel));
+            _commitments = commitments ?? throw new System.ArgumentNullException(nameof(commitments));
+            _battle = battle ?? throw new System.ArgumentNullException(nameof(battle));
             _orderPlanner = new TurnOrderPlanner(
                 _session,
                 new FactionStrategyController(_session.Random, _session.Rules.FactionBehaviorRules));
@@ -65,25 +78,15 @@ namespace OnlyWar.Helpers
                 _organicPopulationGrowthLedger,
                 _lastResult.FortificationTransfers,
                 _lastResult.GovernorRequestReports);
-            CampaignBattleEquipmentSource equipment =
-                new(_session.Rules, _session.Sector.PlayerForce);
-            BattleAftermathDependencies aftermath = new(
-                _session.CurrentDate,
-                _session.Random,
-                new PlayerBattleAftermathSink(_session.Sector.PlayerForce));
-            BattleExecutionContext battleExecution = new(
-                _session.Rules,
-                _session.Random,
-                aftermath);
             BattleEngagementResolver engagementAdapter =
-                new(battleExecution, equipment);
+                _battle.CreateEngagementResolver(_session);
             _missionTurnProcessor = new MissionTurnProcessor(new MissionTurnDependencies
             {
                 Sector = _session.Sector,
                 Rules = _session.Rules,
                 CurrentDate = _session.CurrentDate,
                 Random = _session.Random,
-                Readiness = MedicalReadinessDecisions.Instance,
+                Readiness = _readiness,
                 Engagements = engagementAdapter,
                 MissionRules = new MissionRules(
                     _session.Rules.Skills.Stealth,
@@ -92,7 +95,7 @@ namespace OnlyWar.Helpers
                 Recruitment = _session.Sector.PlayerForce?.RecruitmentProgram,
                 InvasionForces = _session.Sector.StrategicInvasionForces,
                 FactionRules = _session.Rules.FactionBehaviorRules,
-                Personnel = OperationsPersonnelSurface.Instance,
+                Personnel = _personnel,
                 EngagementElements = engagementAdapter,
                 ApplyDailyHealing = MedicalTurnProcessor.ApplyDailyHealing,
                 ResolveMedicalSkills = () => FieldCareService.ResolveMedicalSkills(
@@ -126,10 +129,13 @@ namespace OnlyWar.Helpers
                 _planetIntelligenceProcessor,
                 _intelLedger,
                 _lastResult);
-            _scenarioTurnProcessor = new ScenarioTurnProcessor(_session);
+            _scenarioTurnProcessor = new ScenarioTurnProcessor(
+                _session, _personnel, _commitments);
             _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_session);
             _recruitmentTurnProcessor = new RecruitmentTurnProcessor(
-                _session, _organicPopulationGrowthLedger);
+                _session,
+                _organicPopulationGrowthLedger,
+                _readiness);
             _factionCapabilityCampaignProcessor = new FactionCapabilityCampaignProcessor(_session);
         }
 
@@ -244,7 +250,7 @@ namespace OnlyWar.Helpers
             return _lastResult;
         }
 
-        private static void RelocateAdministrativeStationsAfterHomeWorldLoss(Sector sector)
+        private void RelocateAdministrativeStationsAfterHomeWorldLoss(Sector sector)
         {
             PlayerForce force = sector?.PlayerForce;
             if (force?.HomeWorldPlanetId == null || force.Army?.OrderOfBattle == null)
@@ -271,7 +277,8 @@ namespace OnlyWar.Helpers
                 .SelectMany(taskForce => taskForce.Ships)
                 .ToList() ?? [];
             Ship flagship = new FlagshipService().EnsureSinglePlayerFlagship(force.Faction, ships);
-            AdministrativeStationResult result = new AdministrativeStationService()
+            AdministrativeStationResult result = new AdministrativeStationService(
+                    _personnel, _commitments)
                 .MoveAllToFlagship(force.Army.OrderOfBattle, flagship);
             if (!result.Succeeded)
             {

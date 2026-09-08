@@ -44,7 +44,7 @@ Recommended next atlas expansion:
   engagement, exfiltrate
 - ship class icons: escort, strike cruiser, battle barge, transport, lander
 
-Runtime resolution is provided by `Helpers/UI/IconAssetRegistry.cs` and
+Runtime resolution is provided by `Host/Presentation/UI/IconAssetRegistry.cs` and
 `IconAtlas`. The registry accepts both standalone textures and atlas regions,
 so callers only depend on a logical key. Core keys may remain unqualified;
 content supplied by a mod must use its package namespace, for example

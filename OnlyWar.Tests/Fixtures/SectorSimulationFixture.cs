@@ -43,9 +43,10 @@ internal sealed class SectorSimulationFixture
     /// Explicit campaign inputs for order-lifecycle commands, so order tests name the sector they
     /// mutate rather than depending on whichever campaign happens to be active (SB-05a).
     /// </summary>
-    public OnlyWar.Contracts.Operations.OrderCommandContext OrderCommands =>
+    public OnlyWar.Operations.Contracts.OrderCommandContext OrderCommands =>
         new(Sector, CurrentDate,
-            OnlyWar.Helpers.Readiness.MedicalReadinessDecisions.Instance);
+            new OnlyWar.Helpers.Readiness.MedicalReadinessDecisions(),
+            Personnel: _personnel);
 
     /// <summary>Every player soldier the chapter could lend to an operation.</summary>
     public System.Collections.Generic.IEnumerable<OnlyWar.Models.Soldiers.PlayerSoldier> ChapterRoster =>
@@ -53,6 +54,8 @@ internal sealed class SectorSimulationFixture
         ?? System.Linq.Enumerable.Empty<OnlyWar.Models.Soldiers.PlayerSoldier>();
 
     private readonly RegionFaction[] _defaultRegionFactions = new RegionFaction[RegionCount];
+    private readonly OnlyWar.Operations.Contracts.IOperationsPersonnelSurface _personnel =
+        TestPersonnelComposition.CreatePersonnel();
 
     public RegionFaction DefaultRegionFaction(int region) => _defaultRegionFactions[region];
 
@@ -107,7 +110,7 @@ internal sealed class SectorSimulationFixture
         fixture.Sector = new Sector(playerForce, [], [fixture.Planet], []);
         if (loadRules)
         {
-            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             // These are single-planet simulations with one governor, so tests force or suppress a
             // request through the governor's traits alone. Pin out the sector-wide throttle (which
             // production sets low enough that a lone governor would almost never petition) so those
@@ -209,12 +212,22 @@ internal sealed class SectorSimulationFixture
         return governor;
     }
 
-    public void ProcessTurn() => new TurnController(
-        new OnlyWar.Helpers.Simulation.GameSession(
-            Rules ?? throw new InvalidOperationException("This fixture has no rules."),
-            Sector,
-            CurrentDate,
-            StaticRNG.Instance)).ProcessTurn(Sector);
+    public void ProcessTurn()
+    {
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(new StaticRNG());
+        new TurnController(
+            new OnlyWar.Helpers.Simulation.GameSession(
+                Rules ?? throw new InvalidOperationException("This fixture has no rules."),
+                Sector,
+                CurrentDate,
+                new StaticRNG()),
+            composition.Services.Readiness.Decisions,
+            composition.Services.Operations.Personnel,
+            composition.Services.Operations.Commitments,
+            composition.Services.Battle)
+            .ProcessTurn(Sector);
+    }
 
     private static Planet CreatePlanet()
     {

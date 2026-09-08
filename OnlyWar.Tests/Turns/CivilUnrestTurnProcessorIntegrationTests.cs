@@ -151,7 +151,7 @@ public class CivilUnrestTurnProcessorIntegrationTests
         internal static CivilFixture Create()
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             PlanetTemplate template = rules.PlanetTemplateMap.Values.First();
             int tax = rules.PlanetTemplateMap.Values.Max(item => item.TaxRange.MaxValue);
             Planet planet = new(900, "Unrest Integration World", new Coordinate(1, 1), 16,

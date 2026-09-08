@@ -1,5 +1,5 @@
-using OnlyWar.Contracts.Operations;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Operations.Contracts;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -42,7 +42,8 @@ namespace OnlyWar.Helpers.Missions
         public IEngagementResolver Engagements { get; }
         public IEntityIdAllocator EntityIds { get; }
         public MissionCampaignInputs Campaign { get; }
-        public IOperationsPersonnelSurface Personnel { get; }
+        /// <summary>Physical posting commands used when a mission returns its live force.</summary>
+        public IPhysicalPostingCommands Personnel { get; }
         public IEngagementElementFactory EngagementElements { get; }
 
         public MissionExecutionContext(
@@ -69,7 +70,10 @@ namespace OnlyWar.Helpers.Missions
             Random = random ?? throw new ArgumentNullException(nameof(random));
             Engagements = engagements ?? throw new ArgumentNullException(nameof(engagements));
             EntityIds = entityIds ?? throw new ArgumentNullException(nameof(entityIds));
-            Personnel = Campaign.Personnel ?? OperationsPersonnelDefaults.Current;
+            Personnel = Campaign.Personnel
+                ?? throw new ArgumentException(
+                    "Mission campaign inputs must include physical posting commands.",
+                    nameof(campaign));
             EngagementElements = engagementElements;
         }
     }

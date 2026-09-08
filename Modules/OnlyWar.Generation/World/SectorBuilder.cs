@@ -1,4 +1,4 @@
-﻿using OnlyWar.Contracts.Generation;
+using OnlyWar.Generation.Contracts;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models;

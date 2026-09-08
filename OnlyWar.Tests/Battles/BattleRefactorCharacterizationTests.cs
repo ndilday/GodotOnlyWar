@@ -53,7 +53,7 @@ public class BattleRefactorCharacterizationTests
         PlaceLine(grid, secondRight, side: false, x: 15, y: 4);
 
         SeededRNG random = new(90_123);
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         BattleAftermathDependencies aftermath = new(
             new Date(1, 1, 1), random, NoOpPlayerBattleAftermathSink.Instance);
         BattleExecutionContext execution = new(

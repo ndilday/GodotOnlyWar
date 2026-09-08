@@ -1,6 +1,6 @@
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
-using OnlyWar.Contracts.Application;
+using OnlyWar.Application.Abstractions;
 using OnlyWar.Helpers.Simulation;
 using System;
 using System.Linq;
@@ -12,14 +12,19 @@ namespace OnlyWar.Helpers.Storage
     /// Slot selection, autosave rotation, diagnostics, and UI feedback belong to callers; this
     /// class only maps the live aggregate into the existing atomic database writer.
     /// </summary>
-    public static class CurrentCampaignSaveWriter
+    public sealed class CurrentCampaignSaveWriter
     {
-        public static void Write(string filePath, ICampaignSession session)
+        private readonly GameStateDataAccess _dataAccess;
+
+        public CurrentCampaignSaveWriter(GameStateDataAccess dataAccess) =>
+            _dataAccess = dataAccess ?? throw new ArgumentNullException(nameof(dataAccess));
+
+        public void Write(string filePath, ICampaignSession session)
         {
             if (session == null) throw new ArgumentNullException(nameof(session));
             var force = session.Sector.PlayerForce;
             var units = session.Rules.Factions.SelectMany(faction => faction.Units);
-            GameStateDataAccess.Instance.SaveData(
+            _dataAccess.SaveData(
                 filePath,
                 session.CurrentDate,
                 force.Army.Requisition,

@@ -51,8 +51,11 @@ public interface ITrainingScreenApplication
         Guid sessionToken, int squadId, string optionKey);
 }
 
-public sealed partial class CampaignApplication : ITrainingScreenApplication
+public sealed class TrainingScreenApplication : CampaignScreenApplication,
+    ITrainingScreenApplication
 {
+    private const string NoCampaignMessage = "No campaign is active.";
+    private const string StaleSessionMessage = "This campaign is no longer active.";
     private const string RecruitmentLockedMessage =
         "The Chapter has no Home World. The 10th Company will establish its "
         + "recruitment program when the Promised World is liberated.";
@@ -61,19 +64,21 @@ public sealed partial class CampaignApplication : ITrainingScreenApplication
     private readonly RecruitmentForecastService _forecastService = new();
     private readonly SquadRowViewModelBuilder _trainingRowBuilder = new();
 
+    public TrainingScreenApplication(CampaignApplicationContext context) : base(context) { }
+
     public bool IsRecruitmentSetupComplete =>
-        _activeSession?.Sector.PlayerForce?.RecruitmentProgram?.IsSetupComplete == true;
+        ActiveSession?.Sector.PlayerForce?.RecruitmentProgram?.IsSetupComplete == true;
 
     public RecruitmentDoctrineDraft QueryDoctrineDraft()
     {
-        RecruitmentProgram program = _activeSession?.Sector.PlayerForce?.RecruitmentProgram;
+        RecruitmentProgram program = ActiveSession?.Sector.PlayerForce?.RecruitmentProgram;
         return program == null ? null : CreateDraft(program);
     }
 
     public RecruitmentScreenSnapshot QueryRecruitmentScreen(
         RecruitmentDoctrineDraft draft, int? selectedSquadId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         PlayerForce force = session?.Sector.PlayerForce;
         RecruitmentProgram program = force?.RecruitmentProgram;
         if (program == null)
@@ -139,7 +144,7 @@ public sealed partial class CampaignApplication : ITrainingScreenApplication
 
     public RecruitmentForecast PreviewForecast(RecruitmentDoctrineDraft draft)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         PlayerForce force = session?.Sector.PlayerForce;
         RecruitmentProgram program = force?.RecruitmentProgram;
         if (program == null || draft == null) return null;
@@ -151,7 +156,7 @@ public sealed partial class CampaignApplication : ITrainingScreenApplication
 
     public IReadOnlyList<ScoutSquadRow> QueryScoutSquads(int? selectedSquadId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         PlayerForce force = session?.Sector.PlayerForce;
         if (force?.Army?.OrderOfBattle == null) return [];
 
@@ -187,18 +192,18 @@ public sealed partial class CampaignApplication : ITrainingScreenApplication
     public TrainingCommandResult ConfirmDoctrine(
         Guid sessionToken, RecruitmentDoctrineDraft draft)
     {
-        if (_activeSession == null) return TrainingCommandResult.Failed(NoCampaignMessage);
+        if (ActiveSession == null) return TrainingCommandResult.Failed(NoCampaignMessage);
         if (sessionToken != SessionToken)
             return TrainingCommandResult.Failed(StaleSessionMessage);
 
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         RecruitmentProgram program = force?.RecruitmentProgram;
         if (program == null || draft == null)
         {
             return TrainingCommandResult.Failed(RecruitmentLockedMessage);
         }
 
-        _staffService.Synchronize(force, _activeSession.Rules, _activeSession.Sector);
+        _staffService.Synchronize(force, ActiveSession.Rules, ActiveSession.Sector);
         if (!SummarizeStaff(program).IsComplete)
         {
             return TrainingCommandResult.Failed(
@@ -226,11 +231,11 @@ public sealed partial class CampaignApplication : ITrainingScreenApplication
     public TrainingCommandResult SetScoutTrainingOption(
         Guid sessionToken, int squadId, string optionKey)
     {
-        if (_activeSession == null) return TrainingCommandResult.Failed(NoCampaignMessage);
+        if (ActiveSession == null) return TrainingCommandResult.Failed(NoCampaignMessage);
         if (sessionToken != SessionToken)
             return TrainingCommandResult.Failed(StaleSessionMessage);
 
-        Squad squad = _activeSession.Sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
+        Squad squad = ActiveSession.Sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
             .FirstOrDefault(candidate => candidate.Id == squadId && IsTrainingSquad(candidate));
         if (squad == null)
         {
@@ -239,7 +244,7 @@ public sealed partial class CampaignApplication : ITrainingScreenApplication
         if (squad.TrainingOptionKey == optionKey) return TrainingCommandResult.Failed(null);
 
         // Throws on an unknown key rather than silently recording an unrunnable regimen.
-        _activeSession.Rules.ScoutTrainingOptions.GetRequired(optionKey);
+        ActiveSession.Rules.ScoutTrainingOptions.GetRequired(optionKey);
         squad.TrainingOptionKey = optionKey;
         return TrainingCommandResult.Ok();
     }

@@ -63,7 +63,9 @@ namespace OnlyWar.Helpers.Recruitment
                 }
                 if (taskOrder != null && soldier.CurrentOrder == null
                     && !OrderForceService.AssignCharacter(
-                        taskOrder, soldier, readiness ?? MedicalReadinessDecisions.Instance))
+                        taskOrder,
+                        soldier,
+                        readiness ?? throw new ArgumentNullException(nameof(readiness))))
                 {
                     continue;
                 }

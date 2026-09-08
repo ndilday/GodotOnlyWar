@@ -8,8 +8,6 @@ namespace OnlyWar.Helpers
     /// </summary>
     public sealed class StaticRNG : IRNG
     {
-        public static readonly StaticRNG Instance = new StaticRNG();
-
         public double GetDoubleInRange(double lowerBound, double upperBound)
             => RNG.GetDoubleInRange(lowerBound, upperBound);
 

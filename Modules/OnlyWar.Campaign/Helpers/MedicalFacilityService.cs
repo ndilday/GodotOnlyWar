@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 using MedicalFacilityPolicy = OnlyWar.Medical.Treatment.MedicalFacilityPolicy;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;

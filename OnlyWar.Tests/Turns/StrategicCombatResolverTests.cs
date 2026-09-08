@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Readiness;
+using OnlyWar.Helpers.Readiness;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
@@ -8,8 +8,8 @@ using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Application.Adapters.Operations;
-using OnlyWar.Contracts.Battles;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.FactionBehaviors;
@@ -317,11 +317,11 @@ public class StrategicCombatResolverTests
             Sector = fixture.Sector,
             Rules = fixture.Rules,
             CurrentDate = fixture.CurrentDate,
-            Random = StaticRNG.Instance,
-            Readiness = MedicalReadinessDecisions.Instance,
+            Random = new StaticRNG(),
+            Readiness = new MedicalReadinessDecisions(),
             Engagements = new NoOpEngagementResolver(),
             MissionRules = new MissionRules(TestSkills.Stealth, TestSkills.Tactics),
-            Personnel = OperationsPersonnelSurface.Instance,
+            Personnel = TestPersonnelComposition.CreatePersonnel(),
             EngagementElements = new NoOpEngagementElementFactory()
         });
         List<StrategicCombatResult> results = [];
@@ -387,8 +387,8 @@ public class StrategicCombatResolverTests
                 "The strategic-only fixture does not execute tactical engagements.");
 
         public int GetPreferredOpeningRange(
-            OperationalMissionElement element,
-            IReadOnlyList<OperationalMissionElement> opposingElements) => 0;
+            EngagementParticipant element,
+            IReadOnlyList<EngagementParticipant> opposingElements) => 0;
     }
 
     private sealed class NoOpEngagementElementFactory : IEngagementElementFactory

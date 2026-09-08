@@ -21,6 +21,8 @@ internal sealed class GameStateRoundTripFixture
 
     public string SchemaPath => Path.Combine(RulesDatabaseFixture.RepositoryRoot, "Database", "SaveStructure.sql");
 
+    private GameStateDataAccess DataAccess => new(SchemaPath);
+
     public List<Unit> CurrentUnits => _data.Factions.SelectMany(f => f.Units).ToList();
 
     public static string CreateTempDbPath(string prefix)
@@ -70,7 +72,7 @@ internal sealed class GameStateRoundTripFixture
 
     public void Save(Sector sector, string dbPath, IEnumerable<Unit> units, string schemaPath)
     {
-        GameStateDataAccess.Instance.SaveData(
+        DataAccess.SaveData(
             dbPath,
             _date,
             sector.PlayerForce.Army.Requisition,
@@ -116,7 +118,7 @@ internal sealed class GameStateRoundTripFixture
         var soldierTypeMap = _data.Factions.Where(f => f.SoldierTemplates != null)
             .SelectMany(f => f.SoldierTemplates.Values).ToDictionary(st => st.Id);
 
-        return GameStateDataAccess.Instance.GetData(
+        return DataAccess.GetData(
             dbPath,
             _data.Factions.ToDictionary(f => f.Id),
             _data.PlanetTemplateMap,

@@ -11,15 +11,19 @@ using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Application;
 
-public sealed partial class CampaignApplication : ISectorMapApplication
+public sealed class SectorMapApplication : CampaignScreenApplication, ISectorMapApplication
 {
+    public SectorMapApplication(CampaignApplicationContext context) : base(context) { }
+
+    public bool HasCampaign => ActiveSession != null;
+
     public bool TryQuerySectorGrid(out int width, out int height)
     {
         width = 0;
         height = 0;
-        if (_activeSession == null) return false;
+        if (ActiveSession == null) return false;
 
-        SectorGenerationProfile profile = _activeSession.Rules.SectorGenerationProfile;
+        SectorGenerationProfile profile = ActiveSession.Rules.SectorGenerationProfile;
         width = profile.SectorWidth;
         height = profile.SectorHeight;
         return true;
@@ -27,7 +31,7 @@ public sealed partial class CampaignApplication : ISectorMapApplication
 
     public SectorMapGeometryView QuerySectorMapGeometry(bool useVoronoiBorders)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null) return SectorMapGeometryView.Empty;
 
         SectorGenerationProfile profile = session.Rules.SectorGenerationProfile;
@@ -106,7 +110,7 @@ public sealed partial class CampaignApplication : ISectorMapApplication
 
     public IReadOnlyList<SectorMapFleetMarker> QuerySectorMapFleets()
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null) return [];
 
         List<SectorMapFleetMarker> markers = [];
@@ -134,7 +138,7 @@ public sealed partial class CampaignApplication : ISectorMapApplication
 
     public IReadOnlyList<SectorMapPlanetLabelFacts> QuerySectorMapPlanetLabels()
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null) return [];
 
         HashSet<int> governanceSeats = session.Sector.Subsectors
@@ -185,7 +189,7 @@ public sealed partial class CampaignApplication : ISectorMapApplication
 
     public SectorMapSelectionView QuerySectorMapSelection(int planetId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null || !session.Sector.Planets.TryGetValue(planetId, out Planet planet))
         {
             return SectorMapSelectionView.Missing;

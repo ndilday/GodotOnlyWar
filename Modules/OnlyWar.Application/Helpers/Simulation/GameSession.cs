@@ -1,5 +1,5 @@
 using OnlyWar.Models;
-using OnlyWar.Contracts.Application;
+using OnlyWar.Application.Abstractions;
 using System;
 
 namespace OnlyWar.Helpers.Simulation

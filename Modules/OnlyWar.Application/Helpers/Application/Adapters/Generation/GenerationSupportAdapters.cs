@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Contracts.Generation;
+using OnlyWar.Application;
+using OnlyWar.Generation.Contracts;
+using OnlyWar.Medical.Abstractions;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Narrative;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Turns;
@@ -26,17 +29,28 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
         /// Builds the support bundle for one generation run. Everything it composes operates on the
         /// candidate sector passed to each call; nothing here reads or installs an active campaign.
         /// </summary>
-        public static GenerationSupport For(GameRulesData rules, Date currentDate, IRNG random)
+        public static GenerationSupport For(
+            GameRulesData rules,
+            Date currentDate,
+            IRNG random,
+            IReadinessDecisions readiness,
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments,
+            BattleServices battle)
         {
             if (rules == null) throw new ArgumentNullException(nameof(rules));
             if (currentDate == null) throw new ArgumentNullException(nameof(currentDate));
-            random ??= StaticRNG.Instance;
+            if (readiness == null) throw new ArgumentNullException(nameof(readiness));
+            if (personnel == null) throw new ArgumentNullException(nameof(personnel));
+            if (commitments == null) throw new ArgumentNullException(nameof(commitments));
+            if (battle == null) throw new ArgumentNullException(nameof(battle));
             return new GenerationSupport(
                 new CampaignGenerationSeedingAdapter(rules, currentDate, random),
                 new CampaignGenerationNarrativeAdapter(),
-                new CampaignGenerationFleetAdapter(),
+                new CampaignGenerationFleetAdapter(personnel, commitments),
                 new FoundingRoleAdvisorAdapter(),
-                new CandidateSessionWarmupSimulator(random),
+                new CandidateSessionWarmupSimulator(
+                    random, readiness, personnel, commitments, battle),
                 BuildTrainingService(rules, random));
         }
 
@@ -116,13 +130,25 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
 
     public sealed class CampaignGenerationFleetAdapter : IGenerationFleetPort
     {
+        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IOrderCommitmentSurface _commitments;
+
+        public CampaignGenerationFleetAdapter(
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments)
+        {
+            _personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
+            _commitments = commitments ?? throw new ArgumentNullException(nameof(commitments));
+        }
+
         public Ship SelectInitialFlagship(Faction faction, IReadOnlyList<Ship> ships) =>
             new FlagshipService().SelectInitialFlagship(faction, ships);
 
         public void SeatAdministrativeFormations(Unit orderOfBattle, Ship flagship)
         {
             AdministrativeStationResult result =
-                new AdministrativeStationService().SeatAll(orderOfBattle, flagship);
+                new AdministrativeStationService(_personnel, _commitments)
+                    .SeatAll(orderOfBattle, flagship);
             if (!result.Succeeded)
             {
                 throw new InvalidOperationException(
@@ -157,10 +183,25 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
     public sealed class CandidateSessionWarmupSimulator : ICandidateWarmupSimulator
     {
         private readonly IRNG _random;
+        private readonly IReadinessDecisions _readiness;
+        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IOrderCommitmentSurface _commitments;
+        private readonly BattleServices _battle;
         private TurnController _controller;
 
-        public CandidateSessionWarmupSimulator(IRNG random) =>
+        public CandidateSessionWarmupSimulator(
+            IRNG random,
+            IReadinessDecisions readiness,
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments,
+            BattleServices battle)
+        {
             _random = random ?? throw new ArgumentNullException(nameof(random));
+            _readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
+            _personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
+            _commitments = commitments ?? throw new ArgumentNullException(nameof(commitments));
+            _battle = battle ?? throw new ArgumentNullException(nameof(battle));
+        }
 
         // One controller drives every warm-up pass for a candidate, as it did when the generator
         // constructed it directly. The pre- and post-landing sims therefore still share a turn
@@ -168,7 +209,12 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
         // silently reset both between them. Constructing the session here also keeps the campaign
         // event bindings attaching at exactly the point in the authored sequence they used to.
         public void BeginCandidate(Sector sector, GameRulesData rules, Date currentDate) =>
-            _controller = new TurnController(new GameSession(rules, sector, currentDate, _random));
+            _controller = new TurnController(
+                new GameSession(rules, sector, currentDate, _random),
+                _readiness,
+                _personnel,
+                _commitments,
+                _battle);
 
         public void SimulatePlanetForward(Sector sector, Planet planet, int turns)
         {

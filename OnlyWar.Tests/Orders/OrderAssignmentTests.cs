@@ -254,9 +254,21 @@ public class OrderAssignmentTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
-        Squad squad = TestModelFactory.CreateSquad(
-            "10th Company HQ", TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate));
-        squad.IsAdministrative = true;
+        SquadTemplate template = new(
+            994,
+            "10th Company HQ",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            TestModelFactory.SquadTemplate.Elements.ToList(),
+            SquadTypes.Administrative,
+            FormationMobilityPolicy.MembersOnly)
+        { Faction = fixture.Sector.PlayerForce.Faction };
+        Squad squad = new(
+            "10th Company HQ",
+            null,
+            template);
+        squad.AddSquadMember(TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate));
 
         Order order = OrderAssignment.AssignSquadsToMission(
             fixture.OrderCommands,

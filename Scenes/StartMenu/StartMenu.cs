@@ -17,6 +17,7 @@ public partial class StartMenu : Control
 	private bool _isTransitioning;
 	private GameRulesData _newGameRulesData;
 	private CampaignApplication _campaignApplication;
+	private GameStorage _storage;
 
 	public override void _Ready()
 	{
@@ -27,7 +28,8 @@ public partial class StartMenu : Control
 
 		try
 		{
-			GameStorage.InitializeUserStorage();
+			_storage = OnlyWar.Host.Composition.GodotHostPaths.CreateStorage();
+			_storage.InitializeUserStorage();
 			RefreshLoadGameAvailability();
 		}
 		catch (Exception exception)
@@ -63,7 +65,7 @@ public partial class StartMenu : Control
         {
             // Load once when the setup screen opens so its choices come from the same immutable
             // rules snapshot that will generate the campaign.
-            _newGameRulesData = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(GameStorage.RulesDatabasePath);
+			_newGameRulesData = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath);
             ScenarioProfile profile = _newGameRulesData.ScenarioProfiles.GetRequired(
                 ScenarioKeys.PromisedWorld);
             IReadOnlyList<Faction> invaderFactions = profile
@@ -113,9 +115,11 @@ public partial class StartMenu : Control
 
         try
         {
-			_campaignApplication = new CampaignApplication(StaticRNG.Instance);
+			_campaignApplication = new CampaignApplication(
+				OnlyWar.Host.Composition.GodotHostPaths.CreateCampaignServices(
+					new SeededRNG(settings.Seed), _storage));
 			_campaignApplication.StartNewCampaign(
-				_newGameRulesData ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(GameStorage.RulesDatabasePath),
+				_newGameRulesData ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 settings.ChapterName,
                 settings.Seed,
@@ -151,7 +155,7 @@ public partial class StartMenu : Control
 
 	private void RefreshLoadGameAvailability()
 	{
-		SaveGameCatalog catalog = new(GameStorage.SaveDirectory);
+		SaveGameCatalog catalog = new(_storage.SaveDirectory);
 		var saves = catalog.Discover();
 
 		if (saves.Count > 0)

@@ -81,10 +81,11 @@ public class TrainingUnitScreenControllerTests
     [Fact]
     public void IsTrainingSquad_ExcludesAdministrativeScoutFormation()
     {
-        Squad squad = new(1, "Recruitment Staff", null, CreateScoutTemplate(101, "Scout Staff"))
-        {
-            IsAdministrative = true
-        };
+        Squad squad = new(
+            1,
+            "Recruitment Staff",
+            null,
+            CreateScoutTemplate(101, "Scout Staff", SquadTypes.Scout | SquadTypes.Administrative));
 
         Assert.False(CampaignApplication.IsTrainingSquad(squad));
     }

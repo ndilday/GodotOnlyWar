@@ -1,6 +1,6 @@
-using OnlyWar.Contracts.Battles;
-using OnlyWar.Contracts.Medical;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Medical.Abstractions;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
@@ -35,7 +35,8 @@ public sealed class MissionTurnDependencies
     public RecruitmentProgram Recruitment { get; init; }
     public IReadOnlyList<StrategicInvasionForce> InvasionForces { get; init; } = [];
     public FactionBehaviorRulesProfile FactionRules { get; init; }
-    public IOperationsPersonnelSurface Personnel { get; init; }
+    /// <summary>Physical posting commands used by mission return/exfiltration policy.</summary>
+    public IPhysicalPostingCommands Personnel { get; init; }
     public Func<StrategicInvasionForce, Region, float, IRNG, FactionBehaviorRulesProfile, bool> StrategicCommanderCanBeReached { get; init; }
 
     public IEngagementElementFactory EngagementElements { get; init; }

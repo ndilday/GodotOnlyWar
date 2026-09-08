@@ -161,32 +161,6 @@ namespace OnlyWar.Models.Soldiers
         /// </summary>
         public Orders.Order CurrentOrder { get; set; }
 
-        // Compatibility projection for consumers still phrased in terms of an order attachment.
-        [Obsolete("Use CurrentOrder.")]
-        public Orders.Order AttachedOrder
-        {
-            get => CurrentOrder;
-            set
-            {
-                // Compatibility setter for older tests and migration-only callers. New feature
-                // code uses OrderForceService so both sides of the participant relationship stay
-                // paired.
-                if (value == null)
-                {
-                    CurrentOrder = null;
-                    IndividualPosting = null;
-                    return;
-                }
-                CurrentOrder = value;
-                IndividualPosting = new IndividualPosting(
-                    IndividualPostingKind.OperationalAttachment,
-                    CampaignLocation.Landed(value.Mission?.RegionFaction?.Region)
-                        ?? PhysicalPresence.ForSquad(AssignedSquad),
-                    new Date(1),
-                    value);
-            }
-        }
-
         /// <summary>
         /// Where this brother physically is for campaign purposes: with the operation he is
         /// attached to if he is attached, otherwise wherever his squad is. An attached
@@ -197,32 +171,6 @@ namespace OnlyWar.Models.Soldiers
             PhysicalPresence.ForSoldier(this);
 
         public Planets.Region EffectiveRegion => EffectiveLocation?.Region;
-
-        /// <summary>Unlinks the bidirectional assignment and normalizes an independent reunion.</summary>
-        public void ReleaseOperationalAssignment()
-        {
-            var order = CurrentOrder;
-            if (order == null) return;
-            order.AssignedCharacters.Remove(this);
-            CurrentOrder = null;
-            if (IndividualPosting?.Location == null) return;
-            if (IndividualPosting.Kind == IndividualPostingKind.OperationalAttachment)
-            {
-                IndividualPosting.Location.Ship?.DisembarkIndividual(this);
-                IndividualPosting.Kind = IndividualPostingKind.IndependentDeployment;
-                IndividualPosting.Order = null;
-            }
-            else if (order.Force.IsEmpty && order.Mission?.MissionType != Missions.MissionType.Recruitment)
-            {
-                order.RegisteredSector?.RemoveOrder(order);
-            }
-            if (IndividualPosting.Purpose == IndividualPostingPurpose.Independent
-                && PhysicalPresence.ForSoldier(this)?.IsSamePlace(PhysicalPresence.ForSquad(AssignedSquad)) == true)
-            {
-                IndividualPosting.Location.Ship?.DisembarkIndividual(this);
-                IndividualPosting = null;
-            }
-        }
 
         public void AddSkillPoints(BaseSkill skill, float points)
         {

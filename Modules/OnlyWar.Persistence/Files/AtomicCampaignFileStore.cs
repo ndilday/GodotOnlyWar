@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using OnlyWar.Contracts.Persistence;
+using OnlyWar.Persistence.Contracts;
 
 namespace OnlyWar.Persistence.Files;
 

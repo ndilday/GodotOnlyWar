@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
@@ -40,7 +40,7 @@ public sealed class ReadinessBoundaryTests
             SquadRowContext.ForNewOrder(), program, doctrine);
         Assert.Equal(4, row.Strength.DutyReady);
         Assert.False(row.Readiness.CanBeginDeployment);
-        Assert.False(OrderForceService.AssignSquad(order, squad, MedicalReadinessDecisions.Instance, doctrine, program));
+        Assert.False(OrderForceService.AssignSquad(order, squad, new MedicalReadinessDecisions(), doctrine, program));
         Assert.Empty(order.AssignedSquads);
         Assert.Null(squad.CurrentOrders);
         Assert.Empty(BattleSquadFactory.GetParticipants(squad, doctrine, program));
@@ -49,7 +49,7 @@ public sealed class ReadinessBoundaryTests
         Assert.True(new SquadRowViewModelBuilder().Build(squad,
             SquadRowContext.ForNewOrder(), program, doctrine).Readiness.CanBeginDeployment);
         Assert.Equal(5, BattleSquadFactory.GetParticipants(squad, doctrine, program).Count);
-        Assert.True(OrderForceService.AssignSquad(order, squad, MedicalReadinessDecisions.Instance, doctrine, program));
+        Assert.True(OrderForceService.AssignSquad(order, squad, new MedicalReadinessDecisions(), doctrine, program));
     }
 
     // SB-12: a row built without explicit inputs resolves nothing from another campaign. The live
@@ -99,7 +99,8 @@ public sealed class ReadinessBoundaryTests
             .First(option => option.Kind == MissionAvailabilityKind.Recon);
 
         OrderCommandContext withoutReadiness =
-            new(fixture.Sector, fixture.CurrentDate);
+            new(fixture.Sector, fixture.CurrentDate,
+                Personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.Throws<InvalidOperationException>(() => OrderAssignment.AssignSquadsToMission(
             withoutReadiness, [squad], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
@@ -107,7 +108,8 @@ public sealed class ReadinessBoundaryTests
 
         // The same command with the capability supplied issues normally.
         OrderCommandContext withReadiness = new(
-            fixture.Sector, fixture.CurrentDate, MedicalReadinessDecisions.Instance);
+            fixture.Sector, fixture.CurrentDate, new MedicalReadinessDecisions(),
+            TestPersonnelComposition.CreatePersonnel());
         Assert.NotNull(OrderAssignment.AssignSquadsToMission(
             withReadiness, [squad], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
         Assert.NotNull(squad.CurrentOrders);

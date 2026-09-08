@@ -13,19 +13,22 @@ using OnlyWar.Models.Units;
 
 namespace OnlyWar.Application;
 
-public sealed partial class CampaignApplication : IChapterScreenApplication
+public sealed class ChapterScreenApplication : CampaignScreenApplication,
+    IChapterScreenApplication
 {
     private readonly SoldierTransferService _transferService = new();
     private readonly SoldierDetailBuilder _soldierDetailBuilder = new();
     private readonly SoldierFilterService _filterService = new();
     private readonly SquadRowViewModelBuilder _chapterRowBuilder = new();
 
+    public ChapterScreenApplication(CampaignApplicationContext context) : base(context) { }
+
     public bool HasChapter => TryGetChapter() != null;
 
     public ChapterBrowserView QueryChapterBrowser(ChapterBrowserQuery query)
     {
         ArgumentNullException.ThrowIfNull(query);
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
 
         if (query.HistoricalSoldierId.HasValue
             && force?.Army?.FallenBrothers.TryGetValue(
@@ -57,7 +60,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
         if (chapter == null) return new ChapterFilterOptions([], []);
 
         List<ISoldier> scope = GetScopeMembers(chapter, query).ToList();
-        GameRulesData rules = _activeSession.Rules;
+        GameRulesData rules = ActiveSession.Rules;
         return new ChapterFilterOptions(
             _filterService.GetAvailableRoles(scope),
             _filterService.GetAvailableHonors(
@@ -93,7 +96,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
             return ChapterPrompt.None;
         }
 
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         force.Army.PopulateSquadMap();
         if (_transferService.WouldExceedShipCapacity(soldier, option, force.Army.SquadMap))
         {
@@ -115,7 +118,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
         }
 
         if (option.IsNewSquad
-            || option.SoldierTemplate != _activeSession.Rules.ChapterDoctrine.DevastatorMarine)
+            || option.SoldierTemplate != ActiveSession.Rules.ChapterDoctrine.DevastatorMarine)
         {
             return new ChapterPrompt(
                 ChapterPromptKind.Blocked,
@@ -125,7 +128,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
                     + "must be as a Devastator Marine.");
         }
 
-        BlackCarapacePlanResult plan = new RecruitmentPromotionService(_activeSession)
+        BlackCarapacePlanResult plan = new RecruitmentPromotionService(ActiveSession)
             .EvaluateBlackCarapace(soldier.Id, option.SquadId);
         if (!plan.Succeeded)
         {
@@ -144,7 +147,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
     public ChapterTransferResult ConfirmTransfer(
         Guid sessionToken, int soldierId, int optionIndex, IReadOnlyList<int> contextSoldierIds)
     {
-        if (_activeSession == null || sessionToken != SessionToken)
+        if (ActiveSession == null || sessionToken != SessionToken)
         {
             return new ChapterTransferResult(false, ChapterPrompt.None, false, false, null, null);
         }
@@ -154,10 +157,10 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
             return new ChapterTransferResult(false, ChapterPrompt.None, false, false, null, null);
         }
 
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         if (SoldierTransferService.RequiresBlackCarapace(soldier, option))
         {
-            RecruitmentPromotionResult promotion = new RecruitmentPromotionService(_activeSession)
+            RecruitmentPromotionResult promotion = new RecruitmentPromotionService(ActiveSession)
                 .ScheduleBlackCarapace(soldier.Id, option.SquadId);
             return new ChapterTransferResult(
                 promotion.Succeeded,
@@ -174,7 +177,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
         int originSquadId = soldier.AssignedSquad.Id;
         force.Army.PopulateSquadMap();
         bool didTransfer = _transferService.ApplyTransfer(
-            soldier, option, force.Army.SquadMap, _activeSession.CurrentDate);
+            soldier, option, force.Army.SquadMap, ActiveSession.CurrentDate);
         if (!didTransfer)
         {
             return new ChapterTransferResult(false, ChapterPrompt.None, false, false, null, null);
@@ -215,7 +218,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
 
     public ChapterTransferResult ConfirmRecall(Guid sessionToken, int soldierId)
     {
-        if (_activeSession == null || sessionToken != SessionToken
+        if (ActiveSession == null || sessionToken != SessionToken
             || FindChapterSoldier(soldierId) is not PlayerSoldier soldier
             || soldier.CurrentOrder == null)
         {
@@ -528,17 +531,17 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
     private SoldierDetailContext BuildSoldierDetailContext(PlayerForce force) => new(
         force?.Army?.ChapterOperationalDoctrine,
         force?.RecruitmentProgram,
-        _activeSession?.CurrentDate,
-        _activeSession?.Sector,
-        _activeSession?.Rules?.RatingConsumers);
+        ActiveSession?.CurrentDate,
+        ActiveSession?.Sector,
+        ActiveSession?.Rules?.RatingConsumers);
 
     private List<ISoldier> FilteredSoldiers(
         Unit chapter, ChapterBrowserQuery query, IReadOnlyList<SoldierFilterCondition> filter) =>
         OrderFilteredSoldiers(_filterService.Apply(
             GetScopeMembers(chapter, query),
             filter.ToList(),
-            _activeSession.CurrentDate,
-            _activeSession.Rules.RatingConsumers))
+            ActiveSession.CurrentDate,
+            ActiveSession.Rules.RatingConsumers))
             .ToList();
 
     // Soldiers the filter searches, bound to the current breadcrumb level. Presented in the
@@ -602,20 +605,20 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
     private static IEnumerable<ISoldier> OrderByRankAndTenure(IEnumerable<ISoldier> soldiers) =>
         SoldierSeniority.OrderBySeniority(soldiers);
 
-    private Unit TryGetChapter() => _activeSession?.Sector.PlayerForce?.Army?.OrderOfBattle;
+    private Unit TryGetChapter() => ActiveSession?.Sector.PlayerForce?.Army?.OrderOfBattle;
 
     private ISoldier FindChapterSoldier(int soldierId)
     {
         Unit chapter = TryGetChapter();
         return chapter?.GetAllMembers().FirstOrDefault(soldier => soldier.Id == soldierId)
-            ?? _activeSession?.Sector.PlayerForce?.Army?.FallenBrothers
+            ?? ActiveSession?.Sector.PlayerForce?.Army?.FallenBrothers
                 .GetValueOrDefault(soldierId);
     }
 
     private SoldierTransferOption ResolveTransferOption(PlayerSoldier soldier, int optionIndex)
     {
         List<SoldierTransferOption> options = _transferService.GetTransferOptions(
-            _activeSession.Sector.PlayerForce.Army.OrderOfBattle, soldier);
+            ActiveSession.Sector.PlayerForce.Army.OrderOfBattle, soldier);
         return optionIndex < 0 || optionIndex >= options.Count ? null : options[optionIndex];
     }
 
@@ -788,7 +791,7 @@ public sealed partial class CampaignApplication : IChapterScreenApplication
             cards.Insert(0, new ChapterBrowserDetailCard(
                 SoldierDetailBuilder.GetSoldierIconKey(selectedSoldier),
                 $"Selected: {selectedSoldier.Template.Name} {selectedSoldier.Name}",
-                DutyStatus(_activeSession?.Sector.PlayerForce, selectedSoldier),
+                DutyStatus(ActiveSession?.Sector.PlayerForce, selectedSoldier),
                 "Select a soldier for preview; use the detail button to open the existing soldier display flow."));
         }
 

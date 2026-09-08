@@ -46,7 +46,7 @@ public class PlanetaryOperationsServiceTests
         fixture.Sector.AddNewOrder(otherOrder);
 
         RegionalEligibilityResult result = RegionalOrderEligibilityService.Build(
-            fixture.Sector, target, MedicalReadinessDecisions.Instance);
+            fixture.Sector, target, new MedicalReadinessDecisions());
 
         Assert.Contains(result.Candidates, item => item.Squad == targetSquad);
         Assert.Contains(result.Candidates, item => item.Squad == adjacentSquad);
@@ -77,7 +77,7 @@ public class PlanetaryOperationsServiceTests
             .Single(option => option.Kind == kind);
 
         RegionalEligibilityResult result = RegionalOrderEligibilityService.Build(
-            fixture.Sector, target, MedicalReadinessDecisions.Instance, mission);
+            fixture.Sector, target, new MedicalReadinessDecisions(), mission);
 
         Assert.Contains(result.Candidates, item => item.Squad == targetSquad);
         Assert.DoesNotContain(result.Candidates, item => item.Squad == adjacentSquad);
@@ -100,7 +100,7 @@ public class PlanetaryOperationsServiceTests
             [assigned], target, recon, -1, Aggression.Normal);
 
         RegionalSquadCandidate candidate = RegionalOrderEligibilityService.Build(
-                fixture.Sector, target, MedicalReadinessDecisions.Instance, recon, order)
+                fixture.Sector, target, new MedicalReadinessDecisions(), recon, order)
             .Candidates.Single(item => item.Squad == assigned);
 
         Assert.True(candidate.IsAssignedToContext);
@@ -121,11 +121,13 @@ public class PlanetaryOperationsServiceTests
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
 
         OrderMutationResult created = OrderMutationService.CreateOrAdd(
-            fixture.Sector, target, recon, [first, second], -1, Aggression.Normal, MedicalReadinessDecisions.Instance);
+            fixture.Sector, target, recon, [first, second], -1, Aggression.Normal,
+            new MedicalReadinessDecisions(), personnel: TestPersonnelComposition.CreatePersonnel());
         Squad third = AddPlayerSquad(
             fixture, adjacent, "Third Squad", members: 5, withLeader: true);
         OrderMutationResult reinforced = OrderMutationService.CreateOrAdd(
-            fixture.Sector, target, recon, [third], -1, Aggression.Cautious, MedicalReadinessDecisions.Instance);
+            fixture.Sector, target, recon, [third], -1, Aggression.Cautious,
+            new MedicalReadinessDecisions(), personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.True(created.Succeeded);
         Assert.Equal(OrderMutationKind.Created, created.Kind);
@@ -154,7 +156,8 @@ public class PlanetaryOperationsServiceTests
         Ship ship = AddOrbitingShip(fixture, capacity: 1);
 
         ForceMovementResult result = PlanetForceMovementService.Embark(
-            fixture.Sector, fixture.Planet, source, ship, [squad]);
+            fixture.Sector, fixture.Planet, source, ship, [squad],
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.False(result.Succeeded);
         Assert.Same(source, squad.CurrentRegion);
@@ -179,7 +182,8 @@ public class PlanetaryOperationsServiceTests
         Ship ship = AddOrbitingShip(fixture, capacity: 10);
 
         ForceMovementResult result = PlanetForceMovementService.Embark(
-            fixture.Sector, fixture.Planet, source, ship, [squad]);
+            fixture.Sector, fixture.Planet, source, ship, [squad],
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.True(result.Succeeded);
         Assert.Equal(1, result.OrdersEnded);
@@ -200,7 +204,8 @@ public class PlanetaryOperationsServiceTests
         Ship ship = AddOrbitingShip(fixture, capacity: 10);
 
         ForceMovementResult result = PlanetForceMovementService.Embark(
-            fixture.Sector, fixture.Planet, source, ship, [squad]);
+            fixture.Sector, fixture.Planet, source, ship, [squad],
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.True(result.Succeeded);
         Assert.Null(squad.CurrentRegion);
@@ -220,7 +225,8 @@ public class PlanetaryOperationsServiceTests
         squad.BoardedLocation = ship;
 
         ForceMovementResult result = PlanetForceMovementService.Land(
-            fixture.Sector, fixture.Planet, destination, [squad]);
+            fixture.Sector, fixture.Planet, destination, [squad],
+            personnel: TestPersonnelComposition.CreatePersonnel());
 
         Assert.True(result.Succeeded);
         Assert.Same(destination, squad.CurrentRegion);
@@ -270,7 +276,7 @@ public class PlanetaryOperationsServiceTests
         Squad squad = AddPlayerSquad(fixture, beta, "Beta Squad");
 
         RegionalEligibilityResult result = RegionalOrderEligibilityService.Build(
-            fixture.Sector, gamma, MedicalReadinessDecisions.Instance);
+            fixture.Sector, gamma, new MedicalReadinessDecisions());
 
         Assert.DoesNotContain(result.Candidates, candidate => candidate.Squad == squad);
         Assert.DoesNotContain(result.Groups, group => group.Origin == beta);
@@ -445,7 +451,7 @@ public class PlanetaryOperationsServiceTests
         PlayerSoldier character = new(TestModelFactory.CreateSoldier(), "Brother Medicus");
         administrative.AddSquadMember(character);
         fixture.Sector.PlayerForce.Army.PlayerSoldierMap[character.Id] = character;
-        new IndividualPostingService(OrderCommitmentSurface.Instance).RestorePhysical(
+        new IndividualPostingService(new OrderCommitmentSurface()).RestorePhysical(
             character,
             IndividualPostingPurpose.Independent,
             CampaignLocation.Landed(region),
@@ -473,7 +479,9 @@ public class PlanetaryOperationsServiceTests
         administrative.AddSquadMember(character);
         fixture.Sector.PlayerForce.Army.PlayerSoldierMap[character.Id] = character;
 
-        AdministrativeStationResult result = new AdministrativeStationService().SeatFormation(
+        AdministrativeStationResult result = new AdministrativeStationService(
+            TestPersonnelComposition.CreatePersonnel(),
+            new OrderCommitmentSurface()).SeatFormation(
             administrative, CampaignLocation.Landed(region));
 
         Assert.True(result.Succeeded);
@@ -626,9 +634,10 @@ public class PlanetaryOperationsServiceTests
         AvailableMission recon = MissionAvailability.GetAvailableMissions(region, region)
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
         Order order = OrderMutationService.CreateOrAdd(
-            fixture.Sector, region, recon, [line], -1, Aggression.Normal, MedicalReadinessDecisions.Instance).Order;
+            fixture.Sector, region, recon, [line], -1, Aggression.Normal,
+            new MedicalReadinessDecisions(), personnel: TestPersonnelComposition.CreatePersonnel()).Order;
         Squad pool = CreatePlayerSquad(fixture, "Apothecarion", 0,
-            SquadTypes.PermitsIndividualDetachment);
+            SquadTypes.Administrative);
         PlayerSoldier specialist = new(TestModelFactory.CreateSoldier(), "Brother Medicus");
         pool.AddSquadMember(specialist);
         GetPlayerPresence(fixture, region).LandedSquads.Add(pool);
@@ -638,7 +647,8 @@ public class PlanetaryOperationsServiceTests
         OrderMutationResult aggression = OrderMutationService.SetAggression(
             fixture.Sector, order, Aggression.Aggressive);
         OrderMutationResult attached = OrderMutationService.AttachSpecialist(
-            fixture.Sector, order, specialist, MedicalReadinessDecisions.Instance);
+            fixture.Sector, order, specialist, new MedicalReadinessDecisions(),
+            personnel: TestPersonnelComposition.CreatePersonnel());
         OrderMutationResult detached = OrderMutationService.DetachSpecialist(
             fixture.Sector, order, specialist);
 
@@ -646,8 +656,8 @@ public class PlanetaryOperationsServiceTests
         Assert.Equal(Aggression.Aggressive, order.LevelOfAggression);
         Assert.True(attached.Succeeded);
         Assert.True(detached.Succeeded);
-        Assert.Null(specialist.AttachedOrder);
-        Assert.DoesNotContain(specialist, order.AttachedSoldiers);
+        Assert.Null(specialist.CurrentOrder);
+        Assert.DoesNotContain(specialist, order.AssignedCharacters);
     }
 
     [Fact]
@@ -686,7 +696,7 @@ public class PlanetaryOperationsServiceTests
         Squad administrative = AddPlayerSquad(
             fixture, region, "Apothecarion", squadTypes: SquadTypes.Administrative);
         Squad personnelPool = AddPlayerSquad(
-            fixture, region, "Librarius", squadTypes: SquadTypes.PermitsIndividualDetachment);
+            fixture, region, "Librarius", squadTypes: SquadTypes.Administrative);
 
         // The mission force tree is now a projection: assert on the rows the screen actually gets.
         IReadOnlyList<HierarchyTreeItem> tree =
@@ -802,11 +812,12 @@ public class PlanetaryOperationsServiceTests
         fixture.Sector.PlayerForce.Army.PlayerSoldierMap[casualty.Id] = casualty;
         Ship ship = AddOrbitingShip(fixture, capacity: 10);
 
-        MedicalDetachmentResult result = new MedicalDetachmentService().DetachToOrbit(
+        MedicalDetachmentResult result = new MedicalDetachmentService(
+            TestPersonnelComposition.CreatePersonnel()).DetachToOrbit(
             fixture.Sector, fixture.Planet, region, ship, [casualty], new Date(1));
 
         Assert.True(result.Succeeded);
-        Assert.Equal(IndividualPostingKind.MedicalDetachment, casualty.IndividualPosting.Kind);
+        Assert.Equal(IndividualPostingPurpose.Medical, casualty.IndividualPosting.Purpose);
         Assert.Same(ship, casualty.IndividualPosting.Location.Ship);
         Assert.Contains(casualty, ship.IndividuallyBoardedSoldiers);
         Assert.Same(region, squad.CurrentRegion);
@@ -829,7 +840,7 @@ public class PlanetaryOperationsServiceTests
         internal OperationsProjectionProbe(SectorSimulationFixture fixture)
         {
             _fixture = fixture;
-            _application = new CampaignApplication(new SeededRNG(31));
+            _application = TestPersonnelComposition.CreateCampaign(new SeededRNG(31)).CreateApplication();
             GameRulesData rules = fixture.Rules
                 ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(
                     RulesDatabaseFixture.DatabasePath);

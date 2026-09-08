@@ -22,7 +22,7 @@ public class ChapterMusterPerformanceTests
     {
         _output = output;
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
     }
 
     [Trait("Category", "Slow")]
@@ -91,7 +91,7 @@ public class ChapterMusterPerformanceTests
             _data.RatingDefinitions,
             _data.RatingAwardTiers,
             _data.BaseSkillMap,
-            StaticRNG.Instance);
+            new StaticRNG());
         return new SoldierTrainingCalculator(
             _data.BaseSkillMap.Values,
             _data.TrainingProfiles.Values,

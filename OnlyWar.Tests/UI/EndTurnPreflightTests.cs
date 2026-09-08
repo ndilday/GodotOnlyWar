@@ -365,7 +365,19 @@ public class EndTurnPreflightTests
             [ordered], false, false, Aggression.Normal,
             CreateMission(campaign, MissionType.Patrol));
 
-        Squad lender = new("Armory", campaign.RootUnit, campaign.SquadTemplate)
+        SquadTemplate lenderTemplate = new(
+            104,
+            "Armory",
+            campaign.SquadTemplate.DefaultWeapons,
+            [],
+            campaign.SquadTemplate.Armor,
+            [.. campaign.SquadTemplate.Elements],
+            SquadTypes.Administrative,
+            FormationMobilityPolicy.MembersOnly)
+        {
+            Faction = campaign.PlayerFaction
+        };
+        Squad lender = new("Armory", campaign.RootUnit, lenderTemplate)
         {
             CurrentRegion = campaign.Region
         };
@@ -374,7 +386,7 @@ public class EndTurnPreflightTests
         lender.AddSquadMember(lent);
         campaign.RootUnit.AddSquad(lender);
         GetOrAddPlayerRegionFaction(campaign, campaign.Region).LandedSquads.Add(lender);
-        OnlyWar.Helpers.Orders.OrderAttachment.Attach(lent, order, MedicalReadinessDecisions.Instance);
+        OnlyWar.Helpers.Orders.OrderAttachment.Attach(lent, order, new MedicalReadinessDecisions());
 
         EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
             campaign.Sector,

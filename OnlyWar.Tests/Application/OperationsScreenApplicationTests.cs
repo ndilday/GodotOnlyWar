@@ -215,7 +215,7 @@ public sealed class OperationsScreenApplicationTests
         fixture = SectorSimulationFixture.Create();
         region = fixture.Planet.Regions[7];
         squad = AddPlayerSquad(fixture, region, "Operations Squad", members: 5);
-        CampaignApplication application = new(new SeededRNG(11));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(11)).CreateApplication();
         application.Install(new GameSession(
             fixture.Rules, fixture.Sector,
             fixture.CurrentDate, new SeededRNG(12)));

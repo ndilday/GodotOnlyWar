@@ -1,6 +1,5 @@
-using OnlyWar.Helpers.Orders;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Treatment;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,7 +20,6 @@ namespace OnlyWar.Helpers
             foreach (ISoldier soldier in soldiers)
             {
                 MedicalHealthPolicy.ApplyWeeklyHealing(soldier?.Body);
-                MarkAwaitingReunionWhenRecovered(soldier as PlayerSoldier);
             }
         }
 
@@ -109,23 +107,7 @@ namespace OnlyWar.Helpers
             MedicalProcedureService.SynchronizeProcedureReservations(
                 soldierMap?.Values,
                 procedures);
-            foreach (PlayerSoldier soldier in completed.Select(item => item.Soldier).Distinct())
-            {
-                MarkAwaitingReunionWhenRecovered(soldier);
-            }
             return completed;
-        }
-
-        private static void MarkAwaitingReunionWhenRecovered(PlayerSoldier soldier)
-        {
-            if (soldier?.IndividualPosting?.Kind != IndividualPostingKind.MedicalDetachment
-                || soldier.IsUndergoingMedicalProcedure
-                || soldier.Body?.HitLocations.Any(location =>
-                    location.Wounds.WoundTotal > 0 || location.IsSevered) == true)
-            {
-                return;
-            }
-            new IndividualPostingService(OrderCommitmentSurface.Instance).MarkAwaitingReunion(soldier);
         }
 
     }

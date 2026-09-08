@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -19,10 +19,10 @@ namespace OnlyWar.Helpers.PlanetaryOperations
     /// </summary>
     public sealed class MedicalDetachmentService
     {
-        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IPhysicalPostingCommands _personnel;
 
-        public MedicalDetachmentService(IOperationsPersonnelSurface personnel = null) =>
-            _personnel = personnel ?? OperationsPersonnelDefaults.Current;
+        public MedicalDetachmentService(IPhysicalPostingCommands personnel) =>
+            _personnel = personnel ?? throw new System.ArgumentNullException(nameof(personnel));
 
         public MedicalDetachmentResult DetachToOrbit(
             Sector sector,
@@ -58,9 +58,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     || soldier.AssignedSquad?.CurrentRegion != source
                     || !_personnel.CanCreate(
                         soldier,
-                        IndividualPostingKind.MedicalDetachment,
+                        IndividualPostingPurpose.Medical,
                         CampaignLocation.Aboard(destination),
-                        null,
                         out reason))
                 {
                     return Failure(reason ?? $"{soldier.Name} can no longer be detached from this region.");

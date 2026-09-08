@@ -77,7 +77,7 @@ public class GrenadeReportingTests
     [Fact]
     public void TurnResolver_QueuesBlastWoundsSoTheyAreApplied()
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Date battleDate = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try
@@ -136,9 +136,10 @@ public class GrenadeReportingTests
         Place(grid, victims.Soldiers[0], side: false, x: 3, y: 0);
         Place(grid, victims.Soldiers[1], side: false, x: 4, y: 0);
         Place(grid, victims.Soldiers[2], side: false, x: 3, y: 1);
+        StaticRNG random = new();
         BattleAftermathDependencies aftermath = new(
-            battleDate, StaticRNG.Instance, NoOpPlayerBattleAftermathSink.Instance);
-        BattleExecutionContext execution = new(rules, StaticRNG.Instance, aftermath);
+            battleDate, random, NoOpPlayerBattleAftermathSink.Instance);
+        BattleExecutionContext execution = new(rules, random, aftermath);
         BattleTurnResolver resolver = new(
             grid, [grenadiers], [victims], region: null, execution);
 

@@ -1,5 +1,5 @@
 using System;
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models.Soldiers;
 

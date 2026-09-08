@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;

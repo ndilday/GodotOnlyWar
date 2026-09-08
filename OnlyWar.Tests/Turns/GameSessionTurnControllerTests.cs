@@ -24,7 +24,10 @@ public sealed class GameSessionTurnControllerTests
             sessionDate,
             sessionRandom);
 
-        TurnResolutionResult result = new TurnController(session).ProcessTurn(fixture.Sector);
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(sessionRandom);
+        TurnResolutionResult result = composition.CreateTurnController(session)
+            .ProcessTurn(fixture.Sector);
 
         Assert.NotNull(result);
         Assert.Equal(18, sessionDate.Week);
@@ -41,7 +44,9 @@ public sealed class GameSessionTurnControllerTests
             fixture.Sector,
             new Date(9, 321, 17),
             new CountingRng());
-        TurnController controller = new(session);
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(session.Random);
+        TurnController controller = composition.CreateTurnController(session);
 
         ArgumentException exception = Assert.Throws<ArgumentException>(
             () => controller.ProcessTurn(new Sector()));
@@ -59,7 +64,9 @@ public sealed class GameSessionTurnControllerTests
             new Date(9, 321, 17),
             new CountingRng());
 
-        TurnController controller = new(session);
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(session.Random);
+        TurnController controller = composition.CreateTurnController(session);
 
         Assert.NotNull(controller);
     }

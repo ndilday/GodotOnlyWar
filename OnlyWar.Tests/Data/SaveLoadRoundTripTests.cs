@@ -39,7 +39,7 @@ public class SaveLoadRoundTripTests
     public SaveLoadRoundTripTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         // These tests exercise the save/load schema, not sector generation at scale: a
         // handful of planets stresses every persisted feature just as well as the full
         // 200x200 production sector and generates far faster. The 20x20 grid stays within
@@ -235,7 +235,9 @@ public class SaveLoadRoundTripTests
                 && s.Members.Count > 0
                 && s.Id != orderedSquad.Id
                 && s.Id != landedSquad.Id);
-        AdministrativeStationResult stationResult = new AdministrativeStationService()
+        AdministrativeStationResult stationResult = new AdministrativeStationService(
+                TestPersonnelComposition.CreatePersonnel(),
+                new OrderCommitmentSurface())
             .SeatFormation(administrativeSquad, CampaignLocation.Landed(landedRegion));
         Assert.True(stationResult.Succeeded);
 
@@ -251,7 +253,7 @@ public class SaveLoadRoundTripTests
             && s.Members.Count > 0
             && s.Id != administrativeSquad.Id);
         PlayerSoldier attachedSpecialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
-        OrderAttachment.Attach(attachedSpecialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(attachedSpecialist, order, new MedicalReadinessDecisions());
         int attachedSpecialistId = attachedSpecialist.Id;
         int detachableSquadId = detachableSquad.Id;
 
@@ -647,10 +649,11 @@ public class SaveLoadRoundTripTests
 
             // A fresh rules-data instance, exactly as the real load path constructs. Its
             // player faction starts with no units; the loader must populate them from the blob.
-            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Assert.Empty(freshRules.PlayerFaction.Units);
 
-            Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(loaded, freshRules);
+            Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(
+                loaded, freshRules, new OrderCommitmentSurface());
 
             // The loader registered the loaded order of battle on the previously empty faction,
             // so both the reconstructed army and any subsequent save work.
@@ -698,7 +701,7 @@ public class SaveLoadRoundTripTests
         Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
             s.PermitsIndividualDeployment && s.Members.Count > 0);
         PlayerSoldier specialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
         int specialistId = specialist.Id;
 
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_load_orders");
@@ -708,8 +711,9 @@ public class SaveLoadRoundTripTests
             GameStateDataBlob loaded = _roundTrip.Load(dbPath);
 
             // A fresh rules-data instance, exactly as the real StartMenu load path constructs.
-            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
-            Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(loaded, freshRules);
+            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+            Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(
+                loaded, freshRules, new OrderCommitmentSurface());
 
             Squad rebuiltSquad = rebuilt.PlayerForce.Army.OrderOfBattle.GetAllSquads()
                 .Single(s => s.Id == orderedSquad.Id);

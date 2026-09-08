@@ -87,21 +87,12 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly ChapterChronicleDataAccess _chapterChronicleDataAccess;
         private readonly WorldControlEpisodeDataAccess _worldControlEpisodeDataAccess;
         private readonly IndividualPostingDataAccess _individualPostingDataAccess;
-        private static GameStateDataAccess _instance;
-        public static GameStateDataAccess Instance
+        private readonly string _schemaFilePath;
+
+        public GameStateDataAccess(string schemaFilePath)
         {
-            get
-            {
-                if(_instance == null)
-                {
-                    _instance = new GameStateDataAccess();
-                }
-                return _instance;
-            }
-        }
-        
-        private GameStateDataAccess()
-        {
+            _schemaFilePath = Path.GetFullPath(
+                schemaFilePath ?? throw new ArgumentNullException(nameof(schemaFilePath)));
             _planetDataAccess = new PlanetDataAccess();
             _requestDataAccess = new RequestDataAccess();
             _fleetDataAccess = new FleetDataAccess();
@@ -312,7 +303,7 @@ namespace OnlyWar.Helpers.Database.GameState
             var ships = fleets.SelectMany(f => f.Ships);
             try
             {
-                GenerateTables(tempPath, schemaFilePath ?? DefaultSchemaFilePath());
+                GenerateTables(tempPath, schemaFilePath ?? _schemaFilePath);
                 WriteSaveData(tempPath, currentDate, requisition, geneseedStockpile,
                               geneseedPurity, scenario, medicalProcedures, characters, requests,
                               pledges, planets, fleets, playerSoldiers, fallenBrothers, squads,
@@ -512,11 +503,6 @@ namespace OnlyWar.Helpers.Database.GameState
                 transaction.Commit();
                 dbCon.Close();
             }
-        }
-
-        private static string DefaultSchemaFilePath()
-        {
-            return GameStorage.SaveSchemaPath;
         }
 
         private static List<GhostPopulationSource> LoadGhostPopulationSources(

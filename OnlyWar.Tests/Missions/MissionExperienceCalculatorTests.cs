@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -76,7 +76,7 @@ public class MissionExperienceCalculatorTests
         float secondBefore = second.GetTotalSkillValue(TestSkills.Stealth);
 
         RNG.Reset(42);
-        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+        missionTest.RunMissionCheck([squad], new StaticRNG());
 
         Assert.True(first.GetTotalSkillValue(TestSkills.Stealth) > firstBefore);
         Assert.True(second.GetTotalSkillValue(TestSkills.Stealth) > secondBefore);
@@ -93,7 +93,7 @@ public class MissionExperienceCalculatorTests
         float before = npc.GetTotalSkillValue(TestSkills.Stealth);
 
         RNG.Reset(42);
-        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+        missionTest.RunMissionCheck([squad], new StaticRNG());
 
         Assert.Equal(before, npc.GetTotalSkillValue(TestSkills.Stealth));
     }
@@ -114,7 +114,7 @@ public class MissionExperienceCalculatorTests
             GameLog.MinimumLevel = GameLogLevel.Trace;
             GameLog.Sink = (level, message) => logs.Add(message);
             RNG.Reset(42);
-            missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+            missionTest.RunMissionCheck([squad], new StaticRNG());
         }
         finally
         {
@@ -135,7 +135,7 @@ public class MissionExperienceCalculatorTests
         float leadershipBefore = soldier.GetTotalSkillValue(TestSkills.Leadership);
 
         RNG.Reset(42);
-        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+        missionTest.RunMissionCheck([squad], new StaticRNG());
 
         Assert.Equal(leadershipBefore, soldier.GetTotalSkillValue(TestSkills.Leadership));
     }
@@ -151,7 +151,7 @@ public class MissionExperienceCalculatorTests
         float lowBefore = low.GetTotalSkillValue(TestSkills.Stealth);
 
         RNG.Reset(7);
-        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+        missionTest.RunMissionCheck([squad], new StaticRNG());
 
         // "Low" was not the soldier whose skill resolved the check, but he still participated
         // in (and thus learns from) the mission.

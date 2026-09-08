@@ -171,7 +171,7 @@ public class FleetMovementTests
         public static FleetMovementFixture Create()
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Faction playerFaction = CreatePlayerFaction();
             Planet origin = CreatePlanet(1, "Origin", 10, 10, playerFaction);
             Planet destination = CreatePlanet(2, "Destination", 20, 10, playerFaction);
@@ -190,9 +190,11 @@ public class FleetMovementTests
 
         public void ProcessTurn()
         {
-            new TurnController(
-                new GameSession(Rules, Sector, CurrentDate, StaticRNG.Instance),
-                new NoOpTrainingService()).ProcessTurn(Sector);
+            TestPersonnelComposition.CreateCampaign(new StaticRNG())
+                .CreateTurnController(
+                    new GameSession(Rules, Sector, CurrentDate, new StaticRNG()),
+                    new NoOpTrainingService())
+                .ProcessTurn(Sector);
         }
 
         private static Faction CreatePlayerFaction()

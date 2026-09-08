@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;

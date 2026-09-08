@@ -182,8 +182,8 @@ public class BattleMoraleResolverTests
         SquadTemplate squadTemplate = faction.SquadTemplates[squadTemplateId];
         Squad squad = battleValueBudget.HasValue
             ? SquadFactory.GenerateSquadWithinBudget(
-                squadTemplate, battleValueBudget.Value, StaticRNG.Instance, name)
-            : SquadFactory.GenerateSquad(squadTemplate, StaticRNG.Instance, name);
+                squadTemplate, battleValueBudget.Value, new StaticRNG(), name)
+            : SquadFactory.GenerateSquad(squadTemplate, new StaticRNG(), name);
         return new BattleSquad(false, squad);
     }
 
@@ -202,7 +202,7 @@ public class BattleMoraleResolverTests
         Aggression attackerAggression,
         Aggression defenderAggression)
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Date date = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try
@@ -215,11 +215,12 @@ public class BattleMoraleResolverTests
         }
 
         RNG.Reset(74_000);
+        StaticRNG random = new();
         BattleAftermathDependencies aftermath = new(
             date,
-            StaticRNG.Instance,
+            random,
             NoOpPlayerBattleAftermathSink.Instance);
-        BattleExecutionContext execution = new(rules, StaticRNG.Instance, aftermath);
+        BattleExecutionContext execution = new(rules, random, aftermath);
         return new BattleTurnResolver(
             grid,
             attackers,

@@ -15,10 +15,13 @@ public interface IDiplomacyScreenApplication
     DiplomacyBoardView QueryDiplomacy();
 }
 
-public sealed partial class CampaignApplication : IDiplomacyScreenApplication
+public sealed class DiplomacyScreenApplication : CampaignScreenApplication,
+    IDiplomacyScreenApplication
 {
     private readonly DiplomacyScreenProjector _diplomacyProjector = new();
 
+    public DiplomacyScreenApplication(CampaignApplicationContext context) : base(context) { }
+
     public DiplomacyBoardView QueryDiplomacy() =>
-        new(SessionToken, _diplomacyProjector.Build(_activeSession?.Sector, _activeSession?.Rules));
+        new(SessionToken, _diplomacyProjector.Build(ActiveSession?.Sector, ActiveSession?.Rules));
 }

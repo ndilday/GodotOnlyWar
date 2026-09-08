@@ -36,6 +36,9 @@ internal static class RulesDatabaseFixture
         }
     }
 
+    public static string SaveSchemaPath =>
+        Path.Combine(RepositoryRoot, "Database", "SaveStructure.sql");
+
     public static GameRulesBlob LoadRules()
     {
         return GameRulesDataAccess.Instance.GetData(DatabasePath);

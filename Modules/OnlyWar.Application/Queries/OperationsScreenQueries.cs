@@ -14,12 +14,425 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Personnel;
 using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Application;
+
+/// <summary>
+/// Planetary Operations read service. It resolves the active session, applies the Operations
+/// presentation policy, and returns detached screen projections. Mutating commands belong to
+/// <see cref="OperationsScreenApplication"/>.
+/// </summary>
+public sealed class OperationsScreenQueries : CampaignScreenApplication, IOperationsScreenQueries
+{
+    private IPersonnelAvailabilityQueries Personnel => Services.Operations.Availability;
+    private IReadinessDecisions Readiness => Services.Readiness.Decisions;
+
+    public OperationsScreenQueries(CampaignApplicationContext context) : base(context) { }
+
+    public OperationsWorkspaceView QueryOperations(OperationsWorkspaceQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        Planet planet = FindPlanet(query.PlanetId);
+        Region region = FindRegion(query.RegionId);
+        if (ActiveSession == null || planet == null || region?.Planet != planet)
+        {
+            return new OperationsWorkspaceView(
+                SessionToken, false, null, null, -1, query.Verb, null, null, null);
+        }
+
+        Sector sector = ActiveSession.Sector;
+        OperationsScreenProjector projector = Projector();
+        Order contextOrder = FindOrder(query.OrderId);
+
+        RegionalOperationsView orders = null;
+        MovementOperationsView movement = null;
+        DetachOperationsView detach = null;
+        switch (query.Verb)
+        {
+            case PlanetaryOperationsVerb.Order:
+                orders = projector.BuildRegional(region, query.MissionKey, query.OrderId,
+                    query.Filter, EnumerateSpecialists(sector, region, contextOrder));
+                break;
+            case PlanetaryOperationsVerb.Land:
+            case PlanetaryOperationsVerb.Embark:
+                movement = BuildMovement(projector, sector, planet, region, query);
+                break;
+            case PlanetaryOperationsVerb.Detach:
+                detach = BuildDetach(projector, sector, planet, region, query);
+                break;
+        }
+
+        return new OperationsWorkspaceView(
+            SessionToken, true,
+            projector.BuildHeader(planet),
+            projector.BuildMap(planet, query.Overlay, query.FactionId),
+            region.Id, query.Verb, orders, movement, detach);
+    }
+
+    public WorldDossierView QueryWorldDossier(int planetId, int regionId) =>
+        ActiveSession == null
+            ? new WorldDossierView([], [], [])
+            : Projector().BuildWorld(FindPlanet(planetId), FindRegion(regionId));
+
+    public IReadOnlyList<DossierCardView> QueryRegionCards(int regionId) =>
+        ActiveSession == null ? [] : Projector().BuildRegionCards(FindRegion(regionId));
+
+    /// <summary>
+    /// The region the screen should open on, and the faction whose overlay it should show. Both
+    /// are campaign questions (capital region, default-faction precedence), not screen state.
+    /// </summary>
+    public OperationsEntryView QueryEntry(int planetId, int? regionId)
+    {
+        Planet planet = FindPlanet(planetId);
+        if (planet == null) return new OperationsEntryView(-1, -1, null);
+        Region region = planet.Regions.FirstOrDefault(candidate => candidate?.Id == regionId)
+            ?? planet.Regions.FirstOrDefault(candidate => candidate?.Id == planet.CapitalRegionId)
+            ?? planet.Regions.FirstOrDefault();
+        int? factionId = planet.PlanetFactionMap.Values
+            .OrderBy(presence => presence.Faction.IsDefaultFaction ? 0
+                : presence.Faction.IsPlayerFaction ? 1 : 2)
+            .Select(presence => (int?)presence.Faction.Id).FirstOrDefault();
+        return new OperationsEntryView(planet.Id, region?.Id ?? -1, factionId);
+    }
+
+    /// <summary>
+    /// Where a governor's petition should drop the player: the capital, its Show of Force option
+    /// and any order already covering it.
+    /// </summary>
+    public OperationsEntryView QueryGovernorRequestEntry(int planetId)
+    {
+        OperationsEntryView entry = QueryEntry(planetId, null);
+        Region capital = FindRegion(entry.RegionId);
+        if (capital == null) return entry;
+        AvailableMission showOfForce = Projector().AvailableMissions(capital)
+            .FirstOrDefault(option =>
+                option.SpecialMission?.MissionType == MissionType.ShowOfForce);
+        return entry with
+        {
+            MissionKey = showOfForce?.IdentityKey,
+            OrderId = showOfForce == null
+                ? null : FindOrderForMission(capital.Id, showOfForce.IdentityKey)
+        };
+    }
+
+    /// <summary>The squad a double-click on a force row should open, if it is still present.</summary>
+    public int? FindPlanetSquad(int planetId, int squadId) =>
+        FindPlanet(planetId)?.Regions.Where(region => region != null)
+            .SelectMany(region => region.RegionFactionMap.Values)
+            .SelectMany(presence => presence.LandedSquads)
+            .Concat(FindPlanet(planetId).OrbitingTaskForceList
+                .SelectMany(fleet => fleet.Ships).SelectMany(ship => ship.LoadedSquads))
+            .FirstOrDefault(squad => squad.Id == squadId)?.Id;
+
+    private OperationsScreenProjector Projector() => new(
+        ActiveSession.Sector, ActiveSession.CurrentDate, Readiness);
+
+    private MovementOperationsView BuildMovement(
+        OperationsScreenProjector projector, Sector sector, Planet planet, Region region,
+        OperationsWorkspaceQuery query)
+    {
+        bool landing = query.Verb == PlanetaryOperationsVerb.Land;
+        List<ForceTreeSquad> roster = landing
+            ? PlanetForceMovementService
+                .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction)
+                .SelectMany(ship => ship.LoadedSquads
+                    .Where(squad => squad?.IsPresentOperationalForce == true)
+                    .Select(squad => new ForceTreeSquad(squad, ship.Name, ship))).ToList()
+            : (PlayerPresence(sector, region)?.LandedSquads ?? [])
+                .Where(squad => squad?.IsPresentOperationalForce == true)
+                .Select(squad => new ForceTreeSquad(squad, region.Name)).ToList();
+
+        Ship destinationShip = landing
+            ? null : FindOrbitingShip(sector, planet, query.SelectedShipId ?? -1);
+        IReadOnlyList<SpecialistOption> characters = EnumerateMovableCharacters(
+            sector, planet, region, landing, destinationShip);
+
+        HashSet<int> validSquadIds = roster.Select(item => item.Squad.Id).ToHashSet();
+        HashSet<int> validCharacterIds = characters.Where(option => option.IsAvailable)
+            .Select(option => option.Soldier.Id).ToHashSet();
+        HashSet<int> selectedSquadIds = (query.MovementSquadIds ?? new HashSet<int>())
+            .Where(validSquadIds.Contains).ToHashSet();
+        HashSet<int> selectedCharacterIds = (query.MovementCharacterIds ?? new HashSet<int>())
+            .Where(validCharacterIds.Contains).ToHashSet();
+
+        IReadOnlyList<ShipChoiceView> ships = landing
+            ? []
+            : ProjectShips(PlanetForceMovementService.BuildCapacityChoices(
+                planet, sector.PlayerForce.Faction,
+                new MovementParty(
+                    roster.Where(item => selectedSquadIds.Contains(item.Squad.Id))
+                        .Select(item => item.Squad).ToList(),
+                    characters.Where(option => selectedCharacterIds.Contains(option.Soldier.Id))
+                        .Select(option => option.Soldier).ToList()),
+                Personnel));
+        int? selectedShipId = query.SelectedShipId is int shipId
+            && ships.Any(choice => choice.ShipId == shipId && choice.Fits) ? shipId : null;
+
+        IReadOnlyList<HierarchyTreeItem> tree = PlanetaryForceTreeBuilder
+            .Build(roster, landing ? query.Grouping : ForceTreeGrouping.Company,
+                query.Filter, selectedSquadIds, TreeInputs(sector))
+            .Concat(PlanetaryForceTreeBuilder.BuildCharacterGroup(characters, selectedCharacterIds))
+            .ToList();
+
+        return new MovementOperationsView(
+            projector.BuildRegionCards(region), tree, ships, selectedShipId,
+            selectedSquadIds.Count + selectedCharacterIds.Count,
+            validSquadIds, validCharacterIds);
+    }
+
+    private DetachOperationsView BuildDetach(
+        OperationsScreenProjector projector, Sector sector, Planet planet, Region region,
+        OperationsWorkspaceQuery query)
+    {
+        List<PlayerSoldier> casualties = (PlayerPresence(sector, region)?.LandedSquads ?? [])
+            .SelectMany(SoldierPresenceService.PresentMembers).OfType<PlayerSoldier>()
+            .Where(soldier => soldier.IsWounded && soldier.IndividualPosting == null)
+            .DistinctBy(soldier => soldier.Id)
+            .OrderBy(soldier => soldier.AssignedSquad?.ParentUnit?.Name)
+            .ThenBy(soldier => soldier.Name).ToList();
+        HashSet<int> validIds = casualties.Select(soldier => soldier.Id).ToHashSet();
+        int selectedCount = (query.CasualtyIds ?? new HashSet<int>()).Count(validIds.Contains);
+
+        IReadOnlyList<ShipChoiceView> ships = PlanetForceMovementService
+            .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction)
+            .Select(ship => new ShipChoiceView(
+                ship.Id, ship.Name, ship.Fleet?.Id ?? -1, FleetName(ship),
+                ship.LoadedSoldierCount, selectedCount,
+                ship.LoadedSoldierCount + selectedCount, ship.Template.SoldierCapacity,
+                Math.Max(0, selectedCount - ship.AvailableCapacity))).ToList();
+        int? selectedShipId = query.SelectedShipId is int shipId
+            && ships.Any(choice => choice.ShipId == shipId && choice.Fits) ? shipId : null;
+
+        return new DetachOperationsView(
+            projector.BuildRegionCards(region),
+            casualties.Select(soldier => new CasualtyRowView(
+                soldier.Id, soldier.Name, soldier.AssignedSquad?.Name)).ToList(),
+            ships, selectedShipId, validIds);
+    }
+
+    private static IReadOnlyList<ShipChoiceView> ProjectShips(
+        IReadOnlyList<ShipCapacityChoice> choices) =>
+        choices.Select(choice => new ShipChoiceView(
+            choice.Ship.Id, choice.Ship.Name, choice.Ship.Fleet?.Id ?? -1, FleetName(choice.Ship),
+            choice.CurrentPassengers, choice.SelectedPassengers, choice.ResultingPassengers,
+            choice.Capacity, choice.Shortfall)).ToList();
+
+    private static string FleetName(Ship ship) =>
+        ship.Fleet == null ? "UNASSIGNED SHIPS" : $"TASK FORCE {ship.Fleet.Id}";
+
+    private static ForceTreeInputs TreeInputs(Sector sector) => new(
+        sector?.PlayerForce?.RecruitmentProgram,
+        sector?.PlayerForce?.Army?.ChapterOperationalDoctrine);
+
+    /// <summary>
+    /// Who may be lent to an operation staged out of this region. Availability is Operations
+    /// policy; the screen only renders the resulting rows.
+    /// </summary>
+    internal IReadOnlyList<SpecialistOption> EnumerateSpecialists(
+        Sector sector, Region region, Order contextOrder)
+    {
+        if (region == null) return [];
+        IEnumerable<PlayerSoldier> roster = sector.PlayerForce?.Army?.PlayerSoldierMap?.Values
+            ?? Enumerable.Empty<PlayerSoldier>();
+        return region.GetSelfAndAdjacentRegions()
+            .Select(candidate => PlayerPresence(sector, candidate))
+            .Where(presence => presence != null)
+            .SelectMany(presence => SpecialistAvailability.EnumerateRoster(
+                presence, region, roster, Readiness, contextOrder, Personnel))
+            .Where(option => IsInOrderArea(option?.Soldier, region))
+            .GroupBy(option => option.Soldier.Id)
+            .Select(group => group.First())
+            .OrderBy(option => option.HomeSquad?.Name)
+            .ThenBy(option => option.Soldier.Name)
+            .ToList();
+    }
+
+    private static bool IsInOrderArea(PlayerSoldier soldier, Region target)
+    {
+        Region location = CampaignLocationService.ForSoldier(soldier)?.Region;
+        return target != null && location != null
+            && target.GetSelfAndAdjacentRegions().Contains(location);
+    }
+
+    internal IReadOnlyList<SpecialistOption> EnumerateMovableCharacters(
+        Sector sector, Planet planet, Region region, bool landing, Ship destinationShip)
+    {
+        if (sector?.PlayerForce?.Army?.PlayerSoldierMap == null) return [];
+        CampaignLocation destination = landing
+            ? CampaignLocation.Landed(region)
+            : destinationShip == null ? null : CampaignLocation.Aboard(destinationShip);
+        IReadOnlyList<Ship> orbiting = PlanetForceMovementService
+            .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction);
+        return sector.PlayerForce.Army.PlayerSoldierMap.Values
+            .Where(character => character.AssignedSquad?.PermitsIndividualDeployment == true)
+            .Where(character =>
+            {
+                CampaignLocation location = CampaignLocationService.ForSoldier(character);
+                return landing
+                    ? location?.Ship != null && orbiting.Contains(location.Ship)
+                    : location?.Region == region;
+            })
+            .Select(character =>
+            {
+                PersonnelAvailabilityDecision decision = destination == null
+                    ? new PersonnelAvailabilityDecision(false,
+                        (int)PersonnelAvailabilityReasonCode.MissingLocation,
+                        "Choose a destination ship.")
+                    : Personnel.EvaluateMovement(
+                        PersonnelAvailabilityProjection.ForMovement(character, destination));
+                return new SpecialistOption(
+                    character,
+                    character.AssignedSquad,
+                    decision.IsAllowed
+                        ? CampaignLocationService.Format(
+                            CampaignLocationService.ForSoldier(character))
+                        : decision.Reason,
+                    decision.IsAllowed);
+            })
+            .OrderBy(option => option.HomeSquad?.Name)
+            .ThenBy(option => option.Soldier.Name)
+            .ToList();
+    }
+
+    /// <summary>Resolves a force-tree row key to the participants the screen just activated.</summary>
+    public OperationsSelection ResolveForceSelection(
+        OperationsWorkspaceQuery query, string key)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (ActiveSession == null || string.IsNullOrWhiteSpace(key))
+            return new OperationsSelection([], []);
+        Sector sector = ActiveSession.Sector;
+        Planet planet = FindPlanet(query.PlanetId);
+        Region region = FindRegion(query.RegionId);
+        if (planet == null || region == null) return new OperationsSelection([], []);
+
+        bool landing = query.Verb == PlanetaryOperationsVerb.Land;
+        IReadOnlyList<SpecialistOption> characters =
+            query.Verb == PlanetaryOperationsVerb.Order
+                ? EnumerateSpecialists(sector, region, FindOrder(query.OrderId))
+                : EnumerateMovableCharacters(sector, planet, region, landing,
+                    landing ? null : FindOrbitingShip(sector, planet, query.SelectedShipId ?? -1));
+        List<int> characterIds = PlanetaryForceTreeBuilder
+            .ResolveCharacterSelection(characters, key)
+            .Select(character => character.Id).ToList();
+        if (characterIds.Count > 0) return new OperationsSelection([], characterIds);
+
+        List<ForceTreeSquad> roster;
+        if (query.Verb == PlanetaryOperationsVerb.Order)
+        {
+            AvailableMission mission = FindMission(region, query.MissionKey);
+            roster = OperationsScreenProjector.BuildOrderTreeRoster(
+                RegionalOrderEligibilityService.Build(
+                    sector, region, Readiness, mission, FindOrder(query.OrderId)));
+            return new OperationsSelection(
+                PlanetaryForceTreeBuilder.ResolveSelection(roster, key)
+                    .Where(squad => roster.Any(item =>
+                        item.Squad == squad && item.Selectable))
+                    .Select(squad => squad.Id).ToList(),
+                []);
+        }
+
+        roster = landing
+            ? PlanetForceMovementService
+                .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction)
+                .SelectMany(ship => ship.LoadedSquads
+                    .Select(squad => new ForceTreeSquad(squad, ship.Name, ship))).ToList()
+            : (PlayerPresence(sector, region)?.LandedSquads ?? [])
+                .Select(squad => new ForceTreeSquad(squad, region.Name)).ToList();
+        return new OperationsSelection(
+            PlanetaryForceTreeBuilder.ResolveSelection(roster, key)
+                .Select(squad => squad.Id).ToList(),
+            []);
+    }
+
+    public int? FindOrderForMission(int regionId, string missionKey)
+    {
+        if (ActiveSession == null) return null;
+        Region region = FindRegion(regionId);
+        AvailableMission mission = FindMission(region, missionKey);
+        if (mission == null) return null;
+        return OrderMutationService.FindEquivalentOrder(
+            ActiveSession.Sector, region, mission,
+            ResolveTargetFactionId(region, mission))?.Id;
+    }
+
+    public OrderCancellationPrompt DescribeOrderCancellation(int orderId)
+    {
+        Order order = FindOrder(orderId);
+        return order == null
+            ? new OrderCancellationPrompt(false, null, 0, 0)
+            : new OrderCancellationPrompt(
+                true,
+                MissionAvailability.GetOrderLabel(order.Mission),
+                order.AssignedSquads.Count,
+                order.AssignedCharacters.Count);
+    }
+
+    internal AvailableMission FindMission(Region region, string key)
+    {
+        if (region == null || string.IsNullOrWhiteSpace(key)) return null;
+        return region.GetSelfAndAdjacentRegions()
+            .SelectMany(origin => MissionAvailability.GetAvailableMissions(origin, region))
+            .FirstOrDefault(option => option.IdentityKey == key);
+    }
+
+    internal Planet FindPlanet(int id) => ActiveSession?.Sector.Planets.GetValueOrDefault(id);
+
+    internal Region FindRegion(int id) => ActiveSession?.Sector.Planets.Values
+        .SelectMany(planet => planet.Regions)
+        .FirstOrDefault(region => region?.Id == id);
+
+    internal Order FindOrder(int? id) => id is int value
+        ? ActiveSession?.Sector.Orders.Values.FirstOrDefault(order => order.Id == value)
+        : null;
+
+    internal PlayerSoldier FindPlayerSoldier(int id) =>
+        ActiveSession?.Sector.PlayerForce?.Army?.PlayerSoldierMap?.GetValueOrDefault(id);
+
+    internal List<PlayerSoldier> ResolveCharacters(IReadOnlyList<int> ids) =>
+        (ids ?? []).Select(FindPlayerSoldier).Where(soldier => soldier != null)
+            .DistinctBy(soldier => soldier.Id).ToList();
+
+    internal static RegionFaction PlayerPresence(Sector sector, Region region)
+    {
+        if (region == null || sector?.PlayerForce?.Faction == null) return null;
+        region.RegionFactionMap.TryGetValue(
+            sector.PlayerForce.Faction.Id, out RegionFaction presence);
+        return presence;
+    }
+
+    internal static IEnumerable<Squad> OrbitingSquads(Sector sector, Planet planet) =>
+        planet == null || sector?.PlayerForce?.Faction == null
+            ? []
+            : PlanetForceMovementService
+                .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction)
+                .SelectMany(ship => ship.LoadedSquads);
+
+    internal static Ship FindOrbitingShip(Sector sector, Planet planet, int shipId) =>
+        planet == null || sector?.PlayerForce?.Faction == null
+            ? null
+            : PlanetForceMovementService
+                .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction)
+                .FirstOrDefault(ship => ship.Id == shipId);
+
+    internal static int ResolveTargetFactionId(Region region, AvailableMission mission)
+    {
+        int explicitTarget = mission?.TargetFaction?.PlanetFaction?.Faction?.Id
+            ?? mission?.SpecialMission?.RegionFaction?.PlanetFaction?.Faction?.Id ?? -1;
+        if (explicitTarget >= 0 || mission?.Kind != MissionAvailabilityKind.Diversion)
+            return explicitTarget;
+        return region.RegionFactionMap.Values
+            .Where(presence => presence.IsPublic
+                && !FactionRelationshipService.IsImperial(presence.PlanetFaction.Faction))
+            .Select(presence => presence.PlanetFaction.Faction.Id).FirstOrDefault(-1);
+    }
+}
 
 /// <summary>
 /// Builds the detached Planetary Operations projections. Everything it needs about the campaign

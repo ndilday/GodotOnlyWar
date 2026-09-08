@@ -1,5 +1,6 @@
 using OnlyWar.Models.Recruitment;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Orders;

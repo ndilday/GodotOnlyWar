@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using OnlyWar.Contracts.Generation;
+using OnlyWar.Generation.Contracts;
 using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Helpers.Narrative
 {
-    // BriefingTokens is a boundary value and lives in OnlyWar.Contracts.Generation; Generation
+    // BriefingTokens is a boundary value and lives in OnlyWar.Generation.Contracts; Generation
     // resolves the tokens and this composer, the narrative owner, turns them into prose.
 
     // Minimal token-substitution composer for the "Promised World" founding directive
@@ -88,8 +88,5 @@ namespace OnlyWar.Helpers.Narrative
                 + "last survivors are hunted down.";
         }
 
-        [System.Obsolete("Use ComposeInvasionPromisedWorldBriefing.")]
-        public static string ComposeOrkPromisedWorldBriefing(BriefingTokens tokens) =>
-            ComposeInvasionPromisedWorldBriefing(tokens);
     }
 }

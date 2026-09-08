@@ -1,5 +1,6 @@
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Models.Missions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -52,10 +53,18 @@ namespace OnlyWar.Helpers.Missions
             // Keeping them makes any divergence below attributable to the opening range itself.
             _ = opposingSquads.First().GetRandomAbleMember(random);
             _ = missionSquads.First().GetRandomAbleMember(random);
+            IReadOnlyList<EngagementParticipant> missionParticipants = missionSquads
+                .Select(squad => squad.ToEngagementParticipant())
+                .ToArray();
+            IReadOnlyList<EngagementParticipant> opposingParticipants = opposingSquads
+                .Select(squad => squad.ToEngagementParticipant())
+                .ToArray();
             double missionRange = missionSquads.Average(
-                squad => resolver.GetPreferredOpeningRange(squad, opposingSquads));
+                squad => resolver.GetPreferredOpeningRange(
+                    squad.ToEngagementParticipant(), opposingParticipants));
             double opposingRange = opposingSquads.Average(
-                squad => resolver.GetPreferredOpeningRange(squad, missionSquads));
+                squad => resolver.GetPreferredOpeningRange(
+                    squad.ToEngagementParticipant(), missionParticipants));
             return (ushort)(opposingRange + (missionRange - opposingRange) * rangeModifier);
         }
     }

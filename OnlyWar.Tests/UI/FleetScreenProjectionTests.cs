@@ -130,14 +130,41 @@ public class FleetScreenProjectionTests
         Ship sourceShip = CreateShip(1, "Source", 20);
         Ship destinationShip = CreateShip(2, "Destination", 20);
         _ = new TaskForce(1, CreateFaction(), null, CreatePlanet(1), null, [sourceShip, destinationShip]);
-        Squad squad = CreateSquad(11, "10th Company HQ", secondCompany, memberCount: 5);
-        sourceShip.LoadSquad(squad);
-        squad.BoardedLocation = sourceShip;
+        SquadTemplate administrativeTemplate = new(
+            995,
+            "10th Company HQ",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 5)],
+            SquadTypes.Administrative,
+            FormationMobilityPolicy.MembersOnly);
+        Squad squad = CreateSquad(
+            11,
+            "10th Company HQ",
+            secondCompany,
+            memberCount: 5,
+            template: administrativeTemplate);
+        sourceShip.StationAdministrativeFormation(squad);
+        squad.DutyStation = CampaignLocation.Aboard(sourceShip);
+        Region stationRegion = new(
+            1,
+            CreatePlanet(1),
+            0,
+            "Station",
+            new RegionCoordinate(0, 0),
+            0);
 
-        squad.IsAdministrative = true;
+        OnlyWar.Helpers.AdministrativeStationResult result =
+            new OnlyWar.Helpers.AdministrativeStationService(
+                TestPersonnelComposition.CreatePersonnel(),
+                new OnlyWar.Helpers.Orders.OrderCommitmentSurface()).SeatFormation(
+            squad,
+            CampaignLocation.Landed(stationRegion));
+        Assert.True(result.Succeeded, result.Message);
 
         Assert.Null(squad.BoardedLocation);
-        Assert.DoesNotContain(squad, sourceShip.LoadedSquads);
+        Assert.DoesNotContain(squad, sourceShip.AdministrativeStations);
         Assert.False(FleetTransferService.CanTransferSquadToShip(squad, destinationShip));
     }
 

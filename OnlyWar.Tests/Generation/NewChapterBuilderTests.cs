@@ -20,7 +20,7 @@ public class NewChapterBuilderTests
     public NewChapterBuilderTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
     }
 
     [Fact]
@@ -388,7 +388,7 @@ public class NewChapterBuilderTests
     private ISoldierTrainingService CreateTrainingService()
     {
         RatingCalculator ratingCalculator = new(_data.RatingDefinitions, _data.RatingAwardTiers,
-                                                _data.BaseSkillMap, StaticRNG.Instance);
+                                                _data.BaseSkillMap, new StaticRNG());
         return new SoldierTrainingCalculator(_data.BaseSkillMap.Values, _data.TrainingProfiles.Values,
                                              ratingCalculator);
     }

@@ -1,5 +1,5 @@
 using OnlyWar.Builders;
-using OnlyWar.Contracts.Generation;
+using OnlyWar.Generation.Contracts;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Application.Adapters.Generation;
 using OnlyWar.Models;
@@ -13,8 +13,12 @@ namespace OnlyWar.Tests.Fixtures;
 /// </summary>
 internal static class TestGeneration
 {
-    internal static GenerationSupport Support(GameRulesData data, Date date) =>
-        CandidateGenerationSupport.For(data, date, StaticRNG.Instance);
+    internal static GenerationSupport Support(GameRulesData data, Date date)
+    {
+        TestCampaignComposition composition = TestPersonnelComposition.CreateCampaign();
+        return composition.Services.Generation.CreateSupport(
+            data, date, composition.Services.Random);
+    }
 
     internal static Sector GenerateSector(
         int seed,

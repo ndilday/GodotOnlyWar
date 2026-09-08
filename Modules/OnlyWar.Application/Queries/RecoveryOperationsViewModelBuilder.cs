@@ -39,7 +39,7 @@ namespace OnlyWar.Helpers
             }
 
             MedicalSoldierSummary summary = _medical.BuildSoldierSummary(patient, force);
-            if (patient.IndividualPosting?.Kind == IndividualPostingKind.AwaitingReunion)
+            if (IsAwaitingReunion(patient))
             {
                 bool canRejoin = CampaignLocationService.AreCoLocated(patient, patient.AssignedSquad);
                 IReadOnlyList<RecoveryAction> reunionActions =
@@ -95,14 +95,16 @@ namespace OnlyWar.Helpers
                 .OrderByDescending(wound => wound.IsSevered)
                 .ThenByDescending(wound => wound.PrincipalWoundLevel)
                 .FirstOrDefault();
-            string posting = soldier.IndividualPosting?.Kind switch
-            {
-                IndividualPostingKind.OperationalAttachment => "WITH ORDER",
-                IndividualPostingKind.MedicalDetachment => "IN MEDICAL CARE",
-                IndividualPostingKind.AwaitingReunion => "AWAITING REUNION",
-                IndividualPostingKind.IndependentDeployment => "POSTED",
-                _ => null
-            };
+            string posting = soldier.CurrentOrder != null
+                ? "WITH ORDER"
+                : soldier.IndividualPosting?.Purpose switch
+                {
+                    IndividualPostingPurpose.Medical => IsAwaitingReunion(soldier)
+                        ? "AWAITING REUNION"
+                        : "IN MEDICAL CARE",
+                    IndividualPostingPurpose.Independent => "POSTED",
+                    _ => null
+                };
             return new RecoveryQueueRow(
                 soldier.Id,
                 soldier.Name,
@@ -194,8 +196,13 @@ namespace OnlyWar.Helpers
         private static bool IsInRecoveryQueue(PlayerSoldier soldier) => soldier != null
             && (soldier.IsWounded
                 || soldier.IsUndergoingMedicalProcedure
-                || soldier.IndividualPosting?.Kind == IndividualPostingKind.MedicalDetachment
-                || soldier.IndividualPosting?.Kind == IndividualPostingKind.AwaitingReunion);
+                || soldier.IndividualPosting?.Purpose == IndividualPostingPurpose.Medical);
+
+        private static bool IsAwaitingReunion(PlayerSoldier soldier) =>
+            soldier?.IndividualPosting?.Purpose == IndividualPostingPurpose.Medical
+            && !soldier.IsUndergoingMedicalProcedure
+            && soldier.Body?.HitLocations.All(location =>
+                location.Wounds.WoundTotal == 0 && !location.IsSevered) == true;
 
         private static IEnumerable<RecoveryQueueRow> Sort(
             IEnumerable<RecoveryQueueRow> rows,

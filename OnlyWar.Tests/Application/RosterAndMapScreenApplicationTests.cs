@@ -483,7 +483,7 @@ public sealed class RosterAndMapScreenApplicationTests
 
     private static CampaignApplication InstallFixture(SectorSimulationFixture fixture)
     {
-        CampaignApplication application = new(new SeededRNG(31));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(31)).CreateApplication();
         application.Install(new GameSession(
             fixture.Rules,
             fixture.Sector,
@@ -525,7 +525,7 @@ public sealed class RosterAndMapScreenApplicationTests
         source.LoadSquad(squad);
         squad.BoardedLocation = source;
 
-        CampaignApplication application = new(new SeededRNG(31));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(31)).CreateApplication();
         application.Install(new GameSession(
             fixture.Rules,
             new Sector(force, [], [home, away], [inOrbit, elsewhere]),
@@ -550,7 +550,7 @@ public sealed class RosterAndMapScreenApplicationTests
             fixture.Sector.PlayerForce.Faction,
             new Army("Army", null, "Commander", chapter, new List<PlayerSoldier>()),
             new Fleet("Fleet", null, null));
-        CampaignApplication application = new(new SeededRNG(51));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(51)).CreateApplication();
         application.Install(new GameSession(
             fixture.Rules,
             new Sector(force, [], [fixture.Planet], []),

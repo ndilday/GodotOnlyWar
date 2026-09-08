@@ -212,7 +212,7 @@ public sealed class MainScreenApplicationTests
     private static CampaignApplication CreateApplication(IReadOnlyList<Planet> planets = null)
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        CampaignApplication application = new(new SeededRNG(41));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(41)).CreateApplication();
         application.Install(CreateSession(fixture.Rules, planets));
         return application;
     }

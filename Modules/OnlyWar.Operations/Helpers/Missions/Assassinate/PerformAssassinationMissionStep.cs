@@ -1,6 +1,6 @@
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;

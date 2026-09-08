@@ -9,7 +9,6 @@ public static class NameGenerator
 
     internal static int GivenNameCount => Generator.GivenNameCount;
     internal static int SurnameCount => Generator.SurnameCount;
-    public static void Reset() => Generator.Reset(StaticRNG.Instance);
-    public static string GetFullName() => Generator.GetFullName(StaticRNG.Instance);
+    public static void Reset() => Generator.Reset(new StaticRNG());
+    public static string GetFullName() => Generator.GetFullName(new StaticRNG());
 }
-

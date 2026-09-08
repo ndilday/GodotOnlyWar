@@ -77,7 +77,7 @@ public class SectorBuilderTests
         GameRulesData rules = LoadRulesWithProfile("failed-candidate", 10, 10, 1.0, 20);
         Date activeDate = new(39, 400, 1);
         Sector active = CreateSector(new Coordinate(0, 0), new Coordinate(2, 0));
-        CampaignApplication application = new(new SeededRNG(41));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(41)).CreateApplication();
         GameSession activeSession = new(rules, active, activeDate, new SeededRNG(42));
         application.Install(activeSession);
 

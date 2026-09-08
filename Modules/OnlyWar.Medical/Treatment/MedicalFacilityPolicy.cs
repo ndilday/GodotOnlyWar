@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 
 namespace OnlyWar.Medical.Treatment;
 

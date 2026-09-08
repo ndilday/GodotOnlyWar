@@ -75,26 +75,32 @@ narrative projection and reconciliation.
 
 ## 2. Project Structure
 
-Production sources are split between the Domain, Contracts, Medical, Persistence, Runtime,
-Generation, Campaign and Application headless projects under `Modules/`, plus the root Godot host. Namespaces
+Production sources are split between the Domain, small shared abstractions, Medical, Persistence,
+Runtime, Generation, Campaign and Application headless projects under `Modules/`, plus the root Godot host. Namespaces
 retain the `OnlyWar` root. The exhaustive source
 ownership manifest is `Modules/source-ownership.json`: module entries are relative to their
-respective `Modules/OnlyWar.<owner>/` directories;
-Host entries are repository-relative presentation helpers. Scenes, Composition, and
-the host's assembly metadata also remain in the root project.
+respective `Modules/OnlyWar.<owner>/` directories; Host entries are repository-relative and live
+under `Host/`. `Host/Presentation` is the single home for Godot-facing presentation helpers and
+`Host/Composition` contains startup/path wiring. Scenes and the host's assembly metadata remain in
+the root project; the legacy root `Helpers`, `Models`, `Builders`, and `Composition` trees contain
+no shipping C#.
 
 | Project | Direct production references | Current responsibility |
 |---|---|---|
 | `OnlyWar.Domain` | None | Coordinates/date, body/wound and equipment primitives, independent soldier/planet/fleet templates, doctrine and rating values. |
-| `OnlyWar.Contracts` | Domain | RNG/ID allocation interfaces and typed Medical, Battles, Operations, Persistence, and Runtime boundary inputs/results. |
-| `OnlyWar.Battles` | Domain, Contracts | Tactical state, planning, actions, wounds, morale, withdrawal, battle-local aftermath and replay over explicit equipment/participant/rules inputs. |
-| `OnlyWar.Medical` | Domain, Contracts | Headless readiness, health, procedure, facility and care policies over explicit medical facts. |
-| `OnlyWar.Persistence` | Domain, Contracts | Atomic campaign files, rules/catalog readers, game-state readers, save writers, save catalog/retention/metadata, format validation and raw-record mapping. SQLite-owned adapter surface. |
-| `OnlyWar.Runtime` | Domain, Contracts | Runtime soldier/squad/force factories, names, RNG adapters, explicit persistent/tactical ID allocators, and the deterministic sector topology/governance rebuild shared by new game and load. |
-| `OnlyWar.Generation` | Domain, Contracts, Runtime | Initial sector/chapter/planet/character construction and the authored opening-scenario stamp, over explicit generation ports. |
-| `OnlyWar.Campaign` | Domain, Contracts, Runtime, Battles, Medical, Operations, Generation | Live campaign policies/entities, narrative projection/reconciliation and compatibility façades. It does not read or write SQLite. |
-| `OnlyWar.Application` | Domain, Contracts, Runtime, Campaign, Battles, Medical, Operations, Persistence, Generation | Session lifetime, detached create/load/save workflows, turn orchestration and cross-subsystem composition. |
-| `OnlyWarGodot` | Domain, Contracts, Application, Campaign, Battles, Generation, Medical, Persistence, Runtime, Operations | Scenes, presentation helpers, Godot geometry/path/logging adapters and startup composition. |
+| `OnlyWar.Abstractions` | None | Cross-cutting RNG and entity-ID allocation primitives. |
+| `OnlyWar.Application.Abstractions` | Domain, Abstractions | The explicit `ICampaignSession` seam consumed by application-facing policy. |
+| `OnlyWar.Battles.Abstractions` | Domain | Tactical engagement facts/results plus battle-owned capability ports. No campaign aggregate crosses the engagement request. |
+| `OnlyWar.Battles` | Domain, Abstractions, Battles.Abstractions, Runtime | Tactical state, planning, actions, wounds, morale, withdrawal, battle-local aftermath and replay over explicit equipment/participant/rules inputs. |
+| `OnlyWar.Medical.Abstractions` | Domain | Readiness, health, procedure, facility and care facts/results. Readiness policy receives snapshots rather than campaign aggregates. |
+| `OnlyWar.Medical` | Domain, Abstractions, Medical.Abstractions | Headless readiness, health, procedure, facility and care policies over explicit medical facts. |
+| `OnlyWar.Persistence` | Domain | Persistence ports and adapters: atomic campaign files, rules/catalog readers, game-state readers, save writers, save catalog/retention/metadata, format validation and raw-record mapping. SQLite-owned surface. |
+| `OnlyWar.Runtime` | Domain, Abstractions | Runtime soldier/squad/force factories, names, logging, explicit persistent/tactical ID allocators, and the deterministic sector topology/governance rebuild shared by new game and load. |
+| `OnlyWar.Generation` | Domain, Abstractions, Runtime | Initial sector/chapter/planet/character construction and the authored opening-scenario stamp, over owner-local generation ports. |
+| `OnlyWar.Operations` | Domain, Abstractions, Battles.Abstractions, Medical.Abstractions, Runtime | Operations contracts, neutral mission elements, personnel availability queries, order/mission sequencing and live-graph mutation adapters. |
+| `OnlyWar.Campaign` | Domain, Abstractions, Application.Abstractions, Battles.Abstractions, Runtime, Battles, Medical, Operations, Generation | Live campaign policies/entities, narrative projection/reconciliation and compatibility façades. It does not read or write SQLite. |
+| `OnlyWar.Application` | Domain, Abstractions, Application.Abstractions, Battles.Abstractions, Runtime, Campaign, Battles, Medical, Operations, Persistence, Generation | Session lifetime, detached create/load/save workflows, turn orchestration and cross-subsystem composition. |
+| `OnlyWarGodot` | Domain, Abstractions, Application.Abstractions, Battles.Abstractions, Medical.Abstractions, Application, Campaign, Battles, Generation, Medical, Persistence, Runtime, Operations | `Host/Presentation`, Scenes, Godot geometry/path/logging adapters and startup composition. |
 
 The host excludes `Modules/**/*.cs` and both test projects from compilation, including
 nested generated `obj` sources. Each moved source compiles in exactly one project.
@@ -114,7 +120,7 @@ mission/battle contexts still reference their implementations. `GameRulesData` a
 `GameRulesBlob` remain Domain data; Persistence populates them while Campaign owns the live
 faction/unit policy that can mutate the hydrated graph.
 The feature extraction that first needs each shared signature must separate those
-members before moving the entity to Domain/Contracts; Domain never references Campaign/Application.
+members before moving the entity to Domain or a small owner-local abstraction; Domain never references Campaign/Application.
 Intrinsic health/equipment operations moved down; soldier-dependent casualty evaluation
 stays with the battle implementation. This is an intermediate build seam, not completion
 of the subsystem or shared-mutation boundaries.
@@ -1542,7 +1548,7 @@ Gene-seed recovery resolves once per confirmed-dead brother in `BattleTurnResolv
 ### 6.6.2 Chapter Operational Doctrine & Duty Readiness
 
 Individual/squad policy lives in the headless `OnlyWar.Medical` assembly, with typed facts and
-reasons in `OnlyWar.Contracts/Medical`. It consumes supplied doctrine, personnel, posting and
+reasons in `OnlyWar.Medical.Abstractions/Contracts`. It consumes supplied doctrine, personnel, posting and
 recruitment-reservation facts; null inputs do not select a campaign. Presentation row context
 adapts the neutral `SquadDeploymentContext`, and labels/colors stay separate from policy
 decisions. Campaign's `DutyReadinessService` and `SquadReadinessService` are compatibility
@@ -1647,9 +1653,9 @@ subsector diameter; the shipped profile is 200×200 light years with a 2% spawn 
 20-light-year maximum diameter. Each grid unit represents 1×1 light year. A subsector typically
 contains 2–8 star systems.
 
-Generation lives in `OnlyWar.Generation` and references only Domain, Contracts and Runtime. It builds a candidate campaign and publishes nothing. `SectorBuilder.GenerateSector` constructs the worlds and the founding chapter, rebuilds topology and governance through `OnlyWar.Runtime`'s `SectorTopologyBuilder`, seeds ghost populations, then hands the candidate to `ScenarioBuilder.StampPromisedWorld`. `CampaignApplication.StartNewCampaign` installs the rules, date and sector together only once generation returns, so a failure during generation or warm-up leaves the campaign already in play untouched. Warm-up does not advance the campaign date or run player upkeep, fleet travel or scenario resolution.
+Generation lives in `OnlyWar.Generation` and references only Domain, Abstractions and Runtime. It builds a candidate campaign and publishes nothing. `SectorBuilder.GenerateSector` constructs the worlds and the founding chapter, rebuilds topology and governance through `OnlyWar.Runtime`'s `SectorTopologyBuilder`, seeds ghost populations, then hands the candidate to `ScenarioBuilder.StampPromisedWorld`. `CampaignApplication.StartNewCampaign` installs the rules, date and sector together only once generation returns, so a failure during generation or warm-up leaves the campaign already in play untouched. Warm-up does not advance the campaign date or run player upkeep, fleet travel or scenario resolution.
 
-Every campaign capability generation needs arrives as a `GenerationSupport` bundle of ports declared in `OnlyWar.Contracts.Generation`: seeding (ghost populations, faction reveal, opening invasion), narrative (authority title, briefing composition, event recorder, founding record, chronicle reconcile), fleet (initial flagship, administrative stationing), founding-role ranking, training/rating policy, and `ICandidateWarmupSimulator`. `CandidateGenerationSupport` composes the implementations; the warm-up simulator opens one turn controller over a `GameSession` for the candidate sector and drives both the pre- and post-landing planet passes with it, so the two passes share planning and intelligence state as they did when the generator built the controller itself. Because the simulator is a port, the generator holds no reference to turn simulation and the two remain acyclic.
+Every campaign capability generation needs arrives as a `GenerationSupport` bundle of ports declared in `OnlyWar.Generation/Contracts`: seeding (ghost populations, faction reveal, opening invasion), narrative (authority title, briefing composition, event recorder, founding record, chronicle reconcile), fleet (initial flagship, administrative stationing), founding-role ranking, training/rating policy, and `ICandidateWarmupSimulator`. `CandidateGenerationSupport` composes the implementations; the warm-up simulator opens one turn controller over a `GameSession` for the candidate sector and drives both the pre- and post-landing planet passes with it, so the two passes share planning and intelligence state as they did when the generator built the controller itself. Because the simulator is a port, the generator holds no reference to turn simulation and the two remain acyclic.
 
 The same `SectorTopologyBuilder` rebuild runs on load, so restoring a save no longer calls the new-game generator for its derived subsectors, warp lanes and governance seats.
 
@@ -1718,7 +1724,7 @@ already recorded on it. `InboundOrders.ForRegion` takes the sector to scan and
 `PlanetaryOperationsScreenController` resolves those inputs from the installed campaign; it is the
 host-side adapter for this boundary, not a fallback inside the policy.
 
-Readiness inputs follow the same rule. `ForceReadinessInputs` (Contracts) answers "which doctrine and
+Readiness inputs follow the same rule. The Operations helper `ForceReadinessInputs` answers "which doctrine and
 which reservations govern this squad" against a force the caller names, applying the one guard that
 matters: doctrine and the recruitment pipeline belong to a single player force and never govern
 another faction's squads. Order lifecycle policy resolves that force from `OrderCommandContext.Force`
@@ -1745,7 +1751,7 @@ world size, zoom range, colour, outline, shadow, and letter spacing for the thre
 - Band B (1.1-3.5): priority-ordered planet names while Band A remains dimmed.
 - Band C (3.5-10): close planet names.
 
-Helpers/UI/SectorMapLabelLayout is the engine-independent placement solver. It receives measured
+Host/Presentation/UI/SectorMapLabelLayout is the engine-independent placement solver. It receives measured
 world-space extents and returns deterministic, non-overlapping positions. Subsector candidates
 also carry their Voronoi region polygons, so the solver rejects placements whose sampled bounds
 would cross the region. Planet priority is ordered by active work, request severity, governance
@@ -2353,8 +2359,8 @@ Application load coordinator reconstructs Campaign-owned `PresenceRequest` polic
 Operations/Campaign relationship services after the graph exists. Campaign's narrative event
 projection, history view, policy, reconciliation and campaign-specific mutation remain outside
 Persistence. `ModuleBoundaryEnforcementTests` permits SQL only under Persistence, and
-`HeadlessBoundaryTests` checks the direct assembly graph and the public Contracts surface for
-storage-provider leakage.
+`HeadlessBoundaryTests` checks the direct assembly graph and the owner-local persistence contract
+surface for storage-provider leakage.
 
 ### 8.6 Former GameDataSingleton Global State — RESOLVED
 

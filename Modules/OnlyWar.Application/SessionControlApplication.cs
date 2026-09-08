@@ -13,28 +13,14 @@ namespace OnlyWar.Application;
 /// be saved or ended and issues commands; it never reads the recoverability tracker or the campaign
 /// graph to answer those questions itself.
 /// </summary>
-public sealed partial class CampaignApplication : ISessionControlApplication
+public sealed class SessionControlApplication : CampaignScreenApplication,
+    ISessionControlApplication
 {
-    private SaveGameManager _saves;
-    private bool _statusSubscribed;
-
     public event EventHandler CampaignStatusChanged;
 
-    /// <summary>
-    /// Startup composition supplies the storage manager. Without it the application still runs but
-    /// reports saving as unavailable rather than silently doing nothing.
-    /// </summary>
-    public void ConfigureStorage(SaveGameManager saves)
+    public SessionControlApplication(CampaignApplicationContext context) : base(context)
     {
-        _saves = saves;
-        SubscribeStatus();
-    }
-
-    private void SubscribeStatus()
-    {
-        if (_statusSubscribed) return;
-        _recoverability.StateChanged += OnRecoverabilityChanged;
-        _statusSubscribed = true;
+        Context.Recoverability.StateChanged += OnRecoverabilityChanged;
     }
 
     private void OnRecoverabilityChanged(object sender, EventArgs args) =>
@@ -42,42 +28,38 @@ public sealed partial class CampaignApplication : ISessionControlApplication
 
     public CampaignStatusView QueryStatus()
     {
-        SubscribeStatus();
-        bool hasCampaign = _activeSession != null;
+        bool hasCampaign = ActiveSession != null;
         return new CampaignStatusView(
             hasCampaign,
-            hasCampaign && _recoverability.IsDirty,
+            hasCampaign && Context.Recoverability.IsDirty,
             CampaignName());
     }
 
-    public void MarkChanged() => _recoverability.MarkChanged();
+    public void MarkChanged() => Context.MarkChanged();
 
     public SaveCampaignResult SaveCampaign(SaveCampaignCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        if (_activeSession == null || command.SessionToken != SessionToken)
+        if (ActiveSession == null || command.SessionToken != SessionToken)
             return new(false, "The campaign changed. Reopen the save menu and try again.");
-        if (_saves == null)
-            return new(false, "Save storage is unavailable.");
-
         // Capture what is being saved before writing, so a failed write cannot mark a later state
         // recoverable. Only a successful write clears the dirty flag.
-        CampaignRevision revision = _recoverability.CaptureRevision();
+        CampaignRevision revision = Context.Recoverability.CaptureRevision();
         try
         {
             SaveGameEntry entry = command.Kind switch
             {
-                SaveCampaignKind.Manual => _saves.CreateManualSave(
-                    command.DisplayName, CampaignName(), path => Save(path)),
-                SaveCampaignKind.Overwrite => _saves.OverwriteManualSave(
-                    command.OverwriteFilePath, command.DisplayName, CampaignName(), path => Save(path)),
+                SaveCampaignKind.Manual => Services.Persistence.SaveManager.CreateManualSave(
+                    command.DisplayName, CampaignName(), path => Context.Save(path)),
+                SaveCampaignKind.Overwrite => Services.Persistence.SaveManager.OverwriteManualSave(
+                    command.OverwriteFilePath, command.DisplayName, CampaignName(), path => Context.Save(path)),
                 SaveCampaignKind.PostTurnAutosave =>
-                    _saves.SavePostTurnAutosave(CampaignName(), path => Save(path)),
+                    Services.Persistence.SaveManager.SavePostTurnAutosave(CampaignName(), path => Context.Save(path)),
                 SaveCampaignKind.InitialAutosave =>
-                    _saves.SaveInitialAutosave(CampaignName(), path => Save(path)),
-                _ => _saves.SaveProtectedPreTurn(CampaignName(), path => Save(path))
+                    Services.Persistence.SaveManager.SaveInitialAutosave(CampaignName(), path => Context.Save(path)),
+                _ => Services.Persistence.SaveManager.SaveProtectedPreTurn(CampaignName(), path => Context.Save(path))
             };
-            _recoverability.MarkSaveSucceeded(revision);
+            Context.Recoverability.MarkSaveSucceeded(revision);
             return new(true, $"Campaign saved as {entry.DisplayName}.",
                 entry.DisplayName, entry.LastWriteTimeLocal);
         }
@@ -91,20 +73,20 @@ public sealed partial class CampaignApplication : ISessionControlApplication
     /// Writes the active campaign to an arbitrary path for a diagnostic bundle. It deliberately
     /// does not touch recoverability: this is a copy for support, not a recovery point.
     /// </summary>
-    public void WriteDiagnosticCapture(string filePath) => Save(filePath);
+    public void WriteDiagnosticCapture(string filePath) => Context.Save(filePath);
 
     public bool RequiresRecruitmentSetup() =>
-        _activeSession?.Sector.PlayerForce?.RecruitmentProgram
+        ActiveSession?.Sector.PlayerForce?.RecruitmentProgram
             is RecruitmentProgram { IsSetupComplete: false };
 
     public EndTurnPreflightReport QueryEndTurnPreflight(EndTurnWarningPreferences preferences) =>
-        _activeSession == null
+        ActiveSession == null
             ? new EndTurnPreflightReport([])
             : EndTurnPreflight.EvaluateWithRules(
-                _activeSession.Sector, preferences, _activeSession.Rules);
+                ActiveSession.Sector, preferences, ActiveSession.Rules);
 
     private string CampaignName() =>
-        _activeSession?.Sector.PlayerForce?.Army?.OrderOfBattle?.Name
-        ?? _activeSession?.Sector.PlayerForce?.Army?.ForceName
+        ActiveSession?.Sector.PlayerForce?.Army?.OrderOfBattle?.Name
+        ?? ActiveSession?.Sector.PlayerForce?.Army?.ForceName
         ?? "Unknown Chapter";
 }

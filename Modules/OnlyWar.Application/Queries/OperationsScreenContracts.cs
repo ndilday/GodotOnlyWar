@@ -86,15 +86,13 @@ public sealed record OrderCancellationPrompt(
     int SpecialistCount);
 
 /// <summary>
-/// The Planetary Operations command boundary. Every member resolves the live campaign at execution
-/// and validates the caller's session token first.
+/// The read boundary for Planetary Operations. Query implementations resolve the currently
+/// installed campaign and return detached projections; they do not expose campaign entities.
 /// </summary>
-public interface IOperationsScreenApplication
+public interface IOperationsScreenQueries
 {
     Guid SessionToken { get; }
-    event EventHandler SessionChanged;
 
-    /// <summary>One detached refresh of the whole workspace for the screen's current selection.</summary>
     OperationsWorkspaceView QueryOperations(OperationsWorkspaceQuery query);
     WorldDossierView QueryWorldDossier(int planetId, int regionId);
     IReadOnlyList<DossierCardView> QueryRegionCards(int regionId);
@@ -109,10 +107,20 @@ public interface IOperationsScreenApplication
     /// screen asks rather than recomputing it.
     /// </summary>
     int? FindOrderForMission(int regionId, string missionKey);
+    OrderCancellationPrompt DescribeOrderCancellation(int orderId);
+}
+
+/// <summary>
+/// The Planetary Operations application boundary. Every command resolves the live campaign at
+/// execution and validates the caller's session token first. Read behavior is supplied by the
+/// narrower <see cref="IOperationsScreenQueries"/> boundary.
+/// </summary>
+public interface IOperationsScreenApplication : IOperationsScreenQueries
+{
+    event EventHandler SessionChanged;
 
     OperationsCommandResult SetOrderParticipants(OrderParticipantsCommand command);
     OperationsCommandResult RemoveOrderSquad(RemoveOrderSquadCommand command);
-    OrderCancellationPrompt DescribeOrderCancellation(int orderId);
     OperationsCommandResult CancelOrder(CancelOrderCommand command);
     OperationsCommandResult SetOrderAggression(SetOrderAggressionCommand command);
     OperationsCommandResult ToggleOrderSpecialist(ToggleOrderSpecialistCommand command);

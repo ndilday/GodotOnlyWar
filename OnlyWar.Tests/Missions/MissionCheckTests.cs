@@ -1,6 +1,6 @@
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
@@ -23,7 +23,7 @@ public class MissionCheckTests
         RNG.Reset(99);
         float expected = ExpectedMargin(zAdvantage: (13 - 5) / 5.0f, seed: 99);
         RNG.Reset(99);
-        float actual = missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+        float actual = missionTest.RunMissionCheck([squad], new StaticRNG());
 
         Assert.Equal(expected, actual, precision: 5);
     }
@@ -45,7 +45,7 @@ public class MissionCheckTests
         RNG.Reset(10);
         float actual = missionTest.RunMissionCheck(
             [firstSquad, secondSquad],
-            StaticRNG.Instance);
+            new StaticRNG());
 
         Assert.Equal(expected, actual, precision: 5);
     }
@@ -143,7 +143,7 @@ public class MissionCheckTests
         RNG.Reset(11);
         float expected = ExpectedMargin(zAdvantage: (15 - 5) / 5.0f, seed: 11);
         RNG.Reset(11);
-        float actual = missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+        float actual = missionTest.RunMissionCheck([squad], new StaticRNG());
 
         Assert.Equal(expected, actual, precision: 5);
     }
@@ -159,7 +159,7 @@ public class MissionCheckTests
         RNG.Reset(12);
         float expected = ExpectedMargin(zAdvantage: (12 - 5) / 5.0f, seed: 12);
         RNG.Reset(12);
-        float actual = missionTest.RunMissionCheck([squad], StaticRNG.Instance);
+        float actual = missionTest.RunMissionCheck([squad], new StaticRNG());
 
         Assert.Equal(expected, actual, precision: 5);
     }

@@ -5,7 +5,10 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Modules/OnlyWar.Domain/OnlyWar.Domain.csproj" />
-    <ProjectReference Include="../Modules/OnlyWar.Contracts/OnlyWar.Contracts.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Application.Abstractions/OnlyWar.Application.Abstractions.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Battles.Abstractions/OnlyWar.Battles.Abstractions.csproj" />
+    <ProjectReference Include="../Modules/OnlyWar.Medical.Abstractions/OnlyWar.Medical.Abstractions.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Application/OnlyWar.Application.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Campaign/OnlyWar.Campaign.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Battles/OnlyWar.Battles.csproj" />
@@ -14,6 +17,9 @@
     <ProjectReference Include="../Modules/OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <ProjectReference Include="../Modules/OnlyWar.Generation/OnlyWar.Generation.csproj" />
+    <Using Include="OnlyWar.Abstractions" />
+    <Using Include="OnlyWar.Medical.Abstractions" />
+    <Using Include="OnlyWar.Generation.Contracts" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">

@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Drawing;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Missions;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;

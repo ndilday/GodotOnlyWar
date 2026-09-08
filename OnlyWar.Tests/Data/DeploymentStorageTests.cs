@@ -20,10 +20,10 @@ public sealed class DeploymentStorageTests : IDisposable
     [Fact]
     public void InstalledDatabaseFiles_AreLocatedWithoutWorkingDirectoryAssumptions()
     {
-        Assert.True(File.Exists(GameStorage.RulesDatabasePath));
-        Assert.True(File.Exists(GameStorage.SaveSchemaPath));
-        Assert.Equal("OnlyWar.s3db", Path.GetFileName(GameStorage.RulesDatabasePath));
-        Assert.Equal("SaveStructure.sql", Path.GetFileName(GameStorage.SaveSchemaPath));
+        Assert.True(File.Exists(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath));
+        Assert.True(File.Exists(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.SaveSchemaPath));
+        Assert.Equal("OnlyWar.s3db", Path.GetFileName(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath));
+        Assert.Equal("SaveStructure.sql", Path.GetFileName(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.SaveSchemaPath));
     }
 
     [Fact]
@@ -58,7 +58,8 @@ public sealed class DeploymentStorageTests : IDisposable
     {
         string missingPath = Path.Combine(_tempDirectory, "missing.s3db");
 
-        Assert.Throws<FileNotFoundException>(() => GameStateDataAccess.Instance.GetData(
+        Assert.Throws<FileNotFoundException>(() =>
+            new GameStateDataAccess(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.SaveSchemaPath).GetData(
             missingPath, null, null, null, null, null, null, null, null, null));
         Assert.False(File.Exists(missingPath));
     }
@@ -72,7 +73,7 @@ public sealed class DeploymentStorageTests : IDisposable
         string savePath = CreateMetadataDatabase($"format-{saveVersion}.s3db", saveVersion);
 
         InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
-            GameStateDataAccess.Instance.GetData(
+            new GameStateDataAccess(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.SaveSchemaPath).GetData(
                 savePath, null, null, null, null, null, null, null, null, null));
 
         Assert.Contains("not supported", exception.Message);

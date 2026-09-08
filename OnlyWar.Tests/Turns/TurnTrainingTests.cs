@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -213,7 +213,7 @@ public class TurnTrainingTests
         public static TurnTrainingFixture Create()
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Faction playerFaction = CreatePlayerFaction();
             SoldierTemplate soldierTemplate = CreateTrainingSoldierTemplate();
             SquadTemplate squadTemplate = CreateSquadTemplate(playerFaction);
@@ -338,9 +338,11 @@ public class TurnTrainingTests
 
         public void ProcessTurn()
         {
-            new TurnController(
-                new GameSession(Rules, Sector, CurrentDate, StaticRNG.Instance),
-                TrainingService).ProcessTurn(Sector);
+            TestPersonnelComposition.CreateCampaign(new StaticRNG())
+                .CreateTurnController(
+                    new GameSession(Rules, Sector, CurrentDate, new StaticRNG()),
+                    TrainingService)
+                .ProcessTurn(Sector);
         }
 
         private static SoldierTemplate CreateTrainingSoldierTemplate()

@@ -13,12 +13,15 @@ using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Application;
 
-public sealed partial class CampaignApplication : ICampaignNavigationApplication
+public sealed class CampaignNavigationApplication : CampaignScreenApplication,
+    ICampaignNavigationApplication
 {
+    public CampaignNavigationApplication(CampaignApplicationContext context) : base(context) { }
+
     public CampaignNavigationRoute ResolveNavigation(
         CampaignNavigationTargetKind kind, int? primaryId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         if (session == null) return CampaignNavigationRoute.None;
 
         switch (kind)
@@ -92,7 +95,7 @@ public sealed partial class CampaignApplication : ICampaignNavigationApplication
 
     public CampaignNavigationRoute ResolveSquadLocation(int squadId)
     {
-        GameSession session = _activeSession;
+        GameSession session = ActiveSession;
         Squad squad = session?.Sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
             .FirstOrDefault(candidate => candidate.Id == squadId);
         if (squad == null) return CampaignNavigationRoute.None;
@@ -111,11 +114,11 @@ public sealed partial class CampaignApplication : ICampaignNavigationApplication
     }
 
     public int? QueryRegionPlanet(int regionId) =>
-        FindRegion(_activeSession, regionId)?.Planet?.Id;
+        FindRegion(ActiveSession, regionId)?.Planet?.Id;
 
     public string QueryPlanetName(int planetId) =>
-        _activeSession != null
-            && _activeSession.Sector.Planets.TryGetValue(planetId, out Planet planet)
+        ActiveSession != null
+            && ActiveSession.Sector.Planets.TryGetValue(planetId, out Planet planet)
                 ? planet.Name
                 : null;
 

@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models.Missions;
 using System;
 using System.Collections.Generic;
@@ -49,7 +49,7 @@ namespace OnlyWar.Helpers.Missions.Assault
                     new EngagementInput(
                         first.MissionParticipants,
                         second.MissionParticipants,
-                        first.Order.Mission.RegionFaction.Region,
+                        first.Order.Mission.RegionFaction.Region.ToEngagementLocation(),
                     range,
                     first.CreateMissionEngagementProfile(EngagementRole.Attacker),
                     second.CreateMissionEngagementProfile(EngagementRole.Attacker),

@@ -2,7 +2,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Readiness;
 using MedicalDutyReadinessPolicy = OnlyWar.Medical.Readiness.DutyReadinessPolicy;
 using System;

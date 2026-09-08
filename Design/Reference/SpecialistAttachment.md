@@ -428,7 +428,7 @@ change** — it re-registers the same `Order` instances, which now carry their a
 **`Scenes/RegionScreen/RegionScreenController.cs`** carries all of it. The old `OrderDialogController`
 is gone; this is the only order-issue surface. The roster is a **code-built tree** via
 `CommandWorkspaceView.PopulateSelectionTree` (`Scenes/Common/CommandWorkspaceView.cs:102`) fed by
-`CommandTreeNode` (`Helpers/UI/CommandWorkspaceModels.cs:17`), and multi-select is already on
+`CommandTreeNode` (`Host/Presentation/UI/CommandWorkspaceModels.cs:17`), and multi-select is already on
 (`:58`). **No `.tscn` edit needed.**
 
 Add an `"ATTACHMENTS"` top-level group beside the unit nodes, children keyed `soldier:<id>`:

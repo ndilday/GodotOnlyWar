@@ -24,7 +24,7 @@ public class BattleTurnResolverTests
     [Fact]
     public void ProcessNextTurn_UsesImmutableCompactSnapshotsAcrossMutableSimulationTurns()
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Date battleDate = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try
@@ -41,9 +41,10 @@ public class BattleTurnResolverTests
         BattleGridManager grid = new();
         Place(grid, attackers.Soldiers[0], side: true, x: 0, y: 0);
         Place(grid, defenders.Soldiers[0], side: false, x: 4, y: 0);
+        StaticRNG random = new();
         BattleAftermathDependencies aftermath = new(
-            battleDate, StaticRNG.Instance, NoOpPlayerBattleAftermathSink.Instance);
-        BattleExecutionContext execution = new(rules, StaticRNG.Instance, aftermath);
+            battleDate, random, NoOpPlayerBattleAftermathSink.Instance);
+        BattleExecutionContext execution = new(rules, random, aftermath);
         BattleTurnResolver resolver = new(
             grid, [attackers], [defenders], region: null, execution);
         bool completed = false;
@@ -66,7 +67,7 @@ public class BattleTurnResolverTests
     [Fact]
     public void AssassinationAttacker_OpensWithAimedFire()
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Date battleDate = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try
@@ -86,9 +87,10 @@ public class BattleTurnResolverTests
         BattleGridManager grid = new();
         Place(grid, attacker.Soldiers[0], side: true, x: 0, y: 0);
         Place(grid, defender.Soldiers[0], side: false, x: 10, y: 0);
+        StaticRNG random = new();
         BattleAftermathDependencies aftermath = new(
-            battleDate, StaticRNG.Instance, NoOpPlayerBattleAftermathSink.Instance);
-        BattleExecutionContext execution = new(rules, StaticRNG.Instance, aftermath);
+            battleDate, random, NoOpPlayerBattleAftermathSink.Instance);
+        BattleExecutionContext execution = new(rules, random, aftermath);
         BattleTurnResolver resolver = new(
             grid,
             [attacker],

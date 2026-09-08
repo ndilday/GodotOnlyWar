@@ -26,14 +26,13 @@ public sealed class SessionControlApplicationTests
         Guid staleToken = application.SessionToken;
         application.Install(CreateSession(application.ActiveSession.Rules));
 
-        // No storage composed: the application reports unavailability rather than silently
-        // succeeding, and a token from the replaced campaign is refused outright.
+        // The replaced campaign token is refused outright, while the explicitly composed
+        // application can save the currently installed campaign.
         Assert.False(application.SaveCampaign(
             new(staleToken, SaveCampaignKind.Manual, "Stale")).Succeeded);
         SaveCampaignResult current = application.SaveCampaign(
             new(application.SessionToken, SaveCampaignKind.Manual, "Current"));
-        Assert.False(current.Succeeded);
-        Assert.Contains("unavailable", current.Message);
+        Assert.True(current.Succeeded, current.Message);
     }
 
     [Fact]
@@ -118,7 +117,7 @@ public sealed class SessionControlApplicationTests
     private static CampaignApplication CreateApplication()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        CampaignApplication application = new(new SeededRNG(41));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(41)).CreateApplication();
         application.Install(CreateSession(fixture.Rules));
         return application;
     }

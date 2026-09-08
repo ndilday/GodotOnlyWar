@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Readiness;
@@ -8,6 +8,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Operations.Personnel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -51,7 +52,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Planet planet,
             Faction playerFaction,
             IReadOnlyList<Squad> selectedSquads,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
             => BuildCapacityChoices(
                 planet,
                 playerFaction,
@@ -62,19 +63,20 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Planet planet,
             Faction playerFaction,
             MovementParty party,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
         {
-            IOperationsPersonnelSurface surface =
-                personnel ?? OperationsPersonnelDefaults.Current;
+            IPersonnelAvailabilityQueries surface = personnel
+                ?? throw new System.ArgumentNullException(nameof(personnel));
             int passengers = Distinct(party).Squads
                 .Where(squad => squad != null)
                 .DistinctBy(squad => squad.Id)
-                .Sum(squad => surface.PresentCount(squad))
+                .Sum(squad => surface.PresentCount(
+                    PersonnelAvailabilityProjection.ForFormation(squad)))
                 + Distinct(party).Characters.Count;
             return GetOrbitingPlayerShips(planet, playerFaction)
                 .Select(ship =>
                 {
-                    int current = ShipCapacityService.LoadedSoldierCount(ship);
+                    int current = ShipCapacityService.LoadedSoldierCount(ship, surface);
                     int capacity = ship.Template?.SoldierCapacity ?? 0;
                     return new ShipCapacityChoice(
                         ship,
@@ -109,8 +111,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Date currentDate = null,
             IOperationsPersonnelSurface personnel = null)
         {
-            IOperationsPersonnelSurface surface =
-                personnel ?? OperationsPersonnelDefaults.Current;
+            IOperationsPersonnelSurface surface = personnel
+                ?? throw new System.ArgumentNullException(nameof(personnel));
             MovementParty distinctParty = Distinct(party);
             List<Squad> squads = distinctParty.Squads.ToList();
             List<PlayerSoldier> characters = distinctParty.Characters.ToList();
@@ -137,12 +139,13 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     || character.AssignedSquad?.Faction != playerFaction
                     || !validShips.Contains(CampaignLocationService.ForSoldier(character)?.Ship)
                     || !surface.EvaluateMovement(
-                        character,
-                        CampaignLocation.Landed(destination),
-                        ForceReadinessInputs.DoctrineFor(
-                            sector.PlayerForce, character.AssignedSquad),
-                        ForceReadinessInputs.ProgramFor(
-                            sector.PlayerForce, character.AssignedSquad)).IsAllowed))
+                        PersonnelAvailabilityProjection.ForMovement(
+                            character,
+                            CampaignLocation.Landed(destination),
+                            ForceReadinessInputs.DoctrineFor(
+                                sector.PlayerForce, character.AssignedSquad),
+                            ForceReadinessInputs.ProgramFor(
+                                sector.PlayerForce, character.AssignedSquad))).IsAllowed))
                 {
                 return Failure("The force changed and at least one selected participant can no longer land.");
             }
@@ -153,7 +156,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 return Failure("The Chapter has no valid planetary presence on this world.");
             }
 
-            int passengers = squads.Sum(squad => surface.PresentCount(squad))
+            int passengers = squads.Sum(squad => surface.PresentCount(
+                    PersonnelAvailabilityProjection.ForFormation(squad)))
                 + characters.Count;
             foreach (Squad squad in squads)
             {
@@ -205,8 +209,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Date currentDate = null,
             IOperationsPersonnelSurface personnel = null)
         {
-            IOperationsPersonnelSurface surface =
-                personnel ?? OperationsPersonnelDefaults.Current;
+            IOperationsPersonnelSurface surface = personnel
+                ?? throw new System.ArgumentNullException(nameof(personnel));
             MovementParty distinctParty = Distinct(party);
             List<Squad> squads = distinctParty.Squads.ToList();
             List<PlayerSoldier> characters = distinctParty.Characters.ToList();
@@ -233,22 +237,24 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     squads.Any(squad => squad.Members.Contains(character))
                     || character.AssignedSquad?.Faction != playerFaction
                     || !surface.EvaluateMovement(
-                        character,
-                        CampaignLocation.Aboard(destinationShip),
-                        ForceReadinessInputs.DoctrineFor(
-                            sector.PlayerForce, character.AssignedSquad),
-                        ForceReadinessInputs.ProgramFor(
-                            sector.PlayerForce, character.AssignedSquad)).IsAllowed
+                        PersonnelAvailabilityProjection.ForMovement(
+                            character,
+                            CampaignLocation.Aboard(destinationShip),
+                            ForceReadinessInputs.DoctrineFor(
+                                sector.PlayerForce, character.AssignedSquad),
+                            ForceReadinessInputs.ProgramFor(
+                                sector.PlayerForce, character.AssignedSquad))).IsAllowed
                     || CampaignLocationService.ForSoldier(character)?.Region != source))
             {
                 return Failure("The force changed and at least one selected participant can no longer embark.");
             }
 
-            int passengers = squads.Sum(squad => surface.PresentCount(squad)) + characters.Count;
-            if (!ShipCapacityService.CanBoard(destinationShip, passengers))
+            int passengers = squads.Sum(squad => surface.PresentCount(
+                    PersonnelAvailabilityProjection.ForFormation(squad))) + characters.Count;
+            if (!ShipCapacityService.CanBoard(destinationShip, passengers, surface))
             {
                 int shortfall = System.Math.Max(
-                    0, passengers - ShipCapacityService.AvailableCapacity(destinationShip));
+                    0, passengers - ShipCapacityService.AvailableCapacity(destinationShip, surface));
                 return Failure($"{destinationShip.Name} is short {shortfall} passenger spaces.");
             }
 

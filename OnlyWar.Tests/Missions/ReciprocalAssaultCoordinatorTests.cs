@@ -1,5 +1,5 @@
 using OnlyWar.Helpers.Battles;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Assault;

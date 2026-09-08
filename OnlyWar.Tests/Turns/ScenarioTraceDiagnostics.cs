@@ -56,7 +56,7 @@ public class ScenarioTraceDiagnostics
 
         foreach (int seed in seeds)
         {
-            GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+            GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Sector sector = TestGeneration.GenerateSector(seed, data, _date, $"Pocket {seed}");
             Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
             Faction imp = data.DefaultFaction;
@@ -69,8 +69,10 @@ public class ScenarioTraceDiagnostics
             {
                 if (turn > 0)
                 {
-                    new TurnController(new GameSession(
-                        data, sector, _date, StaticRNG.Instance)).ProcessTurn(sector);
+                    TestPersonnelComposition.CreateCampaign(new StaticRNG())
+                        .CreateTurnController(new GameSession(
+                            data, sector, _date, new StaticRNG()))
+                        .ProcessTurn(sector);
                 }
 
                 long impTotal = 0;
@@ -143,7 +145,7 @@ public class ScenarioTraceDiagnostics
 
     private void RunOneSeed(int seed, StringBuilder csv)
     {
-        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
 
         // Capture the generation-time trace (the pre/post-landing SimulatePlanetForward sims emit
         // Info/Debug), so we can read how long the swarm fed and how the cult war went.
@@ -196,7 +198,10 @@ public class ScenarioTraceDiagnostics
         Snapshot(data, sector, promised, seed, turn: 0, postLandingWeeks,
             battles: 0, strategic: 0, csv, report);
 
-        TurnController controller = new(new GameSession(data, sector, _date, StaticRNG.Instance));
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(new StaticRNG());
+        TurnController controller = composition.CreateTurnController(
+            new GameSession(data, sector, _date, new StaticRNG()));
         for (int turn = 1; turn <= IdleTurns; turn++)
         {
             TurnResolutionResult result = controller.ProcessTurn(sector);

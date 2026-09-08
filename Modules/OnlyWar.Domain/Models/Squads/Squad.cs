@@ -15,9 +15,6 @@ namespace OnlyWar.Models.Squads
     {
         private static int _nextId = 0;
         private readonly List<ISoldier> _members;
-        // Compatibility-only state for format-13 callers that toggled administration on a live
-        // squad. New campaigns derive the identity entirely from SquadTemplate.
-        private bool _legacyAdministrativeOverride;
         public int Id { get; }
         public string Name { get; set; }
         /// <summary>
@@ -31,64 +28,12 @@ namespace OnlyWar.Models.Squads
         /// </summary>
         public bool HasBattleHistory { get; set; }
         public SquadTemplate SquadTemplate { get; }
-        [Obsolete("Administration is authored on SquadTemplate; use SquadTemplate.IsAdministrative.")]
-        public bool IsAdministrative
-        {
-            get => SquadTemplate?.IsAdministrative == true || _legacyAdministrativeOverride;
-            set
-            {
-                if (!value)
-                {
-                    // A rules-authored administrative template cannot be made operational by
-                    // a legacy caller. A compatibility-only live override can still be cleared.
-                    if (SquadTemplate?.IsAdministrative != true)
-                    {
-                        _legacyAdministrativeOverride = false;
-                    }
-                    return;
-                }
-
-                _legacyAdministrativeOverride = SquadTemplate?.IsAdministrative != true;
-
-                // Administrative duty is mutually exclusive with an operational
-                // posting. The 10th Company HQ may be aboard ship, landed, or under
-                // orders when the Home World is won, so activating it must detach all
-                // three pieces of operational state in one place.
-                if (CurrentOrders != null)
-                {
-                    CurrentOrders.AssignedSquads.Remove(this);
-                    CurrentOrders = null;
-                }
-                // Members lent out to other operations come home too: an administrative
-                // formation has no one in the field (Design/Reference/SpecialistAttachment.md).
-                foreach (PlayerSoldier member in _members.OfType<PlayerSoldier>().ToList())
-                {
-                    member.ReleaseOperationalAssignment();
-                }
-                BoardedLocation?.RemoveSquad(this);
-                BoardedLocation = null;
-                if (CurrentRegion != null
-                    && Faction != null
-                    && CurrentRegion.RegionFactionMap.TryGetValue(
-                        Faction.Id, out RegionFaction regionFaction))
-                {
-                    regionFaction.LandedSquads.Remove(this);
-                }
-                CurrentRegion = null;
-            }
-        }
-        public bool CanMoveAsFormation => SquadTemplate?.CanMoveAsFormation == true
-            && !IsAdministrative;
-        public bool CanAcceptSquadOrder => SquadTemplate?.CanAcceptSquadOrder == true
-            && !IsAdministrative;
-        public bool IsPresentOperationalForce => SquadTemplate?.IsPresentOperationalForce == true
-            && !IsAdministrative;
+        public bool CanMoveAsFormation => SquadTemplate?.CanMoveAsFormation == true;
+        public bool CanAcceptSquadOrder => SquadTemplate?.CanAcceptSquadOrder == true;
+        public bool IsPresentOperationalForce => SquadTemplate?.IsPresentOperationalForce == true;
         public bool MayProvideLocalSupport => SquadTemplate?.MayProvideLocalSupport == true;
         public bool PermitsIndividualDeployment =>
             SquadTemplate?.PermitsIndividualDeployment == true;
-
-        [Obsolete("Use the capability that matches the operation being evaluated.")]
-        public bool IsOperational => !IsAdministrative;
         public ISoldier SquadLeader { get => Members.FirstOrDefault(m => m.Template.IsSquadLeader); }
         public IReadOnlyCollection<ISoldier> Members { get => _members; }
         public Faction Faction
@@ -156,7 +101,6 @@ namespace OnlyWar.Models.Squads
         public object Clone()
         {
             Squad clone = new Squad(Id, Name, ParentUnit, SquadTemplate);
-            clone._legacyAdministrativeOverride = _legacyAdministrativeOverride;
             clone.DutyStation = DutyStation;
             clone.CurrentRegion = CurrentRegion;
             clone.BoardedLocation = BoardedLocation;

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Medical.Treatment;

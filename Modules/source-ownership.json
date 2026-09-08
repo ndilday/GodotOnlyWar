@@ -37,15 +37,27 @@
     "Models/Missions/MissionType.cs",
     "Models/Recruitment/RecruitmentEnums.cs"
   ],
-  "Contracts": [
-    "Helpers/IRNG.cs",
-    "Builders/IEntityIdAllocator.cs",
-    "Medical/MedicalBoundaryContracts.cs",
-    "Medical/ReadinessDecisions.cs",
-    "Medical/SquadDeploymentContext.cs",
-    "Application/CampaignSessionContracts.cs",
-    "Persistence/PersistenceBoundaryContracts.cs",
-    "Runtime/RuntimeBoundaryContracts.cs"
+  "Abstractions": [
+    "Random/IRNG.cs",
+    "Entities/IEntityIdAllocator.cs"
+  ],
+  "ApplicationAbstractions": [
+    "CampaignSessionContracts.cs"
+  ],
+  "BattlesAbstractions": [
+    "Contracts/BattleDebriefReport.cs",
+    "Contracts/EngagementContracts.cs",
+    "Contracts/IBattleEquipmentSource.cs",
+    "Contracts/IPlayerBattleAftermathSink.cs",
+    "Contracts/IPlayerCampaignEventSink.cs",
+    "Contracts/IPlayerNarrativeEventSink.cs"
+  ],
+  "MedicalAbstractions": [
+    "Contracts/FieldCareReportValues.cs",
+    "Contracts/IReadinessDecisions.cs",
+    "Contracts/MedicalBoundaryContracts.cs",
+    "Contracts/ReadinessDecisions.cs",
+    "Contracts/SquadDeploymentContext.cs"
   ],
   "Medical": [
     "Readiness/DutyReadinessPolicy.cs",
@@ -58,6 +70,7 @@
     "Treatment/MedicalProcedureRules.cs"
   ],
   "Persistence": [
+    "Contracts/PersistenceBoundaryContracts.cs",
     "Files/AtomicCampaignFileStore.cs",
     "Helpers/Database/DbCommandExtensions.cs",
     "Helpers/Database/GameRules/BaseSkillDataAccess.cs",
@@ -112,6 +125,9 @@
     "Helpers/Storage/SaveGameMetadata.cs"
   ],
   "Runtime": [
+    "Contracts/RuntimeBoundaryContracts.cs",
+    "Logging/GameLog.cs",
+    "Logging/SoldierProgressLog.cs",
     "Allocators/SequentialEntityIdAllocator.cs",
     "Builders/ForceGenerator.cs",
     "Builders/IdGenerator.cs",
@@ -134,20 +150,37 @@
     "WorldGeometry/SubsectorBuilder.cs",
     "WorldGeometry/WarpLaneBuilder.cs"
   ],
+  "Generation": [
+    "Contracts/GenerationBoundaryContracts.cs",
+    "Contracts/ISoldierTrainingService.cs",
+    "Chapter/NewChapterBuilder.cs",
+    "Scenarios/ScenarioBuilder.cs",
+    "World/CharacterBuilder.cs",
+    "World/PlanetBuilder.cs",
+    "World/SectorBuilder.cs"
+  ],
   "Host": [
-    "Helpers/Battles/BattleReplaySummaryBuilder.cs",
-    "Helpers/Extensions/ColorExtensions.cs",
-    "Helpers/MissionDebriefLineGrouper.cs",
-    "Helpers/UI/CommandWorkspaceModels.cs",
-    "Helpers/UI/IconAssetRegistry.cs",
-    "Helpers/UI/IconAtlas.cs",
-    "Helpers/UI/OnlyWarStyle.cs",
-    "Helpers/UI/PresentationMetrics.cs",
-    "Helpers/UI/SectorMapLabelLayout.cs",
-    "Helpers/UI/SystemMenu/SaveSlotViewModelMapper.cs",
-    "Helpers/UI/WoundPresentationPalette.cs"
+    "Host/Composition/GodotHostPaths.cs",
+    "Host/GlobalUsings.cs",
+    "Host/Presentation/Battles/BattleReplaySummaryBuilder.cs",
+    "Host/Presentation/Extensions/ColorExtensions.cs",
+    "Host/Presentation/MissionDebriefLineGrouper.cs",
+    "Host/Presentation/UI/CommandWorkspaceModels.cs",
+    "Host/Presentation/UI/IconAssetRegistry.cs",
+    "Host/Presentation/UI/IconAtlas.cs",
+    "Host/Presentation/UI/OnlyWarStyle.cs",
+    "Host/Presentation/UI/PresentationMetrics.cs",
+    "Host/Presentation/UI/SectorMapLabelLayout.cs",
+    "Host/Presentation/UI/SystemMenu/SaveSlotViewModel.cs",
+    "Host/Presentation/UI/SystemMenu/SaveSlotViewModelMapper.cs",
+    "Host/Presentation/UI/WoundPresentationPalette.cs"
   ],
   "Operations": [
+    "Contracts/IEngagementElementFactory.cs",
+    "Contracts/IOperationsPersonnelSurface.cs",
+    "Contracts/IOrderCommitmentSurface.cs",
+    "Contracts/MissionCampaignInputs.cs",
+    "Contracts/OrderCommandContext.cs",
     "Builders/MissionStepOrchestrator.cs",
     "Helpers/Extensions/RegionDetectionExtensions.cs",
     "Helpers/Extensions/RegionFactionDescriptionExtensions.cs",
@@ -164,6 +197,7 @@
     "Helpers/Missions/ExfiltrateMissionStep.cs",
     "Helpers/Missions/InfiltrateMissionStep.cs",
     "Helpers/Missions/MeetingEngagementMissionStep.cs",
+    "Helpers/Missions/EngagementLocationProjection.cs",
     "Helpers/Missions/MissionAggressionModifiers.cs",
     "Helpers/Missions/MissionAvailability.cs",
     "Helpers/Missions/MissionCheck.cs",
@@ -202,6 +236,10 @@
     "Helpers/PlanetaryOperations/PlanetForceMovementService.cs",
     "Helpers/PlanetaryOperations/RegionalOrderEligibilityService.cs",
     "Helpers/Readiness/ReadinessDescriptions.cs",
+    "Helpers/Readiness/ForceReadinessInputs.cs",
+    "Helpers/Readiness/ReadinessDecisionExtensions.cs",
+    "Helpers/Personnel/PersonnelAvailabilityPolicy.cs",
+    "Helpers/Personnel/PersonnelAvailabilityProjection.cs",
     "Helpers/Recruitment/RecruitmentProcedureRules.cs",
     "Helpers/Recruitment/RecruitmentRules.cs",
     "Helpers/ShipCapacityService.cs",
@@ -214,7 +252,8 @@
     "Helpers/Turns/MissionAftermathProcessor.cs",
     "Helpers/Turns/MissionTurnDependencies.cs",
     "Helpers/Turns/MissionTurnProcessor.cs",
-    "Models/Missions/MissionContext.cs"
+    "Models/Missions/MissionContext.cs",
+    "Models/Missions/OperationalMissionElement.cs"
   ],
   "Campaign": [
     "Builders/RequestFactory.cs",

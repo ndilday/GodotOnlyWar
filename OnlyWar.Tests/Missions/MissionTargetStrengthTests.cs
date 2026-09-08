@@ -293,7 +293,7 @@ public class MissionTargetStrengthTests
         region.RegionFactionMap[faction.Id] = horde;
 
         GameSession session = new(
-            OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath), new Sector(), new Date(1, 1, 1), new SequencedZRng(branchZ, sizeZ));
+            OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath), new Sector(), new Date(1, 1, 1), new SequencedZRng(branchZ, sizeZ));
         List<Mission> generated = [];
         return (new PlanetIntelligenceProcessor(session, generated), horde, generated);
     }

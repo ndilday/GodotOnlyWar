@@ -1,5 +1,5 @@
-using OnlyWar.Contracts.Operations;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Operations.Contracts;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -78,7 +78,7 @@ namespace OnlyWar.Helpers.Missions
             MissionContext context,
             Region region,
             Date currentDate,
-            IOperationsPersonnelSurface personnel)
+            IPhysicalPostingCommands personnel)
         {
             context.ForceLostContact = true;
             MoveForce(
@@ -93,7 +93,7 @@ namespace OnlyWar.Helpers.Missions
             MissionContext context,
             Region region,
             Date currentDate,
-            IOperationsPersonnelSurface personnel) =>
+            IPhysicalPostingCommands personnel) =>
             MoveForce(
                 context,
                 region,
@@ -106,7 +106,7 @@ namespace OnlyWar.Helpers.Missions
             Region region,
             bool registerAsLanded,
             Date currentDate,
-            IOperationsPersonnelSurface personnel)
+            IPhysicalPostingCommands personnel)
         {
             foreach (OperationalMissionElement missionSquad in context.MissionSquads)
             {

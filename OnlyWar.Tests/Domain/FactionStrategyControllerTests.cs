@@ -33,7 +33,7 @@ public class FactionStrategyControllerTests
         Sector sector = BuildSectorWithSingleRegionFaction(
             CreateNonPlayerFaction(id: 99, name: "Other"), population: 1000, organization: 100, isPublic: true);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(enemy, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(enemy, sector);
 
         Assert.Empty(orders);
     }
@@ -44,7 +44,7 @@ public class FactionStrategyControllerTests
         Faction enemy = CreateNonPlayerFaction();
         Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 100, isPublic: false);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(enemy, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(enemy, sector);
 
         Assert.Empty(orders);
     }
@@ -56,7 +56,7 @@ public class FactionStrategyControllerTests
         // Organization 0 => no organized troops => no spare troops => nothing to do
         Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 0, isPublic: true);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(enemy, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(enemy, sector);
 
         Assert.Empty(orders);
     }
@@ -69,7 +69,7 @@ public class FactionStrategyControllerTests
         // defenses when there is no active threat.
         Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 100, isPublic: true);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(enemy, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(enemy, sector);
 
         Assert.Empty(orders);
     }
@@ -83,7 +83,7 @@ public class FactionStrategyControllerTests
             (enemy, population: 1000, organization: 100, isPublic: true),
             (pdf, population: 1000, organization: 100, isPublic: true));
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(enemy, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(enemy, sector);
 
         Assert.NotEmpty(orders);
         Assert.Contains(orders, o => o.Mission is ConstructionMission && !o.AssignedSquads.Any());
@@ -103,7 +103,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, region, pdf, population: 100_000, organization: 100, garrison: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(unrest, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(unrest, sector);
 
         Assert.Contains(orders, order =>
             order.Mission is StrategicCombatMission mission
@@ -131,7 +131,7 @@ public class FactionStrategyControllerTests
         planet.PlanetFactionMap[pdf.Id].SetRegionAwareness(enemyRegion, FactionThreatAssessment.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance)
+        List<Order> orders = new FactionStrategyController(new StaticRNG())
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
 
         Assert.NotEmpty(orders);
@@ -177,7 +177,7 @@ public class FactionStrategyControllerTests
         attackerPlanetFaction.SetRegionAwareness(localRegion, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         StrategicCombatMission assault = orders
             .Select(o => o.Mission)
@@ -194,7 +194,7 @@ public class FactionStrategyControllerTests
         Faction pdf = CreateDefaultFaction();
         Sector sector = BuildSectorWithFactions((pdf, population: 1_000_000, organization: 100, isPublic: true));
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance)
+        List<Order> orders = new FactionStrategyController(new StaticRNG())
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
 
         Assert.Empty(orders);
@@ -214,7 +214,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, region, enemy, population: 1_000, organization: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance)
+        List<Order> orders = new FactionStrategyController(new StaticRNG())
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
 
         Assert.NotEmpty(orders);
@@ -283,7 +283,7 @@ public class FactionStrategyControllerTests
         planet.PlanetFactionMap[attacker.Id].AddRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         Order strategicOrder = Assert.Single(orders, o => o.Mission is StrategicCombatMission);
         Assert.Empty(strategicOrder.AssignedSquads);
@@ -328,7 +328,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         Order reconOrder = Assert.Single(orders, o => o.Mission.MissionType == MissionType.Recon);
         long generatedBattleValue = reconOrder.AssignedSquads
@@ -361,7 +361,7 @@ public class FactionStrategyControllerTests
         planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         Order assault = Assert.Single(orders, o => o.Mission.MissionType == MissionType.Advance);
         long generatedBattleValue = assault.AssignedSquads
@@ -382,7 +382,7 @@ public class FactionStrategyControllerTests
         MissionContext context = new(order, [], []);
         MissionExecutionContext execution = TestExecutionContextFactory.CreateMission(
             context,
-            StaticRNG.Instance);
+            new StaticRNG());
 
         Assert.IsType<LightningRaidMissionStep>(
             MissionStepOrchestrator.GetMainInitialStep(execution));
@@ -412,7 +412,7 @@ public class FactionStrategyControllerTests
         planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetB, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         List<StrategicCombatMission> offensives = orders
             .Select(order => order.Mission)
@@ -439,7 +439,7 @@ public class FactionStrategyControllerTests
         planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         StrategicCombatMission raid = Assert.Single(orders
             .Select(order => order.Mission)
@@ -468,7 +468,7 @@ public class FactionStrategyControllerTests
         planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyPlanningConstants.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         long focusedRemaining = focusedSource.RegionFactionMap[attacker.Id].MilitaryStrength;
         long flexibleRemaining = flexibleSource.RegionFactionMap[attacker.Id].MilitaryStrength;
@@ -492,7 +492,7 @@ public class FactionStrategyControllerTests
         long destinationBefore = destination.RegionFactionMap[attacker.Id].MilitaryStrength;
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         Assert.True(source.RegionFactionMap[attacker.Id].MilitaryStrength < 10_000);
         Assert.True(destination.RegionFactionMap[attacker.Id].MilitaryStrength > destinationBefore);
@@ -520,7 +520,7 @@ public class FactionStrategyControllerTests
             enemyFront, FactionThreatAssessment.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(attacker, sector);
+        new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         // Needy is topped up to exactly its required garrison (5,000) and the rear paid for it.
         Assert.Equal(5_000, needy.RegionFactionMap[attacker.Id].MilitaryStrength);
@@ -680,7 +680,7 @@ public class FactionStrategyControllerTests
         rf.LandedSquads.Add(patrol);
         rf.LandedSquads.Add(garrison);
 
-        new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(faction, sector);
+        new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(faction, sector);
 
         Assert.DoesNotContain(patrol, rf.LandedSquads);
         Assert.Contains(garrison, rf.LandedSquads);
@@ -714,7 +714,7 @@ public class FactionStrategyControllerTests
 
         Assert.False(planet.IsUnderAssault());
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance)
+        List<Order> orders = new FactionStrategyController(new StaticRNG())
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
 
         Assert.NotEmpty(orders);
@@ -744,7 +744,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance)
+        List<Order> orders = new FactionStrategyController(new StaticRNG())
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
 
         Order order = Assert.Single(orders);
@@ -797,7 +797,7 @@ public class FactionStrategyControllerTests
         RegionFaction regionFaction =
             sector.Planets.Values.First().Regions[0].RegionFactionMap[swarm.Id];
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(swarm, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(swarm, sector);
 
         Order feedOrder = Assert.Single(orders, o => o.Mission is FeedMission);
         FeedMission mission = Assert.IsType<FeedMission>(feedOrder.Mission);
@@ -821,7 +821,7 @@ public class FactionStrategyControllerTests
         Sector sector = BuildSectorWithSingleRegionFaction(
             cult, population: 1_000_000, organization: 100, isPublic: true);
 
-        List<Order> orders = new FactionStrategyController(StaticRNG.Instance).GenerateFactionOrders(cult, sector);
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(cult, sector);
 
         Assert.DoesNotContain(orders, o => o.Mission is FeedMission);
     }

@@ -21,7 +21,7 @@ public class IndividualPostingServiceTests
         var fixture = SectorSimulationFixture.Create();
         squad.CurrentRegion = fixture.Planet.Regions[0];
 
-        new IndividualPostingService(OrderCommitmentSurface.Instance).BeginMedicalDetachment(
+        new IndividualPostingService(new OrderCommitmentSurface()).BeginMedicalDetachment(
             casualty,
             CampaignLocation.Landed(fixture.Planet.Regions[1]),
             new Date(42, 1, 1));
@@ -42,7 +42,7 @@ public class IndividualPostingServiceTests
         ship.LoadSquad(squad);
         squad.BoardedLocation = ship;
 
-        new IndividualPostingService(OrderCommitmentSurface.Instance).BeginMedicalDetachment(
+        new IndividualPostingService(new OrderCommitmentSurface()).BeginMedicalDetachment(
             casualty, CampaignLocation.Aboard(ship), new Date(42, 1, 1));
 
         Assert.Equal(2, ship.LoadedSoldierCount);
@@ -58,13 +58,11 @@ public class IndividualPostingServiceTests
         Squad squad = SquadWith(casualty, brother);
         var fixture = SectorSimulationFixture.Create();
         squad.CurrentRegion = fixture.Planet.Regions[0];
-        IndividualPostingService service = new(OrderCommitmentSurface.Instance);
+        IndividualPostingService service = new(new OrderCommitmentSurface());
         service.BeginMedicalDetachment(
             casualty, CampaignLocation.Landed(fixture.Planet.Regions[0]), new Date(42, 1, 1));
 
-        service.MarkAwaitingReunion(casualty);
-
-        Assert.Equal(IndividualPostingKind.AwaitingReunion, casualty.IndividualPosting.Kind);
+        Assert.Equal(IndividualPostingPurpose.Medical, casualty.IndividualPosting.Purpose);
         Assert.Equal(1, SoldierPresenceService.PresentCount(squad));
         Assert.True(service.CanRejoin(casualty, out _));
         service.Rejoin(casualty);
@@ -84,7 +82,7 @@ public class IndividualPostingServiceTests
         passengerSquad.BoardedLocation = fullShip;
 
         InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
-            new IndividualPostingService(OrderCommitmentSurface.Instance).BeginMedicalDetachment(
+            new IndividualPostingService(new OrderCommitmentSurface()).BeginMedicalDetachment(
                 casualty, CampaignLocation.Aboard(fullShip), new Date(42, 1, 1)));
 
         Assert.Contains("no passenger berth", error.Message);

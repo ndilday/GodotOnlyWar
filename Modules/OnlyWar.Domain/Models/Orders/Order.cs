@@ -33,10 +33,6 @@ namespace OnlyWar.Models.Orders
         public bool IsActivelyEngaging { get; }
         public Aggression LevelOfAggression { get; private set; }
         public Mission Mission { get; }
-        // Compatibility projection for the retired format-13 name. It aliases the first-class
-        // character participant collection; new code must use AssignedCharacters.
-        [System.Obsolete("Use AssignedCharacters.")]
-        public List<Soldiers.PlayerSoldier> AttachedSoldiers => AssignedCharacters;
         public Faction OwnerFaction { get; }
         // Runtime identity used to carry a strategic invasion force through planning and result processing. It is
         // deliberately not serialized on an Order because orders are weekly work items.

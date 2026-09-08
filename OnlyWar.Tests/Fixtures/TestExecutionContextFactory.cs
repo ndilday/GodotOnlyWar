@@ -2,11 +2,12 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Application.Adapters.Operations;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;
 
@@ -14,7 +15,9 @@ namespace OnlyWar.Tests.Fixtures;
 
 internal static class TestExecutionContextFactory
 {
-    public static BattleEngagementResolver CreateEngagementResolver(IRNG random = null)
+    public static BattleEngagementResolver CreateEngagementResolver(
+        IRNG random = null,
+        Region region = null)
     {
         random ??= new FixedRNG();
         GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(RulesDatabaseFixture.DatabasePath);
@@ -24,7 +27,9 @@ internal static class TestExecutionContextFactory
             NoOpPlayerBattleAftermathSink.Instance);
         BattleExecutionContext battle = new(
             rules, random, aftermath, throwOnInertBattle: true);
-        return new BattleEngagementResolver(battle);
+        return new BattleEngagementResolver(
+            battle,
+            regionResolver: regionId => region?.Id == regionId ? region : null);
     }
 
     public static MissionExecutionContext CreateMission(
@@ -40,7 +45,8 @@ internal static class TestExecutionContextFactory
         random ??= new FixedRNG();
         // throwOnInertBattle: a battle that stops progressing is an engine bug the game survives
         // and a test must not. See BattleExecutionContext.ThrowOnInertBattle.
-        BattleEngagementResolver engagement = CreateEngagementResolver(random);
+        Region missionRegion = state?.Order?.Mission?.RegionFaction?.Region;
+        BattleEngagementResolver engagement = CreateEngagementResolver(random, missionRegion);
         return new MissionExecutionContext(
             state,
             new MissionRules(TestSkills.Stealth, TestSkills.Tactics),
@@ -49,7 +55,7 @@ internal static class TestExecutionContextFactory
             new TacticalEntityIdAllocator(),
             new MissionCampaignInputs(
                 new Date(1, 1, 1),
-                Personnel: OperationsPersonnelSurface.Instance),
+                Personnel: TestPersonnelComposition.CreatePersonnel()),
             // Mission steps that raise an interception or an assault screen create neutral elements
             // through the same Application adapter as production.
             engagement);

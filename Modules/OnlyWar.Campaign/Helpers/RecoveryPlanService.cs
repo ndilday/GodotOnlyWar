@@ -5,6 +5,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Operations.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,8 +17,18 @@ namespace OnlyWar.Helpers
     public sealed class RecoveryPlanService
     {
         private readonly CareDestinationService _destinations = new();
-        private readonly IndividualPostingService _postings = new(OrderCommitmentSurface.Instance);
+        private readonly IOperationsPersonnelSurface _personnel;
+        private readonly IndividualPostingService _postings;
         private readonly MedicalProcedureService _procedures = new();
+
+        public RecoveryPlanService(
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments)
+        {
+            _personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
+            _postings = new IndividualPostingService(
+                commitments ?? throw new ArgumentNullException(nameof(commitments)));
+        }
 
         public RecoveryPlanCommitResult Commit(
             PlayerForce force,
@@ -61,7 +72,8 @@ namespace OnlyWar.Helpers
             if (movement == RecoveryMovementChoice.MoveWholeSquad
                 && destination.Ship != null
                 && !ShipCapacityService.CanBoard(destination.Ship,
-                    SoldierPresenceService.PresentMembers(patient.AssignedSquad).Count))
+                    SoldierPresenceService.PresentMembers(patient.AssignedSquad).Count,
+                    _personnel))
             {
                 return new(false, "The destination lacks capacity for the whole squad.");
             }
@@ -84,12 +96,12 @@ namespace OnlyWar.Helpers
             // physical location, staff assignment, or resource balance.
             foreach (PlayerSoldier staff in staffToMove.Distinct())
             {
-                if (!_postings.CanCreate(staff, IndividualPostingKind.IndependentDeployment,
-                    destination, null, out string reason)) return new(false, reason);
+                if (!_postings.CanCreate(staff, IndividualPostingPurpose.Independent,
+                    destination, out string reason)) return new(false, reason);
             }
             if (movement == RecoveryMovementChoice.DetachCasualty
-                && !_postings.CanCreate(patient, IndividualPostingKind.MedicalDetachment,
-                    destination, null, out string patientReason)) return new(false, patientReason);
+                && !_postings.CanCreate(patient, IndividualPostingPurpose.Medical,
+                    destination, out string patientReason)) return new(false, patientReason);
             if (destination.Ship != null)
             {
                 int incomingStaff = staffToMove.Distinct().Count(staff =>
@@ -106,7 +118,7 @@ namespace OnlyWar.Helpers
             {
                 foreach (PlayerSoldier staff in staffToMove.Distinct())
                 {
-                    _postings.Create(staff, IndividualPostingKind.IndependentDeployment,
+                    _postings.Create(staff, IndividualPostingPurpose.Independent,
                         destination, date);
                 }
                 if (movement == RecoveryMovementChoice.DetachCasualty)

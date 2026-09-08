@@ -1,11 +1,12 @@
 using OnlyWar.Helpers.Readiness;
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Operations.Personnel;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -61,7 +62,7 @@ namespace OnlyWar.Helpers.Orders
         public static bool IsMissionSquadFormation(Squad squad)
         {
             if (squad == null || !squad.CanAcceptSquadOrder
-                || squad.SquadTemplate?.PermitsIndividualDetachment == true) return false;
+                || squad.PermitsIndividualDeployment) return false;
 
             SquadTypes type = squad.SquadTemplate?.SquadType ?? SquadTypes.None;
             return (type & (SquadTypes.HQ
@@ -78,8 +79,7 @@ namespace OnlyWar.Helpers.Orders
             return squad != null
                 && squad.CanMoveAsFormation
                 && squad.Members.Count > 0
-                && !squad.PermitsIndividualDeployment
-                && !squad.SquadTemplate.PermitsIndividualDetachment;
+                && !squad.PermitsIndividualDeployment;
         }
 
         /// <summary>
@@ -98,7 +98,7 @@ namespace OnlyWar.Helpers.Orders
             IEnumerable<PlayerSoldier> rosterCharacters,
             IReadinessDecisions readiness,
             Order contextOrder = null,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
         {
             return EnumerateRoster(
                     playerRegionFaction,
@@ -129,7 +129,7 @@ namespace OnlyWar.Helpers.Orders
             IEnumerable<PlayerSoldier> rosterCharacters,
             IReadinessDecisions readiness,
             Order contextOrder = null,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
         {
             if (playerRegionFaction == null)
             {
@@ -138,18 +138,16 @@ namespace OnlyWar.Helpers.Orders
 
             IEnumerable<PlayerSoldier> globalCharacters =
                 rosterCharacters ?? Enumerable.Empty<PlayerSoldier>();
-            IOperationsPersonnelSurface surface =
-                personnel ?? OperationsPersonnelDefaults.Current;
+            IPersonnelAvailabilityQueries surface = personnel
+                ?? throw new System.ArgumentNullException(nameof(personnel));
             IEnumerable<PlayerSoldier> localCharacters = playerRegionFaction.LandedSquads
-                .Where(squad => squad?.PermitsIndividualDeployment == true
-                    || squad?.SquadTemplate?.PermitsIndividualDetachment == true)
+                .Where(squad => squad?.PermitsIndividualDeployment == true)
                 .SelectMany(squad => squad.Members.OfType<PlayerSoldier>());
             return globalCharacters
                 .Concat(localCharacters)
                 .GroupBy(soldier => soldier.Id)
                 .Select(group => group.First())
-                .Where(soldier => soldier.AssignedSquad?.PermitsIndividualDeployment == true
-                    || soldier.AssignedSquad?.SquadTemplate?.PermitsIndividualDetachment == true)
+                .Where(soldier => soldier.AssignedSquad?.PermitsIndividualDeployment == true)
                 .Select(soldier =>
                     {
                         bool assignedToContext = contextOrder != null
@@ -158,10 +156,11 @@ namespace OnlyWar.Helpers.Orders
                             ? SpecialistAvailabilityEvaluation.Allowed
                             : soldier.AssignedSquad?.PermitsIndividualDeployment == true
                                 ? Project(surface.EvaluateOrderAssignment(
-                                    soldier,
-                                    contextOrder,
-                                    originRegion,
-                                    contextOrder?.AssignedSquads))
+                                    PersonnelAvailabilityProjection.ForOrderAssignment(
+                                        soldier,
+                                        contextOrder,
+                                        originRegion,
+                                        contextOrder?.AssignedSquads)))
                                 : EvaluateLegacyCandidate(
                                     soldier, contextOrder, originRegion, readiness);
                         return new SpecialistOption(

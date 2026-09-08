@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Builders;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.StrategicCombat;

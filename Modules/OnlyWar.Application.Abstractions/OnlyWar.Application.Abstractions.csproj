@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>OnlyWar</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
+    <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <Using Include="OnlyWar.Abstractions" />
+  </ItemGroup>
+</Project>

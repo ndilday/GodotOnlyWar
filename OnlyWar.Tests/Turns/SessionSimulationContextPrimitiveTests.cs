@@ -17,7 +17,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     [Fact]
     public void GameSession_ExposesConstructorDependenciesByIdentity()
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Sector sector = new();
         Date date = new(42, 123, 7);
         FixedRNG random = new();
@@ -80,7 +80,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     [Fact]
     public void GameSession_RejectsNullRequiredDependencies()
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath);
+        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Sector sector = new();
         Date date = new(42, 123, 7);
         FixedRNG random = new();
@@ -111,7 +111,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     }
 
     private static GameSession CreateSession() => new(
-        OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Helpers.Storage.GameStorage.RulesDatabasePath),
+        OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath),
         new Sector(),
         new Date(42, 123, 7),
         new FixedRNG());

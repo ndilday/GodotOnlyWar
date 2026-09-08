@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Contracts.Runtime;
+using OnlyWar.Runtime.Contracts;
 using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 using RuntimeFactory = OnlyWar.Runtime.Factories.RuntimeSoldierFactory;

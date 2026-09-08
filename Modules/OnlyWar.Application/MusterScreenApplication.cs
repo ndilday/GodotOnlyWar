@@ -9,14 +9,30 @@ using OnlyWar.Models.Units;
 
 namespace OnlyWar.Application;
 
-public sealed partial class CampaignApplication : IMusterScreenApplication
+public sealed class MusterScreenApplication : CampaignScreenApplication,
+    IMusterScreenApplication
 {
+    private const string StaleSessionMessage = "The campaign changed. Reopen the Muster screen.";
+
     private readonly MusterPlanService _musterPlan = new();
     private readonly SoldierFilterService _musterFilters = new();
     private ChapterMusterViewModelBuilder _musterBuilder;
 
+    public bool HasChapter => TryGetChapter() != null;
+
+    public MusterScreenApplication(CampaignApplicationContext context) : base(context)
+    {
+        Context.SessionChanged += OnSessionChanged;
+    }
+
+    private void OnSessionChanged(object sender, EventArgs args)
+    {
+        _musterPlan.Clear();
+        _musterBuilder = null;
+    }
+
     private ChapterMusterViewModelBuilder MusterBuilder =>
-        _musterBuilder ??= new ChapterMusterViewModelBuilder(_activeSession?.Rules?.AwardCatalog);
+        _musterBuilder ??= new ChapterMusterViewModelBuilder(ActiveSession?.Rules?.AwardCatalog);
 
     public int StagedActionCount => _musterPlan.Actions.Count;
 
@@ -38,11 +54,11 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
 
     public ChapterFilterOptions QueryMusterFilterOptions(int? scopeCompanyId)
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         if (force?.Army == null) return new ChapterFilterOptions([], []);
 
         List<PlayerSoldier> scope = MusterScope(force, scopeCompanyId).ToList();
-        GameRulesData rules = _activeSession.Rules;
+        GameRulesData rules = ActiveSession.Rules;
         return new ChapterFilterOptions(
             _musterFilters.GetAvailableRoles(scope),
             _musterFilters.GetAvailableHonors(
@@ -54,7 +70,7 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
         MusterPopulationMode mode,
         IReadOnlyList<SoldierFilterCondition> filters)
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         if (force?.Army?.OrderOfBattle == null) return [];
 
         List<PlayerSoldier> scoped = MusterScope(force, scopeCompanyId).ToList();
@@ -63,8 +79,8 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
             scoped = _musterFilters.Apply(
                     scoped,
                     filters.ToList(),
-                    _activeSession.CurrentDate,
-                    _activeSession.Rules.RatingConsumers)
+                    ActiveSession.CurrentDate,
+                    ActiveSession.Rules.RatingConsumers)
                 .OfType<PlayerSoldier>().ToList();
         }
 
@@ -77,7 +93,7 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
 
     public IReadOnlyList<MusterFormationRow> QueryMusterFormations(int soldierId)
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         PlayerSoldier soldier = FindMusterSoldier(soldierId);
         if (force?.Army == null || soldier == null) return [];
 
@@ -89,7 +105,7 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
 
     public MusterPreviewView QueryMusterPreview(int? soldierId, string formationSelectionKey)
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         PlayerSoldier soldier = soldierId.HasValue ? FindMusterSoldier(soldierId.Value) : null;
         FormationVacancyViewModel formation = soldier == null
             ? null
@@ -129,7 +145,7 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
 
     public MusterPlanView QueryMusterPlan()
     {
-        PlayerForce force = _activeSession?.Sector.PlayerForce;
+        PlayerForce force = ActiveSession?.Sector.PlayerForce;
         IReadOnlyList<MusterStagedAction> actions = _musterPlan.Actions;
         List<MusterPlanRow> rows = actions
             .Select((action, index) => new MusterPlanRow(
@@ -194,8 +210,8 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
 
     public Guid? StageMusterAction(Guid sessionToken, int soldierId, string formationSelectionKey)
     {
-        if (_activeSession == null || sessionToken != SessionToken) return null;
-        PlayerForce force = _activeSession.Sector.PlayerForce;
+        if (ActiveSession == null || sessionToken != SessionToken) return null;
+        PlayerForce force = ActiveSession.Sector.PlayerForce;
         PlayerSoldier soldier = FindMusterSoldier(soldierId);
         FormationVacancyViewModel formation = soldier == null
             ? null
@@ -210,11 +226,11 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
     }
 
     public bool UndoMusterAction(Guid sessionToken, Guid actionId) =>
-        _activeSession != null && sessionToken == SessionToken && _musterPlan.Undo(actionId);
+        ActiveSession != null && sessionToken == SessionToken && _musterPlan.Undo(actionId);
 
     public bool UndoLastMusterAction(Guid sessionToken)
     {
-        if (_activeSession == null || sessionToken != SessionToken
+        if (ActiveSession == null || sessionToken != SessionToken
             || _musterPlan.Actions.Count == 0)
         {
             return false;
@@ -225,19 +241,19 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
 
     public void ClearMusterPlan(Guid sessionToken)
     {
-        if (_activeSession == null || sessionToken != SessionToken) return;
+        if (ActiveSession == null || sessionToken != SessionToken) return;
         _musterPlan.Clear();
     }
 
     public MusterCommitResultView CommitMusterPlan(Guid sessionToken)
     {
-        if (_activeSession == null || sessionToken != SessionToken)
+        if (ActiveSession == null || sessionToken != SessionToken)
         {
             return new MusterCommitResultView(false, StaleSessionMessage);
         }
 
         MusterCommitResult result = _musterPlan.Commit(
-            _activeSession.Sector.PlayerForce, _activeSession.CurrentDate);
+            ActiveSession.Sector.PlayerForce, ActiveSession.CurrentDate);
         return new MusterCommitResultView(
             result.Succeeded,
             result.Succeeded ? null : string.Join("\n", result.Errors));
@@ -256,7 +272,9 @@ public sealed partial class CampaignApplication : IMusterScreenApplication
             : SoldierTransferContext.Build(force.Army.OrderOfBattle);
 
     private PlayerSoldier FindMusterSoldier(int soldierId) =>
-        _activeSession?.Sector.PlayerForce?.Army?.PlayerSoldierMap.GetValueOrDefault(soldierId);
+        ActiveSession?.Sector.PlayerForce?.Army?.PlayerSoldierMap.GetValueOrDefault(soldierId);
+
+    private Unit TryGetChapter() => ActiveSession?.Sector.PlayerForce?.Army?.OrderOfBattle;
 
     private FormationVacancyViewModel FindFormation(
         PlayerForce force, PlayerSoldier soldier, string selectionKey)

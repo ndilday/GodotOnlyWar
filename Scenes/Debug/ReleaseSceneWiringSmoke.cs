@@ -2,7 +2,7 @@ using Godot;
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.UI;
-using OnlyWar.Helpers.UI.SystemMenu;
+using OnlyWar.Host.Presentation.UI.SystemMenu;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using System;

@@ -29,14 +29,7 @@ namespace OnlyWar.Models.Squads
         Fast = 0x8,
         Heavy = 0x10,
         Bodyguard = 0x20,
-        // Retained as a compatibility bit for old hand-built fixtures and old rules databases.
-        // New rules data expresses administration with SquadTemplate.IsAdministrative and
-        // FormationMobilityPolicy.MembersOnly.
-        Administrative = 0x40,
-        // Retained only so format-13 compatibility callers continue to compile. It is no longer
-        // consulted by new movement/order code; templates loaded from new rules data use the
-        // explicit Administrative + MembersOnly pair above.
-        PermitsIndividualDetachment = 0x80
+        Administrative = 0x40
     }
 
     public class SquadWeaponOption
@@ -70,23 +63,6 @@ namespace OnlyWar.Models.Squads
         /// <summary>True when this formation's members can be deployed independently.</summary>
         public bool PermitsIndividualDeployment =>
             IsAdministrative && MobilityPolicy == FormationMobilityPolicy.MembersOnly;
-
-        /// <summary>
-        /// Compatibility projection for format-13 callers. New code must use
-        /// <see cref="PermitsIndividualDeployment"/>.
-        /// </summary>
-        [Obsolete("Use PermitsIndividualDeployment.")]
-        public bool PermitsIndividualDetachment =>
-            PermitsIndividualDeployment
-            || (SquadType & SquadTypes.PermitsIndividualDetachment) != 0;
-
-        /// <summary>
-        /// Compatibility name retained for older consumers. This is intentionally not used as
-        /// the administration predicate by new code because medical staffing and manoeuvre
-        /// eligibility are different questions.
-        /// </summary>
-        [Obsolete("Use CanMoveAsFormation, CanAcceptSquadOrder, or IsPresentOperationalForce.")]
-        public bool IsOperational => true;
 
         public bool CanMoveAsFormation => MobilityPolicy == FormationMobilityPolicy.WholeFormation;
 
@@ -144,8 +120,6 @@ namespace OnlyWar.Models.Squads
             Armor = armor;
             SquadType = squadType;
             IsAdministrative = (squadType & SquadTypes.Administrative) != 0;
-            // A legacy detachment template was already a member-only pool. Mapping it here keeps
-            // old fixtures usable while the shipped rules migrate to explicit policy data.
             MobilityPolicy = mobilityPolicy
                 ?? (IsAdministrative
                     ? FormationMobilityPolicy.MembersOnly

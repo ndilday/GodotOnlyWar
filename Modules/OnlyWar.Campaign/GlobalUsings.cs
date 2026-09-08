@@ -1,1 +1,1 @@
-global using OnlyWar.Contracts.Application;
+global using OnlyWar.Application.Abstractions;

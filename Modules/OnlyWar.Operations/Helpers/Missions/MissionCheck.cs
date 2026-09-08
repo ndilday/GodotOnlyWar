@@ -1,5 +1,5 @@
 using OnlyWar.Helpers;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System.Collections.Generic;

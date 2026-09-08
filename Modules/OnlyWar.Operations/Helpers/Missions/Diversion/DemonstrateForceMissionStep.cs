@@ -1,5 +1,5 @@
 using OnlyWar.Builders;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;

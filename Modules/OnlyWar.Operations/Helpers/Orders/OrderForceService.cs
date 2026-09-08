@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
@@ -105,11 +105,6 @@ namespace OnlyWar.Helpers.Orders
                 changed = true;
             }
             RemoveIfEmpty(order);
-            if (character.IndividualPosting != null
-                && character.IndividualPosting.Purpose == IndividualPostingPurpose.Independent)
-            {
-                OperationsPersonnelDefaults.Current.NormalizeReunion(character);
-            }
             return changed;
         }
 

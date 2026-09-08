@@ -18,14 +18,14 @@ namespace OnlyWar.Tests.Orders;
 // operation without his home squad.
 //
 // Two rules carry most of the weight here and are asserted repeatedly:
-//   1. The pointer pair (Order.AttachedSoldiers / PlayerSoldier.AttachedOrder) is never
+//   1. The pointer pair (Order.AssignedCharacters / PlayerSoldier.CurrentOrder) is never
 //      half-set, because OrderAttachment owns both halves.
-//   2. The detachment flag is TWO-SIDED. A formation that may lend individuals is also a
+//   2. The individual-deployment capability is TWO-SIDED. A formation that may lend individuals is also a
 //      formation that may never be assigned to an order as a unit.
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class OrderAttachmentTests
 {
-    // A private copy of the fixture squad template carrying the detachment flag. Built here
+    // A private copy of the fixture squad template carrying the member-only capability. Built here
     // rather than added to TestModelFactory's shared static, which is process-wide.
     private static SquadTemplate DetachableTemplate() => new(
         901,
@@ -34,7 +34,8 @@ public class OrderAttachmentTests
         [],
         TestModelFactory.TestArmor,
         [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
-        SquadTypes.PermitsIndividualDetachment);
+        SquadTypes.Administrative,
+        FormationMobilityPolicy.MembersOnly);
 
     private static Squad CreateDetachableSquad(string name, params ISoldier[] soldiers)
     {
@@ -84,10 +85,10 @@ public class OrderAttachmentTests
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
 
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
-        Assert.Same(order, specialist.AttachedOrder);
-        Assert.Contains(specialist, order.AttachedSoldiers);
+        Assert.Same(order, specialist.CurrentOrder);
+        Assert.Contains(specialist, order.AssignedCharacters);
     }
 
     [Fact]
@@ -97,11 +98,12 @@ public class OrderAttachmentTests
         Order order = CreateOrder(
             fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
+        CreateDetachableSquad("Apothecarion", specialist);
 
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
-        Assert.Single(order.AttachedSoldiers);
+        Assert.Single(order.AssignedCharacters);
     }
 
     [Fact]
@@ -122,13 +124,14 @@ public class OrderAttachmentTests
             Aggression.Normal);
         Assert.NotNull(secondOrder);
         PlayerSoldier specialist = CreateSpecialist();
+        CreateDetachableSquad("Apothecarion", specialist);
 
-        OrderAttachment.Attach(specialist, first, MedicalReadinessDecisions.Instance);
-        OrderAttachment.Attach(specialist, secondOrder, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, first, new MedicalReadinessDecisions());
+        OrderAttachment.Attach(specialist, secondOrder, new MedicalReadinessDecisions());
 
-        Assert.Empty(first.AttachedSoldiers);
-        Assert.Same(secondOrder, specialist.AttachedOrder);
-        Assert.Contains(specialist, secondOrder.AttachedSoldiers);
+        Assert.Empty(first.AssignedCharacters);
+        Assert.Same(secondOrder, specialist.CurrentOrder);
+        Assert.Contains(specialist, secondOrder.AssignedCharacters);
     }
 
     [Fact]
@@ -138,13 +141,14 @@ public class OrderAttachmentTests
         Order order = CreateOrder(
             fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        CreateDetachableSquad("Apothecarion", specialist);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
         OrderAttachment.Detach(specialist);
         OrderAttachment.Detach(specialist);
 
-        Assert.Null(specialist.AttachedOrder);
-        Assert.Empty(order.AttachedSoldiers);
+        Assert.Null(specialist.CurrentOrder);
+        Assert.Empty(order.AssignedCharacters);
     }
 
     [Fact]
@@ -155,14 +159,15 @@ public class OrderAttachmentTests
             fixture, CreateLineSquad("Line"));
         PlayerSoldier first = CreateSpecialist("Apothecary");
         PlayerSoldier second = CreateSpecialist("Techmarine");
-        OrderAttachment.Attach(first, order, MedicalReadinessDecisions.Instance);
-        OrderAttachment.Attach(second, order, MedicalReadinessDecisions.Instance);
+        CreateDetachableSquad("Apothecarion", first, second);
+        OrderAttachment.Attach(first, order, new MedicalReadinessDecisions());
+        OrderAttachment.Attach(second, order, new MedicalReadinessDecisions());
 
         OrderAttachment.ReleaseAll(order);
 
-        Assert.Empty(order.AttachedSoldiers);
-        Assert.Null(first.AttachedOrder);
-        Assert.Null(second.AttachedOrder);
+        Assert.Empty(order.AssignedCharacters);
+        Assert.Null(first.CurrentOrder);
+        Assert.Null(second.CurrentOrder);
     }
 
     // The load-bearing negative: a detached specialist is still on his squad's roll.
@@ -177,7 +182,7 @@ public class OrderAttachmentTests
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
 
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
         Assert.Contains(specialist, home.Members);
         Assert.Same(home, specialist.AssignedSquad);
@@ -196,7 +201,7 @@ public class OrderAttachmentTests
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
         home.CurrentRegion = origin;
 
-        Assert.True(OrderAttachment.CanAttach(specialist, order, origin, MedicalReadinessDecisions.Instance, out string reason));
+        Assert.True(OrderAttachment.CanAttach(specialist, order, origin, new MedicalReadinessDecisions(), out string reason));
         Assert.Null(reason);
     }
 
@@ -212,7 +217,7 @@ public class OrderAttachmentTests
         line.AddSquadMember(trooper);
         line.CurrentRegion = origin;
 
-        Assert.False(OrderAttachment.CanAttach(trooper, order, origin, MedicalReadinessDecisions.Instance, out string reason));
+        Assert.False(OrderAttachment.CanAttach(trooper, order, origin, new MedicalReadinessDecisions(), out string reason));
         Assert.NotNull(reason);
     }
 
@@ -227,11 +232,11 @@ public class OrderAttachmentTests
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
         home.CurrentRegion = origin;
         Order elsewhere = new([], true, false, Aggression.Normal, order.Mission);
-        OrderAttachment.Attach(specialist, elsewhere, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, elsewhere, new MedicalReadinessDecisions());
 
-        Assert.False(OrderAttachment.CanAttach(specialist, order, origin, MedicalReadinessDecisions.Instance, out _));
+        Assert.False(OrderAttachment.CanAttach(specialist, order, origin, new MedicalReadinessDecisions(), out _));
         // ...but re-offering him to the order he is already on is fine.
-        Assert.True(OrderAttachment.CanAttach(specialist, elsewhere, origin, MedicalReadinessDecisions.Instance, out _));
+        Assert.True(OrderAttachment.CanAttach(specialist, elsewhere, origin, new MedicalReadinessDecisions(), out _));
     }
 
     [Fact]
@@ -249,7 +254,7 @@ public class OrderAttachmentTests
         home.CurrentRegion = origin;
 
         Assert.False(specialist.IsCombatEffective);
-        Assert.False(OrderAttachment.CanAttach(specialist, order, origin, MedicalReadinessDecisions.Instance, out _));
+        Assert.False(OrderAttachment.CanAttach(specialist, order, origin, new MedicalReadinessDecisions(), out _));
     }
 
     [Fact]
@@ -263,7 +268,7 @@ public class OrderAttachmentTests
         home.CurrentRegion = fixture.Planet.Regions[9];
 
         Assert.False(OrderAttachment.CanAttach(
-            specialist, order, fixture.Planet.Regions[0], MedicalReadinessDecisions.Instance, out _));
+            specialist, order, fixture.Planet.Regions[0], new MedicalReadinessDecisions(), out _));
     }
 
     // ---- the two-sided flag: these formations never deploy as units ------------------
@@ -288,7 +293,7 @@ public class OrderAttachmentTests
         Assert.Null(order);
         Assert.Null(apothecarion.CurrentOrders);
         // ...and it stays operational, because surgery staffing and recruitment gate on that.
-        Assert.True(apothecarion.IsOperational);
+        Assert.True(apothecarion.MayProvideLocalSupport);
         Assert.False(SpecialistAvailability.IsDeployableFormation(apothecarion));
     }
 
@@ -316,8 +321,8 @@ public class OrderAttachmentTests
             [specialist]);
 
         Assert.NotNull(order);
-        Assert.Same(order, specialist.AttachedOrder);
-        Assert.Contains(specialist, order.AttachedSoldiers);
+        Assert.Same(order, specialist.CurrentOrder);
+        Assert.Contains(specialist, order.AssignedCharacters);
         Assert.Single(order.AssignedSquads);
     }
 
@@ -346,7 +351,7 @@ public class OrderAttachmentTests
 
         Assert.Null(order);
         Assert.Null(line.CurrentOrders);
-        Assert.Null(trooper.AttachedOrder);
+        Assert.Null(trooper.CurrentOrder);
         Assert.Empty(fixture.Sector.Orders);
     }
 
@@ -372,7 +377,7 @@ public class OrderAttachmentTests
             [specialist]);
 
         Assert.Null(order);
-        Assert.Null(specialist.AttachedOrder);
+        Assert.Null(specialist.CurrentOrder);
         Assert.Empty(fixture.Sector.Orders);
     }
 
@@ -386,12 +391,12 @@ public class OrderAttachmentTests
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
         OrderAssignment.UnassignSquads([line]);
 
-        Assert.Null(specialist.AttachedOrder);
-        Assert.Empty(order.AttachedSoldiers);
+        Assert.Null(specialist.CurrentOrder);
+        Assert.Empty(order.AssignedCharacters);
         Assert.Empty(fixture.Sector.Orders);
     }
 
@@ -403,12 +408,12 @@ public class OrderAttachmentTests
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
         Assert.True(OrderAssignment.UnassignSpecialists([specialist]));
 
-        Assert.Null(specialist.AttachedOrder);
-        Assert.Empty(order.AttachedSoldiers);
+        Assert.Null(specialist.CurrentOrder);
+        Assert.Empty(order.AssignedCharacters);
         Assert.Same(order, line.CurrentOrders);
         Assert.Single(fixture.Sector.Orders);
     }
@@ -421,30 +426,29 @@ public class OrderAttachmentTests
             fixture, CreateLineSquad("Line"));
         PlayerSoldier specialist = CreateSpecialist();
         Squad home = CreateDetachableSquad("Apothecarion", specialist);
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
-        home.IsAdministrative = true;
-
-        Assert.Null(specialist.AttachedOrder);
-        Assert.Empty(order.AttachedSoldiers);
+        Assert.True(home.SquadTemplate.IsAdministrative);
+        Assert.Same(order, specialist.CurrentOrder);
+        Assert.Contains(specialist, order.AssignedCharacters);
     }
 
     // ---- display and preflight -------------------------------------------------------
 
     [Fact]
-    public void InboundOrderSummary_ReportsTheAttachedCount()
+    public void InboundOrderSummary_ReportsTheCharacterCount()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Squad line = CreateLineSquad("Line");
         Order order = CreateOrder(fixture, line);
         PlayerSoldier specialist = CreateSpecialist();
         CreateDetachableSquad("Apothecarion", specialist);
-        OrderAttachment.Attach(specialist, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
 
         InboundOrderInfo inbound = Assert.Single(
             InboundOrders.ForRegion(fixture.Sector, fixture.Planet.Regions[5]));
 
-        Assert.Equal(1, inbound.AttachedCount);
+        Assert.Equal(1, inbound.CharacterCount);
         Assert.Contains("+1 attached", inbound.SummaryLabel);
     }
 
@@ -465,15 +469,22 @@ public class OrderAttachmentTests
         line.CurrentRegion = origin;
         playerRegionFaction.LandedSquads.Add(line);
         Order order = CreateOrder(fixture, line);
-        OrderAttachment.Attach(committed, order, MedicalReadinessDecisions.Instance);
+        OrderAttachment.Attach(committed, order, new MedicalReadinessDecisions());
 
         IReadOnlyList<SpecialistOption> fresh =
-            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin, fixture.ChapterRoster, MedicalReadinessDecisions.Instance);
+            SpecialistAvailability.EnumerateCandidates(
+                playerRegionFaction, origin, fixture.ChapterRoster,
+                new MedicalReadinessDecisions(), personnel: TestPersonnelComposition.CreatePersonnel());
         IReadOnlyList<SpecialistOption> editing =
             SpecialistAvailability.EnumerateCandidates(
-                playerRegionFaction, origin, fixture.ChapterRoster, MedicalReadinessDecisions.Instance, order);
+                playerRegionFaction, origin, fixture.ChapterRoster,
+                new MedicalReadinessDecisions(), order,
+                personnel: TestPersonnelComposition.CreatePersonnel());
+
         IReadOnlyList<SpecialistOption> roster =
-            SpecialistAvailability.EnumerateRoster(playerRegionFaction, origin, fixture.ChapterRoster, MedicalReadinessDecisions.Instance);
+            SpecialistAvailability.EnumerateRoster(
+                playerRegionFaction, origin, fixture.ChapterRoster,
+                new MedicalReadinessDecisions(), personnel: TestPersonnelComposition.CreatePersonnel());
 
         // Issuing a new order: the committed man is not on offer for a second one.
         Assert.Equal(["Free Apothecary"], fresh.Select(o => o.Soldier.Name).ToArray());
@@ -502,7 +513,10 @@ public class OrderAttachmentTests
         playerRegionFaction.LandedSquads.Add(home);
 
         SpecialistOption option = Assert.Single(
-            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin, fixture.ChapterRoster, MedicalReadinessDecisions.Instance));
+            SpecialistAvailability.EnumerateCandidates(
+                playerRegionFaction, origin, fixture.ChapterRoster,
+                new MedicalReadinessDecisions(),
+                personnel: TestPersonnelComposition.CreatePersonnel()));
 
         Assert.Equal("Brother Apothecary | Test Marine | Apothecarion", option.Label);
     }

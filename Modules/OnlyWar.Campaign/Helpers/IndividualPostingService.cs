@@ -1,25 +1,20 @@
-using OnlyWar.Contracts.Operations;
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
-using System.Linq;
 
 namespace OnlyWar.Helpers
 {
     /// <summary>
     /// Owns physical posting and individual-ship-manifest invariants. Operational order membership
-    /// belongs to Operations and is retired through <see cref="IOrderCommitmentSurface"/>; the
-    /// legacy order parameter remains only as a compatibility bridge for format-13 callers.
+    /// belongs to Operations and is retired through <see cref="IOrderCommitmentSurface"/>. A
+    /// posting records only physical purpose and location; order membership stays on the soldier.
     ///
     /// The commitment surface is injected rather than called directly (SB-05b-1). Posting is a
-    /// Campaign personnel concern and Campaign may not reference Operations, so the two paths that
-    /// have to stand a man or a formation down -- releasing an independently posted character from
-    /// his order, and unassigning a formation that no longer physically exists -- go through the
-    /// contract instead of the order services.
+    /// Campaign personnel concern and Campaign may not reference Operations, so an unassigning
+    /// formation that no longer physically exists goes through the contract instead of the order
+    /// services.
     /// </summary>
     public sealed class IndividualPostingService
     {
@@ -33,12 +28,9 @@ namespace OnlyWar.Helpers
 
         public bool CanCreate(
             PlayerSoldier soldier,
-            IndividualPostingKind kind,
+            IndividualPostingPurpose purpose,
             CampaignLocation location,
-            Order order,
-            out string reason,
-            ChapterOperationalDoctrine doctrine = null,
-            RecruitmentProgram program = null)
+            out string reason)
         {
             reason = null;
             if (soldier?.AssignedSquad == null)
@@ -51,33 +43,11 @@ namespace OnlyWar.Helpers
                 reason = "Select exactly one ship or region.";
                 return false;
             }
-            if (kind == IndividualPostingKind.OperationalAttachment && order == null)
-            {
-                reason = "An operational attachment requires an order.";
-                return false;
-            }
-            if (kind != IndividualPostingKind.OperationalAttachment && order != null)
-            {
-                reason = "Only operational attachments can target an order.";
-                return false;
-            }
-            if (kind != IndividualPostingKind.MedicalDetachment
-                && kind != IndividualPostingKind.AwaitingReunion
-                && soldier.AssignedSquad?.PermitsIndividualDeployment != true
-                && soldier.AssignedSquad?.SquadTemplate?.PermitsIndividualDetachment != true)
+            if (purpose == IndividualPostingPurpose.Independent
+                && soldier.AssignedSquad?.PermitsIndividualDeployment != true)
             {
                 reason = "This formation does not permit individual detachment.";
                 return false;
-            }
-            if (kind == IndividualPostingKind.OperationalAttachment)
-            {
-                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
-                    soldier, doctrine: doctrine, recruitmentProgram: program);
-                if (!duty.IsDutyReady)
-                {
-                    reason = duty.Reason ?? "The specialist is not fit and available for operational duty.";
-                    return false;
-                }
             }
             if (location.Ship?.Fleet?.TravelPhase == Models.Fleets.FleetTravelPhase.InWarp)
             {
@@ -104,68 +74,19 @@ namespace OnlyWar.Helpers
 
         public IndividualPosting Create(
             PlayerSoldier soldier,
-            IndividualPostingKind kind,
+            IndividualPostingPurpose purpose,
             CampaignLocation location,
-            Date startedDate,
-            Order order = null,
-            ChapterOperationalDoctrine doctrine = null,
-            RecruitmentProgram program = null)
+            Date startedDate)
         {
-            if (!CanCreate(soldier, kind, location, order, out string reason, doctrine, program))
+            if (!CanCreate(soldier, purpose, location, out string reason))
             {
                 throw new InvalidOperationException(reason);
             }
             RemoveProjection(soldier);
             soldier.IndividualPosting = new IndividualPosting(
-                kind,
+                purpose,
                 location,
-                CloneDate(startedDate),
-                order);
-            soldier.CurrentOrder = order;
-            AddProjection(soldier);
-            CleanupEmptyPhysicalFormation(soldier.AssignedSquad);
-            return soldier.IndividualPosting;
-        }
-
-        public IndividualPosting Restore(
-            PlayerSoldier soldier,
-            IndividualPostingKind kind,
-            CampaignLocation location,
-            Date startedDate,
-            Order order = null,
-            ChapterOperationalDoctrine doctrine = null,
-            RecruitmentProgram program = null)
-        {
-            if (soldier?.AssignedSquad == null)
-                throw new InvalidOperationException("The posting soldier has no organizational home.");
-            if (location == null || location.IsShip == location.IsRegion)
-                throw new InvalidOperationException("The posting has an invalid location.");
-            if (kind == IndividualPostingKind.OperationalAttachment && order == null)
-                throw new InvalidOperationException("The operational posting has no order.");
-            if (kind != IndividualPostingKind.OperationalAttachment && order != null)
-                throw new InvalidOperationException("A non-operational posting targets an order.");
-            if (kind == IndividualPostingKind.OperationalAttachment)
-            {
-                DutyReadinessEvaluation duty = DutyReadinessService.Evaluate(
-                    soldier, doctrine: doctrine, recruitmentProgram: program);
-                if (!duty.IsDutyReady)
-                    throw new InvalidOperationException(
-                        duty.Reason ?? "The specialist is not fit and available for operational duty.");
-            }
-            if (location.Ship != null)
-            {
-                int capacityAfterDeparture = location.Ship.AvailableCapacity;
-                if (soldier.IndividualPosting == null
-                    && ReferenceEquals(soldier.AssignedSquad?.BoardedLocation, location.Ship))
-                    capacityAfterDeparture++;
-                if (soldier.IndividualPosting?.Location?.IsSamePlace(location) != true
-                    && capacityAfterDeparture < 1)
-                    throw new InvalidOperationException($"{location.Ship.Name} has no passenger berth available.");
-            }
-            RemoveProjection(soldier);
-            soldier.IndividualPosting = new IndividualPosting(
-                kind, location, CloneDate(startedDate), order);
-            soldier.CurrentOrder = order;
+                CloneDate(startedDate));
             AddProjection(soldier);
             CleanupEmptyPhysicalFormation(soldier.AssignedSquad);
             return soldier.IndividualPosting;
@@ -227,49 +148,8 @@ namespace OnlyWar.Helpers
             location.Ship?.BoardIndividual(soldier);
         }
 
-    public void AttachToOrder(
-        PlayerSoldier soldier,
-        Order order,
-        Date startedDate,
-        ChapterOperationalDoctrine doctrine = null,
-        RecruitmentProgram program = null)
-        {
-            if (soldier == null || order == null) return;
-            CampaignLocation destination = CampaignLocation.Landed(order.Mission?.RegionFaction?.Region);
-            if (destination == null) throw new InvalidOperationException("Order has no physical region.");
-            Create(soldier, IndividualPostingKind.OperationalAttachment, destination,
-                startedDate ?? new Date(1), order, doctrine, program);
-        }
-
-        public void ReleaseFromOrder(PlayerSoldier soldier)
-        {
-            if (soldier?.CurrentOrder == null) return;
-            // Format 14 stores order membership on PlayerSoldier.CurrentOrder. The old
-            // OperationalAttachment posting shape is still readable for compatibility, but a
-            // modern independently posted character must be released through the shared order
-            // boundary without changing his physical posting.
-            if (soldier.IndividualPosting?.Kind != IndividualPostingKind.OperationalAttachment)
-            {
-                _commitments.ReleaseCharacter(soldier);
-                return;
-            }
-            RemoveProjection(soldier);
-            soldier.IndividualPosting.Kind = IndividualPostingKind.IndependentDeployment;
-            soldier.IndividualPosting.Order = null;
-            soldier.CurrentOrder = null;
-            NormalizeReunion(soldier);
-        }
-
         public void BeginMedicalDetachment(PlayerSoldier soldier, CampaignLocation location, Date date) =>
-            Create(soldier, IndividualPostingKind.MedicalDetachment, location, date);
-
-        public void MarkAwaitingReunion(PlayerSoldier soldier)
-        {
-            if (soldier?.IndividualPosting?.Kind == IndividualPostingKind.MedicalDetachment)
-            {
-                soldier.IndividualPosting.Kind = IndividualPostingKind.AwaitingReunion;
-            }
-        }
+            Create(soldier, IndividualPostingPurpose.Medical, location, date);
 
         public bool CanRejoin(PlayerSoldier soldier, out string reason)
         {
@@ -315,26 +195,19 @@ namespace OnlyWar.Helpers
 
         private static void AddProjection(PlayerSoldier soldier)
         {
-            IndividualPosting posting = soldier.IndividualPosting;
-            if (posting?.Order != null && !posting.Order.AssignedCharacters.Contains(soldier))
+            if (soldier?.CurrentOrder != null
+                && !soldier.CurrentOrder.AssignedCharacters.Contains(soldier))
             {
-                posting.Order.AssignedCharacters.Add(soldier);
+                soldier.CurrentOrder.AssignedCharacters.Add(soldier);
             }
-            soldier.CurrentOrder = posting?.Order;
-            posting?.Location?.Ship?.BoardIndividual(soldier);
+            soldier?.IndividualPosting?.Location?.Ship?.BoardIndividual(soldier);
         }
 
-        private static void RemoveProjection(PlayerSoldier soldier)
+        private void RemoveProjection(PlayerSoldier soldier)
         {
-            Order order = soldier?.CurrentOrder ?? soldier?.IndividualPosting?.Order;
-            order?.AssignedCharacters.Remove(soldier);
-            if (soldier?.IndividualPosting != null)
+            if (soldier?.CurrentOrder != null)
             {
-                soldier.IndividualPosting.Order = null;
-            }
-            if (soldier != null)
-            {
-                soldier.CurrentOrder = null;
+                _commitments.ReleaseCharacter(soldier);
             }
             soldier?.IndividualPosting?.Location?.Ship?.DisembarkIndividual(soldier);
         }
@@ -347,7 +220,7 @@ namespace OnlyWar.Helpers
         {
             if (squad == null || SoldierPresenceService.PresentCount(squad) != 0) return;
             // A seated administrative formation retains its organizational identity and duty
-            // station even when every member is posted elsewhere. Legacy specialist pools also
+            // station even when every member is posted elsewhere. Member-only formations also
             // retain their last location so released members remain discoverable.
             if (squad.PermitsIndividualDeployment)
             {

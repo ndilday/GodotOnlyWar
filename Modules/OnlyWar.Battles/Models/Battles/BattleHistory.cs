@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 
 namespace OnlyWar.Models.Battles
 {

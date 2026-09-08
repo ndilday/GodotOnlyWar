@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Contracts.Generation;
+using OnlyWar.Generation.Contracts;
 using OnlyWar.Helpers.Narrative;
 using OnlyWar.Models.Planets;
 using Xunit;

@@ -13,8 +13,10 @@ public class TurnControllerResultTests
     public void ProcessTurn_ReturnsResolutionCollections()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        TurnController controller = new(new GameSession(
-            fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance));
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(new StaticRNG());
+        TurnController controller = composition.CreateTurnController(new GameSession(
+            fixture.Rules, fixture.Sector, fixture.CurrentDate, new StaticRNG()));
 
         TurnResolutionResult result = controller.ProcessTurn(fixture.Sector);
 

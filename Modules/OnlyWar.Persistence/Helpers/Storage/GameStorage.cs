@@ -10,41 +10,52 @@ namespace OnlyWar.Helpers.Storage
     /// SQLite requires ordinary filesystem paths, so the shipped rules database and save
     /// schema remain loose files under Database/ beside the exported executable.
     /// </summary>
-    public static class GameStorage
+    public sealed class GameStorage
     {
         public const string DefaultSaveFileName = "default.s3db";
         public const string ProtectedPreTurnSaveFileName = "autosave-pre-turn.s3db";
         public const string InitialAutosaveFileName = "autosave-initial.s3db";
         public const string PostTurnAutosaveFilePrefix = "autosave-turn-";
 
-        private static readonly Lazy<string> InstallDirectoryValue =
-            new(LocateInstallDirectory);
+        public string InstallDirectory { get; }
 
-        public static string InstallDirectory => InstallDirectoryValue.Value;
+        public string SaveDirectory { get; }
 
-        public static string RulesDatabasePath =>
+        public string RulesDatabasePath =>
             Path.Combine(InstallDirectory, "Database", "OnlyWar.s3db");
 
-        public static string SaveSchemaPath =>
+        public string SaveSchemaPath =>
             Path.Combine(InstallDirectory, "Database", "SaveStructure.sql");
 
-        private static string _saveDirectory;
-
-        public static void ConfigureSaveDirectory(string saveDirectory) =>
-            _saveDirectory = Path.GetFullPath(saveDirectory);
-
-        public static string SaveDirectory => _saveDirectory
-            ?? throw new InvalidOperationException("The host must configure the save directory before saving.");
-
-        public static string DefaultSavePath =>
+        public string DefaultSavePath =>
             Path.Combine(SaveDirectory, DefaultSaveFileName);
+
+        public GameStorage(string saveDirectory)
+            : this(LocateInstallDirectory(), saveDirectory)
+        {
+        }
+
+        public GameStorage(string installDirectory, string saveDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(installDirectory))
+            {
+                throw new ArgumentException("An install directory is required.", nameof(installDirectory));
+            }
+            if (string.IsNullOrWhiteSpace(saveDirectory))
+            {
+                throw new ArgumentException("A save directory is required.", nameof(saveDirectory));
+            }
+
+            InstallDirectory = Path.GetFullPath(installDirectory);
+            SaveDirectory = Path.GetFullPath(saveDirectory);
+        }
 
         /// <summary>
         /// Creates the writable save directory and adopts the old repository/install-root
         /// default.s3db once. The legacy file is copied, not moved, so an interrupted migration
         /// cannot destroy the player's previous save.
         /// </summary>
-        public static void InitializeUserStorage()
+        public void InitializeUserStorage()
         {
             Directory.CreateDirectory(SaveDirectory);
         }

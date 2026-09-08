@@ -18,7 +18,7 @@ public sealed class CampaignApplicationTests
         SectorSimulationFixture secondFixture = SectorSimulationFixture.CreateDetached();
         GameRulesData rules = firstFixture.Rules
             ?? throw new InvalidOperationException("The rules fixture was not initialized.");
-        CampaignApplication application = new(new SeededRNG(101));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(101)).CreateApplication();
         GameSession first = new(rules, firstFixture.Sector, new Date(1, 1, 1), new SeededRNG(102));
         GameSession second = new(rules, secondFixture.Sector, new Date(2, 1, 1), new SeededRNG(103));
 
@@ -37,7 +37,7 @@ public sealed class CampaignApplicationTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         GameRulesData rules = fixture.Rules
             ?? throw new InvalidOperationException("The rules fixture was not initialized.");
-        CampaignApplication application = new(new SeededRNG(104));
+        CampaignApplication application = TestPersonnelComposition.CreateCampaign(new SeededRNG(104)).CreateApplication();
         GameSession active = new(rules, fixture.Sector, new Date(3, 1, 1), new SeededRNG(105));
         application.Install(active);
 

@@ -1,5 +1,5 @@
 using OnlyWar.Helpers;
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Treatment;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
@@ -12,7 +12,7 @@ using System.Linq;
 namespace OnlyWar.Helpers.Medical
 {
     // FieldCareTreatment and FieldCareReport are boundary values and live in
-    // Modules/OnlyWar.Contracts/Medical/FieldCareReportValues.cs (SB-05b-1). This service is only
+    // Modules/OnlyWar.Medical.Abstractions/Contracts/FieldCareReportValues.cs (SB-05b-1). This service is only
     // their producer.
 
     /// <summary>

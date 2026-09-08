@@ -1,8 +1,9 @@
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Operations.Personnel;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -53,8 +54,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
     }
 
     /// <summary>
-    /// Validated, UI-facing order mutations. Unlike OrderAssignment's legacy API, squads already
-    /// committed elsewhere are rejected instead of being silently detached and reassigned.
+    /// Validated, UI-facing order mutations. Squads already committed elsewhere are rejected
+    /// instead of being silently detached and reassigned.
     /// </summary>
     public static class OrderMutationService
     {
@@ -68,7 +69,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             OrderRestoreToken token,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IOperationsPersonnelSurface personnel = null) =>
+            IPersonnelAvailabilityQueries personnel = null) =>
             token != null && ReferenceEquals(sector, token.Sector)
                 ? RestoreParticipants(
                     sector, token.Order, token.Squads, token.Characters, readiness,
@@ -84,7 +85,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Aggression aggression,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
         {
             return CreateOrAdd(sector, target, mission, selectedSquads, [],
                 targetFactionId, aggression, readiness, currentDate, personnel);
@@ -102,7 +103,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Aggression aggression,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
         {
             if (sector == null || target == null || mission == null)
             {
@@ -262,42 +263,26 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             PlayerSoldier soldier,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
         {
             if (sector == null || !IsPlayerOrder(order)
                 || !sector.Orders.Values.Contains(order))
             {
                 return Failure("That order is no longer active.");
             }
-            IOperationsPersonnelSurface surface =
-                personnel ?? OperationsPersonnelDefaults.Current;
+            IPersonnelAvailabilityQueries surface = personnel
+                ?? throw new System.ArgumentNullException(nameof(personnel));
             PersonnelAvailabilityDecision availability = surface.EvaluateOrderAssignment(
-                soldier,
-                order,
-                null,
-                order.AssignedSquads,
-                ForceReadinessInputs.DoctrineFor(sector.PlayerForce, soldier?.AssignedSquad),
-                ForceReadinessInputs.ProgramFor(sector.PlayerForce, soldier?.AssignedSquad));
-            if (!availability.IsAllowed)
-            {
-                // Keep the format-13 attachment façade usable for old fixtures and saves whose
-                // rules template still carries only PermitsIndividualDetachment. New campaign
-                // data always takes the explicit MembersOnly capability path above.
-                if (!OrderAttachment.CanAttach(
-                        soldier, order, order.AssignedSquads, null, readiness, out string legacyReason))
-                {
-                    return Failure(availability.Reason ?? legacyReason
-                        ?? "That character cannot join this order.");
-                }
-                OrderAttachment.Attach(
+                PersonnelAvailabilityProjection.ForOrderAssignment(
                     soldier,
                     order,
-                    readiness,
-                    doctrine: null,
-                    currentDate: currentDate,
-                    personnel: surface);
-                return new OrderMutationResult(true, $"{soldier.Name} assigned.",
-                    OrderMutationKind.SpecialistAttached, order, ReleasedSpecialists: 1);
+                    null,
+                    order.AssignedSquads,
+                    ForceReadinessInputs.DoctrineFor(sector.PlayerForce, soldier?.AssignedSquad),
+                    ForceReadinessInputs.ProgramFor(sector.PlayerForce, soldier?.AssignedSquad)));
+            if (!availability.IsAllowed)
+            {
+                return Failure(availability.Reason ?? "That character cannot join this order.");
             }
             if (!OrderForceService.AssignCharacter(order, soldier, readiness))
             {
@@ -329,7 +314,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Squad squad,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
             => RestoreParticipants(
                 sector, order, [squad], [], readiness, currentDate, personnel);
 
@@ -344,7 +329,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             IReadOnlyList<PlayerSoldier> selectedCharacters,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IOperationsPersonnelSurface personnel = null)
+            IPersonnelAvailabilityQueries personnel = null)
         {
             List<Squad> squads = (selectedSquads ?? []).ToList();
             List<PlayerSoldier> characters = (selectedCharacters ?? []).ToList();
@@ -383,9 +368,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             }
 
             List<Squad> staging = order.AssignedSquads.Concat(squads).ToList();
-            IOperationsPersonnelSurface surface =
-                personnel ?? OperationsPersonnelDefaults.Current;
-            HashSet<PlayerSoldier> legacyAttachments = [];
+            IPersonnelAvailabilityQueries surface = personnel
+                ?? throw new System.ArgumentNullException(nameof(personnel));
             foreach (PlayerSoldier character in characters)
             {
                 if (character.CurrentOrder != null
@@ -394,32 +378,24 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 {
                     return Failure("The force changed and a character can no longer join the operation.");
                 }
-                if (!surface.EvaluateOrderAssignment(
+                PersonnelAvailabilityDecision availability = surface.EvaluateOrderAssignment(
+                    PersonnelAvailabilityProjection.ForOrderAssignment(
                         character,
                         order,
                         null,
                         staging,
                         doctrine,
-                        program).IsAllowed)
+                        program));
+                if (!availability.IsAllowed)
                 {
-                    if (!OrderAttachment.CanAttach(character, order, staging, null, readiness, out string reason, doctrine))
-                        return Failure(reason ?? "The character can no longer join the operation.");
-                    legacyAttachments.Add(character);
+                    return Failure(availability.Reason
+                        ?? "The character can no longer join the operation.");
                 }
             }
 
             // These are the same readiness and commitment guards used by the mutation owner.
             // No callbacks or simulation execute between validation and this synchronous commit.
-            foreach (PlayerSoldier character in characters.Where(legacyAttachments.Contains))
-                OrderAttachment.Attach(
-                    character,
-                    order,
-                    readiness,
-                    doctrine,
-                    currentDate: currentDate,
-                    personnel: surface);
-            OrderForceService.CommitParticipantRestore(order, squads,
-                characters.Where(character => !legacyAttachments.Contains(character)).ToList());
+            OrderForceService.CommitParticipantRestore(order, squads, characters);
             if (!sector.Orders.Values.Contains(order)) sector.AddNewOrder(order);
             return new OrderMutationResult(true, "Order assignments restored.",
                 OrderMutationKind.Restored, order, squads.Count, characters.Count);

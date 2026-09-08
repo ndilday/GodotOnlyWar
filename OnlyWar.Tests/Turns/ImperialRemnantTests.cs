@@ -352,7 +352,7 @@ public class ImperialRemnantTests
     private static PlanetDemographicsProcessor CreateDemographicsProcessor(SectorSimulationFixture fixture)
     {
         return new PlanetDemographicsProcessor(
-            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance),
+            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, new StaticRNG()),
             new OrganicPopulationGrowthLedger());
     }
 

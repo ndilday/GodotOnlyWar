@@ -451,8 +451,10 @@ public class SectorEntityLogicTests
         RegionFaction weak = fixture.AddPublicCult(0, population: 10000, organization: 100);
         strong.Garrison = strong.Population;
         weak.Garrison = weak.Population;
-        TurnController controller = new(new GameSession(
-            fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance));
+        TestCampaignComposition composition =
+            TestPersonnelComposition.CreateCampaign(new StaticRNG());
+        TurnController controller = composition.CreateTurnController(new GameSession(
+            fixture.Rules, fixture.Sector, fixture.CurrentDate, new StaticRNG()));
 
         int strongCount = 0;
         int weakCount = 0;
@@ -480,7 +482,7 @@ public class SectorEntityLogicTests
         SectorSimulationFixture fixture)
     {
         return new PlanetDemographicsProcessor(
-            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance),
+            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, new StaticRNG()),
             new OrganicPopulationGrowthLedger());
     }
 
@@ -488,7 +490,7 @@ public class SectorEntityLogicTests
         SectorSimulationFixture fixture)
     {
         return new PlanetIntelligenceProcessor(
-            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, StaticRNG.Instance),
+            new GameSession(fixture.Rules, fixture.Sector, fixture.CurrentDate, new StaticRNG()),
             []);
     }
 }

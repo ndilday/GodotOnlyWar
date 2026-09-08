@@ -1,6 +1,6 @@
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
-using OnlyWar.Contracts.Battles;
+using OnlyWar.Battles.Abstractions;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -72,8 +72,10 @@ public class MissionOpeningRangeTests
         // PHASE 7: each side's preference is now derived against the other side's whole force, so
         // the endpoints the interpolation must stay between are asked the same way Interpolate
         // asks them.
-        int shooterPreference = resolver.GetPreferredOpeningRange(shooters, [brawlers]);
-        int brawlerPreference = resolver.GetPreferredOpeningRange(brawlers, [shooters]);
+        int shooterPreference = resolver.GetPreferredOpeningRange(
+            shooters.ToEngagementParticipant(), [brawlers.ToEngagementParticipant()]);
+        int brawlerPreference = resolver.GetPreferredOpeningRange(
+            brawlers.ToEngagementParticipant(), [shooters.ToEngagementParticipant()]);
 
         Assert.True(
             shooterPreference > brawlerPreference,
@@ -120,7 +122,8 @@ public class MissionOpeningRangeTests
         OperationalMissionElement brawlers = ToMissionElement(CreateMeleeSquad());
         IEngagementResolver resolver = TestExecutionContextFactory.CreateEngagementResolver();
 
-        int opening = resolver.GetPreferredOpeningRange(shooters, [brawlers]);
+        int opening = resolver.GetPreferredOpeningRange(
+            shooters.ToEngagementParticipant(), [brawlers.ToEngagementParticipant()]);
         int headroom = (int)(10 * brawlers.GetSquadMove());
 
         Assert.True(

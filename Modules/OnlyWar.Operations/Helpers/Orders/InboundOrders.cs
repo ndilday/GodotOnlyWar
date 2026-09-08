@@ -21,11 +21,8 @@ namespace OnlyWar.Helpers.Orders
         // an advance already converging on this hex from a different region is visible.
         public string OriginLabel { get; }
         public int SquadCount { get; }
-        // Characters are first-class order participants. Keep the old property as a display/API
-        // compatibility alias while new callers use CharacterCount.
+        // Characters are first-class order participants.
         public int CharacterCount => Order?.AssignedCharacters?.Count ?? 0;
-        [System.Obsolete("Use CharacterCount.")]
-        public int AttachedCount => CharacterCount;
         public string SummaryLabel
         {
             get

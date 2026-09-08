@@ -2,7 +2,6 @@ using Godot;
 using OnlyWar.Application;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameRules;
-using OnlyWar.Helpers.Storage;
 using OnlyWar.Models;
 
 public partial class MainGamePreviewBootstrap : Node
@@ -17,9 +16,14 @@ public partial class MainGamePreviewBootstrap : Node
 
     public override void _Ready()
     {
-        _campaignApplication = new CampaignApplication(StaticRNG.Instance);
+        OnlyWar.Helpers.Storage.GameStorage storage =
+            OnlyWar.Host.Composition.GodotHostPaths.CreateStorage();
+        _campaignApplication = new CampaignApplication(
+            OnlyWar.Host.Composition.GodotHostPaths.CreateCampaignServices(
+                new SeededRNG(Seed), storage));
         _campaignApplication.StartNewCampaign(
-            GameRulesLoader.Load(GameStorage.RulesDatabasePath),
+            GameRulesLoader.Load(
+                _campaignApplication.Services.Persistence.Storage.RulesDatabasePath),
             new Date(39, 500, 1),
             ChapterName,
             Seed);

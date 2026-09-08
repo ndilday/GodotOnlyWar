@@ -1,4 +1,5 @@
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Personnel;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models;
@@ -17,59 +18,39 @@ namespace OnlyWar.Helpers.Application.Adapters.Operations;
 /// </summary>
 public sealed class OperationsPersonnelSurface : IOperationsPersonnelSurface
 {
-    public static OperationsPersonnelSurface Instance { get; } = new();
+    private readonly IndividualPostingService _postings;
+    private readonly IReadinessDecisions _readiness;
 
-    static OperationsPersonnelSurface()
+    public OperationsPersonnelSurface(
+        IReadinessDecisions readiness,
+        IOrderCommitmentSurface commitments)
     {
-        OperationsPersonnelDefaults.Configure(Instance);
+        _readiness = readiness ?? throw new System.ArgumentNullException(nameof(readiness));
+        _postings = new IndividualPostingService(
+            commitments ?? throw new System.ArgumentNullException(nameof(commitments)));
     }
 
-    private readonly CharacterAvailabilityService _availability = new();
-    private readonly IndividualPostingService _postings =
-        new(OrderCommitmentSurface.Instance);
-
     public PersonnelAvailabilityDecision EvaluateMovement(
-        PlayerSoldier character,
-        CampaignLocation destination,
-        ChapterOperationalDoctrine doctrine = null,
-        RecruitmentProgram program = null) =>
-        Project(_availability.EvaluateMovement(character, destination, doctrine, program));
+        PersonnelMovementRequest request) =>
+        PersonnelAvailabilityPolicy.EvaluateMovement(
+            request,
+            EvaluateDuty(request?.Character));
 
     public PersonnelAvailabilityDecision EvaluateOrderAssignment(
-        PlayerSoldier character,
-        Order order,
-        Region origin = null,
-        IReadOnlyList<Squad> stagingSquads = null,
-        ChapterOperationalDoctrine doctrine = null,
-        RecruitmentProgram program = null) =>
-        Project(_availability.EvaluateOrderAssignment(
-            character, order, origin, stagingSquads, doctrine, program));
+        PersonnelOrderAssignmentRequest request) =>
+        PersonnelAvailabilityPolicy.EvaluateOrderAssignment(
+            request,
+            EvaluateDuty(request?.Character));
 
-    public int PresentCount(
-        Squad squad,
-        RecruitmentProgram program = null,
-        ChapterOperationalDoctrine doctrine = null) =>
-        SquadStrengthSnapshotBuilder.Build(squad, program, doctrine).Present;
+    public int PresentCount(PersonnelFormationSnapshot formation) =>
+        PersonnelAvailabilityPolicy.PresentCount(formation);
 
     public bool CanCreate(
         PlayerSoldier soldier,
-        IndividualPostingKind kind,
+        IndividualPostingPurpose purpose,
         CampaignLocation location,
-        Order order,
-        out string reason,
-        ChapterOperationalDoctrine doctrine = null,
-        RecruitmentProgram program = null) =>
-        _postings.CanCreate(soldier, kind, location, order, out reason, doctrine, program);
-
-    public IndividualPosting Restore(
-        PlayerSoldier soldier,
-        IndividualPostingKind kind,
-        CampaignLocation location,
-        Date startedDate,
-        Order order = null,
-        ChapterOperationalDoctrine doctrine = null,
-        RecruitmentProgram program = null) =>
-        _postings.Restore(soldier, kind, location, startedDate, order, doctrine, program);
+        out string reason) =>
+        _postings.CanCreate(soldier, purpose, location, out reason);
 
     public IndividualPosting RestorePhysical(
         PlayerSoldier soldier,
@@ -84,18 +65,11 @@ public sealed class OperationsPersonnelSurface : IOperationsPersonnelSurface
         Date date) =>
         _postings.BeginMedicalDetachment(soldier, location, date);
 
-    public void ReleaseFromOrder(PlayerSoldier soldier) =>
-        _postings.ReleaseFromOrder(soldier);
-
     public void NormalizeReunion(PlayerSoldier soldier) =>
         _postings.NormalizeReunion(soldier);
 
-    private static PersonnelAvailabilityDecision Project(
-        CharacterAvailabilityEvaluation evaluation) =>
-        evaluation == null
-            ? new PersonnelAvailabilityDecision(false, -1, "No availability decision was returned.")
-            : new PersonnelAvailabilityDecision(
-                evaluation.IsAllowed,
-                (int)evaluation.ReasonCode,
-                evaluation.Reason);
+    private DutyReadinessEvaluation EvaluateDuty(PersonnelCharacterSnapshot character) =>
+        character == null
+            ? null
+            : _readiness.EvaluateSoldier(character.DutyFacts, character.DutyOptions);
 }

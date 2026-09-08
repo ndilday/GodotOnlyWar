@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Contracts.Medical;
+using OnlyWar.Medical.Abstractions;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Models.Soldiers;

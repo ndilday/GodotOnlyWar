@@ -10,6 +10,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Medical.Abstractions;
 
 namespace OnlyWar.Helpers.Turns
 {
@@ -30,16 +31,20 @@ namespace OnlyWar.Helpers.Turns
 
         private readonly ICampaignSession _session;
         private readonly OrganicPopulationGrowthLedger _growthLedger;
+        private readonly IReadinessDecisions _readiness;
         private readonly RecruitmentStaffService _staffService = new();
         private readonly RecruitmentForecastService _forecastService = new();
 
         internal RecruitmentTurnProcessor(
             ICampaignSession session,
-            OrganicPopulationGrowthLedger growthLedger)
+            OrganicPopulationGrowthLedger growthLedger,
+            IReadinessDecisions readiness)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _growthLedger = growthLedger
                 ?? throw new ArgumentNullException(nameof(growthLedger));
+            _readiness = readiness
+                ?? throw new ArgumentNullException(nameof(readiness));
         }
 
         internal RecruitmentTurnReport Process()
@@ -55,7 +60,7 @@ namespace OnlyWar.Helpers.Turns
                 return null;
             }
 
-            _staffService.Synchronize(force, _session.Rules, _session.Sector);
+            _staffService.Synchronize(force, _session.Rules, _session.Sector, _readiness);
             Planet homeWorld = _session.Sector.GetPlanet(program.HomeWorldPlanetId);
             Faction chapter = force.Faction;
             long population = GetChapterPopulation(homeWorld, chapter.Id);

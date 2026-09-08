@@ -461,7 +461,7 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
             Faction = pdf,
             TargetBattleValue = targetBattleValue,
             Profile = ForceCompositionProfile.Garrison
-        }, StaticRNG.Instance);
+        }, new StaticRNG());
 
         Assert.NotEmpty(force);
         Assert.All(force, squad =>

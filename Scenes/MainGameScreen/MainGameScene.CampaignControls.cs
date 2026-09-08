@@ -4,7 +4,7 @@ using OnlyWar.Helpers.Diagnostics;
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.UI.SystemMenu;
+using OnlyWar.Host.Presentation.UI.SystemMenu;
 using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
@@ -94,18 +94,16 @@ public partial class MainGameScene
 		_endTurnPreflightDialog.CancelPressed += OnEndTurnPreflightCancelled;
 		_endTurnPreflightDialog.WarningPreferencesChanged += OnPreflightPreferencesChanged;
 
-		_warningPreferencesRepository = OnlyWar.Composition.GodotHostPaths.CreateWarningPreferences();
+		_warningPreferencesRepository = OnlyWar.Host.Composition.GodotHostPaths.CreateWarningPreferences();
 		_warningPreferences = _warningPreferencesRepository.Load();
 		ApplyWarningPreferencesToMenu();
 
 		try
 		{
-			GameStorage.InitializeUserStorage();
-			_saveGameManager = new SaveGameManager(GameStorage.SaveDirectory);
-			_saveCatalog = new SaveGameCatalog(GameStorage.SaveDirectory);
-			// Startup composition is the only place the host hands a concrete adapter to the
-			// application; from here every write goes through SaveCampaign.
-			_campaignApplication.ConfigureStorage(_saveGameManager);
+			GameStorage storage = _campaignApplication.Services.Persistence.Storage;
+			storage.InitializeUserStorage();
+			_saveGameManager = _campaignApplication.Services.Persistence.SaveManager;
+			_saveCatalog = new SaveGameCatalog(storage.SaveDirectory);
 		}
 		catch (Exception exception)
 		{

@@ -1,4 +1,4 @@
-using OnlyWar.Contracts.Operations;
+using OnlyWar.Operations.Contracts;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
@@ -9,6 +9,7 @@ using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Operations.Personnel;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -44,7 +45,7 @@ namespace OnlyWar.Helpers.Orders
             if (campaign?.Sector == null) return null;
             if (squads == null || squads.Count == 0
                 || squads.Any(squad => squad?.CanAcceptSquadOrder != true
-                    || squad.SquadTemplate?.PermitsIndividualDetachment == true
+                    || squad.PermitsIndividualDeployment
                     || squad.CurrentOrders == null
                         && !campaign.RequireReadiness().CanBeginNewDeployment(
                             squad,
@@ -56,8 +57,8 @@ namespace OnlyWar.Helpers.Orders
             // A formation that may give up individuals never deploys as a unit
             // (Design/Reference/SpecialistAttachment.md §3.3). HQ squads and the four chapter
             // offices are personnel pools: their people reach the field only by attachment.
-            // Note this is enforced here rather than by marking them Administrative -- their
-            // IsOperational must stay true, since surgery staffing and recruitment gate on it.
+            // Administrative formations are member-only personnel pools and never deploy as
+            // whole formations; their capabilities are authored by the template.
             List<Squad> distinctSquads = squads
                 .GroupBy(squad => squad.Id)
                 .Select(group => group.First())
@@ -86,8 +87,10 @@ namespace OnlyWar.Helpers.Orders
             }
 
             Sector sector = campaign.Sector;
-            IOperationsPersonnelSurface personnel =
-                campaign.Personnel ?? OperationsPersonnelDefaults.Current;
+            IPersonnelAvailabilityQueries personnel = campaign.Personnel
+                ?? throw new System.ArgumentException(
+                    "Order command context must include personnel availability queries.",
+                    nameof(campaign));
             List<Order> equivalentOrders = sector.Orders.Values
                 .Where(order => IsPlayerOrder(order)
                     && RepresentsEffectiveMission(
@@ -117,9 +120,7 @@ namespace OnlyWar.Helpers.Orders
                         specialist,
                         existingOrder,
                         campaign.RequireReadiness(),
-                        doctrine,
-                        campaign.PostingDate,
-                        personnel);
+                        doctrine);
                 }
                 return existingOrder;
             }
@@ -157,9 +158,7 @@ namespace OnlyWar.Helpers.Orders
                     specialist,
                     newOrder,
                     campaign.RequireReadiness(),
-                    doctrine,
-                    campaign.PostingDate,
-                    personnel);
+                    doctrine);
             }
             return newOrder;
         }
@@ -205,8 +204,10 @@ namespace OnlyWar.Helpers.Orders
 
             Sector sector = campaign?.Sector;
             if (sector == null) return null;
-            IOperationsPersonnelSurface personnel =
-                campaign.Personnel ?? OperationsPersonnelDefaults.Current;
+            IPersonnelAvailabilityQueries personnel = campaign.Personnel
+                ?? throw new System.ArgumentException(
+                    "Order command context must include personnel availability queries.",
+                    nameof(campaign));
             RecruitmentProgram program = campaign.Recruitment;
             if (distinctSquads.SelectMany(squad => squad.Members)
                     .Concat(distinctCharacters)
@@ -249,12 +250,13 @@ namespace OnlyWar.Helpers.Orders
                 Region explicitOrigin = staging.Count == 0 ? targetRegion : null;
                 if (distinctCharacters.Any(character =>
                     !personnel.EvaluateOrderAssignment(
-                        character,
-                        targetOrder,
-                        explicitOrigin,
-                        staging,
-                        doctrine,
-                        program).IsAllowed))
+                        PersonnelAvailabilityProjection.ForOrderAssignment(
+                            character,
+                            targetOrder,
+                            explicitOrigin,
+                            staging,
+                            doctrine,
+                            program)).IsAllowed))
                 {
                     return null;
                 }
@@ -303,12 +305,13 @@ namespace OnlyWar.Helpers.Orders
             Region origin = stagingSquads.Count == 0 ? targetRegion : null;
             if (distinctCharacters.Any(character =>
                 !personnel.EvaluateOrderAssignment(
-                    character,
-                    targetOrder,
-                    origin,
-                    stagingSquads,
-                    doctrine,
-                    program).IsAllowed))
+                    PersonnelAvailabilityProjection.ForOrderAssignment(
+                        character,
+                        targetOrder,
+                        origin,
+                        stagingSquads,
+                        doctrine,
+                        program)).IsAllowed))
             {
                 return null;
             }
@@ -499,17 +502,11 @@ namespace OnlyWar.Helpers.Orders
 
             Order oldOrder = squad.CurrentOrders;
             OrderForceService.RemoveSquad(oldOrder, squad);
-            // Format-13's attachment façade required at least one squad to keep an order alive.
-            // Preserve that behavior only for its operational-posting projection; format-14
-            // character-only orders remain valid and are governed by OrderForceService.
             if (oldOrder.AssignedSquads.Count == 0)
             {
                 foreach (PlayerSoldier character in oldOrder.AssignedCharacters.ToList())
                 {
-                    if (character.IndividualPosting?.Kind == IndividualPostingKind.OperationalAttachment)
-                    {
-                        OrderAttachment.Detach(character);
-                    }
+                    OrderForceService.RemoveCharacter(oldOrder, character);
                 }
             }
             if (oldOrder.Force.IsEmpty)

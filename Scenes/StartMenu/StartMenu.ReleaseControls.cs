@@ -4,7 +4,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Diagnostics;
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Storage;
-using OnlyWar.Helpers.UI.SystemMenu;
+using OnlyWar.Host.Presentation.UI.SystemMenu;
 using OnlyWar.Models;
 using System;
 using System.IO;
@@ -45,7 +45,7 @@ public partial class StartMenu
 		_titleDiagnosticsDialog.CancelRequested += OnTitleDiagnosticsCancelled;
 		_titleDiagnosticsDialog.ExportRequested += OnTitleDiagnosticsExportRequested;
 
-		_titleWarningRepository = OnlyWar.Composition.GodotHostPaths.CreateWarningPreferences();
+		_titleWarningRepository = OnlyWar.Host.Composition.GodotHostPaths.CreateWarningPreferences();
 		_titleWarningPreferences = _titleWarningRepository.Load();
 		ApplyTitleWarningPreferences();
 	}
@@ -87,7 +87,7 @@ public partial class StartMenu
 	{
 		try
 		{
-			SaveGameCatalog catalog = new(GameStorage.SaveDirectory);
+			SaveGameCatalog catalog = new(_storage.SaveDirectory);
 			_titleSaveChooser.ShowChooser(
 				SaveChooserMode.Load,
 				SaveSlotViewModelMapper.Map(catalog.Discover()));
@@ -108,7 +108,7 @@ public partial class StartMenu
 	{
 		try
 		{
-			SaveGameCatalog catalog = new(GameStorage.SaveDirectory);
+			SaveGameCatalog catalog = new(_storage.SaveDirectory);
 			_titleSaveChooser.RefreshEntries(
 				SaveSlotViewModelMapper.Map(catalog.Discover()));
 			RefreshLoadGameAvailability();
@@ -135,7 +135,9 @@ public partial class StartMenu
 
 		try
 		{
-			_campaignApplication = new CampaignApplication(StaticRNG.Instance);
+			_campaignApplication = new CampaignApplication(
+				OnlyWar.Host.Composition.GodotHostPaths.CreateCampaignServices(
+					new SeededRNG(System.Environment.TickCount), _storage));
 			_campaignApplication.LoadAndInstall(args.Slot.FilePath);
 			LaunchMainGameScene();
 		}
@@ -156,7 +158,7 @@ public partial class StartMenu
 
 		try
 		{
-			SaveGameManager manager = new(GameStorage.SaveDirectory);
+			SaveGameManager manager = new(_storage.SaveDirectory);
 			manager.DeleteManualSave(args.Slot.FilePath);
 			_titleFeedback.ShowSuccess($"Deleted {args.Slot.DisplayName}.");
 			OnTitleSaveChooserRefreshRequested(this, EventArgs.Empty);
@@ -172,7 +174,6 @@ public partial class StartMenu
 	{
 		// The application owns the write and the recoverability bookkeeping; the title screen only
 		// composes the storage manager and reports the outcome.
-		_campaignApplication.ConfigureStorage(new SaveGameManager(GameStorage.SaveDirectory));
 		SaveCampaignResult result = _campaignApplication.SaveCampaign(new(
 			_campaignApplication.SessionToken, SaveCampaignKind.InitialAutosave));
 		if (result.Succeeded) return null;
