@@ -3,15 +3,12 @@ using System.Collections.Generic;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Command;
-using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Runtime.Allocators;
 using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Command;
 using OnlyWar.Models.Events;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
@@ -415,7 +412,7 @@ public sealed class CampaignApplication :
     public RecruitmentScreenSnapshot QueryRecruitmentScreen(
         RecruitmentDoctrineDraft draft, int? selectedSquadId) =>
         _training.QueryRecruitmentScreen(draft, selectedSquadId);
-    public RecruitmentForecast PreviewForecast(RecruitmentDoctrineDraft draft) =>
+    public RecruitmentForecastView PreviewForecast(RecruitmentDoctrineDraft draft) =>
         _training.PreviewForecast(draft);
     public IReadOnlyList<ScoutSquadRow> QueryScoutSquads(int? selectedSquadId) =>
         _training.QueryScoutSquads(selectedSquadId);

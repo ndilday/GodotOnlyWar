@@ -1,8 +1,4 @@
 using Godot;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,6 +20,7 @@ public partial class TrainingUnitScreenView : MainScreenView
     private RecruitmentPage _activePage;
     private bool _setupMode;
     private bool _suppressDoctrineEvents;
+    private RecruitmentScreenRulesView _screenRules = RecruitmentScreenRulesView.Default;
 
     private Label _overviewWorld;
     private Label _overviewResources;
@@ -52,7 +49,7 @@ public partial class TrainingUnitScreenView : MainScreenView
     private VBoxContainer _promotionRows;
     private ButtonGroup _squadButtonGroup;
     private IReadOnlyList<ScoutSquadRow> _scoutRows = [];
-    private IReadOnlyList<ScoutTrainingOption> _scoutTrainingOptions = [];
+    private IReadOnlyList<ScoutTrainingOptionView> _scoutTrainingOptions = [];
     private int? _selectedSquadId;
 
     public event EventHandler<int> SquadButtonPressed;
@@ -93,6 +90,7 @@ public partial class TrainingUnitScreenView : MainScreenView
 
     public void Render(RecruitmentScreenSnapshot snapshot, int? selectedSquadId)
     {
+        _screenRules = snapshot.Rules ?? RecruitmentScreenRulesView.Default;
         _navigationButtons[RecruitmentPage.Recruitment].Disabled = false;
         _navigationButtons[RecruitmentPage.Aspirants].Disabled = false;
         SetScoutTrainingOptions(snapshot.ScoutTrainingOptions);
@@ -132,7 +130,7 @@ public partial class TrainingUnitScreenView : MainScreenView
 
     public void UpdateForecast(
         RecruitmentDoctrineDraft doctrine,
-        RecruitmentForecast forecast)
+        RecruitmentForecastView forecast)
     {
         _suppressDoctrineEvents = true;
         SetDoctrineControls(doctrine);
@@ -180,7 +178,7 @@ public partial class TrainingUnitScreenView : MainScreenView
         PopulatePromotionRows(selected.PromotionRows);
     }
 
-    public void SetScoutTrainingOptions(IReadOnlyList<ScoutTrainingOption> options)
+    public void SetScoutTrainingOptions(IReadOnlyList<ScoutTrainingOptionView> options)
     {
         _scoutTrainingOptions = options ?? [];
         PopulateFocusOptions();
@@ -263,8 +261,9 @@ public partial class TrainingUnitScreenView : MainScreenView
         HBoxContainer policyRow = new();
         policyRow.AddChild(CreateFieldLabel("Recruitment policy", 240));
         _policyOption = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _policyOption.AddItem("Voluntary Presentation", (int)RecruitmentPolicy.VoluntaryPresentation);
-        _policyOption.AddItem("Planetary Tithe", (int)RecruitmentPolicy.PlanetaryTithe);
+        _policyOption.AddItem(
+            "Voluntary Presentation", (int)RecruitmentPolicyChoice.VoluntaryPresentation);
+        _policyOption.AddItem("Planetary Tithe", (int)RecruitmentPolicyChoice.PlanetaryTithe);
         _policyOption.ItemSelected += index => RaiseDoctrineChanged();
         policyRow.AddChild(_policyOption);
         content.AddChild(policyRow);
@@ -334,8 +333,8 @@ public partial class TrainingUnitScreenView : MainScreenView
         row.AddChild(CreateFieldLabel(label, 240));
         HSlider slider = new()
         {
-            MinValue = RecruitmentRules.MinimumAttributeFilterHalfSteps,
-            MaxValue = RecruitmentRules.MaximumAttributeFilterHalfSteps,
+            MinValue = _screenRules.MinimumAttributeFilterHalfSteps,
+            MaxValue = _screenRules.MaximumAttributeFilterHalfSteps,
             Step = 1,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
@@ -438,12 +437,12 @@ public partial class TrainingUnitScreenView : MainScreenView
             $"10th Company HQ staff — Scout Sergeants: {staff.ScoutSergeants}, "
             + $"Apothecaries: {staff.Apothecaries}, Chaplains/Judiciars: {staff.Chaplains}";
         _overviewFunnel.Text =
-            $"Eligible male cohort: {RecruitmentRateFormatter.FormatWeekly(snapshot.Forecast.EligibleMaleCohort)}\n"
-            + $"Screened: {RecruitmentRateFormatter.FormatWeekly(snapshot.Forecast.ExpectedScreenedCandidates)} "
+            $"Eligible male cohort: {RecruitmentRatePresentation.FormatWeekly(snapshot.Forecast.EligibleMaleCohort)}\n"
+            + $"Screened: {RecruitmentRatePresentation.FormatWeekly(snapshot.Forecast.ExpectedScreenedCandidates)} "
             + $"({snapshot.Forecast.ScreeningCoverage:P0} coverage)\n"
-            + $"Qualified: {RecruitmentRateFormatter.FormatWeekly(snapshot.Forecast.ExpectedQualifiedCandidates)}\n"
-            + $"Expected Phase 12 survivors: {RecruitmentRateFormatter.FormatWeekly(snapshot.Forecast.ExpectedPhase12Survivors)}\n"
-            + $"Expected Battle Brothers: {RecruitmentRateFormatter.FormatWeekly(snapshot.Forecast.ExpectedPhase13BattleBrothers)}";
+            + $"Qualified: {RecruitmentRatePresentation.FormatWeekly(snapshot.Forecast.ExpectedQualifiedCandidates)}\n"
+            + $"Expected Phase 12 survivors: {RecruitmentRatePresentation.FormatWeekly(snapshot.Forecast.ExpectedPhase12Survivors)}\n"
+            + $"Expected Battle Brothers: {RecruitmentRatePresentation.FormatWeekly(snapshot.Forecast.ExpectedPhase13BattleBrothers)}";
         _overviewCapacity.Text =
             $"Screening capacity: {snapshot.Forecast.ScreeningCapacity:N0}/week    "
             + $"Aspirant capacity: {snapshot.Forecast.AspirantTrainingCapacity:N0}    "
@@ -515,7 +514,7 @@ public partial class TrainingUnitScreenView : MainScreenView
         }
 
         RecruitmentDoctrineDraft doctrine = new(
-            (RecruitmentPolicy)_policyOption.GetSelectedId(),
+            (RecruitmentPolicyChoice)_policyOption.GetSelectedId(),
             (int)_filterSliders["strength"].Value,
             (int)_filterSliders["constitution"].Value,
             (int)_filterSliders["intelligence"].Value,
@@ -687,7 +686,7 @@ public partial class TrainingUnitScreenView : MainScreenView
     private void PopulateFocusOptions()
     {
         _focusOption.Clear();
-        foreach (ScoutTrainingOption option in _scoutTrainingOptions)
+        foreach (ScoutTrainingOptionView option in _scoutTrainingOptions)
         {
             int index = _focusOption.GetItemCount();
             _focusOption.AddItem(option.DisplayName);
@@ -751,24 +750,24 @@ public partial class TrainingUnitScreenView : MainScreenView
         };
     }
 
-    private static string FormatSigma(int halfSteps)
+    private string FormatSigma(int halfSteps)
     {
-        double sigma = halfSteps * RecruitmentRules.AttributeFilterStepSigma;
+        double sigma = halfSteps * _screenRules.AttributeFilterStepSigma;
         return $"{sigma.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)}σ";
     }
 
-    private static string FormatDoctrineForecast(RecruitmentForecast forecast)
+    private static string FormatDoctrineForecast(RecruitmentForecastView forecast)
     {
         return
             $"Screening coverage: {forecast.ScreeningCoverage:P0}    "
             + $"Public compliance: {forecast.PublicCompliance:P0}    "
             + $"Attribute pass rate: {forecast.AttributePassRate:P2}\n"
             + $"Qualified candidates: "
-            + $"{RecruitmentRateFormatter.FormatWeekly(forecast.ExpectedQualifiedCandidates)}    "
+            + $"{RecruitmentRatePresentation.FormatWeekly(forecast.ExpectedQualifiedCandidates)}    "
             + $"Phase 12 survivors: "
-            + $"{RecruitmentRateFormatter.FormatWeekly(forecast.ExpectedPhase12Survivors)}    "
+            + $"{RecruitmentRatePresentation.FormatWeekly(forecast.ExpectedPhase12Survivors)}    "
             + $"Battle Brothers: "
-            + $"{RecruitmentRateFormatter.FormatWeekly(forecast.ExpectedPhase13BattleBrothers)}\n"
+            + $"{RecruitmentRatePresentation.FormatWeekly(forecast.ExpectedPhase13BattleBrothers)}\n"
             + $"Weekly Requisition: {forecast.WeeklyRequisitionCost:N0}    "
             + $"Expected overflow: {forecast.ExpectedCandidateOverflow:0.##}";
     }

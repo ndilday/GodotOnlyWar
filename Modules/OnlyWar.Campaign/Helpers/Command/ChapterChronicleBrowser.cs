@@ -1,5 +1,4 @@
 using OnlyWar.Models;
-using OnlyWar.Models.Command;
 using OnlyWar.Models.Events;
 using OnlyWar.Models.Missions;
 using System;

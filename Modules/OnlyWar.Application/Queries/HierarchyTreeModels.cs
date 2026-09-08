@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.UI
+namespace OnlyWar.Application
 {
     /// <summary>
     /// Presentation data for a row in a reusable hierarchy tree. The model deliberately contains

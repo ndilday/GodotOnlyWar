@@ -21,6 +21,7 @@
     <ProjectReference Include="../OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
     <ProjectReference Include="../OnlyWar.Generation/OnlyWar.Generation.csproj" />
     <Using Include="OnlyWar.Abstractions" />
+    <Using Include="OnlyWar.Helpers" />
     <Using Include="OnlyWar.Medical.Abstractions" />
     <Using Include="OnlyWar.Generation.Abstractions" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />

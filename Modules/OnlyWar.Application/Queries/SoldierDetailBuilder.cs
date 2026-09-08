@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.UI;
+namespace OnlyWar.Application;
 
 /// <summary>
 /// The soldier dossier as browser detail cards. Everything it needs — the doctrine, the

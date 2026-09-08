@@ -1,7 +1,4 @@
 using Godot;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 
@@ -39,8 +36,9 @@ public partial class HonorBadgeView : HBoxContainer
                 Modulate = tint,
                 MouseFilter = MouseFilterEnum.Pass
             };
-            string iconKey = honor.IconAssetKey
-                ?? AwardFamilyCatalog.CreateDefault().Get(honor.Type).IconAssetKey;
+            string iconKey = string.IsNullOrWhiteSpace(honor.IconAssetKey)
+                ? "award"
+                : honor.IconAssetKey;
             icon.Texture = IconAtlas.GetIcon(IconAtlas.HasIcon(iconKey) ? iconKey : "award");
             badge.AddChild(icon);
             AddChild(badge);

@@ -13,7 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.UI
+namespace OnlyWar.Application
 {
     /// <summary>
     /// The one vocabulary used by every live squad presentation. The aliases keep the names
@@ -128,8 +128,29 @@ namespace OnlyWar.Helpers.UI
             _ => "LEADER READY"
         };
 
-        public static string BlockerLabel(SquadReadinessBlocker blocker) =>
-            ReadinessDescriptions.BlockerLabel(blocker);
+        public static string BlockerLabel(SquadReadinessBlocker blocker) => blocker switch
+        {
+            SquadReadinessBlocker.Administrative => "ADMINISTRATIVE",
+            SquadReadinessBlocker.EmptyFormation => "EMPTY FORMATION",
+            SquadReadinessBlocker.NoEffectiveMembers => "NO EFFECTIVE MEMBERS",
+            SquadReadinessBlocker.Leaderless => "NO LEADER",
+            SquadReadinessBlocker.BelowMinimumDutyReadyStrength => "BELOW MINIMUM DUTY STRENGTH",
+            SquadReadinessBlocker.RequiredLeaderUnavailable => "REQUIRED LEADER UNAVAILABLE",
+            SquadReadinessBlocker.ReservedForProcedure => "PROCEDURE RESERVED",
+            SquadReadinessBlocker.AssignedElsewhere => "ASSIGNED ELSEWHERE",
+            SquadReadinessBlocker.Embarked => "ABOARD SHIP",
+            SquadReadinessBlocker.NotLanded => "NOT LANDED",
+            SquadReadinessBlocker.NotOrbiting => "NOT IN ORBIT",
+            SquadReadinessBlocker.InWarp => "IN WARP",
+            SquadReadinessBlocker.CommittedToTraining => "TRAINING",
+            SquadReadinessBlocker.OutsideArea => "OUTSIDE AREA",
+            SquadReadinessBlocker.MissionUnavailable => "MISSION UNAVAILABLE",
+            SquadReadinessBlocker.DestinationCapacity => "NO CAPACITY",
+            SquadReadinessBlocker.InWarpContact => "OUT OF CONTACT",
+            SquadReadinessBlocker.HistoricalFormation => "HISTORICAL",
+            SquadReadinessBlocker.Other => "UNAVAILABLE",
+            _ => string.Empty
+        };
 
         public static string UnavailableLabel(SquadUnavailableReason reason) => reason switch
         {

@@ -1,6 +1,6 @@
 using OnlyWar.Models;
 
-namespace OnlyWar.Helpers.UI;
+namespace OnlyWar.Application;
 
 /// <summary>
 /// Icon key selection for the planetary map. Choosing which icon represents a faction is a

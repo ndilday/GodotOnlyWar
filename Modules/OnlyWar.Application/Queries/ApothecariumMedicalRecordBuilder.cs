@@ -3,12 +3,11 @@ using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
-using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     public class ApothecariumMedicalRecordBuilder
     {
@@ -153,9 +152,17 @@ namespace OnlyWar.Helpers
                 geneSeedStatus,
                 worstSeverity,
                 wounds,
-                BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id),
+                BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id)
+                    .Select(ProjectTreatmentOption)
+                    .ToList(),
                 duty.ReasonCode);
         }
+
+        internal IReadOnlyList<ReplacementOption> BuildTreatmentOptions(
+            ISoldier soldier, PlayerForce force = null) =>
+            soldier?.Body?.HitLocations == null
+                ? []
+                : BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id);
 
         public static string GetSoldierIconKey(ISoldier soldier)
         {
@@ -429,6 +436,20 @@ namespace OnlyWar.Helpers
 
             return options;
         }
+
+        private static MedicalTreatmentOptionView ProjectTreatmentOption(ReplacementOption option) =>
+            new(
+                option.HitLocationId,
+                option.Type,
+                option.LocationName,
+                option.Title,
+                option.Description,
+                option.Weeks,
+                option.RequisitionCost,
+                option.IsAvailable,
+                option.Requisites?.Select(requisite =>
+                    new MedicalTreatmentRequisiteView(requisite.Label, requisite.IsMet)).ToArray(),
+                option.CanAssign);
 
         private static int GetActiveProcedureRecoveryWeeks(PlayerForce force, int soldierId)
         {

@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Helpers;
 using OnlyWar.Application;
 using OnlyWar.Models.Soldiers;
 using System;
@@ -8,7 +7,7 @@ public partial class ApothecariumScreenController : MainScreenController
 {
     private IMedicalScreenApplication _application;
     private Guid _sessionToken;
-    private ReplacementOption _displayedTreatment;
+    private MedicalTreatmentOptionView _displayedTreatment;
 
     public void Configure(IMedicalScreenApplication application)
     {
@@ -98,7 +97,7 @@ public partial class ApothecariumScreenController : MainScreenController
         RenderSelectedDetail();
     }
 
-    private void OnReplacementOptionPressed(object sender, ReplacementOption option)
+    private void OnReplacementOptionPressed(object sender, MedicalTreatmentOptionView option)
     {
         if (option == null || _selectedId == null) return;
         _selectedKind = ApothecariumSelectionKind.Soldier;
@@ -151,7 +150,7 @@ public partial class ApothecariumScreenController : MainScreenController
         RenderRecoveryOperations();
     }
 
-    private void OnRecoveryTreatmentSelected(object sender, ReplacementOption option)
+    private void OnRecoveryTreatmentSelected(object sender, MedicalTreatmentOptionView option)
     {
         _recoveryHitLocationId = option?.HitLocationId;
         _recoveryProcedureType = option?.Type;

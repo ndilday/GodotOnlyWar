@@ -4,12 +4,11 @@ using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
-using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     public sealed class RecoveryOperationsViewModelBuilder
     {
@@ -54,10 +53,16 @@ namespace OnlyWar.Helpers
                     RecoveryMovementChoice.None, reunionActions, 0, canRejoin,
                     canRejoin ? "Ready to reunite with the home formation." : "Reunion movement is required.");
             }
-            ReplacementOption option = summary.ReplacementOptions.FirstOrDefault(candidate =>
+            IReadOnlyList<ReplacementOption> treatmentOptions =
+                _medical.BuildTreatmentOptions(patient, force);
+            ReplacementOption option = treatmentOptions.FirstOrDefault(candidate =>
                 candidate.HitLocationId == selectedHitLocationId
                 && candidate.Type == selectedProcedureType)
-                ?? summary.ReplacementOptions.FirstOrDefault();
+                ?? treatmentOptions.FirstOrDefault();
+            MedicalTreatmentOptionView selectedTreatment = summary.ReplacementOptions
+                .FirstOrDefault(candidate => option != null
+                    && candidate.HitLocationId == option.HitLocationId
+                    && candidate.Type == option.Type);
             IReadOnlyList<CareDestinationCandidate> candidates = option == null
                 ? []
                 : _destinations.Enumerate(force, planets, patient, option);
@@ -72,7 +77,7 @@ namespace OnlyWar.Helpers
                 queue,
                 summary,
                 BuildSquadStatus(force, patient),
-                option,
+                selectedTreatment,
                 candidates.Select(ProjectDestination).ToArray(),
                 selected == null ? null : ProjectDestination(selected),
                 movement,
@@ -115,7 +120,8 @@ namespace OnlyWar.Helpers
                 summary.MaxRecoveryWeeks,
                 worst?.PrincipalWoundLevel ?? WoundLevel.None,
                 posting,
-                BuildCareGaps(force, soldier, summary.ReplacementOptions));
+                BuildCareGaps(
+                    force, soldier, _medical.BuildTreatmentOptions(soldier, force)));
         }
 
         private IReadOnlyList<string> BuildCareGaps(

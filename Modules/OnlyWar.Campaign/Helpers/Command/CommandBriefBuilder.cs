@@ -1,7 +1,6 @@
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
-using OnlyWar.Models.Command;
 using OnlyWar.Models.Events;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;

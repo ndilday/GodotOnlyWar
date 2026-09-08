@@ -4,7 +4,6 @@ using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;

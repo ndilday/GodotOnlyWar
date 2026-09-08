@@ -1,6 +1,6 @@
 using OnlyWar.Models.Squads;
 
-namespace OnlyWar.Helpers.UI;
+namespace OnlyWar.Application;
 
 public static class SquadIconKeys
 {

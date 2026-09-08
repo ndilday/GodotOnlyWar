@@ -1,6 +1,5 @@
 using Godot;
 using System;
-using OnlyWar.Helpers.UI;
 
 public partial class WeaponSetRowView : HBoxContainer
 {

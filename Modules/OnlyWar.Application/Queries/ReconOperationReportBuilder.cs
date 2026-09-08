@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     public sealed record ReconOperationReport(string OutcomeStatus, string Summary);
 

@@ -1,6 +1,4 @@
 using Godot;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models.Command;
 using OnlyWar.Models.Events;
 using System;
 using System.Collections.Generic;

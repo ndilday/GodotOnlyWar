@@ -1,8 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
@@ -27,7 +24,7 @@ public partial class RecoveryOperationsView : Control
     public event EventHandler<RecoverySortRequest> SortChanged;
     public event EventHandler<MedicalLocationId> DestinationSelected;
     public event EventHandler<RecoveryMovementChoice> MovementSelected;
-    public event EventHandler<ReplacementOption> TreatmentSelected;
+    public event EventHandler<MedicalTreatmentOptionView> TreatmentSelected;
     public event EventHandler ConfirmPressed;
 
     public override void _Ready() => BuildLayout();
@@ -220,7 +217,7 @@ public partial class RecoveryOperationsView : Control
         {
             treatment.AddChild(Info("Natural recovery only; no replacement procedure required."));
         }
-        foreach (ReplacementOption option in _model.Patient.ReplacementOptions)
+        foreach (MedicalTreatmentOptionView option in _model.Patient.ReplacementOptions)
         {
             Button choice = new()
             {
@@ -233,7 +230,7 @@ public partial class RecoveryOperationsView : Control
                 && _model.SelectedTreatment.Type == option.Type;
             IconAtlas.Apply(choice, "limb_replacement");
             OnlyWarStyle.ApplyAccentButtonRow(choice, selected, OnlyWarStyle.PlayerAccent);
-            ReplacementOption captured = option;
+            MedicalTreatmentOptionView captured = option;
             choice.Pressed += () => TreatmentSelected?.Invoke(this, captured);
             treatment.AddChild(choice);
         }
@@ -427,7 +424,7 @@ public partial class RecoveryOperationsView : Control
         return string.Join("\n", lines);
     }
 
-    private static string BuildTreatmentTooltip(ReplacementOption option)
+    private static string BuildTreatmentTooltip(MedicalTreatmentOptionView option)
     {
         List<string> lines =
         [

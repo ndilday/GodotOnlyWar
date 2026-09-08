@@ -1,7 +1,7 @@
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.UI;
+using OnlyWar.Helpers.PlanetaryOperations;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
@@ -12,7 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.PlanetaryOperations
+namespace OnlyWar.Application
 {
     public enum ForceTreeGrouping { Company, Ship }
 

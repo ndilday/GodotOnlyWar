@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Helpers.UI;
 using System;
 
 public partial class DialogView : Control

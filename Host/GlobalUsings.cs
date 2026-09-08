@@ -1,4 +1,5 @@
 global using OnlyWar.Host.Composition;
+global using OnlyWar.Application;
 global using OnlyWar.Host.Presentation;
 global using OnlyWar.Host.Presentation.Battles;
 global using OnlyWar.Host.Presentation.Extensions;

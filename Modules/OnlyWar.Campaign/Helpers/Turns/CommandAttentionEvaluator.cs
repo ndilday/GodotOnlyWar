@@ -4,7 +4,6 @@ using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
-using OnlyWar.Models.Command;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Recruitment;
@@ -127,9 +126,9 @@ namespace OnlyWar.Helpers.Turns
 
         public static IReadOnlyList<EndTurnAttentionItem> ToPreflightItems(
             IEnumerable<CommandAttentionFact> facts,
-            Settings.EndTurnWarningPreferences preferences)
+            EndTurnWarningPreferences preferences)
         {
-            preferences ??= new Settings.EndTurnWarningPreferences();
+            preferences ??= new EndTurnWarningPreferences();
             return (facts ?? Enumerable.Empty<CommandAttentionFact>())
                 .Where(fact => preferences.IsEnabled(fact.WarningCategory))
                 .Select(fact => new EndTurnAttentionItem(

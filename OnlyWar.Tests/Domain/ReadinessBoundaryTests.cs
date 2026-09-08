@@ -5,7 +5,6 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;

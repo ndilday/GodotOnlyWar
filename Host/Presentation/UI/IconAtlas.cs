@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Squads;
 using System.Collections.Generic;

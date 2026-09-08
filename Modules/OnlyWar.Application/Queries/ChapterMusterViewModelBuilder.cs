@@ -3,12 +3,11 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
-using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     public enum MusterPopulationMode { PromotionEligible, AnyLegalMove }
     // AtStrength sorts last: once the staged plan fills a formation it is no longer a vacancy,

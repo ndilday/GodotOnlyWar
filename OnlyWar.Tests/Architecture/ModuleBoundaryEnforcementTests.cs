@@ -117,6 +117,53 @@ public class ModuleBoundaryEnforcementTests
     }
 
     [Fact]
+    public void ScenesUseApplicationNamespacesForApplicationOwnedProjectionContracts()
+    {
+        string scenesRoot = Path.Combine(RulesDatabaseFixture.RepositoryRoot, "Scenes");
+        string[] legacyProjectionNamespaces =
+        [
+            "using OnlyWar.Helpers.UI;",
+            "using OnlyWar.Helpers.PlanetaryOperations;",
+            "using OnlyWar.Helpers.Recruitment;",
+            "using OnlyWar.Models.Command;",
+            "using OnlyWar.Helpers.Turns;"
+        ];
+
+        string[] offenders = Directory
+            .EnumerateFiles(scenesRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => ContainsAny(CodeOf(path), legacyProjectionNamespaces))
+            .Select(path => Path.GetRelativePath(
+                RulesDatabaseFixture.RepositoryRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void ApplicationQueryContractsDoNotDeclareLegacyPresentationNamespaces()
+    {
+        string queriesRoot = Path.Combine(
+            RulesDatabaseFixture.RepositoryRoot, "Modules", "OnlyWar.Application", "Queries");
+        string[] legacyNamespaces =
+        [
+            "namespace OnlyWar.Helpers.UI",
+            "namespace OnlyWar.Helpers.PlanetaryOperations",
+            "namespace OnlyWar.Helpers"
+        ];
+
+        string[] offenders = Directory
+            .EnumerateFiles(queriesRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => ContainsAny(CodeOf(path), legacyNamespaces))
+            .Select(path => Path.GetRelativePath(
+                RulesDatabaseFixture.RepositoryRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
     public void SharedQueryPortsDoNotExposeCampaignAggregates()
     {
         Type[] queryPorts =

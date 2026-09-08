@@ -1,74 +1,9 @@
-using OnlyWar.Helpers.Turns;
 using System;
 using System.IO;
 using System.Text.Json;
 
 namespace OnlyWar.Helpers.Settings
 {
-    public sealed class EndTurnWarningPreferences
-    {
-        public bool WarnIdleDeployableSquads { get; set; } = true;
-        public bool WarnLeaderlessSquads { get; set; } = true;
-        public bool WarnActionableTaskForces { get; set; } = true;
-        public bool WarnSpecialMissionOpportunities { get; set; } = true;
-        public bool WarnRecruitmentProgram { get; set; } = true;
-
-        public bool IsEnabled(EndTurnWarningCategory category)
-        {
-            return category switch
-            {
-                EndTurnWarningCategory.IdleDeployableSquads => WarnIdleDeployableSquads,
-                EndTurnWarningCategory.LeaderlessSquads => WarnLeaderlessSquads,
-                EndTurnWarningCategory.ActionableTaskForces => WarnActionableTaskForces,
-                EndTurnWarningCategory.SpecialMissionOpportunities => WarnSpecialMissionOpportunities,
-                EndTurnWarningCategory.RecruitmentProgram => WarnRecruitmentProgram,
-                _ => true
-            };
-        }
-
-        public void SetEnabled(EndTurnWarningCategory category, bool enabled)
-        {
-            switch (category)
-            {
-                case EndTurnWarningCategory.IdleDeployableSquads:
-                    WarnIdleDeployableSquads = enabled;
-                    break;
-                case EndTurnWarningCategory.LeaderlessSquads:
-                    WarnLeaderlessSquads = enabled;
-                    break;
-                case EndTurnWarningCategory.ActionableTaskForces:
-                    WarnActionableTaskForces = enabled;
-                    break;
-                case EndTurnWarningCategory.SpecialMissionOpportunities:
-                    WarnSpecialMissionOpportunities = enabled;
-                    break;
-                case EndTurnWarningCategory.RecruitmentProgram:
-                    WarnRecruitmentProgram = enabled;
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(category), category, null);
-            }
-        }
-
-        public EndTurnWarningPreferences Clone()
-        {
-            return new EndTurnWarningPreferences
-            {
-                WarnIdleDeployableSquads = WarnIdleDeployableSquads,
-                WarnLeaderlessSquads = WarnLeaderlessSquads,
-                WarnActionableTaskForces = WarnActionableTaskForces,
-                WarnSpecialMissionOpportunities = WarnSpecialMissionOpportunities,
-                WarnRecruitmentProgram = WarnRecruitmentProgram
-            };
-        }
-    }
-
-    public interface IEndTurnWarningPreferencesRepository
-    {
-        EndTurnWarningPreferences Load();
-        void Save(EndTurnWarningPreferences preferences);
-    }
-
     /// <summary>
     /// Persists global (not campaign-save) warning choices. Writes replace the small JSON file
     /// atomically so a terminated process cannot leave half a settings document behind.

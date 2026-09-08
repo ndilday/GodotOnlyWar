@@ -1,9 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.PlanetaryOperations;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;

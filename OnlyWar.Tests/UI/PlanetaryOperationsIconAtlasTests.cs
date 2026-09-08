@@ -1,4 +1,3 @@
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Tests.Fixtures;
 using Xunit;

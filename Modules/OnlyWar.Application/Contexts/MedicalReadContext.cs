@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -73,6 +72,8 @@ internal sealed class MedicalReadContext
                 if (member != null)
                 {
                     soldier = BuildSoldierSummary(member);
+                    IReadOnlyList<ReplacementOption> treatmentOptions =
+                        _medicalRecords.BuildTreatmentOptions(member, force);
                     soldier = soldier with
                     {
                         ReplacementOptions = soldier.ReplacementOptions
@@ -80,11 +81,20 @@ internal sealed class MedicalReadContext
                                 force, member.Id, option.HitLocationId))
                             .Select(option =>
                             {
+                                ReplacementOption treatment = treatmentOptions.FirstOrDefault(
+                                    candidate => candidate.HitLocationId == option.HitLocationId
+                                        && candidate.Type == option.Type);
                                 IReadOnlyList<ProcedureRequisite> requisites =
-                                    _medicalProcedures.EvaluateRequisites(force, member, option);
+                                    treatment == null
+                                        ? []
+                                        : _medicalProcedures.EvaluateRequisites(
+                                            force, member, treatment);
                                 return option with
                                 {
-                                    Requisites = requisites,
+                                    Requisites = requisites
+                                        .Select(value => new MedicalTreatmentRequisiteView(
+                                            value.Label, value.IsMet))
+                                        .ToArray(),
                                     CanAssign = requisites.All(value => value.IsMet)
                                 };
                             }).ToArray()

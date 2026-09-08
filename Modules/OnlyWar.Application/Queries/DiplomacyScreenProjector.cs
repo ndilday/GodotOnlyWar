@@ -6,7 +6,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Supply;
 
-namespace OnlyWar.Helpers.UI
+namespace OnlyWar.Application
 {
     /// <summary>
     /// Builds the Diplomacy board: the Sector Lord's standing promise, the governors' open

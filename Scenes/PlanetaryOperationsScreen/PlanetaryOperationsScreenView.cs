@@ -1,7 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers.PlanetaryOperations;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Orders;
 using System;
 using System.Collections.Generic;

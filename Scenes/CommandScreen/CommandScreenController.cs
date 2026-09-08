@@ -1,11 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers.Command;
-using OnlyWar.Helpers.Storage;
-using OnlyWar.Models;
-using OnlyWar.Models.Command;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Reports;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -12,8 +12,6 @@ using System.Linq;
 
 namespace OnlyWar.Helpers
 {
-    public sealed record RecoveryPlanCommitResult(bool Succeeded, string Message);
-
     public sealed class RecoveryPlanService
     {
         private readonly CareDestinationService _destinations = new();

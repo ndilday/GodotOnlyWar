@@ -1,7 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models.Recruitment;
 using System;
 
 public partial class TrainingUnitScreenController : MainScreenController
@@ -114,7 +112,7 @@ public partial class TrainingUnitScreenController : MainScreenController
     {
         if (_application == null || _draft == null) return;
 
-        RecruitmentForecast forecast = _application.PreviewForecast(_draft);
+        RecruitmentForecastView forecast = _application.PreviewForecast(_draft);
         if (forecast == null) return;
 
         _view.UpdateForecast(_draft, forecast);

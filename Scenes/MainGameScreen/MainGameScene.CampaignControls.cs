@@ -1,9 +1,7 @@
 using Godot;
 using OnlyWar.Application;
 using OnlyWar.Helpers.Diagnostics;
-using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Storage;
-using OnlyWar.Helpers.Turns;
 using OnlyWar.Host.Presentation.UI.SystemMenu;
 using OnlyWar.Models;
 using System;
@@ -32,7 +30,7 @@ public partial class MainGameScene
 	private EndTurnPreflightDialog _endTurnPreflightDialog;
 	private SaveGameManager _saveGameManager;
 	private SaveGameCatalog _saveCatalog;
-	private EndTurnWarningPreferencesRepository _warningPreferencesRepository;
+	private IEndTurnWarningPreferencesRepository _warningPreferencesRepository;
 	private EndTurnWarningPreferences _warningPreferences;
 	private PendingNavigationKind _pendingNavigation;
 	private string _pendingLoadPath;

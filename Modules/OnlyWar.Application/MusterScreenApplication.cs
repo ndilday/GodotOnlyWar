@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Units;

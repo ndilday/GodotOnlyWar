@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Helpers.UI;
 
 /// <summary>
 /// Shared dimensions and small construction helpers for roster rows that use the Chapter screen's

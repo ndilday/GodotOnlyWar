@@ -1,6 +1,5 @@
 using System;
 using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;

@@ -7,7 +7,7 @@ using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 
-namespace OnlyWar.Helpers.UI
+namespace OnlyWar.Application
 {
     /// <summary>
     /// Builds the Classis transfer tree from live task forces. Ordering, warp concealment and the

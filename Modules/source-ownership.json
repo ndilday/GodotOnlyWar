@@ -43,7 +43,11 @@
     "Entities/IPersistentIdAllocator.cs"
   ],
   "ApplicationAbstractions": [
-    "CampaignSessionContracts.cs"
+    "CampaignSessionContracts.cs",
+    "Contracts/CommandScreenContracts.cs",
+    "Contracts/EndTurnPreflightContracts.cs",
+    "Contracts/MedicalBoundaryEnums.cs",
+    "Contracts/SoldierFilterContracts.cs"
   ],
   "BattlesAbstractions": [
     "Contracts/BattleDebriefReport.cs",
@@ -176,14 +180,17 @@
   "Host": [
     "Host/Composition/GodotHostPaths.cs",
     "Host/GlobalUsings.cs",
+    "Host/Presentation/Battles/BattleDebriefPresentation.cs",
     "Host/Presentation/Battles/BattleReplaySummaryBuilder.cs",
     "Host/Presentation/Extensions/ColorExtensions.cs",
     "Host/Presentation/MissionDebriefLineGrouper.cs",
     "Host/Presentation/UI/CommandWorkspaceModels.cs",
+    "Host/Presentation/UI/EndTurnPreflightPresentation.cs",
     "Host/Presentation/UI/IconAssetRegistry.cs",
     "Host/Presentation/UI/IconAtlas.cs",
     "Host/Presentation/UI/OnlyWarStyle.cs",
     "Host/Presentation/UI/PresentationMetrics.cs",
+    "Host/Presentation/UI/RecruitmentRateFormatter.cs",
     "Host/Presentation/UI/SectorMapLabelLayout.cs",
     "Host/Presentation/UI/SystemMenu/SaveSlotViewModel.cs",
     "Host/Presentation/UI/SystemMenu/SaveSlotViewModelMapper.cs",
@@ -292,7 +299,6 @@
     "Helpers/Narrative/BriefingComposer.cs",
     "Helpers/Narrative/CampaignEventProjectionBuilder.cs",
     "Helpers/RatingCalculator.cs",
-    "Helpers/RecoveryMovementChoice.cs",
     "Helpers/RecoveryPlanService.cs",
     "Helpers/Recruitment/RecruitmentForecastService.cs",
     "Helpers/Recruitment/RecruitmentPromotionService.cs",
@@ -305,7 +311,6 @@
     "Helpers/Simulation/FactionRevealService.cs",
     "Helpers/Simulation/GovernorCivilAssessmentService.cs",
     "Helpers/SoldierDossierService.cs",
-    "Helpers/SoldierFilter.cs",
     "Helpers/SoldierFilterService.cs",
     "Helpers/SoldierPresenceService.cs",
     "Helpers/SoldierTemplateEligibilityService.cs",
@@ -356,7 +361,6 @@
     "Helpers/Turns/TurnResolutionResult.cs",
     "Helpers/TurnController.cs",
     "Helpers/VoronoiSubsectorMapper.cs",
-    "Models/Command/CommandWorkspaceModels.cs",
     "Models/Events/CampaignEventClassifier.cs",
     "Models/Events/CampaignEventNarrator.cs",
     "Models/Events/CampaignEventRecorder.cs",

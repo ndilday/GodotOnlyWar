@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Helpers.UI;
 
 namespace OnlyWar.Host.Presentation.UI
 {

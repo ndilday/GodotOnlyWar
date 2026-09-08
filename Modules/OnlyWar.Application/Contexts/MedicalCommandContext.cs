@@ -40,8 +40,7 @@ internal sealed class MedicalCommandContext
         if (IsAwaitingReunion(patient)) return _recoveryPlans.Rejoin(patient);
 
         // Resolve the exact displayed treatment again; never silently substitute another option.
-        ReplacementOption option = _medicalRecords.BuildSoldierSummary(patient, force)
-            .ReplacementOptions
+        ReplacementOption option = _medicalRecords.BuildTreatmentOptions(patient, force)
             .FirstOrDefault(value => value.HitLocationId == command.HitLocationId
                 && value.Type == command.ProcedureType);
         if (option == null || _medicalProcedures.HasProcedureInProgress(

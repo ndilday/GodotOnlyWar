@@ -5,7 +5,6 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;

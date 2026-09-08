@@ -1,11 +1,10 @@
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.FactionBehaviors;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.PlanetaryOperations
+namespace OnlyWar.Application
 {
     public enum RegionControlState
     {

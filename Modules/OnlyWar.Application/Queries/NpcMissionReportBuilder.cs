@@ -1,7 +1,7 @@
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Missions;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     // The tier of evidence the player has on an NPC-run mission, derived purely from the region's
     // player-visible intel (Region.GetPlayerVisibleIntel via RegionFactionExtensions - decays 0.75x/turn,

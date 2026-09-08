@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     // Pure string-building for the end-of-turn construction entry, in the same second-person
     // "Your forces ..." voice as MissionReportSummaryBuilder and for the same reason: the

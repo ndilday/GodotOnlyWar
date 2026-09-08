@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using OnlyWar.Helpers.UI;
 using Xunit;
 
 namespace OnlyWar.Tests.UI;

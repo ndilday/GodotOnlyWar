@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.UI
+namespace OnlyWar.Application
 {
     public enum TreeNodeKind
     {

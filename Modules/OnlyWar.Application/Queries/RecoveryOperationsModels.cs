@@ -2,7 +2,7 @@ using OnlyWar.Application;
 using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     public enum RecoverySortMode { Severity, RecoveryTime, Squad, Location }
 
@@ -38,7 +38,7 @@ namespace OnlyWar.Helpers
         IReadOnlyList<RecoveryQueueRow> Queue,
         MedicalSoldierSummary Patient,
         RecoverySquadStatus SquadStatus,
-        ReplacementOption SelectedTreatment,
+        MedicalTreatmentOptionView SelectedTreatment,
         IReadOnlyList<CareDestinationView> Destinations,
         CareDestinationView SelectedDestination,
         RecoveryMovementChoice Movement,

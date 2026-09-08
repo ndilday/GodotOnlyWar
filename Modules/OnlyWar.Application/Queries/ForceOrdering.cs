@@ -3,7 +3,7 @@ using OnlyWar.Models.Units;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.UI;
+namespace OnlyWar.Application;
 
 /// <summary>
 /// The Chapter's own order of battle sequence, used by every force listing so a squad appears in

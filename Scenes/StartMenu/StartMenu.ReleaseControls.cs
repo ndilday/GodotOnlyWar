@@ -2,7 +2,6 @@ using Godot;
 using OnlyWar.Application;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Diagnostics;
-using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Host.Presentation.UI.SystemMenu;
 using OnlyWar.Models;
@@ -15,7 +14,7 @@ public partial class StartMenu
 	private SystemMenuController _titleOptionsMenu;
 	private DiagnosticsExportDialog _titleDiagnosticsDialog;
 	private TransientFeedbackOverlay _titleFeedback;
-	private EndTurnWarningPreferencesRepository _titleWarningRepository;
+	private IEndTurnWarningPreferencesRepository _titleWarningRepository;
 	private EndTurnWarningPreferences _titleWarningPreferences;
 
 	private void InitializeTitleControls()

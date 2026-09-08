@@ -1,7 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models;
 using OnlyWar.Scenes.MainGameScreen;
 using System;
 using System.Collections.Generic;

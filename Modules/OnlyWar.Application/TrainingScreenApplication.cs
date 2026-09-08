@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
@@ -40,7 +39,7 @@ public interface ITrainingScreenApplication
         RecruitmentDoctrineDraft draft, int? selectedSquadId);
 
     /// <summary>Just the forecast for a staged doctrine, for the live preview.</summary>
-    RecruitmentForecast PreviewForecast(RecruitmentDoctrineDraft draft);
+    RecruitmentForecastView PreviewForecast(RecruitmentDoctrineDraft draft);
 
     IReadOnlyList<ScoutSquadRow> QueryScoutSquads(int? selectedSquadId);
 
@@ -108,7 +107,8 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
             Geneseed = training.GeneseedStockpile,
             Staff = SummarizeStaff(program),
             Doctrine = effective,
-            Forecast = CalculateForecast(training, program, homeWorld, effective),
+            Forecast = ToView(CalculateForecast(training, program, homeWorld, effective)),
+            Rules = BuildScreenRules(),
             Candidates = program.QualifiedCandidates
                 .OrderBy(candidate => candidate.QualifiedDate)
                 .ThenBy(candidate => candidate.Id)
@@ -130,7 +130,9 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                     aspirant.TrainingProgress,
                     aspirant.Phase == RecruitmentPhase.Phase12))
                 .ToList(),
-            ScoutTrainingOptions = training.ScoutTrainingOptions.Options,
+            ScoutTrainingOptions = training.ScoutTrainingOptions.Options
+                .Select(option => new ScoutTrainingOptionView(option.Key, option.DisplayName))
+                .ToList(),
             ScoutSquads = QueryScoutSquads(selectedSquadId),
             RecentEvents = program.ProgramEvents
                 .OrderByDescending(programEvent => programEvent.Date)
@@ -140,14 +142,14 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
         };
     }
 
-    public RecruitmentForecast PreviewForecast(RecruitmentDoctrineDraft draft)
+    public RecruitmentForecastView PreviewForecast(RecruitmentDoctrineDraft draft)
     {
         TrainingContext training = Training;
         RecruitmentProgram program = training?.Program;
         if (program == null || draft == null) return null;
 
         training.SynchronizeStaff();
-        return CalculateForecast(training, program, training.FindHomeWorld(), draft);
+        return ToView(CalculateForecast(training, program, training.FindHomeWorld(), draft));
     }
 
     public IReadOnlyList<ScoutSquadRow> QueryScoutSquads(int? selectedSquadId)
@@ -213,7 +215,7 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                 "All recruitment thresholds must remain within the allowed range.");
         }
 
-        program.Policy = draft.Policy;
+        program.Policy = ToDomainPolicy(draft.Policy);
         program.AttributeFilters.StrengthHalfSigmaSteps = draft.StrengthHalfSigmaSteps;
         program.AttributeFilters.ConstitutionHalfSigmaSteps = draft.ConstitutionHalfSigmaSteps;
         program.AttributeFilters.IntelligenceHalfSigmaSteps = draft.IntelligenceHalfSigmaSteps;
@@ -331,6 +333,58 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                 PlayerReputation = GetChapterReputation(homeWorld, training.FactionId)
             });
 
+    private static RecruitmentScreenRulesView BuildScreenRules() => new(
+        RecruitmentRules.MinimumAttributeFilterHalfSteps,
+        RecruitmentRules.MaximumAttributeFilterHalfSteps,
+        RecruitmentRules.AttributeFilterStepSigma);
+
+    private static RecruitmentPolicy ToDomainPolicy(RecruitmentPolicyChoice policy) => policy switch
+    {
+        RecruitmentPolicyChoice.VoluntaryPresentation =>
+            RecruitmentPolicy.VoluntaryPresentation,
+        RecruitmentPolicyChoice.PlanetaryTithe => RecruitmentPolicy.PlanetaryTithe,
+        _ => throw new ArgumentOutOfRangeException(nameof(policy), policy, null)
+    };
+
+    private static RecruitmentPolicyChoice FromDomainPolicy(RecruitmentPolicy policy) => policy switch
+    {
+        RecruitmentPolicy.VoluntaryPresentation => RecruitmentPolicyChoice.VoluntaryPresentation,
+        RecruitmentPolicy.PlanetaryTithe => RecruitmentPolicyChoice.PlanetaryTithe,
+        _ => throw new ArgumentOutOfRangeException(nameof(policy), policy, null)
+    };
+
+    private static RecruitmentForecastView ToView(RecruitmentForecast forecast) => forecast == null
+        ? null
+        : new(
+            forecast.ChildrenReachingRecruitmentAge,
+            forecast.EligibleMaleCohort,
+            forecast.UnscreenedBacklog,
+            forecast.ScreeningDemand,
+            forecast.NonGeneticScreeningCapacity,
+            forecast.GeneticScreeningCapacity,
+            forecast.SpiritualScreeningCapacity,
+            forecast.ScreeningCapacity,
+            forecast.ScreeningCoverage,
+            forecast.ExpectedScreenedCandidates,
+            forecast.PublicCompliance,
+            forecast.WeeklyPublicSentimentChange,
+            forecast.ExpectedCompliantCandidates,
+            forecast.GeneticPassRate,
+            forecast.AttributePassRate,
+            forecast.ExpectedQualifiedCandidates,
+            forecast.AspirantTrainingCapacity,
+            forecast.AvailablePhaseZeroPlaces,
+            forecast.QualifiedCandidateWaitlist,
+            forecast.AvailablePhaseZeroPlacesAfterWaitlist,
+            forecast.ExpectedNewPhaseZeroAdmissions,
+            forecast.ExpectedCandidateOverflow,
+            forecast.ExpectedPhase12Survivors,
+            forecast.ExpectedPhase13BattleBrothers,
+            forecast.ExpectedPhase12SurvivalRate,
+            forecast.ExpectedPhase13SurvivalRate,
+            forecast.WeeklyRequisitionCost,
+            forecast.SourceAttributeMeanModifierSigma);
+
     private static RecruitmentStaffSummary SummarizeStaff(RecruitmentProgram program) => new(
         program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.ScoutSergeant),
         program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.Apothecary),
@@ -340,7 +394,7 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
     {
         RecruitmentAttributeFilters filters = program.AttributeFilters;
         return new RecruitmentDoctrineDraft(
-            program.Policy,
+            FromDomainPolicy(program.Policy),
             filters.StrengthHalfSigmaSteps,
             filters.ConstitutionHalfSigmaSteps,
             filters.IntelligenceHalfSigmaSteps,
@@ -359,7 +413,7 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
             EstablishedDate = source.EstablishedDate,
             LastProcessedDate = source.LastProcessedDate,
             IsSetupComplete = source.IsSetupComplete,
-            Policy = doctrine.Policy,
+            Policy = ToDomainPolicy(doctrine.Policy),
             WorldType = source.WorldType,
             MinimumGeneticCompatibility = doctrine.MinimumGeneticCompatibility,
             AttributeFilters = new RecruitmentAttributeFilters

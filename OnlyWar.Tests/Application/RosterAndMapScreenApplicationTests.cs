@@ -6,7 +6,6 @@ using System.Reflection;
 using OnlyWar.Application;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -368,14 +367,14 @@ public sealed class RosterAndMapScreenApplicationTests
             out Ship source, out _, out _, out Squad squad);
 
         CampaignNavigationRoute fleet = application.ResolveNavigation(
-            OnlyWar.Models.Command.CampaignNavigationTargetKind.Fleet, source.Fleet.Id);
+            CampaignNavigationTargetKind.Fleet, source.Fleet.Id);
         Assert.Equal(CampaignNavigationRouteKind.Fleet, fleet.Kind);
 
         // A world that is not charted resolves to nothing rather than opening an empty screen.
         Assert.Equal(
             CampaignNavigationRouteKind.None,
             application.ResolveNavigation(
-                OnlyWar.Models.Command.CampaignNavigationTargetKind.Planet, -1).Kind);
+                CampaignNavigationTargetKind.Planet, -1).Kind);
 
         Assert.Equal(source.Fleet.Planet.Name,
             application.QueryPlanetName(source.Fleet.Planet.Id));

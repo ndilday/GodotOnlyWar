@@ -8,15 +8,6 @@ using System.Linq;
 
 namespace OnlyWar.Helpers
 {
-    public enum CareDestinationState
-    {
-        Ready = 0,
-        Resolvable = 1,
-        Ineligible = 2
-    }
-
-    public sealed record CareDestinationReason(string Code, string Message, bool IsResolvable);
-
     public sealed record CareDestinationCandidate(
         CampaignLocation Location,
         string Name,

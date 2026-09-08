@@ -2,7 +2,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers.Ratings;
 
-namespace OnlyWar.Helpers.UI;
+namespace OnlyWar.Application;
 
 /// <summary>
 /// The campaign facts a soldier dossier is read against: the Chapter's operational doctrine and

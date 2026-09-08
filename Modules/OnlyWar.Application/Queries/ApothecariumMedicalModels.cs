@@ -1,9 +1,8 @@
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Helpers.UI;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     public enum ApothecariumSelectionKind
     {
@@ -101,7 +100,7 @@ namespace OnlyWar.Helpers
         string GeneSeedStatus,
         MedicalSeverity WorstSeverity,
         IReadOnlyList<WoundLocationSummary> Wounds,
-        IReadOnlyList<ReplacementOption> ReplacementOptions,
+        IReadOnlyList<MedicalTreatmentOptionView> ReplacementOptions,
         DutyReadinessReasonCode DutyReasonCode = DutyReadinessReasonCode.Ready)
     {
         public bool IsDutyReady => IsCombatEffective;

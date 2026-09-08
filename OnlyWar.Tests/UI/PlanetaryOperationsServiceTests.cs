@@ -12,7 +12,6 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Application;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;

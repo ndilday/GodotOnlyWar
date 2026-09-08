@@ -1,7 +1,5 @@
 using Godot;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.UI;
+using OnlyWar.Host.Presentation.Battles;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
 using System;
@@ -148,12 +146,10 @@ public partial class MissionDebriefDialogView : DialogView
     {
         BattleHistory battleHistory = line.BattleHistory as BattleHistory;
         BattleDebriefReport report = line.BattleReport
-            ?? (battleHistory == null
-                ? new BattleDebriefReport(0, 0, System.Array.Empty<BattleCasualtyEntry>())
-                : BattleDebriefReportBuilder.Build(battleHistory));
+            ?? new BattleDebriefReport(0, 0, System.Array.Empty<BattleCasualtyEntry>());
         Label summary = new()
         {
-            Text = prefix + BattleDebriefReportBuilder.BuildSummaryLine(report),
+            Text = prefix + BattleDebriefPresentation.BuildSummaryLine(report),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         summary.AddThemeColorOverride("font_color",

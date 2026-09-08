@@ -1,11 +1,24 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Application;
 
 public enum MedicalLocationKind { Ship, Region }
+
+public sealed record MedicalTreatmentRequisiteView(string Label, bool IsMet);
+public sealed record MedicalTreatmentOptionView(
+    int HitLocationId,
+    MedicalProcedureType Type,
+    string LocationName,
+    string Title,
+    string Description,
+    int Weeks,
+    int RequisitionCost,
+    bool IsAvailable,
+    IReadOnlyList<MedicalTreatmentRequisiteView> Requisites = null,
+    bool CanAssign = false);
+
 public sealed record MedicalLocationId(MedicalLocationKind Kind, int Id);
 public sealed record CareDestinationView(
     MedicalLocationId Location, string Name, string SiteType, CareDestinationState State,

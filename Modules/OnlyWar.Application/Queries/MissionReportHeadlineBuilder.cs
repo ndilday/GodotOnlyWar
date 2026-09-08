@@ -3,7 +3,7 @@ using OnlyWar.Helpers.Missions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     // Pure string-building for the primary line of an end-of-turn mission report. Keeping this
     // separate from the Godot controller makes the recon/mission distinctions easy to exercise

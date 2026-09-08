@@ -1,3 +1,4 @@
+using OnlyWar.Application;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;

@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.UI;
+namespace OnlyWar.Application;
 
 /// <summary>
 /// The meaning a projection attaches to a value, not the colour that renders it. Queries classify;

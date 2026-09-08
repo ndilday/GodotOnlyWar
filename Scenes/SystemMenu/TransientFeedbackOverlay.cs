@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Helpers.UI;
 
 public partial class TransientFeedbackOverlay : Control
 {
@@ -49,4 +48,3 @@ public partial class TransientFeedbackOverlay : Control
         _timer.Start(System.Math.Max(0.5, seconds));
     }
 }
-

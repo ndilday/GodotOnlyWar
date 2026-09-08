@@ -1,5 +1,6 @@
 using OnlyWar.Application;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
@@ -10,7 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Application
 {
     /// <summary>
     /// Builds the persisted last-turn snapshot and the live presentation from one resolved result.

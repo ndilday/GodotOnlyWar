@@ -1,8 +1,5 @@
 using Godot;
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Helpers.UI;
-using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Scenes.MainGameScreen;
 using System;

@@ -2,7 +2,6 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.UI;
 
 public partial class WeaponSetSelectionView : PanelContainer
 {

@@ -2,7 +2,6 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Command;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
-using OnlyWar.Models.Command;
 using OnlyWar.Models.Events;
 using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;

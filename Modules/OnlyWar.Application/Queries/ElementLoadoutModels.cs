@@ -4,7 +4,7 @@ using System.Linq;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Squads;
 
-namespace OnlyWar.Helpers.UI
+namespace OnlyWar.Application
 {
     /// <summary>
     /// One character-equipped slot. Key is a soldier id when editing a live squad's personal

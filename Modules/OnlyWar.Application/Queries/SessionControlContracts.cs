@@ -1,6 +1,4 @@
 using System;
-using OnlyWar.Helpers.Settings;
-using OnlyWar.Helpers.Turns;
 
 namespace OnlyWar.Application;
 

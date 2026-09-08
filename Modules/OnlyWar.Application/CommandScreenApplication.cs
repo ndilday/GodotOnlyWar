@@ -4,7 +4,6 @@ using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Command;
 using OnlyWar.Models;
-using OnlyWar.Models.Command;
 using OnlyWar.Models.Events;
 
 namespace OnlyWar.Application;

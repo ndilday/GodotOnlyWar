@@ -1,7 +1,5 @@
 using Godot;
 using OnlyWar.Helpers.Settings;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Host.Presentation.UI.SystemMenu;
 using OnlyWar.Models;
 using System;

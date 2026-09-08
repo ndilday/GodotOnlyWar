@@ -1,7 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
@@ -33,14 +31,14 @@ public partial class ApothecariumScreenView : MainScreenView
 
     public event EventHandler VaultButtonPressed;
     public event EventHandler<ApothecariumSelection> TreeSelectionChanged;
-    public event EventHandler<ReplacementOption> ReplacementOptionPressed;
+    public event EventHandler<MedicalTreatmentOptionView> ReplacementOptionPressed;
     public event EventHandler RecoveryOperationsPressed;
     public event EventHandler RecoveryBackPressed;
     public event EventHandler<int> RecoveryPatientSelected;
     public event EventHandler<RecoverySortRequest> RecoverySortChanged;
     public event EventHandler<MedicalLocationId> RecoveryDestinationSelected;
     public event EventHandler<RecoveryMovementChoice> RecoveryMovementSelected;
-    public event EventHandler<ReplacementOption> RecoveryTreatmentSelected;
+    public event EventHandler<MedicalTreatmentOptionView> RecoveryTreatmentSelected;
     public event EventHandler RecoveryConfirmPressed;
 
     public override void _Ready()
@@ -189,7 +187,7 @@ public partial class ApothecariumScreenView : MainScreenView
             return;
         }
 
-        foreach (ReplacementOption option in summary.ReplacementOptions)
+        foreach (MedicalTreatmentOptionView option in summary.ReplacementOptions)
         {
             _replacementRows.AddChild(CreateReplacementCard(option));
         }
@@ -462,7 +460,7 @@ public partial class ApothecariumScreenView : MainScreenView
         return panel;
     }
 
-    private Control CreateReplacementCard(ReplacementOption option)
+    private Control CreateReplacementCard(MedicalTreatmentOptionView option)
     {
         PanelContainer panel = new() { CustomMinimumSize = new Vector2(0, 132), SizeFlagsHorizontal = SizeFlags.ExpandFill };
         OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(option.Type == MedicalProcedureType.Cybernetic ? MedicalSeverity.Watch : MedicalSeverity.Critical, 0.75f));
@@ -478,7 +476,7 @@ public partial class ApothecariumScreenView : MainScreenView
         stack.AddChild(description);
         // Every prerequisite is listed explicitly (PRD 4.8): met in green, unmet in red, so
         // the player can see at a glance both that a procedure is blocked and exactly why.
-        foreach (ProcedureRequisite requisite in option.Requisites ?? [])
+        foreach (MedicalTreatmentRequisiteView requisite in option.Requisites ?? [])
         {
             Label line = new()
             {

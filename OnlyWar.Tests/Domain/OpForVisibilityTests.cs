@@ -1,6 +1,5 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;

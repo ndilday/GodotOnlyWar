@@ -1,7 +1,6 @@
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;

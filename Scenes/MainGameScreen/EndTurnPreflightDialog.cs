@@ -1,7 +1,5 @@
 using Godot;
-using OnlyWar.Helpers.Settings;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.UI;
+using OnlyWar.Host.Presentation.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -88,7 +86,7 @@ public partial class EndTurnPreflightDialog : DialogController
         heading.AddThemeConstantOverride("separation", 12);
         Label title = new()
         {
-            Text = $"{EndTurnPreflight.GetCategoryTitle(category).ToUpperInvariant()} ({items.Count})",
+            Text = $"{EndTurnPreflightPresentation.GetCategoryTitle(category).ToUpperInvariant()} ({items.Count})",
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -97,7 +95,7 @@ public partial class EndTurnPreflightDialog : DialogController
 
         CheckButton preferenceToggle = new()
         {
-            Text = EndTurnPreflight.GetPreferenceLabel(category),
+            Text = EndTurnPreflightPresentation.GetPreferenceLabel(category),
             ButtonPressed = _preferences.IsEnabled(category),
             TooltipText = "This is a global preference and applies to every campaign."
         };

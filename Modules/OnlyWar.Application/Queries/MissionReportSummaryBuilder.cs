@@ -4,7 +4,7 @@ using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Missions;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application
 {
     // Pure string-building for the end-of-turn mission report (PRD 4.13/4.19). Kept free of Godot
     // types so it can be exercised directly by xunit tests - EndOfTurnDialogController itself is a

@@ -17,6 +17,7 @@ public static class GodotHostPaths
     public static CampaignServices CreateCampaignServices(IRNG random, GameStorage storage) =>
         new(random, storage);
 
-    public static EndTurnWarningPreferencesRepository CreateWarningPreferences() =>
-        new(ProjectSettings.GlobalizePath(EndTurnWarningPreferencesRepository.DefaultUserPath));
+    public static IEndTurnWarningPreferencesRepository CreateWarningPreferences() =>
+        new EndTurnWarningPreferencesRepository(
+            ProjectSettings.GlobalizePath(EndTurnWarningPreferencesRepository.DefaultUserPath));
 }
