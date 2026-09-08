@@ -16,7 +16,7 @@ namespace OnlyWar.Application
 {
     public enum ForceTreeGrouping { Company, Ship }
 
-    public sealed record ForceTreeSquad(
+    internal sealed record ForceTreeSquad(
         Squad Squad,
         string Origin,
         Ship Ship = null,
@@ -31,11 +31,11 @@ namespace OnlyWar.Application
     /// the session rather than read from the installed campaign, so a tree always describes the
     /// campaign its caller asked about.
     /// </summary>
-    public sealed record ForceTreeInputs(
+    internal sealed record ForceTreeInputs(
         RecruitmentProgram Program = null,
         ChapterOperationalDoctrine Doctrine = null);
 
-    public static class PlanetaryForceTreeBuilder
+    internal static class PlanetaryForceTreeBuilder
     {
         private const string CharacterSquadGroupPrefix = "group:characters:squad:";
         private static readonly SquadRowViewModelBuilder RowBuilder = new();

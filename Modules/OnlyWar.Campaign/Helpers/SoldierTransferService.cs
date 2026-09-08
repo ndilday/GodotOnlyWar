@@ -1,4 +1,5 @@
 using OnlyWar.Models;
+using OnlyWar.Abstractions;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -7,6 +8,7 @@ using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Runtime.Allocators;
 
 namespace OnlyWar.Helpers
 {
@@ -392,7 +394,8 @@ namespace OnlyWar.Helpers
             PlayerSoldier soldier,
             SoldierTransferOption option,
             IReadOnlyDictionary<int, Squad> squadMap,
-            Date date)
+            Date date,
+            IPersistentIdAllocator identity = null)
         {
             if (soldier == null || option == null || option.IsCurrentAssignment)
             {
@@ -438,7 +441,12 @@ namespace OnlyWar.Helpers
                 {
                     return false;
                 }
-                newSquad = new Squad(option.TargetSquadTemplate.Name, option.TargetUnit, option.TargetSquadTemplate);
+                identity ??= CreateScopedIdentity(option.TargetUnit);
+                newSquad = new Squad(
+                    option.TargetSquadTemplate.Name,
+                    option.TargetUnit,
+                    option.TargetSquadTemplate,
+                    identity);
                 option.TargetUnit.AddSquad(newSquad);
                 if (squadMap is IDictionary<int, Squad> writableSquadMap)
                 {
@@ -640,6 +648,21 @@ namespace OnlyWar.Helpers
         // existing on-demand squad behavior.
         private static bool CanCreateSquadInUnit(Unit unit) =>
             unit?.HQSquad == null || unit.HQSquad.SquadLeader != null;
+
+        private static IPersistentIdAllocator CreateScopedIdentity(Unit targetUnit)
+        {
+            Unit root = targetUnit;
+            while (root.ParentUnit != null)
+            {
+                root = root.ParentUnit;
+            }
+
+            int nextSquadId = (root.GetAllSquads() ?? [])
+                .Select(squad => squad.Id)
+                .DefaultIfEmpty(-1)
+                .Max() + 1;
+            return new PersistentIdAllocator(nextSquadId: nextSquadId);
+        }
 
         // A squad has exactly one command seat, so a leader element is open only while the
         // squad is leaderless -- except in an administrative formation, where leader

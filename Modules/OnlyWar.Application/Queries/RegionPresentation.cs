@@ -45,7 +45,7 @@ namespace OnlyWar.Application
         RegionControlState State,
         IReadOnlyList<RegionPresencePresentation> Presences);
 
-    public static class RegionControlPresentation
+    internal static class RegionControlPresentation
     {
         public static RegionControlPresentationModel Build(Region region)
         {
@@ -103,7 +103,7 @@ namespace OnlyWar.Application
     /// dossier. Ground truth is used only after the presence is already open; hidden feral activity
     /// is disclosed solely through the observer's target-specific intelligence belief.
     /// </summary>
-    public static class FactionActivityPresentation
+    internal static class FactionActivityPresentation
     {
         public static string Build(Region region) => BuildDetails(region)?.Text;
 
@@ -141,7 +141,7 @@ namespace OnlyWar.Application
         public static string GetIconKey(Region region) => BuildDetails(region)?.IconKey;
     }
 
-    public static class RegionTerrainPresentation
+    internal static class RegionTerrainPresentation
     {
         public const int VariantCount = 6;
 

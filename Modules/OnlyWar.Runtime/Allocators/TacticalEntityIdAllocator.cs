@@ -1,5 +1,5 @@
 using System;
-using OnlyWar.Builders;
+using OnlyWar.Abstractions;
 
 namespace OnlyWar.Runtime.Allocators;
 
@@ -11,8 +11,10 @@ public sealed class TacticalEntityIdAllocator : IEntityIdAllocator
     public int GetNextId()
     {
         if (_nextId >= -1)
+        {
             throw new InvalidOperationException("The tactical entity ID range is exhausted.");
+        }
+
         return (int)_nextId++;
     }
 }
-

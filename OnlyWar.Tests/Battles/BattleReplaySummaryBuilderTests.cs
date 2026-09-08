@@ -480,7 +480,10 @@ public class BattleReplaySummaryBuilderTests
             [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
             squadType);
         squadTemplate.Faction = faction;
-        Squad sourceSquad = new(squadName, null, squadTemplate);
+        int squadId = soldiers.Count > 0
+            ? -System.Math.Abs(soldiers[0].Id)
+            : 0;
+        Squad sourceSquad = new(squadId, squadName, null, squadTemplate);
         foreach (Soldier soldier in soldiers)
         {
             sourceSquad.AddSquadMember(soldier);

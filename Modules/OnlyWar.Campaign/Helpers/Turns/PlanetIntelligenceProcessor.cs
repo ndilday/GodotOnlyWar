@@ -23,7 +23,7 @@ namespace OnlyWar.Helpers.Turns
     {
         private const float IntelPerListeningPostLevel = 0.2f;
 
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly List<Mission> _specialMissions;
         private readonly TurnIntelligenceLedger _ledger;
 
@@ -31,8 +31,16 @@ namespace OnlyWar.Helpers.Turns
             ICampaignSimulationSession session,
             List<Mission> specialMissions,
             TurnIntelligenceLedger ledger = null)
+            : this(CampaignTurnContext.From(session), specialMissions, ledger)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal PlanetIntelligenceProcessor(
+            CampaignTurnContext turn,
+            List<Mission> specialMissions,
+            TurnIntelligenceLedger ledger = null)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _specialMissions = specialMissions ?? throw new ArgumentNullException(nameof(specialMissions));
             _ledger = ledger ?? new TurnIntelligenceLedger();
         }
@@ -134,7 +142,7 @@ namespace OnlyWar.Helpers.Turns
                 foreach (Mission mission in region.SpecialMissions.ToList())
                 {
                     if (mission.MissionType == MissionType.ShowOfForce) continue;
-                    if (_session.Random.GetIntBelowMax(0, 4) == 0)
+                    if (_turn.Random.GetIntBelowMax(0, 4) == 0)
                     {
                         region.SpecialMissions.Remove(mission);
                     }
@@ -173,13 +181,13 @@ namespace OnlyWar.Helpers.Turns
 
                     Mission culling = current == null
                         ? new Mission(
-                            _session.Identity.GetNextMissionId(),
+                            _turn.Identity.GetNextMissionId(),
                             MissionType.Extermination,
                             region,
                             belief.TargetFaction,
                             1)
                         : new Mission(
-                            _session.Identity.GetNextMissionId(),
+                            _turn.Identity.GetNextMissionId(),
                             MissionType.Extermination,
                             current,
                             1);
@@ -210,7 +218,7 @@ namespace OnlyWar.Helpers.Turns
 
         private void QueuePublicActivityObservations(Planet planet)
         {
-            int evidenceWeek = _session.CurrentDate.GetTotalWeeks();
+            int evidenceWeek = _turn.CurrentDate.GetTotalWeeks();
             foreach (Region region in planet.Regions
                 .Where(region => region != null)
                 .OrderBy(region => region.Id))
@@ -268,7 +276,7 @@ namespace OnlyWar.Helpers.Turns
             float remaining = specMissionBudget - existing;
             for (int i = 0; i < remaining; i++)
             {
-                double chance = _session.Random.NextRandomZValue();
+                double chance = _turn.Random.NextRandomZValue();
                 RegionFaction current = region.RegionFactionMap.GetValueOrDefault(belief.TargetFaction.Id);
                 if (current == null)
                 {
@@ -305,12 +313,12 @@ namespace OnlyWar.Helpers.Turns
                 0.9999f);
             float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
             zScore += enemyRegionFaction.Region.GetPlayerVisibleIntel() / 10.0f;
-            double chance = _session.Random.NextRandomZValue();
+            double chance = _turn.Random.NextRandomZValue();
             if (chance < zScore)
             {
                 int size = Math.Max((int)(zScore - chance), 1);
                 Mission hiddenCellAmbush = new Mission(
-                    _session.Identity.GetNextMissionId(),
+                    _turn.Identity.GetNextMissionId(),
                     MissionType.Extermination,
                     enemyRegionFaction,
                     size);
@@ -328,7 +336,7 @@ namespace OnlyWar.Helpers.Turns
                 .Count(mission => mission.RegionFaction == enemyRegionFaction);
             for (int i = 0; i < specMissionChance; i++)
             {
-                double chance = _session.Random.NextRandomZValue();
+                double chance = _turn.Random.NextRandomZValue();
                 if (chance >= 2)
                 {
                     GenerateAssassinationMission(enemyRegionFaction);
@@ -354,10 +362,10 @@ namespace OnlyWar.Helpers.Turns
         {
             int maxSize = (int)MissionStealthDifficulty.TroopMagnitude(
                 enemyRegionFaction.MilitaryStrength);
-            int size = ClampMissionSize((int)_session.Random.NextRandomZValue() + 1, maxSize);
-            long targetBattleValue = AmbushMissionSizing.RollTargetBattleValue(size, _session.Random);
+            int size = ClampMissionSize((int)_turn.Random.NextRandomZValue() + 1, maxSize);
+            long targetBattleValue = AmbushMissionSizing.RollTargetBattleValue(size, _turn.Random);
             Mission ambush = new Mission(
-                _session.Identity.GetNextMissionId(),
+                _turn.Identity.GetNextMissionId(),
                 MissionType.Ambush,
                 enemyRegionFaction,
                 size,
@@ -376,7 +384,7 @@ namespace OnlyWar.Helpers.Turns
             double listeningPost = RegionDefenses.GetShared(
                 enemyRegionFaction,
                 DefenseType.ListeningPost);
-            double roll = _session.Random.GetLinearDouble() * defenseTotal;
+            double roll = _turn.Random.GetLinearDouble() * defenseTotal;
             if (roll <= entrenchment)
             {
                 AddSabotageMission(enemyRegionFaction, DefenseType.Entrenchment, entrenchment);
@@ -400,10 +408,10 @@ namespace OnlyWar.Helpers.Turns
             double defenseLevel)
         {
             int size = ClampMissionSize(
-                (int)_session.Random.NextRandomZValue() + 1,
+                (int)_turn.Random.NextRandomZValue() + 1,
                 (int)Math.Ceiling(defenseLevel));
             SabotageMission sabotage = new SabotageMission(
-                _session.Identity.GetNextMissionId(),
+                _turn.Identity.GetNextMissionId(),
                 defenseType,
                 size,
                 enemyRegionFaction);
@@ -414,9 +422,9 @@ namespace OnlyWar.Helpers.Turns
         private void GenerateAssassinationMission(RegionFaction enemyRegionFaction)
         {
             int maximum = (int)MissionStealthDifficulty.TroopMagnitude(enemyRegionFaction.Population);
-            int size = ClampMissionSize((int)_session.Random.NextRandomZValue() + 1, maximum);
+            int size = ClampMissionSize((int)_turn.Random.NextRandomZValue() + 1, maximum);
             Mission assassination = new Mission(
-                _session.Identity.GetNextMissionId(),
+                _turn.Identity.GetNextMissionId(),
                 MissionType.Assassination,
                 enemyRegionFaction,
                 size);

@@ -9,6 +9,11 @@ namespace OnlyWar.Runtime.Allocators;
 public sealed class PersistentIdAllocator : IPersistentIdAllocator
 {
     private int _nextSoldierId;
+    private int _nextCharacterId;
+    private int _nextPlanetId;
+    private int _nextUnitId;
+    private int _nextSquadId;
+    private int _nextTaskForceId;
     private int _nextRequestId;
     private int _nextMissionId;
     private int _nextOrderId;
@@ -17,9 +22,19 @@ public sealed class PersistentIdAllocator : IPersistentIdAllocator
         int nextSoldierId = 0,
         int nextRequestId = 0,
         int nextMissionId = 0,
-        int nextOrderId = 0)
+        int nextOrderId = 0,
+        int nextCharacterId = 0,
+        int nextPlanetId = 0,
+        int nextUnitId = 0,
+        int nextSquadId = 0,
+        int nextTaskForceId = 0)
     {
         _nextSoldierId = nextSoldierId;
+        _nextCharacterId = nextCharacterId;
+        _nextPlanetId = nextPlanetId;
+        _nextUnitId = nextUnitId;
+        _nextSquadId = nextSquadId;
+        _nextTaskForceId = nextTaskForceId;
         _nextRequestId = nextRequestId;
         _nextMissionId = nextMissionId;
         _nextOrderId = nextOrderId;
@@ -28,6 +43,16 @@ public sealed class PersistentIdAllocator : IPersistentIdAllocator
     public int GetNextId() => GetNextSoldierId();
 
     public int GetNextSoldierId() => TakeNext(ref _nextSoldierId);
+
+    public int GetNextCharacterId() => TakeNext(ref _nextCharacterId);
+
+    public int GetNextPlanetId() => TakeNext(ref _nextPlanetId);
+
+    public int GetNextUnitId() => TakeNext(ref _nextUnitId);
+
+    public int GetNextSquadId() => TakeNext(ref _nextSquadId);
+
+    public int GetNextTaskForceId() => TakeNext(ref _nextTaskForceId);
 
     public int GetNextRequestId() => TakeNext(ref _nextRequestId);
 

@@ -27,7 +27,7 @@ namespace OnlyWar.Application;
 /// presentation policy, and returns detached screen projections. Mutating commands belong to
 /// <see cref="OperationsScreenApplication"/>.
 /// </summary>
-public sealed class OperationsScreenQueries : CampaignScreenApplication, IOperationsScreenQueries
+internal sealed class OperationsScreenQueries : CampaignScreenApplication, IOperationsScreenQueries
 {
     private OperationsReadContext Read => Context.OperationsRead;
     private IPersonnelAvailabilityQueries Personnel => Read?.Personnel;
@@ -230,7 +230,7 @@ public sealed class OperationsScreenQueries : CampaignScreenApplication, IOperat
     /// Who may be lent to an operation staged out of this region. Availability is Operations
     /// policy; the screen only renders the resulting rows.
     /// </summary>
-    internal IReadOnlyList<SpecialistOption> EnumerateSpecialists(
+    private IReadOnlyList<SpecialistOption> EnumerateSpecialists(
         OperationsReadContext read, Region region, Order contextOrder)
     {
         if (region == null) return [];
@@ -255,7 +255,7 @@ public sealed class OperationsScreenQueries : CampaignScreenApplication, IOperat
             && target.GetSelfAndAdjacentRegions().Contains(location);
     }
 
-    internal IReadOnlyList<SpecialistOption> EnumerateMovableCharacters(
+    private IReadOnlyList<SpecialistOption> EnumerateMovableCharacters(
         OperationsReadContext read, Planet planet, Region region,
         bool landing, Ship destinationShip)
     {
@@ -366,7 +366,7 @@ public sealed class OperationsScreenQueries : CampaignScreenApplication, IOperat
                 order.AssignedCharacters.Count);
     }
 
-    internal AvailableMission FindMission(Region region, string key)
+    private AvailableMission FindMission(Region region, string key)
     {
         if (region == null || string.IsNullOrWhiteSpace(key)) return null;
         return region.GetSelfAndAdjacentRegions()
@@ -374,41 +374,19 @@ public sealed class OperationsScreenQueries : CampaignScreenApplication, IOperat
             .FirstOrDefault(option => option.IdentityKey == key);
     }
 
-    internal Planet FindPlanet(int id) => Read?.FindPlanet(id);
+    private Planet FindPlanet(int id) => Read?.FindPlanet(id);
 
-    internal Region FindRegion(int id) => Read?.FindRegion(id);
+    private Region FindRegion(int id) => Read?.FindRegion(id);
 
-    internal Order FindOrder(int? id) => Read?.FindOrder(id);
+    private Order FindOrder(int? id) => Read?.FindOrder(id);
 
-    internal PlayerSoldier FindPlayerSoldier(int id) => Read?.FindPlayerSoldier(id);
+    private PlayerSoldier FindPlayerSoldier(int id) => Read?.FindPlayerSoldier(id);
 
-    internal List<PlayerSoldier> ResolveCharacters(IReadOnlyList<int> ids) =>
+    private List<PlayerSoldier> ResolveCharacters(IReadOnlyList<int> ids) =>
         (ids ?? []).Select(FindPlayerSoldier).Where(soldier => soldier != null)
             .DistinctBy(soldier => soldier.Id).ToList();
 
-    internal static RegionFaction PlayerPresence(Sector sector, Region region)
-    {
-        if (region == null || sector?.PlayerForce?.Faction == null) return null;
-        region.RegionFactionMap.TryGetValue(
-            sector.PlayerForce.Faction.Id, out RegionFaction presence);
-        return presence;
-    }
-
-    internal static IEnumerable<Squad> OrbitingSquads(Sector sector, Planet planet) =>
-        planet == null || sector?.PlayerForce?.Faction == null
-            ? []
-            : PlanetForceMovementService
-                .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction)
-                .SelectMany(ship => ship.LoadedSquads);
-
-    internal static Ship FindOrbitingShip(Sector sector, Planet planet, int shipId) =>
-        planet == null || sector?.PlayerForce?.Faction == null
-            ? null
-            : PlanetForceMovementService
-                .GetOrbitingPlayerShips(planet, sector.PlayerForce.Faction)
-                .FirstOrDefault(ship => ship.Id == shipId);
-
-    internal static int ResolveTargetFactionId(Region region, AvailableMission mission)
+    private static int ResolveTargetFactionId(Region region, AvailableMission mission)
     {
         int explicitTarget = mission?.TargetFaction?.PlanetFaction?.Faction?.Id
             ?? mission?.SpecialMission?.RegionFaction?.PlanetFaction?.Faction?.Id ?? -1;

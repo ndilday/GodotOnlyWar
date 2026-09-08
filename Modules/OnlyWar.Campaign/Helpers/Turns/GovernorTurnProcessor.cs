@@ -1,4 +1,5 @@
 using OnlyWar.Builders;
+using OnlyWar.Abstractions;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Supply;
@@ -20,21 +21,28 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class GovernorTurnProcessor
     {
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly ICollection<GovernorRequestReport> _requestReports;
 
         internal GovernorTurnProcessor(
             ICampaignSimulationSession session,
             ICollection<GovernorRequestReport> requestReports = null)
+            : this(CampaignTurnContext.From(session), requestReports)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal GovernorTurnProcessor(
+            CampaignTurnContext turn,
+            ICollection<GovernorRequestReport> requestReports = null)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _requestReports = requestReports;
         }
 
         internal void ProcessGovernor(Planet planet, PlanetFaction planetFaction)
         {
             Character governor = planetFaction.Leader;
-            IRNG random = _session.Random;
+            IRNG random = _turn.Random;
             if (AgeAndCheckForDeath(planet, planetFaction, random))
             {
                 return;
@@ -43,7 +51,7 @@ namespace OnlyWar.Helpers.Turns
             if (governor.ActiveRequest != null)
             {
                 IRequest request = governor.ActiveRequest;
-                request.ProcessTurn(_session.CurrentDate, _session.Rules);
+                request.ProcessTurn(_turn.CurrentDate, _turn.Rules);
                 if (request.Status == RequestStatus.Fulfilled)
                 {
                     CreatePledge(request);
@@ -53,7 +61,7 @@ namespace OnlyWar.Helpers.Turns
                     governor.OpinionOfPlayerForce +=
                         governor.Appreciation * (1 - governor.OpinionOfPlayerForce);
                     governor.NextRequestEligibleDate = AddWeeks(
-                        _session.CurrentDate, _session.Rules.SupplyEconomyRules.RequestCooldownWeeks);
+                        _turn.CurrentDate, _turn.Rules.SupplyEconomyRules.RequestCooldownWeeks);
                 }
                 else if (request.Status == RequestStatus.Failed)
                 {
@@ -65,7 +73,7 @@ namespace OnlyWar.Helpers.Turns
                     governor.ActiveRequest = null;
                     governor.OpinionOfPlayerForce -= 0.05f / Math.Max(0.1f, governor.Patience);
                     governor.NextRequestEligibleDate = AddWeeks(
-                        _session.CurrentDate, _session.Rules.SupplyEconomyRules.RequestCooldownWeeks);
+                        _turn.CurrentDate, _turn.Rules.SupplyEconomyRules.RequestCooldownWeeks);
                 }
                 else
                 {
@@ -80,7 +88,7 @@ namespace OnlyWar.Helpers.Turns
             }
             else if (governor.OpinionOfPlayerForce > 0
                      && (governor.NextRequestEligibleDate == null
-                         || _session.CurrentDate.IsAfterOrEqual(governor.NextRequestEligibleDate)))
+                         || _turn.CurrentDate.IsAfterOrEqual(governor.NextRequestEligibleDate)))
             {
                 GenerateRequest(planet, planetFaction, random);
             }
@@ -89,7 +97,7 @@ namespace OnlyWar.Helpers.Turns
         private bool AgeAndCheckForDeath(Planet planet, PlanetFaction planetFaction, IRNG random)
         {
             Character leader = planetFaction.Leader;
-            if (_session.CurrentDate.Week == 1)
+            if (_turn.CurrentDate.Week == 1)
             {
                 leader.Age++;
             }
@@ -105,7 +113,7 @@ namespace OnlyWar.Helpers.Turns
             if (leader.ActiveRequest != null)
             {
                 IRequest request = leader.ActiveRequest;
-                request.Fail(_session.CurrentDate);
+                request.Fail(_turn.CurrentDate);
                 RetireShowOfForceMission(request);
                 Report(
                     GovernorRequestReportKind.Failed,
@@ -113,11 +121,11 @@ namespace OnlyWar.Helpers.Turns
                     $"{leader.Name} died before the commitment was met; the petition dies with them.");
                 leader.ActiveRequest = null;
             }
-            List<Character> characters = _session.Sector.Characters;
+            List<Character> characters = _turn.Sector.Characters;
             // Retain the former governor as a historical character. Resolved requests and
             // institutional pledge attribution can continue to reference them after succession.
-            int newId = characters.Count == 0 ? 0 : characters.Max(c => c.Id) + 1;
-            Character successor = CharacterBuilder.GenerateCharacter(newId, planetFaction.Faction);
+            Character successor = CharacterBuilder.GenerateCharacter(
+                _turn.Identity.GetNextCharacterId(), planetFaction.Faction);
             characters.Add(successor);
             planetFaction.Leader = successor;
             return true;
@@ -154,7 +162,7 @@ namespace OnlyWar.Helpers.Turns
             if (threatBelief == null && !concernDetected) return;
             Faction threatFaction = threatBelief?.TargetFaction;
 
-            SupplyEconomyRules supplyRules = _session.Rules.SupplyEconomyRules;
+            SupplyEconomyRules supplyRules = _turn.Rules.SupplyEconomyRules;
             // RequestGenerationRate throttles the whole petition economy. Both gates are linear in
             // the governor's traits, so scaling here changes only how often worlds petition, not
             // which governors do it (see SupplyEconomyRules.RequestGenerationRate).
@@ -196,12 +204,12 @@ namespace OnlyWar.Helpers.Turns
             int deliveryDelayWeeks = scheduleKind == PledgeScheduleKind.Standing
                 ? supplyRules.StandingCadenceWeeks
                 : supplyRules.DefaultDeliveryWeeks;
-            IRequest request = new RequestFactory(_session.Identity).GenerateNewRequest(
+            IRequest request = new RequestFactory(_turn.Identity).GenerateNewRequest(
                 planet,
                 planetFaction.Leader,
                 threatFaction,
-                _session.CurrentDate,
-                AddWeeks(_session.CurrentDate, deadlineWeeks),
+                _turn.CurrentDate,
+                AddWeeks(_turn.CurrentDate, deadlineWeeks),
                 commitment,
                 offeredAmount,
                 scheduleKind,
@@ -210,7 +218,7 @@ namespace OnlyWar.Helpers.Turns
                 severity,
                 hazard);
             planetFaction.Leader.ActiveRequest = request;
-            _session.Sector.PlayerForce.Requests.Add(request);
+            _turn.Sector.PlayerForce.Requests.Add(request);
             SyncShowOfForceMission(request);
             Report(GovernorRequestReportKind.Arrived, request);
         }
@@ -247,7 +255,7 @@ namespace OnlyWar.Helpers.Turns
             capital.SpecialMissions.RemoveAll(
                 mission => mission.MissionType == MissionType.ShowOfForce);
             capital.SpecialMissions.Add(new Mission(
-                _session.Identity.GetNextMissionId(),
+                _turn.Identity.GetNextMissionId(),
                 MissionType.ShowOfForce,
                 playerRegionFaction,
                 request.Commitment.PackageCount));
@@ -275,7 +283,7 @@ namespace OnlyWar.Helpers.Turns
         // RegionFaction that exists.
         private RegionFaction GetOrCreatePlayerRegionFaction(Region region)
         {
-            Faction playerFaction = _session.Sector.PlayerForce.Faction;
+            Faction playerFaction = _turn.Sector.PlayerForce.Faction;
             if (region.RegionFactionMap.TryGetValue(
                 playerFaction.Id, out RegionFaction existing))
             {
@@ -319,7 +327,7 @@ namespace OnlyWar.Helpers.Turns
         /// </summary>
         private int ResolveDeadlineWeeks(RequestSeverity severity)
         {
-            SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
+            SupplyEconomyRules rules = _turn.Rules.SupplyEconomyRules;
             return rules.SeverityDeadlineWeeks.TryGetValue(severity, out int weeks)
                 ? weeks
                 : rules.DefaultDeadlineWeeks;
@@ -331,8 +339,8 @@ namespace OnlyWar.Helpers.Turns
             Faction threatFaction,
             int deadlineWeeks)
         {
-            SquadTemplate reference = _session.Rules.ChapterDoctrine.TacticalSquad;
-            SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
+            SquadTemplate reference = _turn.Rules.ChapterDoctrine.TacticalSquad;
+            SupplyEconomyRules rules = _turn.Rules.SupplyEconomyRules;
             long hostileStrength = threatFaction == null
                 ? 0
                 : SumBelievedMilitaryStrength(observer, threatFaction);
@@ -361,7 +369,7 @@ namespace OnlyWar.Helpers.Turns
             RequestSeverity severity,
             RequestHazard hazard)
         {
-            SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
+            SupplyEconomyRules rules = _turn.Rules.SupplyEconomyRules;
             decimal hazardMultiplier = rules.HazardMultipliers[hazard];
             RequestValuationResult value = RequestValueCalculator.Calculate(
                 commitment,
@@ -408,7 +416,7 @@ namespace OnlyWar.Helpers.Turns
         {
             if (threatFaction == null) return 0m;
             long hostile = SumBelievedMilitaryStrength(observer, threatFaction);
-            long defenders = SumMilitaryStrength(planet, _session.Rules.DefaultFaction);
+            long defenders = SumMilitaryStrength(planet, _turn.Rules.DefaultFaction);
             return hostile / (decimal)Math.Max(1, defenders);
         }
 
@@ -433,7 +441,7 @@ namespace OnlyWar.Helpers.Turns
             PlanetFaction observer,
             Faction targetFaction)
         {
-            int evidenceWeek = _session.CurrentDate.GetTotalWeeks();
+            int evidenceWeek = _turn.CurrentDate.GetTotalWeeks();
             foreach (RegionFaction target in planet.Regions
                 .SelectMany(region => region.RegionFactionMap.Values)
                 .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id == targetFaction.Id)
@@ -466,7 +474,7 @@ namespace OnlyWar.Helpers.Turns
             Planet planet,
             PlanetFaction observer)
         {
-            Faction target = _session.Rules.Factions
+            Faction target = _turn.Rules.Factions
                 .Where(faction => faction.Id != observer.Faction.Id)
                 .Where(faction => FactionRelationshipService.GetEffectiveStance(
                     observer.Faction,
@@ -479,7 +487,7 @@ namespace OnlyWar.Helpers.Turns
             Region region = planet.Regions.OrderBy(candidate => candidate.Id).FirstOrDefault();
             if (target == null || region == null) return false;
 
-            int evidenceWeek = _session.CurrentDate.GetTotalWeeks();
+            int evidenceWeek = _turn.CurrentDate.GetTotalWeeks();
             FactionIntelligenceService.ApplyObservation(
                 planet,
                 new IntelObservation(
@@ -512,18 +520,18 @@ namespace OnlyWar.Helpers.Turns
 
         private void CreatePledge(IRequest request)
         {
-            int nextId = _session.Sector.PlayerForce.Pledges.Count == 0
+            int nextId = _turn.Sector.PlayerForce.Pledges.Count == 0
                 ? 0
-                : _session.Sector.PlayerForce.Pledges.Max(pledge => pledge.Id) + 1;
+                : _turn.Sector.PlayerForce.Pledges.Max(pledge => pledge.Id) + 1;
             Pledge pledge = new(
                 nextId,
                 request.TargetPlanet.Id,
                 request.Requester.Id,
                 PledgePayload.Requisition(request.OfferedRequisition),
                 request.OfferedScheduleKind,
-                AddWeeks(_session.CurrentDate, request.OfferedDeliveryDelayWeeks),
+                AddWeeks(_turn.CurrentDate, request.OfferedDeliveryDelayWeeks),
                 request.OfferedCadenceWeeks);
-            _session.Sector.PlayerForce.Pledges.Add(pledge);
+            _turn.Sector.PlayerForce.Pledges.Add(pledge);
         }
 
         private static Date AddWeeks(Date date, int weeks)

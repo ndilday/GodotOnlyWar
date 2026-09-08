@@ -633,7 +633,7 @@ public class BattleTurnResolverWithdrawalTests
         };
         Soldier soldier = TestModelFactory.CreateSoldier(soldierTemplate, $"{name} Soldier");
         soldier.Id = soldierId;
-        Squad squad = new(name, null, squadTemplate);
+        Squad squad = new(soldierId, name, null, squadTemplate);
         squad.AddSquadMember(soldier);
         return new BattleSquad(isPlayerSquad, squad);
     }

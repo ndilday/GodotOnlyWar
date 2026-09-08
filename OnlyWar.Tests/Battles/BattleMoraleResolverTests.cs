@@ -65,11 +65,17 @@ public class BattleMoraleResolverTests
         // Seeded separately from the battle: CreateResolver re-seeds for the fight itself, so
         // soldier generation and combat are both deterministic.
         RNG.Reset(74_050);
+        OnlyWar.Abstractions.IEntityIdAllocator entityIds =
+            new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
         BattleSquad victims = CreateNpcSquad(
-            tyranids, TermagauntSquadTemplateId, "Termagaunt Brood", TermagauntBroodBudget);
+            tyranids,
+            TermagauntSquadTemplateId,
+            "Termagaunt Brood",
+            TermagauntBroodBudget,
+            entityIds);
         List<BattleSquad> platoons = Enumerable.Range(0, PdfPlatoonCount)
             .Select(i => CreateNpcSquad(
-                imperial, PdfInfantrySquadTemplateId, $"PDF Platoon {i + 1}"))
+                imperial, PdfInfantrySquadTemplateId, $"PDF Platoon {i + 1}", entityIds: entityIds))
             .ToList();
 
         BattleGridManager grid = new();
@@ -177,13 +183,14 @@ public class BattleMoraleResolverTests
         Faction faction,
         int squadTemplateId,
         string name,
-        long? battleValueBudget = null)
+        long? battleValueBudget = null,
+        OnlyWar.Abstractions.IEntityIdAllocator entityIds = null)
     {
         SquadTemplate squadTemplate = faction.SquadTemplates[squadTemplateId];
         Squad squad = battleValueBudget.HasValue
             ? SquadFactory.GenerateSquadWithinBudget(
-                squadTemplate, battleValueBudget.Value, new StaticRNG(), name)
-            : SquadFactory.GenerateSquad(squadTemplate, new StaticRNG(), name);
+                squadTemplate, battleValueBudget.Value, new StaticRNG(), entityIds, name)
+            : SquadFactory.GenerateSquad(squadTemplate, new StaticRNG(), entityIds, name);
         return new BattleSquad(false, squad);
     }
 

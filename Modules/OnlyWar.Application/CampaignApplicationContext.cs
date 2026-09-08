@@ -1,6 +1,7 @@
 using System;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Turns;
@@ -23,7 +24,18 @@ public sealed class CampaignApplicationContext
     internal MedicalCommandContext MedicalCommand { get; private set; }
     internal RecoveryPlanService MedicalRecoveryPlans { get; }
     internal FleetCommandContext FleetCommand { get; private set; }
+    internal FleetScreenContext FleetScreen { get; private set; }
     internal TrainingContext Training { get; private set; }
+    internal TrainingScreenContext TrainingScreen { get; private set; }
+    internal CommandScreenContext Command { get; private set; }
+    internal DiplomacyScreenContext Diplomacy { get; private set; }
+    internal CampaignNavigationContext Navigation { get; private set; }
+    internal MainScreenContext Main { get; private set; }
+    internal SectorMapContext SectorMap { get; private set; }
+    internal SessionControlContext SessionControl { get; private set; }
+    internal ChapterScreenContext Chapter { get; private set; }
+    internal MusterScreenContext Muster { get; private set; }
+    internal LoadoutScreenContext Loadout { get; private set; }
     public Guid SessionToken { get; private set; } = Guid.NewGuid();
 
     public event EventHandler SessionChanged;
@@ -65,11 +77,52 @@ public sealed class CampaignApplicationContext
             session.Sector,
             session.CurrentDate,
             MedicalRecoveryPlans);
-        FleetCommand = new FleetCommandContext(session.Sector, session.Rules);
+        FleetCommand = new FleetCommandContext(session.Sector, session.Rules, session.Identity);
+        FleetScreen = new FleetScreenContext(FleetCommand);
         Training = new TrainingContext(
             session.Sector,
             session.Rules,
             session.CurrentDate,
+            session.Identity);
+        TrainingScreen = new TrainingScreenContext(Training);
+        RecruitmentPromotionService promotions = new(
+            session.Sector,
+            session.Rules,
+            session.CurrentDate,
+            session.Random,
+            session.Identity);
+        Command = new CommandScreenContext(
+            session.Sector, session.Rules, session.CurrentDate);
+        Diplomacy = new DiplomacyScreenContext(session.Sector, session.Rules);
+        Navigation = new CampaignNavigationContext(session.Sector);
+        Main = new MainScreenContext(
+            session.Sector,
+            session.Rules,
+            session.CurrentDate,
+            promotions,
+            () => AdvanceTurn());
+        SectorMap = new SectorMapContext(
+            session.Sector, session.Rules.SectorGenerationProfile);
+        SessionControl = new SessionControlContext(
+            session.Sector,
+            session.Rules,
+            Services.Persistence.SaveManager,
+            Recoverability,
+            path => Save(path));
+        Chapter = new ChapterScreenContext(
+            session.Sector,
+            session.Rules,
+            session.CurrentDate,
+            session.Identity,
+            promotions);
+        Muster = new MusterScreenContext(
+            session.Sector,
+            session.Rules,
+            session.CurrentDate,
+            session.Identity);
+        Loadout = new LoadoutScreenContext(
+            session.Sector,
+            session.Rules,
             session.Identity);
         ReplaceSessionToken();
     }
@@ -82,7 +135,18 @@ public sealed class CampaignApplicationContext
         MedicalRead = null;
         MedicalCommand = null;
         FleetCommand = null;
+        FleetScreen = null;
         Training = null;
+        TrainingScreen = null;
+        Command = null;
+        Diplomacy = null;
+        Navigation = null;
+        Main = null;
+        SectorMap = null;
+        SessionControl = null;
+        Chapter = null;
+        Muster = null;
+        Loadout = null;
         ReplaceSessionToken();
     }
 
@@ -107,7 +171,16 @@ public sealed class CampaignApplicationContext
         Services.Persistence.SaveWriter.Write(filePath, target);
     }
 
+    internal SystemInspectorContext CreateSystemInspectorContext(
+        IOperationsScreenQueries operationsQueries,
+        IFleetScreenApplication fleet) =>
+        ActiveSession == null
+            ? null
+            : new SystemInspectorContext(ActiveSession.Sector, operationsQueries, fleet);
+
     public void MarkChanged() => Recoverability.MarkChanged();
+
+    internal bool HasSession => ActiveSession != null;
 
     private void ReplaceSessionToken()
     {
@@ -123,8 +196,6 @@ public sealed class CampaignApplicationContext
 public abstract class CampaignScreenApplication
 {
     protected CampaignApplicationContext Context { get; }
-    protected CampaignServices Services => Context.Services;
-    protected GameSession ActiveSession => Context.ActiveSession;
 
     public Guid SessionToken => Context.SessionToken;
 
@@ -140,7 +211,7 @@ public abstract class CampaignScreenApplication
     }
 
     protected bool IsCurrentSession(Guid sessionToken) =>
-        ActiveSession != null && sessionToken == SessionToken;
+        Context.HasSession && sessionToken == SessionToken;
 
     protected void RecordChange() => Context.MarkChanged();
 }

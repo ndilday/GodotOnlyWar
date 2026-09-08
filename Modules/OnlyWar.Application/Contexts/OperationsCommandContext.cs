@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Abstractions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.PlanetaryOperations;
 using OnlyWar.Helpers.Readiness;
@@ -24,8 +25,8 @@ namespace OnlyWar.Application;
 ///
 /// The mutation pipeline still operates on the live campaign entities internally, but the screen
 /// service no longer receives the Sector, date, identity allocator, or personnel implementation as
-/// a collection of loose arguments. This is the seam to replace with command-specific ports when
-/// the underlying mutation helpers are ready for them.
+/// a collection of loose arguments. This internal command port is the only application feature
+/// that resolves those entities for a Planetary Operations write.
 /// </summary>
 internal sealed class OperationsCommandContext
 {
@@ -61,6 +62,43 @@ internal sealed class OperationsCommandContext
         region.RegionFactionMap.TryGetValue(
             _sector.PlayerForce.Faction.Id, out RegionFaction presence);
         return presence;
+    }
+
+    internal Planet FindPlanet(int id) => _sector.Planets.GetValueOrDefault(id);
+
+    internal Region FindRegion(int id) => _sector.Planets.Values
+        .SelectMany(planet => planet.Regions)
+        .FirstOrDefault(region => region?.Id == id);
+
+    internal Order FindOrder(int? id) => id is int value
+        ? _sector.Orders.Values.FirstOrDefault(order => order.Id == value)
+        : null;
+
+    internal PlayerSoldier FindPlayerSoldier(int id) =>
+        _sector.PlayerForce?.Army?.PlayerSoldierMap?.GetValueOrDefault(id);
+
+    internal List<PlayerSoldier> ResolveCharacters(IReadOnlyList<int> ids) =>
+        (ids ?? []).Select(FindPlayerSoldier).Where(soldier => soldier != null)
+            .DistinctBy(soldier => soldier.Id).ToList();
+
+    internal AvailableMission FindMission(Region region, string key)
+    {
+        if (region == null || string.IsNullOrWhiteSpace(key)) return null;
+        return region.GetSelfAndAdjacentRegions()
+            .SelectMany(origin => MissionAvailability.GetAvailableMissions(origin, region))
+            .FirstOrDefault(option => option.IdentityKey == key);
+    }
+
+    internal static int ResolveTargetFactionId(Region region, AvailableMission mission)
+    {
+        int explicitTarget = mission?.TargetFaction?.PlanetFaction?.Faction?.Id
+            ?? mission?.SpecialMission?.RegionFaction?.PlanetFaction?.Faction?.Id ?? -1;
+        if (explicitTarget >= 0 || mission?.Kind != MissionAvailabilityKind.Diversion)
+            return explicitTarget;
+        return region.RegionFactionMap.Values
+            .Where(presence => presence.IsPublic
+                && !FactionRelationshipService.IsImperial(presence.PlanetFaction.Faction))
+            .Select(presence => presence.PlanetFaction.Faction.Id).FirstOrDefault(-1);
     }
 
     internal IEnumerable<Squad> OrbitingSquads(Planet planet) =>

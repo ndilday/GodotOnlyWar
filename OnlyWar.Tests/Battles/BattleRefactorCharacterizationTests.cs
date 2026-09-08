@@ -129,7 +129,7 @@ public class BattleRefactorCharacterizationTests
         {
             Faction = faction
         };
-        Squad squad = new(name, null, template);
+        Squad squad = new(firstSoldierId, name, null, template);
         for (int index = 0; index < 2; index++)
         {
             Soldier soldier = TestModelFactory.CreateSoldier(

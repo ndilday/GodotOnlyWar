@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Abstractions;
 
 namespace OnlyWar.Models.Fleets
 {
@@ -23,7 +24,6 @@ namespace OnlyWar.Models.Fleets
     public class TaskForce
     {
         public const int SystemTransitWeeksPerEnd = 2;
-        private static int _nextTaskForceId = 0;
         public int Id { get; set; }
         public Faction Faction { get; }
         public Coordinate? Position { get; set; }
@@ -45,10 +45,6 @@ namespace OnlyWar.Models.Fleets
                      double warpObjectiveWeeks = 0, bool warpSubjectiveTrainingApplied = true)
         {
             Id = id;
-            if(_nextTaskForceId <= id)
-            {
-                _nextTaskForceId = id + 1;
-            }
             Faction = faction;
             Position = position;
             Origin = origin;
@@ -67,7 +63,10 @@ namespace OnlyWar.Models.Fleets
             }
         }
 
-        public TaskForce(Faction faction, FleetTemplate template) : this(faction)
+        public TaskForce(
+            Faction faction,
+            FleetTemplate template,
+            IPersistentIdAllocator identity) : this(faction, identity)
         {
             if (faction == null)
             {
@@ -107,13 +106,26 @@ namespace OnlyWar.Models.Fleets
             }
         }
 
-        public TaskForce(Faction faction)
+        /// <summary>Compatibility overload backed by a fresh, non-global allocator.</summary>
+        public TaskForce(Faction faction, FleetTemplate template)
+            : this(faction, template, new CompatibilityPersistentIdAllocator())
         {
-            Id = _nextTaskForceId++;
+        }
+
+        public TaskForce(Faction faction, IPersistentIdAllocator identity)
+        {
+            if (identity == null) throw new ArgumentNullException(nameof(identity));
+            Id = identity.GetNextTaskForceId();
             Faction = faction;
             Ships = [];
             TravelPhase = FleetTravelPhase.InOrbit;
             WarpSubjectiveTrainingApplied = true;
+        }
+
+        /// <summary>Compatibility overload backed by a fresh, non-global allocator.</summary>
+        public TaskForce(Faction faction)
+            : this(faction, new CompatibilityPersistentIdAllocator())
+        {
         }
 
         public void OrderMoveTo(Planet destination, int travelWeeks)

@@ -289,13 +289,35 @@ internal static class TestModelFactory
 
     public static Squad CreateSquad(string name, params Soldier[] soldiers)
     {
-        Squad squad = new(name, null, SquadTemplate);
+        // Detached fixture squads still need distinct battle-local keys, but they do not have a
+        // campaign parent from which to borrow a scoped persistent allocator. Derive the key from
+        // the first member (whose fixture ID is already unique) and use a stable name hash only
+        // for intentionally empty squads. This keeps tests deterministic without reintroducing a
+        // process-wide Squad counter.
+        int squadId = soldiers.Length > 0 && soldiers[0].Id != 0
+            ? -System.Math.Abs(soldiers[0].Id == int.MinValue ? int.MaxValue : soldiers[0].Id)
+            : StableSquadId(name);
+        Squad squad = new(squadId, name, null, SquadTemplate);
         foreach (Soldier soldier in soldiers)
         {
             squad.AddSquadMember(soldier);
         }
 
         return squad;
+    }
+
+    private static int StableSquadId(string name)
+    {
+        unchecked
+        {
+            int hash = 17;
+            foreach (char character in name ?? string.Empty)
+            {
+                hash = hash * 31 + character;
+            }
+
+            return hash == 0 ? int.MinValue + 1 : hash;
+        }
     }
 
     private static NormalizedValueTemplate Value(float value)

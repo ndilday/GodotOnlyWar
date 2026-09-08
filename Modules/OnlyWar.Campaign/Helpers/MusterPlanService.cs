@@ -1,4 +1,5 @@
 using OnlyWar.Models;
+using OnlyWar.Abstractions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -128,7 +129,10 @@ namespace OnlyWar.Helpers
             return blockers.Count == 0 ? MusterPlanValidation.Valid : new(false, blockers);
         }
 
-        public MusterCommitResult Commit(PlayerForce force, Date date)
+        public MusterCommitResult Commit(
+            PlayerForce force,
+            Date date,
+            IPersistentIdAllocator identity = null)
         {
             SoldierTransferContext context = force?.Army?.OrderOfBattle == null
                 ? null
@@ -148,7 +152,7 @@ namespace OnlyWar.Helpers
                     HashSet<Squad> before = action.ProvisionalUnit.Squads.ToHashSet();
                     option = ToOption(action);
                     if (!_transferService.ApplyTransfer(
-                            soldier, option, force.Army.SquadMap, date))
+                            soldier, option, force.Army.SquadMap, date, identity))
                     {
                         throw new InvalidOperationException(
                             $"Validated Muster action {action.ActionId} could not be committed.");
@@ -182,7 +186,8 @@ namespace OnlyWar.Helpers
                     option = ToOption(action);
                 }
 
-                if (!_transferService.ApplyTransfer(soldier, option, force.Army.SquadMap, date))
+                if (!_transferService.ApplyTransfer(
+                        soldier, option, force.Army.SquadMap, date, identity))
                 {
                     throw new InvalidOperationException(
                         $"Validated Muster action {action.ActionId} could not be committed.");

@@ -13,7 +13,7 @@ namespace OnlyWar.Application
     /// Builds the Classis transfer tree from live task forces. Ordering, warp concealment and the
     /// squad rows are decided here so the screen only renders ids and text.
     /// </summary>
-    public sealed class FleetScreenProjector
+    internal sealed class FleetScreenProjector
     {
         private static readonly SquadRowViewModelBuilder SquadRowBuilder = new();
 

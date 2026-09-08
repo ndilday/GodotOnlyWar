@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Abstractions;
 using OnlyWar.Builders;
+using OnlyWar.Application.Abstractions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
@@ -33,18 +35,41 @@ namespace OnlyWar.Helpers.Recruitment
     {
         private const float BlackCarapaceReadinessRangedRating = 105f;
 
-        private readonly ICampaignSimulationSession _session;
+        private readonly Sector _sector;
+        private readonly GameRulesData _rules;
+        private readonly Date _currentDate;
+        private readonly IRNG _random;
+        private readonly IPersistentIdAllocator _identity;
 
         public RecruitmentPromotionService(ICampaignSimulationSession session)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+            ArgumentNullException.ThrowIfNull(session);
+            _sector = session.Sector;
+            _rules = session.Rules;
+            _currentDate = session.CurrentDate;
+            _random = session.Random;
+            _identity = session.Identity;
+        }
+
+        public RecruitmentPromotionService(
+            Sector sector,
+            GameRulesData rules,
+            Date currentDate,
+            IRNG random,
+            IPersistentIdAllocator identity)
+        {
+            _sector = sector ?? throw new ArgumentNullException(nameof(sector));
+            _rules = rules ?? throw new ArgumentNullException(nameof(rules));
+            _currentDate = currentDate ?? throw new ArgumentNullException(nameof(currentDate));
+            _random = random ?? throw new ArgumentNullException(nameof(random));
+            _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         }
 
         public RecruitmentPromotionResult PromoteAspirantToNeophyte(
             int aspirantId,
             int scoutSquadId)
         {
-            PlayerForce force = _session.Sector.PlayerForce;
+            PlayerForce force = _sector.PlayerForce;
             RecruitmentProgram program = force?.RecruitmentProgram;
             RecruitmentAspirant aspirant = program?.Aspirants
                 .FirstOrDefault(item => item.Id == aspirantId);
@@ -56,8 +81,8 @@ namespace OnlyWar.Helpers.Recruitment
             Squad target = FindSquad(force, scoutSquadId);
             if (!IsEligibleTarget(
                     target,
-                    _session.Rules.ChapterDoctrine.ScoutSquad,
-                    _session.Rules.ChapterDoctrine.ScoutMarine,
+                    _rules.ChapterDoctrine.ScoutSquad,
+                    _rules.ChapterDoctrine.ScoutMarine,
                     program.HomeWorldPlanetId,
                     out string targetError))
             {
@@ -65,10 +90,10 @@ namespace OnlyWar.Helpers.Recruitment
             }
 
             Soldier generated = new SoldierFactory().GenerateNewSoldier(
-                _session.Rules.ChapterDoctrine.ScoutMarine,
-                _session.Random,
-                _session.Identity);
-            generated.Template = _session.Rules.ChapterDoctrine.ScoutMarine;
+                _rules.ChapterDoctrine.ScoutMarine,
+                _random,
+                _identity);
+            generated.Template = _rules.ChapterDoctrine.ScoutMarine;
             generated.Strength = aspirant.Attributes.Strength;
             generated.Constitution = aspirant.Attributes.Constitution;
             generated.Intelligence = aspirant.Attributes.Intelligence;
@@ -76,7 +101,7 @@ namespace OnlyWar.Helpers.Recruitment
             generated.Ego = aspirant.Attributes.Ego;
             foreach ((int skillId, float points) in aspirant.SkillPoints)
             {
-                if (_session.Rules.BaseSkillMap.TryGetValue(
+                if (_rules.BaseSkillMap.TryGetValue(
                         skillId, out BaseSkill baseSkill)
                     && points > 0)
                 {
@@ -99,17 +124,17 @@ namespace OnlyWar.Helpers.Recruitment
                 SoldierEventType.AcceptedToTraining,
                 $"accepted as aspirant {aspirant.InductionDesignation}"));
             neophyte.AddEvent(new SoldierEvent(
-                CopyDate(_session.CurrentDate),
+                CopyDate(_currentDate),
                 SoldierEventType.Promotion,
                 $"promoted to Scout Marine and assigned to {target.Name}"));
             if (mentor != null)
             {
-                force.RecordMentorAssigned(_session.CurrentDate, neophyte, mentor, target);
+                force.RecordMentorAssigned(_currentDate, neophyte, mentor, target);
             }
             program.Aspirants.Remove(aspirant);
             program.ProgramEvents.Add(new RecruitmentProgramEvent
             {
-                Date = CopyDate(_session.CurrentDate),
+                Date = CopyDate(_currentDate),
                 Type = RecruitmentEventType.NeophytePromoted,
                 Count = 1,
                 Detail = $"{neophyte.Name} entered {target.Name} as a neophyte."
@@ -131,7 +156,7 @@ namespace OnlyWar.Helpers.Recruitment
                 return Failure(plan.Message);
             }
 
-            PlayerForce force = _session.Sector.PlayerForce;
+            PlayerForce force = _sector.PlayerForce;
             RecruitmentProgram program = force.RecruitmentProgram;
             PlayerSoldier neophyte = force.Army.PlayerSoldierMap[soldierId];
 
@@ -159,17 +184,17 @@ namespace OnlyWar.Helpers.Recruitment
             int soldierId,
             int devastatorSquadId)
         {
-            PlayerForce force = _session.Sector.PlayerForce;
+            PlayerForce force = _sector.PlayerForce;
             RecruitmentProgram program = force?.RecruitmentProgram;
             if (program == null)
             {
                 return PlanFailure("The Chapter has no recruitment program.");
             }
             new RecruitmentStaffService().Synchronize(
-                force, _session.Rules, _session.Sector, identity: _session.Identity);
+                force, _rules, _sector, identity: _identity);
             if (!force.Army.PlayerSoldierMap.TryGetValue(
                     soldierId, out PlayerSoldier neophyte)
-                || neophyte.Template != _session.Rules.ChapterDoctrine.ScoutMarine)
+                || neophyte.Template != _rules.ChapterDoctrine.ScoutMarine)
             {
                 return PlanFailure("Only a Scout Marine can receive the Black Carapace.");
             }
@@ -183,7 +208,7 @@ namespace OnlyWar.Helpers.Recruitment
                 return PlanFailure(
                     "The neophyte's induction age record is missing, so surgery cannot be authorized.");
             }
-            double age = _session.CurrentDate.GetWeeksDifference(
+            double age = _currentDate.GetWeeksDifference(
                 neophyte.RecruitmentBirthDate) / 52.0;
             if (!RecruitmentRules.GetPhaseAgeWindow(
                     RecruitmentPhase.Phase13BlackCarapace).Contains(age))
@@ -210,7 +235,7 @@ namespace OnlyWar.Helpers.Recruitment
             }
             SoldierEvaluation latest = neophyte.SoldierEvaluationHistory.LastOrDefault();
             if (latest == null
-                || _session.Rules.RatingConsumers.Get(
+                || _rules.RatingConsumers.Get(
                     latest, RatingConsumerRole.RangedCombat) <= BlackCarapaceReadinessRangedRating)
             {
                 return PlanFailure("That neophyte is not yet ready for the Black Carapace.");
@@ -219,8 +244,8 @@ namespace OnlyWar.Helpers.Recruitment
             Squad target = FindSquad(force, devastatorSquadId);
             if (!IsEligibleTarget(
                     target,
-                    _session.Rules.ChapterDoctrine.DevastatorSquad,
-                    _session.Rules.ChapterDoctrine.DevastatorMarine,
+                    _rules.ChapterDoctrine.DevastatorSquad,
+                    _rules.ChapterDoctrine.DevastatorMarine,
                     program.HomeWorldPlanetId,
                     out string targetError,
                     CountReservedSeats(program, devastatorSquadId)))

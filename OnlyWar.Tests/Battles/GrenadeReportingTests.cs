@@ -169,7 +169,7 @@ public class GrenadeReportingTests
             soldiers.Add(soldier);
         }
 
-        Squad squad = new(squadName, null, TestModelFactory.SquadTemplate);
+        Squad squad = new(firstSoldierId, squadName, null, TestModelFactory.SquadTemplate);
         foreach (Soldier soldier in soldiers)
         {
             squad.AddSquadMember(soldier);

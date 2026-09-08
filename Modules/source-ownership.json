@@ -1,5 +1,6 @@
 {
   "Domain": [
+    "Identity/CompatibilityPersistentIdAllocator.cs",
     "Models/Coordinate.cs",
     "Models/Date.cs",
     "Models/NormalizedValueTemplate.cs",
@@ -151,10 +152,9 @@
     "Logging/SoldierProgressLog.cs",
     "Allocators/SequentialEntityIdAllocator.cs",
     "Allocators/PersistentIdAllocator.cs",
+    "Allocators/TacticalEntityIdAllocator.cs",
     "Builders/ForceGenerator.cs",
     "Builders/SquadFactory.cs",
-    "Builders/TacticalEntityIdAllocator.cs",
-    "Builders/TacticalEntityIdAllocator.Legacy.cs",
     "Factories/RuntimeForceGenerator.cs",
     "Factories/RuntimeSoldierFactory.cs",
     "Factories/RuntimeSquadFactory.cs",

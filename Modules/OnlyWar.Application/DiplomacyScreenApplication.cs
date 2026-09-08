@@ -17,10 +17,10 @@ public interface IDiplomacyScreenApplication
 public sealed class DiplomacyScreenApplication : CampaignScreenApplication,
     IDiplomacyScreenApplication
 {
-    private readonly DiplomacyScreenProjector _diplomacyProjector = new();
+    private DiplomacyScreenContext Screen => Context.Diplomacy;
 
     public DiplomacyScreenApplication(CampaignApplicationContext context) : base(context) { }
 
     public DiplomacyBoardView QueryDiplomacy() =>
-        new(SessionToken, _diplomacyProjector.Build(ActiveSession?.Sector, ActiveSession?.Rules));
+        new(SessionToken, Screen?.QueryDiplomacy() ?? []);
 }

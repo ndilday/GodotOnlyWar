@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Abstractions;
 using OnlyWar.Generation.Abstractions;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
@@ -85,6 +86,7 @@ namespace OnlyWar.Builders
             // The player arrives last, into whatever state the sims produced.
             PlaceFleetInOrbit(sector, playerForce, promised, support);
             Character authority = ResolveAuthority(sector, planetList, characterList, data,
+                                                   support.Identity,
                                                    out GovernanceTier authorityTier);
             string briefingText = ComposeBriefing(sector, promised, authority, authorityTier,
                                                   playerForce, invader, currentDate, support);
@@ -585,6 +587,7 @@ namespace OnlyWar.Builders
         // free-standing commander, so the scenario can never lack an authority.
         private static Character ResolveAuthority(Sector sector, List<Planet> planetList,
                                                   List<Character> characterList, GameRulesData data,
+                                                  IPersistentIdAllocator identity,
                                                   out GovernanceTier authorityTier)
         {
             Planet capital = sector.GetSectorCapital();
@@ -607,8 +610,8 @@ namespace OnlyWar.Builders
             // Last resort (the only path that creates a character): a free-standing commander.
             // Title them as the highest authority, since no seated governor exists to rank.
             authorityTier = GovernanceTier.SectorCapital;
-            int newId = (sector.Characters.Count > 0 ? sector.Characters.Max(c => c.Id) : -1) + 1;
-            Character authority = CharacterBuilder.GenerateCharacter(newId, data.DefaultFaction);
+            Character authority = CharacterBuilder.GenerateCharacter(
+                identity.GetNextCharacterId(), data.DefaultFaction);
             sector.Characters.Add(authority);
             characterList.Add(authority);
             return authority;

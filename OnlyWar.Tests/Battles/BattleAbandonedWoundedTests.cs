@@ -55,11 +55,21 @@ public class BattleAbandonedWoundedTests
         // Seeded separately from the battle, which CreateResolver re-seeds, so both soldier
         // generation and the fight itself are deterministic.
         RNG.Reset(75_050);
+        OnlyWar.Abstractions.IEntityIdAllocator entityIds =
+            new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
         List<BattleSquad> platoons = Enumerable.Range(0, PdfPlatoonCount)
-            .Select(i => CreateNpcSquad(imperial, PdfInfantrySquadTemplateId, $"PDF Platoon {i + 1}"))
+            .Select(i => CreateNpcSquad(
+                imperial,
+                PdfInfantrySquadTemplateId,
+                $"PDF Platoon {i + 1}",
+                entityIds: entityIds))
             .ToList();
         BattleSquad brood = CreateNpcSquad(
-            tyranids, TermagauntSquadTemplateId, "Termagaunt Brood", TermagauntBroodBudget);
+            tyranids,
+            TermagauntSquadTemplateId,
+            "Termagaunt Brood",
+            TermagauntBroodBudget,
+            entityIds);
         // The live rosters lose their casualties as the battle runs, so record who started.
         List<int> broodStartingIds = brood.Soldiers.Select(s => s.Soldier.Id).ToList();
         List<int> pdfStartingIds = platoons
@@ -144,13 +154,14 @@ public class BattleAbandonedWoundedTests
         Faction faction,
         int squadTemplateId,
         string name,
-        long? battleValueBudget = null)
+        long? battleValueBudget = null,
+        OnlyWar.Abstractions.IEntityIdAllocator entityIds = null)
     {
         SquadTemplate squadTemplate = faction.SquadTemplates[squadTemplateId];
         Squad squad = battleValueBudget.HasValue
             ? SquadFactory.GenerateSquadWithinBudget(
-                squadTemplate, battleValueBudget.Value, new StaticRNG(), name)
-            : SquadFactory.GenerateSquad(squadTemplate, new StaticRNG(), name);
+                squadTemplate, battleValueBudget.Value, new StaticRNG(), entityIds, name)
+            : SquadFactory.GenerateSquad(squadTemplate, new StaticRNG(), entityIds, name);
         return new BattleSquad(false, squad);
     }
 

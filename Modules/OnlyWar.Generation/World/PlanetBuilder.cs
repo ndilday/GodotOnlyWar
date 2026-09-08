@@ -6,13 +6,17 @@ using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Abstractions;
 
 namespace OnlyWar.Builders
 {
     class PlanetBuilder
     {
-        public PlanetBuilder()
+        private readonly IPersistentIdAllocator _identity;
+
+        public PlanetBuilder(IPersistentIdAllocator identity)
         {
+            _identity = identity ?? throw new ArgumentNullException(nameof(identity));
             _shuffledNameIndexes = [];
             RefillNameIndexPool();
         }
@@ -21,9 +25,6 @@ namespace OnlyWar.Builders
         // sector and consumed from the tail: O(1) per planet, and it cannot stall the
         // way rejection sampling does as the pool drains.
         private readonly List<int> _shuffledNameIndexes;
-
-        private int _nextPlanetId;
-        private int _nextLeaderId;
 
         // Rebuilds the name pool in a fresh random order (Fisher-Yates).
         private void RefillNameIndexPool()
@@ -67,9 +68,8 @@ namespace OnlyWar.Builders
                 + (int)(RNG.NextRandomZValue() * template.ImportanceRange.StandardDeviation);
             int taxLevel =
                 RNG.GetIntBelowMax(template.TaxRange.MinValue, template.TaxRange.MaxValue + 1);
-            Planet planet = new Planet(_nextPlanetId, TempPlanetList.PlanetNames[nameIndex],
+            Planet planet = new Planet(_identity.GetNextPlanetId(), TempPlanetList.PlanetNames[nameIndex],
                                        position, 16, template, importance, taxLevel);
-            _nextPlanetId++;
 
             PlanetFaction planetFaction = new PlanetFaction(controllingFaction);
             planetFaction.PlayerReputation = 0;
@@ -84,7 +84,8 @@ namespace OnlyWar.Builders
                 .First().Id);
             if (controllingFaction.IsDefaultFaction)
             {
-                planetFaction.Leader = CharacterBuilder.GenerateCharacter(_nextLeaderId, leaderFaction);
+                planetFaction.Leader = CharacterBuilder.GenerateCharacter(
+                    _identity.GetNextCharacterId(), leaderFaction);
                 if (!leaderFaction.IsDefaultFaction)
                 {
                     // if the planetary leader is a member of a GC,
@@ -92,7 +93,6 @@ namespace OnlyWar.Builders
                     planetFaction.Leader.OpinionOfPlayerForce = -1;
                 }
                 InitializeContentment(planet, planetFaction.Leader, planetTemplateMap);
-                _nextLeaderId++;
             }
             return planet;
         }

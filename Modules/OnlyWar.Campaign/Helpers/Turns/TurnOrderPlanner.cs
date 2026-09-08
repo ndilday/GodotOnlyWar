@@ -15,20 +15,27 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class TurnOrderPlanner
     {
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly FactionStrategyController _strategyController;
 
         internal TurnOrderPlanner(
             ICampaignSimulationSession session,
             FactionStrategyController strategyController)
+            : this(CampaignTurnContext.From(session), strategyController)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal TurnOrderPlanner(
+            CampaignTurnContext turn,
+            FactionStrategyController strategyController)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _strategyController = strategyController;
         }
 
         internal void AppendNpcOrders(List<Order> orders, Sector sector, Planet planet = null)
         {
-            GameRulesData rules = _session.Rules;
+            GameRulesData rules = _turn.Rules;
             IEnumerable<Faction> enemyFactions = rules.Factions
                 .Where(faction => !FactionRelationshipService.IsImperial(faction));
 

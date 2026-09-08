@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers
         private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
         private readonly RecruitmentTurnProcessor _recruitmentTurnProcessor;
         private readonly FactionCapabilityCampaignProcessor _factionCapabilityCampaignProcessor;
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly TurnIntelligenceLedger _intelLedger;
         private readonly OrganicPopulationGrowthLedger _organicPopulationGrowthLedger;
         private readonly TurnResolutionResult _lastResult;
@@ -52,7 +52,7 @@ namespace OnlyWar.Helpers
             IEngagementElementFactory engagementElements,
             ISoldierTrainingService trainingService = null)
         {
-            _session = session ?? throw new System.ArgumentNullException(nameof(session));
+            _turn = CampaignTurnContext.From(session);
             _readiness = readiness ?? throw new System.ArgumentNullException(nameof(readiness));
             _personnel = personnel ?? throw new System.ArgumentNullException(nameof(personnel));
             _commitments = commitments ?? throw new System.ArgumentNullException(nameof(commitments));
@@ -60,51 +60,51 @@ namespace OnlyWar.Helpers
             _engagementElements = engagementElements
                 ?? throw new System.ArgumentNullException(nameof(engagementElements));
             _orderPlanner = new TurnOrderPlanner(
-                _session,
+                _turn,
                 new FactionStrategyController(
-                    _session.Random,
-                    _session.Rules.FactionBehaviorRules,
-                    _session.Identity));
-            _chapterUpkeepProcessor = new ChapterUpkeepProcessor(_session, trainingService);
+                    _turn.Random,
+                    _turn.Rules.FactionBehaviorRules,
+                    _turn.Identity));
+            _chapterUpkeepProcessor = new ChapterUpkeepProcessor(_turn, trainingService);
             _fleetTurnProcessor = new FleetTurnProcessor(_chapterUpkeepProcessor);
             _lastResult = new TurnResolutionResult();
             _intelLedger = new TurnIntelligenceLedger();
             _organicPopulationGrowthLedger = new OrganicPopulationGrowthLedger();
             _planetIntelligenceProcessor = new PlanetIntelligenceProcessor(
-                _session,
+                _turn,
                 _lastResult.SpecialMissions,
                 _intelLedger);
             _planetTurnProcessor = new PlanetTurnProcessor(
-                _session,
+                _turn,
                 _planetIntelligenceProcessor,
                 _organicPopulationGrowthLedger,
                 _lastResult.FortificationTransfers,
                 _lastResult.GovernorRequestReports);
             _missionTurnProcessor = new MissionTurnProcessor(new MissionTurnDependencies
             {
-                Sector = _session.Sector,
-                Rules = _session.Rules,
-                CurrentDate = _session.CurrentDate,
-                Random = _session.Random,
+                Sector = _turn.Sector,
+                Rules = _turn.Rules,
+                CurrentDate = _turn.CurrentDate,
+                Random = _turn.Random,
                 Readiness = _readiness,
                 Engagements = _engagements,
                 MissionRules = new MissionRules(
-                    _session.Rules.Skills.Stealth,
-                    _session.Rules.Skills.Tactics),
-                Doctrine = _session.Sector.PlayerForce?.Army?.ChapterOperationalDoctrine,
-                Recruitment = _session.Sector.PlayerForce?.RecruitmentProgram,
-                InvasionForces = _session.Sector.StrategicInvasionForces,
-                FactionRules = _session.Rules.FactionBehaviorRules,
+                    _turn.Rules.Skills.Stealth,
+                    _turn.Rules.Skills.Tactics),
+                Doctrine = _turn.Sector.PlayerForce?.Army?.ChapterOperationalDoctrine,
+                Recruitment = _turn.Sector.PlayerForce?.RecruitmentProgram,
+                InvasionForces = _turn.Sector.StrategicInvasionForces,
+                FactionRules = _turn.Rules.FactionBehaviorRules,
                 Personnel = _personnel,
                 EngagementElements = _engagementElements,
                 ApplyDailyHealing = MedicalTurnProcessor.ApplyDailyHealing,
                 ResolveMedicalSkills = () => FieldCareService.ResolveMedicalSkills(
-                    _session.Rules.RatingDefinitions,
-                    _session.Rules.BaseSkillMap,
-                    _session.Rules.RatingConsumers),
+                    _turn.Rules.RatingDefinitions,
+                    _turn.Rules.BaseSkillMap,
+                    _turn.Rules.RatingConsumers),
                 ApplyDailyFieldCare = (order, report, skills, day, ratings) =>
                     FieldCareService.ApplyDailyFieldCare(
-                        _session.Random, order, report, skills, day, ratings),
+                        _turn.Random, order, report, skills, day, ratings),
                 RecordIntelGain = _planetIntelligenceProcessor.RecordIntelGain,
                 RecordTargetObservation = _planetIntelligenceProcessor.RecordTargetObservation,
                 RecordScenarioPdfLost = ScenarioMetricsCollector.RecordScenarioPdfLost,
@@ -121,7 +121,7 @@ namespace OnlyWar.Helpers
                 ScenarioMetricsCollector.RecordScenarioPdfLost,
                 _planetIntelligenceProcessor.RecordTargetObservation);
             _planetForwardSimulator = new PlanetForwardSimulator(
-                _session,
+                _turn,
                 _orderPlanner,
                 _missionTurnProcessor,
                 _missionAftermathProcessor,
@@ -130,13 +130,13 @@ namespace OnlyWar.Helpers
                 _intelLedger,
                 _lastResult);
             _scenarioTurnProcessor = new ScenarioTurnProcessor(
-                _session, _personnel, _commitments);
-            _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_session);
+                _turn, _personnel, _commitments);
+            _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_turn);
             _recruitmentTurnProcessor = new RecruitmentTurnProcessor(
-                _session,
+                _turn,
                 _organicPopulationGrowthLedger,
                 _readiness);
-            _factionCapabilityCampaignProcessor = new FactionCapabilityCampaignProcessor(_session);
+            _factionCapabilityCampaignProcessor = new FactionCapabilityCampaignProcessor(_turn);
         }
 
         public TurnResolutionResult ProcessTurn(Sector sector)
@@ -146,13 +146,13 @@ namespace OnlyWar.Helpers
             // Ending the displayed turn advances the campaign into the week whose events are
             // about to be resolved. Keeping this in the turn controller ensures every caller
             // (including simulations outside the main screen) observes the same campaign date.
-            _session.CurrentDate.IncrementWeek();
+            _turn.CurrentDate.IncrementWeek();
 
             _lastResult.Clear();
-            _session.Sector.PlayerForce?.CurrentTurnEvents.Clear();
+            _turn.Sector.PlayerForce?.CurrentTurnEvents.Clear();
             _planetIntelligenceProcessor.ClearTurnGains();
             _organicPopulationGrowthLedger.Clear();
-            Faction defaultFaction = _session.Rules.DefaultFaction;
+            Faction defaultFaction = _turn.Rules.DefaultFaction;
             ScenarioMetricsCollector.BeginScenarioRegionMetrics(
                 ScenarioMetricsCollector.GetScenarioMetricsPlanet(sector),
                 defaultFaction);
@@ -169,7 +169,7 @@ namespace OnlyWar.Helpers
             // with every other mission, where they shape who is looking where each day
             // (OnlyWar_TDD.md §6.4).
             SimulationContext context = new(
-                _session,
+                _turn,
                 _lastResult,
                 _intelLedger,
                 sector.Orders.Values);
@@ -237,16 +237,16 @@ namespace OnlyWar.Helpers
             {
                 _lastResult.ScenarioNotification = scenarioNotification;
             }
-            ScenarioMetricsCollector.LogScenarioRegionMetrics($"date={_session.CurrentDate}");
+            ScenarioMetricsCollector.LogScenarioRegionMetrics($"date={_turn.CurrentDate}");
             ScenarioMetricsCollector.EndScenarioRegionMetrics();
             MissionAftermathProcessor.CleanupResolvedPlayerOrders(sector, playerOrdersThisTurn);
-            _lastResult.CampaignEvents.AddRange(_session.Sector.PlayerForce?.CurrentTurnEvents ?? []);
-            _lastResult.CampaignIdentity = _session.Sector.PlayerForce?.CampaignIdentity;
+            _lastResult.CampaignEvents.AddRange(_turn.Sector.PlayerForce?.CurrentTurnEvents ?? []);
+            _lastResult.CampaignIdentity = _turn.Sector.PlayerForce?.CampaignIdentity;
             ChapterChronicleProjector.ReconcileRecent(
-                _session.Sector.PlayerForce?.CampaignEventLedger,
-                _session.Sector.PlayerForce?.ChapterChronicle,
-                _session.Sector.PlayerForce?.CurrentTurnEvents,
-                _session.Sector.PlayerForce?.CampaignIdentity);
+                _turn.Sector.PlayerForce?.CampaignEventLedger,
+                _turn.Sector.PlayerForce?.ChapterChronicle,
+                _turn.Sector.PlayerForce?.CurrentTurnEvents,
+                _turn.Sector.PlayerForce?.CampaignIdentity);
             return _lastResult;
         }
 
@@ -300,7 +300,7 @@ namespace OnlyWar.Helpers
                     imperialFaction.Id,
                     controller?.Id,
                     planet.IsContested(),
-                    _session.CurrentDate.GetTotalWeeks(),
+                    _turn.CurrentDate.GetTotalWeeks(),
                     isImperialControlled: controller != null
                         && FactionRelationshipService.IsImperial(controller));
             }
@@ -313,7 +313,7 @@ namespace OnlyWar.Helpers
         {
             PlayerForce force = sector.PlayerForce;
             if (force == null) return;
-            int week = _session.CurrentDate.GetTotalWeeks();
+            int week = _turn.CurrentDate.GetTotalWeeks();
             foreach (Planet planet in sector.Planets.Values)
             {
                 bool participated = force.CurrentTurnEvents.Any(@event =>
@@ -394,7 +394,7 @@ namespace OnlyWar.Helpers
             {
                 throw new System.ArgumentNullException(nameof(sector));
             }
-            if (!ReferenceEquals(sector, _session.Sector))
+            if (!ReferenceEquals(sector, _turn.Sector))
             {
                 throw new System.ArgumentException(
                     "The supplied sector must be the sector owned by this game session.",

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Abstractions;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Models.Units
@@ -65,10 +66,16 @@ namespace OnlyWar.Models.Units
             return _childSquadSlots ?? (IReadOnlyCollection<SquadTemplateSlot>)Enumerable.Empty<SquadTemplateSlot>();
         }
 
-        public Unit GenerateUnitFromTemplateWithoutChildren(string name)
+        public Unit GenerateUnitFromTemplateWithoutChildren(
+            string name,
+            IPersistentIdAllocator identity)
         {
-            return new Unit(name, this);
+            return new Unit(name, this, identity);
         }
+
+        /// <summary>Compatibility overload for callers outside campaign composition.</summary>
+        public Unit GenerateUnitFromTemplateWithoutChildren(string name) =>
+            new Unit(name, this, new CompatibilityPersistentIdAllocator());
 
         public int GetMaximumSoldierCount()
         {

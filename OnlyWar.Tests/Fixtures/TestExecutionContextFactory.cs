@@ -9,6 +9,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using System.Collections.Generic;
 
 namespace OnlyWar.Tests.Fixtures;
@@ -52,7 +53,7 @@ internal static class TestExecutionContextFactory
             new MissionRules(TestSkills.Stealth, TestSkills.Tactics),
             random,
             engagement,
-            new TacticalEntityIdAllocator(),
+            new RuntimeTacticalEntityIdAllocator(),
             new MissionCampaignInputs(
                 new Date(1, 1, 1),
                 Personnel: TestPersonnelComposition.CreatePersonnel()),

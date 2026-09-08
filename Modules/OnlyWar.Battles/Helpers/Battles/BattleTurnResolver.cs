@@ -10,7 +10,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -75,10 +74,6 @@ namespace OnlyWar.Helpers.Battles
         // "issuing no actions at all" are completely different bugs, and the counters above cannot
         // tell them apart.
         private string _lastTurnActionSummary = "none";
-
-        // Disambiguates battles that share a date and a region. Process-wide and never persisted:
-        // it exists to name a log stream, not to identify a battle across sessions.
-        private static int _nextBattleId;
 
         public BattleTurnResolver(BattleGridManager grid,
                                     IList<BattleSquad> attackerBattleSquads,
@@ -168,14 +163,14 @@ namespace OnlyWar.Helpers.Battles
 
         /// <summary>
         /// Identifies this battle's log stream: <c>{gamedate}-{region}-{battleId}</c>. The id is a
-        /// process-wide counter rather than anything persisted, because date and region alone do not
-        /// separate two battles fought in the same region in the same week -- exactly the case a
-        /// contested region produces. Announced to <see cref="BattleLog"/>, which leaves it to the
-        /// host to decide whether that means a separate file.
+        /// execution-scoped counter rather than anything persisted, because date and region alone
+        /// do not separate two battles fought in the same region in the same week -- exactly the
+        /// case a contested region produces. Announced to <see cref="BattleLog"/>, which leaves it
+        /// to the host to decide whether that means a separate file.
         /// </summary>
         private string BuildBattleLogName()
         {
-            int battleId = Interlocked.Increment(ref _nextBattleId);
+            int battleId = _execution.BattleIds.GetNextId();
             string date = SanitizeForFileName(_execution.Aftermath?.Date?.ToString()) ?? "unknown-date";
             string region = SanitizeForFileName(_region?.Name) ?? "unknown-region";
             return $"{date}-{region}-{battleId}";

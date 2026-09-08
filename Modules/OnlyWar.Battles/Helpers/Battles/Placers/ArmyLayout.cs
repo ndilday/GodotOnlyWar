@@ -19,19 +19,7 @@ namespace OnlyWar.Helpers.Battles.Placers
 
     public class ArmyLayoutHelper
     {
-        private static ArmyLayoutHelper _instance;
-        private ArmyLayoutHelper() { }
-        public static ArmyLayoutHelper Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = new ArmyLayoutHelper();
-                }
-                return _instance;
-            }
-        }
+        private readonly BattleSquadLayoutHelper _squadLayout = new();
 
         public ArmyLayout LayoutArmyLine(IEnumerable<BattleSquad> squads, bool isLoose, IRNG random)
         {
@@ -108,7 +96,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     BattleSquad hqSquad = hqSquads[i];
                     BattleSquadLayout squadLayout =
-                        BattleSquadLayoutHelper.Instance.LayoutBattleSquad(hqSquad, isLoose, random);
+                        _squadLayout.LayoutBattleSquad(hqSquad, isLoose, random);
                     layout.SquadLayoutMap[hqSquad.Id] = squadLayout;
                     
                     layout.SquadPositionMap[squad.Id] = 
@@ -126,7 +114,7 @@ namespace OnlyWar.Helpers.Battles.Placers
             return layout;
         }
 
-        private static void PlaceSquads(List<BattleSquad> squads, bool isLoose, ArmyLayout layout, int y,
+        private void PlaceSquads(List<BattleSquad> squads, bool isLoose, ArmyLayout layout, int y,
                                         ref int lineLeft, ref int lineRight, ref int maxY, IRNG random)
         {
             int i = 0;
@@ -135,7 +123,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 BattleSquad squad = squads[i];
                 // place a squad to the left
                 BattleSquadLayout squadLayout =
-                    BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose, random);
+                    _squadLayout.LayoutBattleSquad(squad, isLoose, random);
                 layout.SquadLayoutMap[squad.Id] = squadLayout;
                 lineLeft = lineLeft - 3 - squadLayout.SquadDimension.Item1;
                 layout.SquadPositionMap[squad.Id] = new ValueTuple<int, int>(lineLeft, y);
@@ -150,7 +138,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     squad = squads[i];
                     squadLayout =
-                        BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose, random);
+                        _squadLayout.LayoutBattleSquad(squad, isLoose, random);
                     layout.SquadLayoutMap[squad.Id] = squadLayout;
                     layout.SquadPositionMap[squad.Id] =
                         new ValueTuple<int, int>(lineRight + 3, y);

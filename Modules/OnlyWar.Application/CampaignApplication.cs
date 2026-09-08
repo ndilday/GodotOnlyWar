@@ -432,21 +432,21 @@ public sealed class CampaignApplication :
         ChapterScreenApplication.OrderSquads(squads);
 
     internal static bool IsTrainingSquad(Squad squad) =>
-        TrainingScreenApplication.IsTrainingSquad(squad);
+        TrainingScreenContext.IsTrainingSquad(squad);
 
     internal static string DescribeSquadListLabel(Squad squad) =>
-        TrainingScreenApplication.DescribeSquadListLabel(squad);
+        TrainingScreenContext.DescribeSquadListLabel(squad);
 
     internal static string DescribeSquadListLabel(
         Squad squad, ScoutTrainingOptionCatalog trainingOptions) =>
-        TrainingScreenApplication.DescribeSquadListLabel(squad, trainingOptions);
+        TrainingScreenContext.DescribeSquadListLabel(squad, trainingOptions);
 
     internal static IEnumerable<Squad> OrderScoutSquads(IEnumerable<Squad> squads) =>
-        TrainingScreenApplication.OrderScoutSquads(squads);
+        TrainingScreenContext.OrderScoutSquads(squads);
 
     internal static bool IsDoctrineValid(RecruitmentDoctrineDraft doctrine) =>
-        TrainingScreenApplication.IsDoctrineValid(doctrine);
+        TrainingScreenContext.IsDoctrineValid(doctrine);
 
     internal static long GetChapterPopulation(Planet planet, int chapterFactionId) =>
-        TrainingScreenApplication.GetChapterPopulation(planet, chapterFactionId);
+        TrainingScreenContext.GetChapterPopulation(planet, chapterFactionId);
 }

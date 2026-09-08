@@ -1,3 +1,4 @@
+using OnlyWar.Runtime.Allocators;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -6,38 +7,36 @@ using Xunit;
 
 namespace OnlyWar.Tests.Domain;
 
-// Squad and Unit both hand out runtime ids from a static counter that the loading
-// constructor advances past whatever a save contains. The counter must move past an id
-// that lands exactly on it, or the next runtime-created entity reuses that id — which
-// surfaced as a duplicate-key crash the first time anything keyed the order of battle by
-// squad id (SoldierTransferService.GetTransferOptions) after a new squad was created.
+// Loaded entities keep their persisted identity. Runtime-created entities consume the
+// session allocator, so loading one graph cannot mutate another graph's identity stream.
 public class EntityIdAllocationTests
 {
     [Fact]
-    public void Squad_LoadedIdEqualToTheCounterStillAdvancesIt()
+    public void Squad_RuntimeIdComesFromTheExplicitSessionAllocator()
     {
         SquadTemplate template = CreateSquadTemplate();
         Unit unit = CreateUnit();
+        PersistentIdAllocator identity = new(nextSquadId: 100_002);
 
-        // The first load pushes the counter to 100_001; the second load lands exactly on it.
         _ = new Squad(100_000, "Loaded Squad", unit, template);
         Squad boundary = new(100_001, "Boundary Squad", unit, template);
 
-        Squad runtime = new("Runtime Squad", unit, template);
+        Squad runtime = new("Runtime Squad", unit, template, identity);
 
         Assert.NotEqual(boundary.Id, runtime.Id);
         Assert.True(runtime.Id > boundary.Id, $"Runtime squad reused id {runtime.Id}.");
     }
 
     [Fact]
-    public void Unit_LoadedIdEqualToTheCounterStillAdvancesIt()
+    public void Unit_RuntimeIdComesFromTheExplicitSessionAllocator()
     {
         UnitTemplate template = new(1, "Test Unit Template", true, [], []);
+        PersistentIdAllocator identity = new(nextUnitId: 100_002);
 
         _ = new Unit(100_000, "Loaded Unit", template, []);
         Unit boundary = new(100_001, "Boundary Unit", template, []);
 
-        Unit runtime = new("Runtime Unit", template);
+        Unit runtime = new("Runtime Unit", template, identity);
 
         Assert.NotEqual(boundary.Id, runtime.Id);
         Assert.True(runtime.Id > boundary.Id, $"Runtime unit reused id {runtime.Id}.");

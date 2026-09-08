@@ -16,10 +16,15 @@ namespace OnlyWar.Helpers.Battles
     public class BattleSquad : ICloneable
     {
         private readonly IBattleEquipmentSource _equipment;
-        private static int _globalAbleSoldiersVersion;
+        // Cloned battle wrappers share campaign soldier injury state. Keep their lazy eligibility
+        // cache coherent through a token shared by that wrapper family rather than a process-wide
+        // generation counter that couples unrelated battles and tests.
+        private sealed class AbleSoldiersGenerationToken
+        {
+            public int Value;
+        }
 
-        internal static int AbleSoldiersGeneration =>
-            System.Threading.Volatile.Read(ref _globalAbleSoldiersVersion);
+        private readonly AbleSoldiersGenerationToken _ableSoldiersGeneration;
         private List<BattleSoldier> _ableSoldiers;
         // A player formation's eligible bodies are frozen at the campaign-to-engagement boundary.
         // Combat wounds may still remove a body during the engagement, but a non-incapacitating
@@ -27,7 +32,7 @@ namespace OnlyWar.Helpers.Battles
         // way. A null set preserves the legacy unrestricted behaviour for NPC formations.
         private HashSet<int> _engagementParticipantIds;
         private int _ableSoldiersSourceCount = -1;
-        private int _cachedGlobalAbleSoldiersVersion = -1;
+        private int _cachedAbleSoldiersGeneration = -1;
         private int _ableSoldiersVersion;
         private int _statisticsVersion = -1;
         private float _averageArmor;
@@ -73,6 +78,8 @@ namespace OnlyWar.Helpers.Battles
         public bool MobSuppressionCommitted { get; set; }
 
         public Squad Squad { get; }
+        internal int AbleSoldiersGeneration => System.Threading.Volatile.Read(
+            ref _ableSoldiersGeneration.Value);
         public List<BattleSoldier> AbleSoldiers
         {
             get
@@ -80,10 +87,11 @@ namespace OnlyWar.Helpers.Battles
                 // This property is read repeatedly while planning every soldier's turn. Reuse the
                 // filtered list until a wound/removal can change combat eligibility. The count
                 // check also keeps direct test/setup mutations of the public Soldiers list safe.
-                int globalVersion = System.Threading.Volatile.Read(ref _globalAbleSoldiersVersion);
+                int generation = System.Threading.Volatile.Read(
+                    ref _ableSoldiersGeneration.Value);
                 if (_ableSoldiers == null
                     || _ableSoldiersSourceCount != Soldiers.Count
-                    || _cachedGlobalAbleSoldiersVersion != globalVersion)
+                    || _cachedAbleSoldiersGeneration != generation)
                 {
                     _ableSoldiers = Soldiers
                         .Where(s => s.IsCombatEffective
@@ -91,7 +99,7 @@ namespace OnlyWar.Helpers.Battles
                                 || _engagementParticipantIds.Contains(s.Soldier.Id)))
                         .ToList();
                     _ableSoldiersSourceCount = Soldiers.Count;
-                    _cachedGlobalAbleSoldiersVersion = globalVersion;
+                    _cachedAbleSoldiersGeneration = generation;
                     _ableSoldiersVersion++;
                     _statisticsVersion = -1;
                 }
@@ -198,6 +206,7 @@ namespace OnlyWar.Helpers.Battles
             IEnumerable<ISoldier> engagementParticipants = null, IBattleEquipmentSource equipment = null)
         {
             _equipment = equipment;
+            _ableSoldiersGeneration = new AbleSoldiersGenerationToken();
             Id = squad.Id;
             Name = squad.Name;
             Squad = squad;
@@ -229,6 +238,7 @@ namespace OnlyWar.Helpers.Battles
         {
             if (spec == null) throw new ArgumentNullException(nameof(spec));
             _equipment = equipment;
+            _ableSoldiersGeneration = new AbleSoldiersGenerationToken();
             Id = spec.TacticalId;
             Name = spec.Name;
             Squad = spec.CampaignSquad;
@@ -254,6 +264,7 @@ namespace OnlyWar.Helpers.Battles
         private BattleSquad(BattleSquad original)
         {
             _equipment = original._equipment;
+            _ableSoldiersGeneration = original._ableSoldiersGeneration;
             Id = original.Id;
             Name = original.Name;
             // we shouldn't need to clone the squad
@@ -356,10 +367,21 @@ namespace OnlyWar.Helpers.Battles
         internal void CommitEquipmentStateFrom(BattleSquad snapshot)
         {
             if (snapshot == null) return;
-            int count = Math.Min(_missionRangedWeapons.Count, snapshot._missionRangedWeapons.Count);
-            for (int index = 0; index < count; index++)
+            List<RangedWeapon> remainingSnapshotWeapons = snapshot._missionRangedWeapons.ToList();
+            foreach (RangedWeapon liveWeapon in _missionRangedWeapons)
             {
-                _missionRangedWeapons[index].CopyLiveStateFrom(snapshot._missionRangedWeapons[index]);
+                int matchingIndex = remainingSnapshotWeapons.FindIndex(weapon =>
+                    weapon.Template?.Id == liveWeapon.Template?.Id);
+                if (matchingIndex < 0)
+                {
+                    // A caller may replace a live battle wrapper's weapon list while assembling
+                    // a test or a runtime engagement. There is no compatible reserve state to
+                    // copy in that case; do not pair unrelated templates by list position.
+                    continue;
+                }
+
+                liveWeapon.CopyLiveStateFrom(remainingSnapshotWeapons[matchingIndex]);
+                remainingSnapshotWeapons.RemoveAt(matchingIndex);
             }
         }
 
@@ -423,11 +445,12 @@ namespace OnlyWar.Helpers.Battles
         {
             // BattleState clones share the underlying ISoldier injury data. A wound applied through
             // one wrapper can therefore change eligibility in another wrapper retained by a chained
-            // mission. A global generation invalidates all wrappers lazily without scanning them.
-            System.Threading.Interlocked.Increment(ref _globalAbleSoldiersVersion);
+            // mission. The shared token invalidates that wrapper family lazily without coupling
+            // unrelated battles.
+            System.Threading.Interlocked.Increment(ref _ableSoldiersGeneration.Value);
             _ableSoldiers = null;
             _ableSoldiersSourceCount = -1;
-            _cachedGlobalAbleSoldiersVersion = -1;
+            _cachedAbleSoldiersGeneration = -1;
             _ableSoldiersVersion++;
             _statisticsVersion = -1;
         }

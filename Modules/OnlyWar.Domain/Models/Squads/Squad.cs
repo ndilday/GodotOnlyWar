@@ -7,13 +7,12 @@ using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
+using OnlyWar.Abstractions;
 
 namespace OnlyWar.Models.Squads
 {
     public class Squad : ICloneable
     {
-        private static int _nextId = 0;
         private readonly List<ISoldier> _members;
         public int Id { get; }
         public string Name { get; set; }
@@ -66,9 +65,11 @@ namespace OnlyWar.Models.Squads
         /// </summary>
         public string TrainingOptionKey { get; set; } = ScoutTrainingOptionKeys.Balanced;
         //public List<int> AssignedVehicles;
-        public Squad(string name, Unit parentUnit, SquadTemplate template)
+        public Squad(string name, Unit parentUnit, SquadTemplate template,
+                     IPersistentIdAllocator identity)
         {
-            Id = _nextId++;
+            if (identity == null) throw new ArgumentNullException(nameof(identity));
+            Id = identity.GetNextSquadId();
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;
@@ -78,17 +79,30 @@ namespace OnlyWar.Models.Squads
             Loadout = [];
         }
 
+        /// <summary>Compatibility overload backed by a fresh, non-global allocator.</summary>
+        public Squad(string name, Unit parentUnit, SquadTemplate template)
+            : this(name, parentUnit, template, CreateCompatibilityIdentity(parentUnit))
+        {
+        }
+
+        private static IPersistentIdAllocator CreateCompatibilityIdentity(Unit parentUnit)
+        {
+            Unit root = parentUnit;
+            while (root?.ParentUnit != null)
+            {
+                root = root.ParentUnit;
+            }
+
+            int nextSquadId = (root?.GetAllSquads() ?? [])
+                .Select(squad => squad.Id)
+                .DefaultIfEmpty(-1)
+                .Max() + 1;
+            return new CompatibilityPersistentIdAllocator(nextSquadId: nextSquadId);
+        }
+
         public Squad(int id, string name, Unit parentUnit, SquadTemplate template)
         {
             Id = id;
-            // >= , not > : _nextId is the *next* id to hand out, so a loaded squad whose id
-            // equals it must still push it past itself. With > , loading a save whose highest
-            // squad id landed on _nextId left the counter unchanged and the next runtime-created
-            // squad reused that id.
-            if(id >= _nextId)
-            {
-                Interlocked.Exchange(ref _nextId, id + 1);
-            }
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;

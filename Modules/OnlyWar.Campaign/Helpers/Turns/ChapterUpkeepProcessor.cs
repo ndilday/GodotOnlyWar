@@ -20,14 +20,21 @@ namespace OnlyWar.Helpers.Turns
     internal sealed class ChapterUpkeepProcessor
     {
         private const float WeeklyTrainingPoints = 0.2f;
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly ISoldierTrainingService _trainingService;
 
         internal ChapterUpkeepProcessor(
             ICampaignSimulationSession session,
             ISoldierTrainingService trainingService = null)
+            : this(CampaignTurnContext.From(session), trainingService)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal ChapterUpkeepProcessor(
+            CampaignTurnContext turn,
+            ISoldierTrainingService trainingService = null)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _trainingService = trainingService;
         }
 
@@ -72,12 +79,12 @@ namespace OnlyWar.Helpers.Turns
             //
             // Run BEFORE the weekly cascade so the week's demotions are in place when it ticks.
             FieldCareService.ApplyGarrisonFieldCare(
-                _session.Random,
+                _turn.Random,
                 members?.OfType<PlayerSoldier>(),
                 FieldCareService.ResolveMedicalSkills(
-                    _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap,
-                    _session.Rules?.RatingConsumers),
-                _session.Rules?.RatingConsumers);
+                    _turn.Rules?.RatingDefinitions, _turn.Rules?.BaseSkillMap,
+                    _turn.Rules?.RatingConsumers),
+                _turn.Rules?.RatingConsumers);
             MedicalTurnProcessor.ApplyWeeklyHealing(members);
             IReadOnlyList<CompletedMedicalProcedure> completedProcedures =
                 MedicalTurnProcessor.ResolveProcedures(army.MedicalProcedures, army.PlayerSoldierMap);
@@ -99,7 +106,7 @@ namespace OnlyWar.Helpers.Turns
                         ?.Payload as IncapacitatedPayload)?.BattleContext;
                 force.GetCampaignEventRecorder().RecordBodyPartReplacement(
                     completion.Soldier,
-                    _session.CurrentDate,
+                    _turn.CurrentDate,
                     new BodyPartReplacementPayload(
                         completion.PrimaryHitLocationTemplateId,
                         completion.PrimaryHitLocationName,
@@ -154,10 +161,10 @@ namespace OnlyWar.Helpers.Turns
                 };
                 int durationWeeks = Math.Max(
                     0,
-                    _session.CurrentDate.GetTotalWeeks() - source.OccurredWeek);
+                    _turn.CurrentDate.GetTotalWeeks() - source.OccurredWeek);
                 force.GetCampaignEventRecorder().RecordNearDeathRecovery(
                     soldier,
-                    _session.CurrentDate,
+                    _turn.CurrentDate,
                     new NearDeathRecoveryPayload(
                         episode.SourceIncapacitationEventId,
                         durationWeeks,
@@ -308,9 +315,9 @@ namespace OnlyWar.Helpers.Turns
 
         private ISoldierTrainingService CreateTrainingService()
         {
-            GameRulesData rules = _session.Rules;
+            GameRulesData rules = _turn.Rules;
             RatingCalculator ratingCalculator = new(rules.RatingDefinitions, rules.RatingAwardTiers,
-                                                    rules.BaseSkillMap, _session.Random);
+                                                    rules.BaseSkillMap, _turn.Random);
             return new SoldierTrainingCalculator(
                 rules.BaseSkillMap.Values,
                 rules.TrainingProfiles.Values,

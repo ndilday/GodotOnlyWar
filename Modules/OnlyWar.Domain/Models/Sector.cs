@@ -1,3 +1,4 @@
+using OnlyWar.Abstractions;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -251,9 +252,10 @@ namespace OnlyWar.Models
         }
 
         public TaskForce SplitOffNewFleet(TaskForce originalFleet,
-                                      IReadOnlyCollection<Ship> newFleetShipList)
+                                      IReadOnlyCollection<Ship> newFleetShipList,
+                                      IPersistentIdAllocator identity)
         {
-            TaskForce newFleet = new TaskForce(originalFleet.Faction)
+            TaskForce newFleet = new TaskForce(originalFleet.Faction, identity)
             {
                 Planet = originalFleet.Planet,
                 Position = originalFleet.Position,
@@ -272,5 +274,14 @@ namespace OnlyWar.Models
             _fleets[newFleet.Id] = newFleet;
             return newFleet;
         }
+
+        /// <summary>Compatibility overload for callers that do not own a session.</summary>
+        public TaskForce SplitOffNewFleet(
+            TaskForce originalFleet,
+            IReadOnlyCollection<Ship> newFleetShipList) =>
+            SplitOffNewFleet(
+                originalFleet,
+                newFleetShipList,
+                new CompatibilityPersistentIdAllocator());
     }
 }

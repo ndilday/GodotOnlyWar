@@ -80,13 +80,13 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Region region = _queries.FindRegion(command.RegionId);
-        AvailableMission mission = _queries.FindMission(region, command.MissionKey);
+        Region region = commandContext.FindRegion(command.RegionId);
+        AvailableMission mission = commandContext.FindMission(region, command.MissionKey);
         if (region == null || mission == null)
             return OperationsCommandResult.Rejected("The target or mission is no longer available.");
-        Order context = _queries.FindOrder(command.OrderId);
+        Order context = commandContext.FindOrder(command.OrderId);
 
-        List<PlayerSoldier> characters = _queries.ResolveCharacters(command.CharacterIds);
+        List<PlayerSoldier> characters = commandContext.ResolveCharacters(command.CharacterIds);
         if (characters.Count > 0)
         {
             // Selecting characters already committed to the order being edited releases them;
@@ -97,7 +97,7 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
                 ? commandContext.DetachSpecialists(context, characters)
                 : commandContext.CreateOrAdd(
                     region, mission, [], characters,
-                    OperationsScreenQueries.ResolveTargetFactionId(region, mission),
+                    OperationsCommandContext.ResolveTargetFactionId(region, mission),
                     context?.LevelOfAggression ?? command.Aggression);
             return Project(characterResult, undo: null);
         }
@@ -110,7 +110,7 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         bool created = context == null;
         OrderMutationResult result = commandContext.CreateOrAdd(
             region, mission, squads, [],
-            OperationsScreenQueries.ResolveTargetFactionId(region, mission),
+            OperationsCommandContext.ResolveTargetFactionId(region, mission),
             context?.LevelOfAggression ?? command.Aggression);
         if (!result.Succeeded) return Project(result, undo: null);
 
@@ -125,7 +125,7 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Order order = _queries.FindOrder(command.OrderId);
+        Order order = commandContext.FindOrder(command.OrderId);
         Squad squad = order?.AssignedSquads.FirstOrDefault(item => item.Id == command.SquadId);
         OrderMutationResult result = commandContext.RemoveSquad(order, squad);
         return Project(result, result.Succeeded
@@ -138,7 +138,7 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Order order = _queries.FindOrder(command.OrderId);
+        Order order = commandContext.FindOrder(command.OrderId);
         if (order == null) return OperationsCommandResult.Rejected("That order is no longer active.");
 
         // Capture the participants before the release so the undo restores the whole set as one
@@ -155,7 +155,7 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Order order = _queries.FindOrder(command.OrderId);
+        Order order = commandContext.FindOrder(command.OrderId);
         if (order == null) return OperationsCommandResult.Rejected("That order is no longer active.");
         Aggression previous = order.LevelOfAggression;
         OrderMutationResult result = commandContext.SetAggression(order, command.Aggression);
@@ -170,9 +170,9 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Order order = _queries.FindOrder(command.OrderId);
+        Order order = commandContext.FindOrder(command.OrderId);
         if (order == null) return OperationsCommandResult.Rejected("That order is no longer active.");
-        PlayerSoldier soldier = _queries.FindPlayerSoldier(command.SoldierId);
+        PlayerSoldier soldier = commandContext.FindPlayerSoldier(command.SoldierId);
         bool attached = ReferenceEquals(soldier?.CurrentOrder, order);
         OrderMutationResult result = attached
             ? commandContext.DetachSpecialist(order, soldier)
@@ -208,14 +208,14 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Planet planet = _queries.FindPlanet(command.PlanetId);
-        Region region = _queries.FindRegion(command.RegionId);
+        Planet planet = commandContext.FindPlanet(command.PlanetId);
+        Region region = commandContext.FindRegion(command.RegionId);
         List<Squad> squads = commandContext
             .OrbitingSquads(planet)
             .Where(squad => command.SquadIds?.Contains(squad.Id) == true).ToList();
         return Project(commandContext.Land(
             planet, region,
-            new MovementParty(squads, _queries.ResolveCharacters(command.CharacterIds))));
+            new MovementParty(squads, commandContext.ResolveCharacters(command.CharacterIds))));
     }
 
     public OperationsCommandResult EmbarkForce(EmbarkForceCommand command)
@@ -223,15 +223,15 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Planet planet = _queries.FindPlanet(command.PlanetId);
-        Region region = _queries.FindRegion(command.RegionId);
+        Planet planet = commandContext.FindPlanet(command.PlanetId);
+        Region region = commandContext.FindRegion(command.RegionId);
         List<Squad> squads = (commandContext.PlayerPresence(region)
                 ?.LandedSquads ?? [])
             .Where(squad => command.SquadIds?.Contains(squad.Id) == true).ToList();
         return Project(commandContext.Embark(
             planet, region,
             commandContext.FindOrbitingShip(planet, command.ShipId),
-            new MovementParty(squads, _queries.ResolveCharacters(command.CharacterIds))));
+            new MovementParty(squads, commandContext.ResolveCharacters(command.CharacterIds))));
     }
 
     public OperationsCommandResult DetachCasualties(DetachCasualtiesCommand command)
@@ -239,12 +239,12 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
         OperationsCommandContext commandContext = Command;
-        Planet planet = _queries.FindPlanet(command.PlanetId);
+        Planet planet = commandContext.FindPlanet(command.PlanetId);
         MedicalDetachmentResult result = commandContext.DetachCasualties(
             planet,
-            _queries.FindRegion(command.RegionId),
+            commandContext.FindRegion(command.RegionId),
             commandContext.FindOrbitingShip(planet, command.ShipId),
-            _queries.ResolveCharacters(command.SoldierIds));
+            commandContext.ResolveCharacters(command.SoldierIds));
         return new OperationsCommandResult(result.Succeeded, result.Message);
     }
 

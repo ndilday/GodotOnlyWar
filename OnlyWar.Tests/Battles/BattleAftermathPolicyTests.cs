@@ -372,7 +372,8 @@ public class BattleAftermathPolicyTests
     private static BattleSquad CreateBattleSquad(Faction faction, string name, params ISoldier[] soldiers)
     {
         SquadTemplate template = CreateSquadTemplate(faction);
-        Squad squad = new(name, null, template);
+        int squadId = soldiers.Length > 0 ? soldiers[0].Id : 0;
+        Squad squad = new(squadId, name, null, template);
         foreach (ISoldier soldier in soldiers)
         {
             squad.AddSquadMember(soldier);

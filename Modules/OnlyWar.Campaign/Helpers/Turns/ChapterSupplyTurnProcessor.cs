@@ -10,30 +10,35 @@ namespace OnlyWar.Helpers.Turns
 {
     internal sealed class ChapterSupplyTurnProcessor
     {
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
 
         internal ChapterSupplyTurnProcessor(ICampaignSimulationSession session)
+            : this(CampaignTurnContext.From(session))
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal ChapterSupplyTurnProcessor(CampaignTurnContext turn)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
         }
 
         internal void ProcessDeliveries()
         {
-            var pledges = _session.Sector.PlayerForce.Pledges;
+            var pledges = _turn.Sector.PlayerForce.Pledges;
             for (int index = 0; index < pledges.Count; index++)
             {
                 Pledge pledge = pledges[index];
                 bool sourceAvailable = IsSourceFriendlyAndControlled(pledge.SourcePlanetId);
                 PledgeDeliveryResult result = PledgeDeliveryProcessor.Process(
-                    pledge, _session.CurrentDate, sourceAvailable);
+                    pledge, _turn.CurrentDate, sourceAvailable);
                 pledges[index] = result.Pledge;
-                _session.Sector.PlayerForce.Army.Requisition += result.DeliveredRequisition;
+                _turn.Sector.PlayerForce.Army.Requisition += result.DeliveredRequisition;
             }
         }
 
         private bool IsSourceFriendlyAndControlled(int sourcePlanetId)
         {
-            if (!_session.Sector.Planets.TryGetValue(sourcePlanetId, out Planet source))
+            if (!_turn.Sector.Planets.TryGetValue(sourcePlanetId, out Planet source))
             {
                 return false;
             }

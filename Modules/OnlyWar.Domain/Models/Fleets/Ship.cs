@@ -8,18 +8,26 @@ namespace OnlyWar.Models.Fleets
     public class Boat
     {
         private readonly List<Squad> _loadedSquads;
-        private static int _idGenerator = 10000;
         public int Id { get; }
         public string Name { get; }
         public BoatTemplate Template { get; }
         public IReadOnlyCollection<Squad> LoadedSoldiers { get => _loadedSquads; }
 
-        public Boat(BoatTemplate template)
+        public Boat(int id, string name, BoatTemplate template)
         {
-            Id = _idGenerator++;
-            Name = $"{template.ClassName}-{Id}";
+            Id = id;
+            Name = name;
             _loadedSquads = [];
             Template = template;
+        }
+
+        /// <summary>
+        /// Source-compatibility constructor for detached runtime boats. Boats are not persisted;
+        /// ships create them with explicit per-ship IDs through the constructor above.
+        /// </summary>
+        public Boat(BoatTemplate template)
+            : this(0, $"{template.ClassName}-0", template)
+        {
         }
 
         public void LoadSquad(Squad squad)
@@ -73,7 +81,10 @@ namespace OnlyWar.Models.Fleets
         {
             for (byte i = 0; i < Template.BoatCapacity; i++)
             {
-                Boats.Add(new Boat(boatTemplate));
+                Boats.Add(new Boat(
+                    i,
+                    $"{boatTemplate.ClassName}-{Id}-{i}",
+                    boatTemplate));
             }
         }
 

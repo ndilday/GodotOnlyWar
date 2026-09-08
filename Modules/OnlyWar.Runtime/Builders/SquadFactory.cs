@@ -7,6 +7,7 @@ using OnlyWar.Runtime.Allocators;
 using OnlyWar.Runtime.Factories;
 using System.Collections.Generic;
 using System.Linq;
+using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 
 namespace OnlyWar.Builders
 {
@@ -25,6 +26,7 @@ namespace OnlyWar.Builders
             IEntityIdAllocator entityIds,
             string name = "")
         {
+            entityIds ??= new RuntimeTacticalEntityIdAllocator();
             // An element that opts into rolled strength musters somewhere in [Min, Max], so an
             // irregular formation turns out at a different size every time. Everything else builds
             // at Max exactly as it always has — including the many elements whose Min is merely an
@@ -60,6 +62,7 @@ namespace OnlyWar.Builders
             IEntityIdAllocator entityIds,
             string name = "")
         {
+            entityIds ??= new RuntimeTacticalEntityIdAllocator();
             Dictionary<SquadTemplateElement, int> counts = CalculateSquadCountsWithinBudget(
                 squadTemplate,
                 maximumBattleValue,
@@ -121,11 +124,8 @@ namespace OnlyWar.Builders
             IEntityIdAllocator entityIds,
             string name)
         {
-            IEntityIdAllocator soldierIds = entityIds ?? new SequentialEntityIdAllocator(
-                Guid.NewGuid().GetHashCode() & 0x3FFFFFFF);
-            Squad squad = entityIds == null
-                ? new Squad(name, null, squadTemplate)
-                : new Squad(entityIds.GetNextId(), name, null, squadTemplate);
+            IEntityIdAllocator soldierIds = entityIds ?? new RuntimeTacticalEntityIdAllocator();
+            Squad squad = new(soldierIds.GetNextId(), name, null, squadTemplate);
             foreach (SquadTemplateElement element in squadTemplate.Elements)
             {
                 SoldierTemplate template = element.SoldierTemplate;
@@ -140,9 +140,7 @@ namespace OnlyWar.Builders
                     squad.AddSquadMember(soldier);
                     soldier.AssignedSquad = squad;
                     soldier.Template = template;
-                    soldier.Name = entityIds == null
-                        ? $"{soldier.Template.Name} {soldier.Id}"
-                        : soldier.Template.Name;
+                    soldier.Name = soldier.Template.Name;
                 }
             }
             // Pooled special-weapon quotas: for every element's quota group other than Command

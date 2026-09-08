@@ -1,4 +1,6 @@
 using OnlyWar.Helpers.Battles.Aftermath;
+using OnlyWar.Runtime.Allocators;
+using OnlyWar.Abstractions;
 using OnlyWar.Models;
 using System;
 
@@ -15,6 +17,7 @@ namespace OnlyWar.Helpers.Battles
         public IRNG Random { get; }
         internal BattleAftermathDependencies Aftermath { get; }
         internal int MaxPlanningDegreeOfParallelism { get; }
+        internal IEntityIdAllocator BattleIds { get; }
 
         /// <summary>
         /// Whether an INERT battle -- neither side taking casualties, neither side moving -- should
@@ -38,12 +41,14 @@ namespace OnlyWar.Helpers.Battles
             IRNG random,
             BattleAftermathDependencies aftermath,
             int maxPlanningDegreeOfParallelism = 0,
-            bool throwOnInertBattle = false)
+            bool throwOnInertBattle = false,
+            IEntityIdAllocator battleIds = null)
         {
             ThrowOnInertBattle = throwOnInertBattle;
             Rules = rules ?? throw new ArgumentNullException(nameof(rules));
             Random = random ?? throw new ArgumentNullException(nameof(random));
             Aftermath = aftermath ?? throw new ArgumentNullException(nameof(aftermath));
+            BattleIds = battleIds ?? new SequentialEntityIdAllocator(1);
             MaxPlanningDegreeOfParallelism = maxPlanningDegreeOfParallelism <= 0
                 ? Math.Max(1, Environment.ProcessorCount)
                 : maxPlanningDegreeOfParallelism;

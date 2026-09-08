@@ -1,171 +1,74 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
 
 namespace OnlyWar.Application;
 
 /// <summary>
-/// The main game screen's boundary: header facts, the world it opens on, the founding directive,
-/// turn resolution with its report, and neophyte placement. The scene keeps navigation and dialogs
-/// and no longer reads or writes the campaign to answer any of these.
+/// The main workspace boundary. Campaign reads and mutations live in its focused context;
+/// this service only applies session-token and recoverability policies.
 /// </summary>
 public sealed class MainScreenApplication : CampaignScreenApplication, IMainScreenApplication
 {
     private const string StaleSessionMessage =
         "The campaign changed. Reopen the campaign and try again.";
 
-    private static readonly TurnReportView EmptyTurnReport = new(
-        null,
-        "No previous turn report is available for this save.",
-        []);
+    private MainScreenContext Screen => Context.Main;
 
     public MainScreenApplication(CampaignApplicationContext context) : base(context) { }
 
-    public CampaignHeaderView QueryHeader()
-    {
-        GameSession session = ActiveSession;
-        if (session == null) return new CampaignHeaderView("", 0);
-        return new CampaignHeaderView(
-            session.CurrentDate?.ToString() ?? "",
-            session.Sector.PlayerForce?.Army?.Requisition ?? 0);
-    }
+    public CampaignHeaderView QueryHeader() =>
+        Screen?.QueryHeader() ?? new CampaignHeaderView("", 0);
 
-    public MainScreenStartupView QueryStartup()
-    {
-        GameSession session = ActiveSession;
-        if (session == null) return new MainScreenStartupView(null, false);
-
-        // Open on the world the chapter fleet is orbiting - the promised world at game start -
-        // and fall back to any charted world so a campaign without an orbiting fleet still opens
-        // somewhere sensible.
-        Sector sector = session.Sector;
-        Planet initial =
-            sector.PlayerForce?.Fleet?.TaskForces?.FirstOrDefault()?.Planet
-            ?? sector.Planets.Values.FirstOrDefault();
-        CampaignScenario scenario = sector.Scenario;
-        return new MainScreenStartupView(
-            initial?.Id,
-            scenario is { State: ObjectiveState.Pending, BriefingAcknowledged: false });
-    }
+    public MainScreenStartupView QueryStartup() =>
+        Screen?.QueryStartup() ?? new MainScreenStartupView(null, false);
 
     public void AcknowledgeOpeningBrief(Guid sessionToken)
     {
-        if (ActiveSession == null || sessionToken != SessionToken) return;
-        CampaignScenario scenario = ActiveSession.Sector.Scenario;
-        if (scenario == null || scenario.BriefingAcknowledged) return;
-
-        scenario.BriefingAcknowledged = true;
-        RecordChange();
+        if (!IsCurrentSession(sessionToken)) return;
+        if (Screen?.AcknowledgeOpeningBrief() == true)
+        {
+            RecordChange();
+        }
     }
 
     public TurnReportView QueryLastTurnReport() =>
-        BuildReportView(ActiveSession?.Sector.PlayerForce?.LastTurnReportSnapshot);
+        Screen?.QueryLastTurnReport()
+        ?? new TurnReportView(
+            null,
+            "No previous turn report is available for this save.",
+            []);
 
     public ResolveTurnView ResolveTurn(Guid sessionToken)
     {
-        GameSession session = ActiveSession;
-        if (session == null || sessionToken != SessionToken)
+        if (!IsCurrentSession(sessionToken))
         {
-            return new ResolveTurnView(
-                false, StaleSessionMessage);
+            return new ResolveTurnView(false, StaleSessionMessage);
         }
 
-        TurnResolutionResult result = Context.AdvanceTurn(session);
-        LastTurnReportBuildResult build = LastTurnReportSnapshotBuilder.Build(
-            session.CurrentDate, result);
-
-        // Replace the persisted report only after resolution and report construction both
-        // succeed. A failed turn therefore leaves the previous report available to the protected
-        // pre-turn save and to any later manual save.
-        PlayerForce force = session.Sector.PlayerForce;
-        if (force != null)
-        {
-            force.LastTurnReportSnapshot = build.Snapshot;
-        }
-
-        return new ResolveTurnView(
-            true,
-            null,
-            new TurnReportView(
-                FormatResolvedDate(build.Snapshot), null, build.PresentationEntries),
-            result.ScenarioNotification,
-            RequiresRecruitmentSetup());
+        return Screen?.ResolveTurn()
+            ?? new ResolveTurnView(false, StaleSessionMessage);
     }
 
-    public NeophytePlacementOptions QueryNeophytePlacementTargets()
+    public NeophytePlacementOptions QueryNeophytePlacementTargets() =>
+        Screen?.QueryNeophytePlacementTargets()
+        ?? new NeophytePlacementOptions(
+            false, "The Chapter has no active recruitment program.", []);
+
+    public NeophytePlacementResult PlaceNeophyte(
+        Guid sessionToken, int aspirantId, int squadId)
     {
-        GameSession session = ActiveSession;
-        PlayerForce force = session?.Sector.PlayerForce;
-        if (force?.RecruitmentProgram == null)
-        {
-            return new NeophytePlacementOptions(
-                false, "The Chapter has no active recruitment program.", []);
-        }
-
-        SquadTemplate targetTemplate = session.Rules.ChapterDoctrine.ScoutSquad;
-        List<NeophytePlacementTarget> targets = force.Army.OrderOfBattle.GetAllSquads()
-            .Where(squad => squad.IsPresentOperationalForce)
-            .Where(squad => squad.SquadTemplate == targetTemplate)
-            .Where(squad =>
-                (squad.CurrentRegion?.Planet
-                    ?? squad.BoardedLocation?.Fleet?.Planet)?.Id
-                == force.RecruitmentProgram.HomeWorldPlanetId)
-            .OrderBy(squad => squad.ParentUnit?.Name)
-            .ThenBy(squad => squad.Name)
-            .Select(squad => new NeophytePlacementTarget(
-                squad.Id,
-                $"{squad.Name} - {squad.ParentUnit?.Name} ({SquadLocationFormatter.Format(squad)})"))
-            .ToList();
-
-        return targets.Count == 0
-            ? new NeophytePlacementOptions(
-                false,
-                $"No {targetTemplate.Name} is available on or in orbit of the Home World.",
-                [])
-            : new NeophytePlacementOptions(true, null, targets);
-    }
-
-    public NeophytePlacementResult PlaceNeophyte(Guid sessionToken, int aspirantId, int squadId)
-    {
-        GameSession session = ActiveSession;
-        if (session == null || sessionToken != SessionToken)
+        if (!IsCurrentSession(sessionToken))
         {
             return new NeophytePlacementResult(
                 false, "The campaign changed. Reopen the recruitment screen and try again.");
         }
 
-        RecruitmentPromotionResult result =
-            new RecruitmentPromotionService(session).PromoteAspirantToNeophyte(aspirantId, squadId);
+        NeophytePlacementResult result = Screen?.PlaceNeophyte(aspirantId, squadId)
+            ?? new NeophytePlacementResult(
+                false, "The campaign changed. Reopen the recruitment screen and try again.");
         if (result.Succeeded)
         {
             RecordChange();
         }
-        return new NeophytePlacementResult(result.Succeeded, result.Message);
+        return result;
     }
-
-    private static TurnReportView BuildReportView(Models.Reports.LastTurnReportSnapshot snapshot) =>
-        snapshot == null
-            ? EmptyTurnReport
-            : new TurnReportView(
-                FormatResolvedDate(snapshot),
-                null,
-                LastTurnReportSnapshotBuilder.BuildPresentationEntries(snapshot));
-
-    private static string FormatResolvedDate(Models.Reports.LastTurnReportSnapshot snapshot) =>
-        snapshot?.ResolvedDate > 0
-            ? Date.FromTotalWeeks(snapshot.ResolvedDate).ToString()
-            : null;
-
-    private bool RequiresRecruitmentSetup() =>
-        ActiveSession?.Sector.PlayerForce?.RecruitmentProgram
-            is RecruitmentProgram { IsSetupComplete: false };
 }

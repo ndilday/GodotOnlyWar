@@ -7,25 +7,20 @@ namespace OnlyWar.Helpers.Battles.Placers
 {
     public static class BattleSquadPlacer
     {
-        public delegate void SquadPlacedHandler(BattleSquad squad, ValueTuple<int, int> position);
-        public static event SquadPlacedHandler OnSquadPlaced;
-
         public static void PlaceBattleSquad(BattleGridManager manager, BattleSquad squad, ValueTuple<int, int> bottomLeft,
                                            bool longHorizontal, bool tacticalSide, bool formationSide)
         {
             // if any squad member is already on the map, we have a problem
             //if (squad.Soldiers.Any(s => _soldierLocationsMap.ContainsKey(s.Soldier.Id))) throw new InvalidOperationException(squad.Name + " has soldiers already on BattleGrid");
             SquadFormationGeometry geometry = SquadFormationGeometry.For(squad);
-            ValueTuple<int, int> startingLocation;
             if (longHorizontal)
             {
-                startingLocation = PlaceSquadHorizontally(manager, squad, bottomLeft, geometry, formationSide, tacticalSide);
+                PlaceSquadHorizontally(manager, squad, bottomLeft, geometry, formationSide, tacticalSide);
             }
             else
             {
-                startingLocation = PlaceSquadVertically(manager, squad, bottomLeft, geometry, formationSide, tacticalSide);
+                PlaceSquadVertically(manager, squad, bottomLeft, geometry, formationSide, tacticalSide);
             }
-            OnSquadPlaced?.Invoke(squad, startingLocation);
         }
 
         private static ValueTuple<int, int> PlaceSquadHorizontally(BattleGridManager manager, BattleSquad squad,

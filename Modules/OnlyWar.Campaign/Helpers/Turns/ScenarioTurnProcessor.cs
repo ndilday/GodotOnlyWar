@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class ScenarioTurnProcessor
     {
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly IOperationsPersonnelSurface _personnel;
         private readonly IOrderCommitmentSurface _commitments;
 
@@ -23,8 +23,16 @@ namespace OnlyWar.Helpers.Turns
             ICampaignSimulationSession session,
             IOperationsPersonnelSurface personnel,
             IOrderCommitmentSurface commitments)
+            : this(CampaignTurnContext.From(session), personnel, commitments)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal ScenarioTurnProcessor(
+            CampaignTurnContext turn,
+            IOperationsPersonnelSurface personnel,
+            IOrderCommitmentSurface commitments)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
             _commitments = commitments ?? throw new ArgumentNullException(nameof(commitments));
         }
@@ -40,7 +48,7 @@ namespace OnlyWar.Helpers.Turns
 
             Planet promised = sector.GetPlanet(scenario.PromisedPlanetId);
             Faction player = sector.PlayerForce.Faction;
-            ScenarioProfile profile = _session.Rules.ScenarioProfiles.GetRequired(
+            ScenarioProfile profile = _turn.Rules.ScenarioProfiles.GetRequired(
                 ScenarioKeys.PromisedWorld);
 
             // Both outcomes are measured by who holds ground OPENLY, not by headcount. An earlier
@@ -98,9 +106,9 @@ namespace OnlyWar.Helpers.Turns
         private RecruitmentProgram CreateFoundingRecruitmentProgram(Planet homeWorld)
         {
             Date established = new(
-                _session.CurrentDate.Millenium,
-                _session.CurrentDate.Year,
-                _session.CurrentDate.Week);
+                _turn.CurrentDate.Millenium,
+                _turn.CurrentDate.Year,
+                _turn.CurrentDate.Week);
             RecruitmentProgram program = new()
             {
                 Id = 1,
@@ -116,7 +124,7 @@ namespace OnlyWar.Helpers.Turns
             long chapterPopulation =
                 homeWorld.Regions.Sum(region =>
                     region.RegionFactionMap.TryGetValue(
-                        _session.Sector.PlayerForce.Faction.Id,
+                        _turn.Sector.PlayerForce.Faction.Id,
                         out RegionFaction chapterRegion)
                             && chapterRegion.IsPublic
                             ? chapterRegion.Population
@@ -139,10 +147,10 @@ namespace OnlyWar.Helpers.Turns
                 Detail = $"The Chapter established its first recruitment program on {homeWorld.Name}."
             });
             RecruitmentStaffService.EnsureTaskOrder(
-                _session.Sector.PlayerForce,
+                _turn.Sector.PlayerForce,
                 program,
-                _session.Sector,
-                _session.Identity);
+                _turn.Sector,
+                _turn.Identity);
             return program;
         }
 

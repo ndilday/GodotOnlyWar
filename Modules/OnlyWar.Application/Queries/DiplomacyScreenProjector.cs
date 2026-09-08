@@ -12,7 +12,7 @@ namespace OnlyWar.Application
     /// Builds the Diplomacy board: the Sector Lord's standing promise, the governors' open
     /// petitions and the outstanding pledges. Every line is decided here; the screen renders text.
     /// </summary>
-    public sealed class DiplomacyScreenProjector
+    internal sealed class DiplomacyScreenProjector
     {
         public IReadOnlyList<TreeNode> Build(Sector sector, GameRulesData rules)
         {

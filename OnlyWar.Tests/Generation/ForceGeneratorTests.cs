@@ -7,6 +7,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using SequentialEntityIdAllocator = OnlyWar.Runtime.Allocators.SequentialEntityIdAllocator;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -28,7 +29,7 @@ public class ForceGeneratorTests
             Faction = faction,
             TargetBattleValue = 1,
             Profile = ForceCompositionProfile.AssaultForce
-        }, random, new TacticalEntityIdAllocator());
+        }, random, new RuntimeTacticalEntityIdAllocator());
 
         Assert.Single(generated);
         Assert.Equal(
@@ -47,7 +48,7 @@ public class ForceGeneratorTests
             Faction = faction,
             TargetBattleValue = 4,
             Profile = ForceCompositionProfile.AssaultForce
-        }, new RecordingRng(), new TacticalEntityIdAllocator());
+        }, new RecordingRng(), new RuntimeTacticalEntityIdAllocator());
 
         int[] entityIds = generated
             .SelectMany(squad => new[] { squad.Id }.Concat(squad.Members.Select(member => member.Id)))
@@ -70,7 +71,7 @@ public class ForceGeneratorTests
             Faction = faction,
             TargetBattleValue = 4,
             Profile = ForceCompositionProfile.AssaultForce
-        }, new RecordingRng(), new TacticalEntityIdAllocator());
+        }, new RecordingRng(), new RuntimeTacticalEntityIdAllocator());
 
         int[] entityIds = generated
             .SelectMany(squad => new[] { squad.Id }.Concat(squad.Members.Select(member => member.Id)))
@@ -91,7 +92,7 @@ public class ForceGeneratorTests
             Faction = faction,
             TargetBattleValue = 4,
             Profile = ForceCompositionProfile.AssaultForce
-        }, new RecordingRng(), new TacticalEntityIdAllocator());
+        }, new RecordingRng(), new RuntimeTacticalEntityIdAllocator());
 
         ISoldier[] soldiers = generated.SelectMany(squad => squad.Members).ToArray();
         Assert.Equal(
@@ -119,7 +120,7 @@ public class ForceGeneratorTests
             Faction = faction,
             TargetBattleValue = 3,
             Profile = ForceCompositionProfile.AssaultForce
-        }, random, new TacticalEntityIdAllocator());
+        }, random, new RuntimeTacticalEntityIdAllocator());
 
         Squad persistentAfter = SquadFactory.GenerateSquad(line, random, persistentIds);
 

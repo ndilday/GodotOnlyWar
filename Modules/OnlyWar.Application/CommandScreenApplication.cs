@@ -1,10 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Command;
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
 
 namespace OnlyWar.Application;
 
@@ -35,60 +30,18 @@ public interface ICommandScreenApplication
 public sealed class CommandScreenApplication : CampaignScreenApplication,
     ICommandScreenApplication
 {
-    private readonly CommandBriefBuilder _briefBuilder = new();
+    private CommandScreenContext Screen => Context.Command;
 
     public CommandScreenApplication(CampaignApplicationContext context) : base(context) { }
 
-    public bool HasCampaign => ActiveSession != null;
+    public bool HasCampaign => Screen != null;
 
-    public bool HasLastTurnReport =>
-        ActiveSession?.Sector.PlayerForce?.LastTurnReportSnapshot != null;
+    public bool HasLastTurnReport => Screen?.HasLastTurnReport == true;
 
-    public CommandBriefModel QueryBrief()
-    {
-        if (ActiveSession == null) return new CommandBriefModel([]);
-        Sector sector = ActiveSession.Sector;
-        Date date = ActiveSession.CurrentDate;
-        return _briefBuilder.Build(
-            date,
-            sector,
-            ActiveSession.Rules,
-            sector.PlayerForce.LastTurnReportSnapshot,
-            sector.PlayerForce.CampaignEventLedger.GetEventsInWeekRange(
-                date.GetTotalWeeks(), date.GetTotalWeeks()));
-    }
+    public CommandBriefModel QueryBrief() =>
+        Screen?.QueryBrief() ?? new CommandBriefModel([]);
 
-    public ChronicleView QueryChronicle(ChronicleFilter filter, int page)
-    {
-        if (ActiveSession == null)
-            return new ChronicleView([], ChronicleFilter.All, [], false, false);
-        PlayerForce force = ActiveSession.Sector.PlayerForce;
-        IReadOnlyList<ChronicleFilter> available = ChapterChronicleBrowser.GetAvailableFilters(
-            force.ChapterChronicle, force.CampaignEventLedger);
-        // A filter the campaign no longer offers falls back to All rather than showing nothing.
-        ChronicleFilter effective = available.Contains(filter) ? filter : ChronicleFilter.All;
-        return new ChronicleView(
-            available.Select(candidate => new ChronicleFilterOption(
-                candidate,
-                ChronicleFilterLabel(candidate),
-                ChapterChronicleBrowser.Count(
-                    force.ChapterChronicle, force.CampaignEventLedger, candidate))).ToList(),
-            effective,
-            ChapterChronicleBrowser.GetPage(
-                force.ChapterChronicle, force.CampaignEventLedger,
-                ActiveSession.Sector, effective, page),
-            ChapterChronicleBrowser.HasPage(
-                force.ChapterChronicle, force.CampaignEventLedger, effective, page + 1),
-            force.ChapterChronicle.Entries.Count > 0);
-    }
-
-    private static string ChronicleFilterLabel(ChronicleFilter filter) => filter switch
-    {
-        ChronicleFilter.Defining => "Defining",
-        ChronicleFilter.Battles => "Battles",
-        ChronicleFilter.Brothers => "Brothers",
-        ChronicleFilter.Worlds => "Worlds",
-        ChronicleFilter.Chapter => "Chapter",
-        _ => "All"
-    };
+    public ChronicleView QueryChronicle(ChronicleFilter filter, int page) =>
+        Screen?.QueryChronicle(filter, page)
+        ?? new ChronicleView([], ChronicleFilter.All, [], false, false);
 }

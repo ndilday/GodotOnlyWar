@@ -21,6 +21,7 @@ internal sealed class FleetCommandContext
 {
     private readonly Sector _sector;
     private readonly ushort _maxSubsectorDiameter;
+    private readonly IPersistentIdAllocator _identity;
 
     internal Faction PlayerFaction => _sector.PlayerForce?.Faction;
     internal RecruitmentProgram RecruitmentProgram =>
@@ -30,11 +31,15 @@ internal sealed class FleetCommandContext
     internal IEnumerable<TaskForce> TaskForces => _sector.Fleets.Values;
     internal IEnumerable<Planet> Planets => _sector.Planets.Values;
 
-    internal FleetCommandContext(Sector sector, GameRulesData rules)
+    internal FleetCommandContext(
+        Sector sector,
+        GameRulesData rules,
+        IPersistentIdAllocator identity)
     {
         _sector = sector ?? throw new ArgumentNullException(nameof(sector));
         _maxSubsectorDiameter = rules?.SectorGenerationProfile?.MaxSubsectorDiameter
             ?? throw new ArgumentNullException(nameof(rules));
+        _identity = identity ?? throw new ArgumentNullException(nameof(identity));
     }
 
     internal TaskForce FindTaskForce(int id) => _sector.Fleets.GetValueOrDefault(id);
@@ -64,7 +69,7 @@ internal sealed class FleetCommandContext
     }
 
     internal void Split(TaskForce original, IReadOnlyCollection<Ship> ships) =>
-        _sector.SplitOffNewFleet(original, ships);
+        _sector.SplitOffNewFleet(original, ships, _identity);
 
     internal void Combine(TaskForce remaining, TaskForce merging) =>
         _sector.CombineFleets(remaining, merging);

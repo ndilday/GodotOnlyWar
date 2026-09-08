@@ -29,7 +29,7 @@ namespace OnlyWar.Helpers.Turns
         private const float CandidateAttributeSigma = 2f;
         private const float ImplantPhysicalGrowth = 0.25f;
 
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly OrganicPopulationGrowthLedger _growthLedger;
         private readonly IReadinessDecisions _readiness;
         private readonly RecruitmentStaffService _staffService = new();
@@ -39,8 +39,16 @@ namespace OnlyWar.Helpers.Turns
             ICampaignSimulationSession session,
             OrganicPopulationGrowthLedger growthLedger,
             IReadinessDecisions readiness)
+            : this(CampaignTurnContext.From(session), growthLedger, readiness)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal RecruitmentTurnProcessor(
+            CampaignTurnContext turn,
+            OrganicPopulationGrowthLedger growthLedger,
+            IReadinessDecisions readiness)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _growthLedger = growthLedger
                 ?? throw new ArgumentNullException(nameof(growthLedger));
             _readiness = readiness
@@ -49,24 +57,24 @@ namespace OnlyWar.Helpers.Turns
 
         internal RecruitmentTurnReport Process()
         {
-            PlayerForce force = _session.Sector.PlayerForce;
+            PlayerForce force = _turn.Sector.PlayerForce;
             RecruitmentProgram program = force?.RecruitmentProgram;
             if (program == null || !program.IsSetupComplete)
             {
                 return null;
             }
-            if (program.LastProcessedDate?.Equals(_session.CurrentDate) == true)
+            if (program.LastProcessedDate?.Equals(_turn.CurrentDate) == true)
             {
                 return null;
             }
 
             _staffService.Synchronize(
                 force,
-                _session.Rules,
-                _session.Sector,
+                _turn.Rules,
+                _turn.Sector,
                 _readiness,
-                _session.Identity);
-            Planet homeWorld = _session.Sector.GetPlanet(program.HomeWorldPlanetId);
+                _turn.Identity);
+            Planet homeWorld = _turn.Sector.GetPlanet(program.HomeWorldPlanetId);
             Faction chapter = force.Faction;
             long population = GetChapterPopulation(homeWorld, chapter.Id);
             float reputation = homeWorld.PlanetFactionMap.TryGetValue(
@@ -90,7 +98,7 @@ namespace OnlyWar.Helpers.Turns
                 AddProgramEvent(program, RecruitmentEventType.ProgramPaused, 1, reason);
                 int agedOutWhilePaused = AgeOutCandidates(program);
                 DecayAndExpireCohorts(program);
-                program.LastProcessedDate = CopyDate(_session.CurrentDate);
+                program.LastProcessedDate = CopyDate(_turn.CurrentDate);
                 return new RecruitmentTurnReport(
                     false, reason, 0, 0, 0, 0, 0, 0, agedOutWhilePaused);
             }
@@ -128,7 +136,7 @@ namespace OnlyWar.Helpers.Turns
             implantations += blackCarapace;
             deaths += blackCarapaceDeaths;
 
-            program.LastProcessedDate = CopyDate(_session.CurrentDate);
+            program.LastProcessedDate = CopyDate(_turn.CurrentDate);
             return new RecruitmentTurnReport(
                 true,
                 null,
@@ -205,22 +213,22 @@ namespace OnlyWar.Helpers.Turns
                     continue;
                 }
 
-                if (_session.Random.GetLinearDouble()
+                if (_turn.Random.GetLinearDouble()
                     >= procedure.GeneticCompatibility)
                 {
                     CampaignEvent deathEvent = force.RecordProceduralDeath(
-                        _session.CurrentDate,
+                        _turn.CurrentDate,
                         neophyte,
                         $"{neophyte.Name} died during Black Carapace implantation.");
                     force.RecordProceduralGeneseedRecovery(
-                        _session.CurrentDate,
+                        _turn.CurrentDate,
                         neophyte,
                         deathEvent.Id,
                         GeneseedRecoveryOutcome.Immature);
                     new PlayerBattleAftermathSink(force).MoveToFallenBrothers(neophyte);
                     program.ProgramEvents.Add(new RecruitmentProgramEvent
                     {
-                        Date = CopyDate(_session.CurrentDate),
+                        Date = CopyDate(_turn.CurrentDate),
                         Type = RecruitmentEventType.AspirantDied,
                         Count = 1,
                         Detail = $"{neophyte.Name} died during Black Carapace implantation."
@@ -237,21 +245,21 @@ namespace OnlyWar.Helpers.Turns
                     new SquadLifecycleService(force).HandleEmptySquad(oldSquad);
                 }
                 target.AddSquadMember(neophyte);
-                neophyte.Template = _session.Rules.ChapterDoctrine.DevastatorMarine;
+                neophyte.Template = _turn.Rules.ChapterDoctrine.DevastatorMarine;
                 neophyte.AddEvent(new SoldierEvent(
-                    CopyDate(_session.CurrentDate),
+                    CopyDate(_turn.CurrentDate),
                     SoldierEventType.Promotion,
                     $"received the Black Carapace and joined {target.Name} as a Devastator Marine"));
                 program.ProgramEvents.Add(new RecruitmentProgramEvent
                 {
-                    Date = CopyDate(_session.CurrentDate),
+                    Date = CopyDate(_turn.CurrentDate),
                     Type = RecruitmentEventType.BlackCarapaceCompleted,
                     Count = 1,
                     Detail = $"{neophyte.Name} survived the Black Carapace implantation."
                 });
                 program.ProgramEvents.Add(new RecruitmentProgramEvent
                 {
-                    Date = CopyDate(_session.CurrentDate),
+                    Date = CopyDate(_turn.CurrentDate),
                     Type = RecruitmentEventType.BattleBrotherPromoted,
                     Count = 1,
                     Detail = $"{neophyte.Name} entered {target.Name} as a Battle-Brother."
@@ -269,15 +277,15 @@ namespace OnlyWar.Helpers.Turns
         private bool HasDevastatorSeat(Squad squad)
         {
             if (squad?.CanAcceptSquadOrder != true
-                || squad.SquadTemplate != _session.Rules.ChapterDoctrine.DevastatorSquad)
+                || squad.SquadTemplate != _turn.Rules.ChapterDoctrine.DevastatorSquad)
             {
                 return false;
             }
             SquadTemplateElement slot = squad.SquadTemplate.Elements.FirstOrDefault(
-                item => item.SoldierTemplate == _session.Rules.ChapterDoctrine.DevastatorMarine);
+                item => item.SoldierTemplate == _turn.Rules.ChapterDoctrine.DevastatorMarine);
             return slot != null
                 && squad.Members.Count(member =>
-                    member.Template == _session.Rules.ChapterDoctrine.DevastatorMarine)
+                    member.Template == _turn.Rules.ChapterDoctrine.DevastatorMarine)
                     < slot.MaximumNumber;
         }
 
@@ -301,7 +309,7 @@ namespace OnlyWar.Helpers.Turns
                 program.UnscreenedCohorts.Add(new RecruitmentCohort
                 {
                     Id = NextCohortId(program),
-                    CreatedDate = CopyDate(_session.CurrentDate),
+                    CreatedDate = CopyDate(_turn.CurrentDate),
                     RemainingPopulation = newBacklog,
                     MinimumAgeAtCreation = 10,
                     MaximumAgeAtCreation = 10,
@@ -365,11 +373,11 @@ namespace OnlyWar.Helpers.Turns
                 {
                     Id = candidateId,
                     InductionDesignation =
-                        $"{_session.CurrentDate}-{candidateId % 1000:D3}",
+                        $"{_turn.CurrentDate}-{candidateId % 1000:D3}",
                     SourceWorldPlanetId = program.HomeWorldPlanetId,
                     BirthDate = GenerateBirthDate(source.Cohort),
-                    QualifiedDate = CopyDate(_session.CurrentDate),
-                    GeneticCompatibility = (float)_session.Random.GetDoubleInRange(
+                    QualifiedDate = CopyDate(_turn.CurrentDate),
+                    GeneticCompatibility = (float)_turn.Random.GetDoubleInRange(
                         program.MinimumGeneticCompatibility, 1),
                     Attributes = GenerateCandidateAttributes(
                         program.AttributeFilters,
@@ -410,7 +418,7 @@ namespace OnlyWar.Helpers.Turns
                 halfSigmaSteps * RecruitmentRules.AttributeFilterStepSigma;
             double lowerCdf = GaussianCalculator.ApproximateNormalCDF(
                 (float)(threshold - sourceModifier));
-            double probability = _session.Random.GetDoubleInRange(
+            double probability = _turn.Random.GetDoubleInRange(
                 Math.Min(lowerCdf, 0.999999), 0.9999999);
             double standardized =
                 GaussianCalculator.ApproximateInverseNormalCDF((float)probability)
@@ -443,9 +451,9 @@ namespace OnlyWar.Helpers.Turns
                     InductionDesignation = candidate.InductionDesignation,
                     SourceWorldPlanetId = candidate.SourceWorldPlanetId,
                     BirthDate = candidate.BirthDate,
-                    AdmittedDate = CopyDate(_session.CurrentDate),
+                    AdmittedDate = CopyDate(_turn.CurrentDate),
                     Phase = RecruitmentPhase.Phase0PreImplantation,
-                    PhaseStartedDate = CopyDate(_session.CurrentDate),
+                    PhaseStartedDate = CopyDate(_turn.CurrentDate),
                     WeeksInCurrentPhase = 0,
                     TrainingProgress = 0,
                     GeneticCompatibility = candidate.GeneticCompatibility,
@@ -453,7 +461,7 @@ namespace OnlyWar.Helpers.Turns
                 };
                 aspirant.Events.Add(new RecruitmentAspirantEvent
                 {
-                    Date = CopyDate(_session.CurrentDate),
+                    Date = CopyDate(_turn.CurrentDate),
                     Type = RecruitmentEventType.AspirantAdmitted,
                     Detail = "Accepted into Phase 0 pre-implantation training."
                 });
@@ -528,20 +536,20 @@ namespace OnlyWar.Helpers.Turns
                 }
 
                 capacity--;
-                if (_session.Random.GetLinearDouble() >= aspirant.GeneticCompatibility)
+                if (_turn.Random.GetLinearDouble() >= aspirant.GeneticCompatibility)
                 {
                     deaths.Add(aspirant);
                     continue;
                 }
 
                 aspirant.Phase = next;
-                aspirant.PhaseStartedDate = CopyDate(_session.CurrentDate);
+                aspirant.PhaseStartedDate = CopyDate(_turn.CurrentDate);
                 aspirant.WeeksInCurrentPhase = 0;
                 aspirant.Attributes.Strength += ImplantPhysicalGrowth;
                 aspirant.Attributes.Constitution += ImplantPhysicalGrowth;
                 aspirant.Events.Add(new RecruitmentAspirantEvent
                 {
-                    Date = CopyDate(_session.CurrentDate),
+                    Date = CopyDate(_turn.CurrentDate),
                     Type = RecruitmentEventType.ImplantationCompleted,
                     Detail = $"Survived implantation Phase {(int)next}."
                 });
@@ -577,7 +585,7 @@ namespace OnlyWar.Helpers.Turns
         {
             List<RecruitmentCandidate> expired = program.QualifiedCandidates
                 .Where(candidate =>
-                    _session.CurrentDate.GetWeeksDifference(candidate.QualifiedDate)
+                    _turn.CurrentDate.GetWeeksDifference(candidate.QualifiedDate)
                         >= RecruitmentRules.CandidateMaximumWaitWeeks)
                 .ToList();
             foreach (RecruitmentCandidate candidate in expired)
@@ -600,7 +608,7 @@ namespace OnlyWar.Helpers.Turns
         {
             foreach (RecruitmentCohort cohort in program.UnscreenedCohorts.ToList())
             {
-                int ageWeeks = _session.CurrentDate.GetWeeksDifference(cohort.CreatedDate);
+                int ageWeeks = _turn.CurrentDate.GetWeeksDifference(cohort.CreatedDate);
                 if (ageWeeks >= RecruitmentRules.FoundingCohortExpirationWeeks)
                 {
                     program.UnscreenedCohorts.Remove(cohort);
@@ -625,7 +633,7 @@ namespace OnlyWar.Helpers.Turns
             {
                 int elapsed = Math.Max(
                     0,
-                    _session.CurrentDate.GetWeeksDifference(cohort.CreatedDate));
+                    _turn.CurrentDate.GetWeeksDifference(cohort.CreatedDate));
                 double minimum = cohort.MinimumAgeAtCreation + elapsed / 52.0;
                 double maximum = cohort.IsFoundingCohort
                     ? cohort.MaximumAgeAtCreation
@@ -633,12 +641,12 @@ namespace OnlyWar.Helpers.Turns
                 maximum = Math.Max(minimum, maximum);
                 ageYears = maximum <= minimum
                     ? minimum
-                    : _session.Random.GetDoubleInRange(minimum, maximum);
+                    : _turn.Random.GetDoubleInRange(minimum, maximum);
             }
 
             int birthWeek = Math.Max(
                 1,
-                _session.CurrentDate.GetTotalWeeks()
+                _turn.CurrentDate.GetTotalWeeks()
                 - (int)Math.Round(ageYears * 52));
             return Date.FromTotalWeeks(birthWeek);
         }
@@ -647,7 +655,7 @@ namespace OnlyWar.Helpers.Turns
             IReadOnlyList<ScreenedSegment> segments,
             double total)
         {
-            double roll = _session.Random.GetDoubleInRange(0, total);
+            double roll = _turn.Random.GetDoubleInRange(0, total);
             double cumulative = 0;
             foreach (ScreenedSegment segment in segments)
             {
@@ -670,14 +678,14 @@ namespace OnlyWar.Helpers.Turns
                 ? int.MaxValue
                 : (int)Math.Floor(expected);
             return whole < int.MaxValue
-                && _session.Random.GetLinearDouble() < expected - whole
+                && _turn.Random.GetLinearDouble() < expected - whole
                     ? whole + 1
                     : whole;
         }
 
         private double GetAgeYears(RecruitmentAspirant aspirant)
         {
-            return _session.CurrentDate.GetWeeksDifference(aspirant.BirthDate) / 52.0;
+            return _turn.CurrentDate.GetWeeksDifference(aspirant.BirthDate) / 52.0;
         }
 
         private void AddProgramEvent(
@@ -688,7 +696,7 @@ namespace OnlyWar.Helpers.Turns
         {
             program.ProgramEvents.Add(new RecruitmentProgramEvent
             {
-                Date = CopyDate(_session.CurrentDate),
+                Date = CopyDate(_turn.CurrentDate),
                 Type = type,
                 Count = count,
                 Detail = detail

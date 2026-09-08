@@ -6,6 +6,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Runtime.Allocators;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Storage
@@ -52,10 +53,17 @@ namespace OnlyWar.Helpers.Storage
             // rather than persisted, so rebuild them before returning the detached session.
             OnlyWar.Runtime.WorldGeometry.SectorTopologyBuilder.Rebuild(sector, gameRulesData);
             PersistentIdAllocator identity = new(
-                NextIdAfter(gameState.HighestSoldierId),
-                NextIdAfter(gameState.HighestRequestId),
-                gameState.NextMissionId,
-                gameState.NextOrderId);
+                nextSoldierId: NextIdAfter(gameState.HighestSoldierId),
+                nextRequestId: NextIdAfter(gameState.HighestRequestId),
+                nextMissionId: gameState.NextMissionId,
+                nextOrderId: gameState.NextOrderId,
+                nextCharacterId: NextIdAfter(gameState.Characters?.Select(character => character.Id)),
+                nextPlanetId: NextIdAfter(gameState.Planets?.Select(planet => planet.Id)),
+                nextUnitId: NextIdAfter(gameState.Units?.Select(unit => unit.Id)),
+                nextSquadId: NextIdAfter(gameState.Units?
+                    .SelectMany(unit => unit.GetAllSquads() ?? [])
+                    .Select(squad => squad.Id)),
+                nextTaskForceId: NextIdAfter(gameState.Fleets?.Select(fleet => fleet.Id)));
             GameSession session = new(gameRulesData, sector, gameState.CurrentDate, random, identity)
             {
                 UpgradePending = gameState.UpgradePending
@@ -67,6 +75,9 @@ namespace OnlyWar.Helpers.Storage
             highestId == int.MaxValue
                 ? throw new InvalidOperationException("Persistent ID range is exhausted.")
                 : highestId + 1;
+
+        private static int NextIdAfter(IEnumerable<int> ids) =>
+            NextIdAfter(ids?.DefaultIfEmpty(-1).Max() ?? -1);
 
         private GameStateDataBlob LoadGameData(
             GameRulesData gameRulesData,

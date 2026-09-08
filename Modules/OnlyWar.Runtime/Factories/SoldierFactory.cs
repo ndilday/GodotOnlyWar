@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Runtime.Abstractions;
@@ -17,6 +16,9 @@ namespace OnlyWar.Builders;
 public sealed class SoldierFactory
 {
     private readonly RuntimeFactory _runtime = new();
+    // Legacy overloads remain source-compatible, but their IDs are scoped to this factory
+    // instance. Campaign composition passes the session allocator explicitly.
+    private readonly IEntityIdAllocator _compatibilityEntityIds = new SequentialEntityIdAllocator();
 
     public SoldierFactory() { }
 
@@ -28,7 +30,7 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
-        entityIds ??= CreateTransientAllocator();
+        entityIds ??= _compatibilityEntityIds;
         RuntimeSoldier generated = _runtime.Create(
             template,
             random,
@@ -48,7 +50,7 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
-        entityIds ??= CreateTransientAllocator();
+        entityIds ??= _compatibilityEntityIds;
         RuntimeSoldier generated = _runtime.Create(
             species,
             newRecruitSkills,
@@ -66,7 +68,7 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
-        entityIds ??= CreateTransientAllocator();
+        entityIds ??= _compatibilityEntityIds;
         Soldier[] result = new Soldier[count];
         for (int i = 0; i < count; i++)
             result[i] = GenerateNewSoldier(template, random, entityIds);
@@ -87,7 +89,7 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
-        entityIds ??= CreateTransientAllocator();
+        entityIds ??= _compatibilityEntityIds;
         Soldier[] result = new Soldier[count];
         for (int i = 0; i < count; i++)
             result[i] = GenerateNewSoldier(species, newRecruitSkills, random, entityIds);
@@ -113,8 +115,5 @@ public sealed class SoldierFactory
         };
         return soldier;
     }
-
-    private static IEntityIdAllocator CreateTransientAllocator() =>
-        new SequentialEntityIdAllocator(Guid.NewGuid().GetHashCode() & 0x3FFFFFFF);
 
 }

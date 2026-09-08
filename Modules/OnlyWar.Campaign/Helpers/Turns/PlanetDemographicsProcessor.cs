@@ -19,14 +19,21 @@ namespace OnlyWar.Helpers.Turns
         private const float ActiveAssaultGarrisonDraftRate = 0.15f;
         private const float OverrunRemnantGarrisonArmingRate = 1.0f;
 
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly OrganicPopulationGrowthLedger _growthLedger;
 
         internal PlanetDemographicsProcessor(
             ICampaignSimulationSession session,
             OrganicPopulationGrowthLedger growthLedger)
+            : this(CampaignTurnContext.From(session), growthLedger)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal PlanetDemographicsProcessor(
+            CampaignTurnContext turn,
+            OrganicPopulationGrowthLedger growthLedger)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _growthLedger = growthLedger ?? throw new ArgumentNullException(nameof(growthLedger));
         }
 
@@ -44,7 +51,7 @@ namespace OnlyWar.Helpers.Turns
                 // Invasion-held civilians are enslaved rather than allowed to reproduce normally. The
                 // decline is deliberately population-only; it does not create a new military pool.
                 newPop = (float)(-regionFaction.Population
-                    * _session.Rules.FactionBehaviorRules.OccupiedCivilianDeclineRate);
+                    * _turn.Rules.FactionBehaviorRules.OccupiedCivilianDeclineRate);
             }
             else switch (regionFaction.PlanetFaction.Faction.GrowthType)
             {
@@ -54,7 +61,7 @@ namespace OnlyWar.Helpers.Turns
                         regionFaction.PlanetFaction.Faction))
                     {
                         factionGrowthMultiplier *= (float)DormantPopulationRules.GrowthEfficiency(
-                            _session.Rules.FactionBehaviorRules,
+                            _turn.Rules.FactionBehaviorRules,
                             regionFaction.IsPublic);
                     }
                     newPop = ApplyCarryingCapacity(
@@ -89,7 +96,7 @@ namespace OnlyWar.Helpers.Turns
 
             float whole = (float)Math.Truncate(newPop);
             float fraction = newPop - whole;
-            if (_session.Random.GetLinearDouble() < Math.Abs(fraction))
+            if (_turn.Random.GetLinearDouble() < Math.Abs(fraction))
             {
                 whole += Math.Sign(fraction);
             }
@@ -169,7 +176,7 @@ namespace OnlyWar.Helpers.Turns
                 defaultFaction.Population--;
                 regionFaction.Population++;
                 float pdfChance = (float)defaultFaction.Garrison / defaultFaction.Population;
-                if (_session.Random.GetLinearDouble() < pdfChance)
+                if (_turn.Random.GetLinearDouble() < pdfChance)
                 {
                     defaultFaction.Garrison--;
                     regionFaction.Garrison++;

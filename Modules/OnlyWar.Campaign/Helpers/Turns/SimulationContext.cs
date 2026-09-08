@@ -12,26 +12,26 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class SimulationContext
     {
-        internal ICampaignSimulationSession Session { get; }
+        internal CampaignTurnContext Turn { get; }
         internal TurnResolutionResult Result { get; }
         internal TurnIntelligenceLedger IntelLedger { get; }
         internal List<Order> PlayerOrders { get; }
         internal List<Order> AllOrders { get; }
         internal Planet PlanetScope { get; }
 
-        internal Sector Sector => Session.Sector;
-        internal GameRulesData Rules => Session.Rules;
-        internal Date Date => Session.CurrentDate;
+        internal Sector Sector => Turn.Sector;
+        internal GameRulesData Rules => Turn.Rules;
+        internal Date Date => Turn.CurrentDate;
         internal bool IsPlanetSimulation => PlanetScope != null;
 
         internal SimulationContext(
-            ICampaignSimulationSession session,
+            CampaignTurnContext turn,
             TurnResolutionResult result,
             TurnIntelligenceLedger intelLedger,
             IEnumerable<Order> playerOrders = null,
             Planet planetScope = null)
         {
-            Session = session ?? throw new ArgumentNullException(nameof(session));
+            Turn = turn ?? throw new ArgumentNullException(nameof(turn));
             Result = result ?? throw new ArgumentNullException(nameof(result));
             IntelLedger = intelLedger ?? throw new ArgumentNullException(nameof(intelLedger));
             PlayerOrders = playerOrders == null ? new List<Order>() : new List<Order>(playerOrders);

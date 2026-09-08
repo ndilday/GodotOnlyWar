@@ -3,15 +3,19 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Application;
 using OnlyWar.Application.Abstractions;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Units;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -84,6 +88,28 @@ public class ModuleBoundaryEnforcementTests
         ];
 
         Assert.Empty(FindOffenders("StaticRNG", allowed));
+    }
+
+    [Fact]
+    public void ProductionSourcesDoNotDeclareMutableProcessWideIdentityCounters()
+    {
+        Regex mutableIdentityField = new(
+            @"\bstatic\s+(?:volatile\s+)?(?:int|long|uint|ulong)\s+_[A-Za-z0-9]*(?:id|ID)[A-Za-z0-9]*\s*(?:=|;)",
+            RegexOptions.Compiled);
+
+        string[] offenders = EnumerateProductionSources()
+            .Where(source => mutableIdentityField.IsMatch(CodeOf(source.Full)))
+            .Select(source => source.Relative)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+        Assert.DoesNotContain(
+            EnumerateProductionSources(),
+            source => Path.GetFileName(source.Full).Contains("IdGenerator", StringComparison.Ordinal));
+        Assert.Empty(FindOffenders("PlanetBuilder.Instance", []));
+        Assert.Empty(FindOffenders("SoldierFactory.Instance", []));
+        Assert.Empty(FindOffenders("RequestFactory.Instance", []));
     }
 
     [Fact]
@@ -236,7 +262,17 @@ public class ModuleBoundaryEnforcementTests
         string root = RulesDatabaseFixture.RepositoryRoot;
         string[] screenFiles =
         [
+            Path.Combine(root, "Modules", "OnlyWar.Application", "CampaignNavigationApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "ChapterScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "CommandScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "DiplomacyScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "LoadoutScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "MainScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "MusterScreenApplication.cs"),
             Path.Combine(root, "Modules", "OnlyWar.Application", "OperationsScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "SectorMapApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "SessionControlApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "SystemInspectorApplication.cs"),
             Path.Combine(root, "Modules", "OnlyWar.Application", "MedicalScreenApplication.cs"),
             Path.Combine(root, "Modules", "OnlyWar.Application", "FleetScreenApplication.cs"),
             Path.Combine(root, "Modules", "OnlyWar.Application", "TrainingScreenApplication.cs")
@@ -256,9 +292,106 @@ public class ModuleBoundaryEnforcementTests
             string source = CodeOf(path);
             foreach (string handle in forbiddenHandles)
             {
-                Assert.DoesNotContain(handle, source);
+                Assert.DoesNotMatch(
+                    new Regex($@"\b{Regex.Escape(handle)}\b", RegexOptions.Compiled),
+                    source);
             }
         }
+    }
+
+    [Fact]
+    public void CampaignTurnProcessorsTraverseTheTurnContextInsteadOfTheSession()
+    {
+        string root = RulesDatabaseFixture.RepositoryRoot;
+        string[] roots =
+        [
+            Path.Combine(root, "Modules", "OnlyWar.Campaign", "Helpers", "Turns"),
+            Path.Combine(root, "Modules", "OnlyWar.Campaign", "Helpers", "TurnController.cs")
+        ];
+        Regex directSessionTraversal = new(
+            @"\b(?:_session|session)\s*\.\s*(?:Sector|Rules|CurrentDate|Random|Identity)\b",
+            RegexOptions.Compiled);
+
+        IEnumerable<string> sources = roots
+            .SelectMany(path => Directory.Exists(path)
+                ? Directory.EnumerateFiles(path, "*.cs", SearchOption.AllDirectories)
+                : File.Exists(path) ? [path] : []);
+        string[] offenders = sources
+            .Where(path => !string.Equals(
+                Path.GetFileName(path), "CampaignTurnContext.cs", StringComparison.Ordinal))
+            .Where(path => directSessionTraversal.IsMatch(CodeOf(path)))
+            .Select(path => Path.GetRelativePath(root, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void ScreenPortsReturnDetachedContractGraphs()
+    {
+        Type[] screenPorts =
+        [
+            typeof(ICommandScreenApplication),
+            typeof(IDiplomacyScreenApplication),
+            typeof(ICampaignNavigationApplication),
+            typeof(IMainScreenApplication),
+            typeof(ISectorMapApplication),
+            typeof(ISessionControlApplication),
+            typeof(ISystemInspectorApplication),
+            typeof(IChapterScreenApplication),
+            typeof(IMusterScreenApplication),
+            typeof(ILoadoutScreenApplication),
+            typeof(IOperationsScreenApplication),
+            typeof(IMedicalScreenApplication),
+            typeof(IFleetScreenApplication),
+            typeof(ITrainingScreenApplication)
+        ];
+        Type[] forbidden =
+        [
+            typeof(GameSession),
+            typeof(Sector),
+            typeof(Planet),
+            typeof(Region),
+            typeof(Squad),
+            typeof(Order),
+            typeof(PlayerSoldier),
+            typeof(TaskForce),
+            typeof(Ship),
+            typeof(Faction),
+            typeof(PlayerForce),
+            typeof(Unit)
+        ];
+
+        string[] offenders = ContractSurface(screenPorts)
+            .Where(forbidden.Contains)
+            .Select(type => type.FullName)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void AggregateBackedProjectionImplementationsAreNotPublicPorts()
+    {
+        Type[] implementationTypes =
+        [
+            typeof(OperationsScreenQueries),
+            typeof(FleetScreenProjector),
+            typeof(DiplomacyScreenProjector),
+            typeof(PlanetaryForceTreeBuilder),
+            typeof(ForceTreeSquad),
+            typeof(ForceTreeInputs),
+            typeof(RegionControlPresentation),
+            typeof(FactionActivityPresentation),
+            typeof(RegionTerrainPresentation)
+        ];
+
+        Assert.All(implementationTypes, type => Assert.False(
+            type.IsPublic,
+            $"{type.FullName} is an aggregate-backed implementation detail, not a screen port."));
     }
 
     [Fact]
@@ -271,7 +404,19 @@ public class ModuleBoundaryEnforcementTests
             typeof(MedicalReadContext),
             typeof(MedicalCommandContext),
             typeof(FleetCommandContext),
-            typeof(TrainingContext)
+            typeof(FleetScreenContext),
+            typeof(TrainingContext),
+            typeof(TrainingScreenContext),
+            typeof(CommandScreenContext),
+            typeof(DiplomacyScreenContext),
+            typeof(CampaignNavigationContext),
+            typeof(MainScreenContext),
+            typeof(SectorMapContext),
+            typeof(SessionControlContext),
+            typeof(SystemInspectorContext),
+            typeof(ChapterScreenContext),
+            typeof(MusterScreenContext),
+            typeof(LoadoutScreenContext)
         ];
         Type[] forbidden = [typeof(Sector), typeof(GameRulesData)];
 
@@ -436,6 +581,53 @@ public class ModuleBoundaryEnforcementTests
                 .Select(property => property.PropertyType)))
         .SelectMany(UnwrapTypes)
         .Distinct();
+
+    private static IEnumerable<Type> ContractSurface(IEnumerable<Type> roots)
+    {
+        Queue<Type> pending = new(roots);
+        HashSet<Type> visited = [];
+        while (pending.Count > 0)
+        {
+            Type type = pending.Dequeue();
+            foreach (Type nested in UnwrapTypes(type))
+            {
+                if (!visited.Add(nested)) continue;
+                yield return nested;
+                if (nested.Namespace?.StartsWith("System", StringComparison.Ordinal) == true)
+                {
+                    continue;
+                }
+
+                foreach (ConstructorInfo constructor in nested.GetConstructors(
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+                {
+                    foreach (ParameterInfo parameter in constructor.GetParameters())
+                    {
+                        pending.Enqueue(parameter.ParameterType);
+                    }
+                }
+                foreach (MethodInfo method in nested.GetMethods(
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+                {
+                    pending.Enqueue(method.ReturnType);
+                    foreach (ParameterInfo parameter in method.GetParameters())
+                    {
+                        pending.Enqueue(parameter.ParameterType);
+                    }
+                }
+                foreach (PropertyInfo property in nested.GetProperties(
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+                {
+                    pending.Enqueue(property.PropertyType);
+                }
+                foreach (FieldInfo field in nested.GetFields(
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+                {
+                    pending.Enqueue(field.FieldType);
+                }
+            }
+        }
+    }
 
     private static IEnumerable<Type> UnwrapTypes(Type type)
     {

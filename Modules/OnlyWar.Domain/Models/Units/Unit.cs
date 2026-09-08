@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
+using OnlyWar.Abstractions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Helpers;
@@ -10,7 +10,6 @@ namespace OnlyWar.Models.Units
 {
     public class Unit
     {
-        private static int _nextId = 0;
         private readonly List<Squad> _squads;
         public int Id { get; private set; }
         public string Name { get; set; }
@@ -44,21 +43,16 @@ namespace OnlyWar.Models.Units
         public Unit(int id, string name, UnitTemplate template, List<Squad> squads)
         {
             Id = id;
-            // >= , not > : see Squad's loading constructor — _nextId is the next id to hand
-            // out, so an id equal to it must still advance the counter or it gets reissued.
-            if(id >= _nextId)
-            {
-                Interlocked.Exchange(ref _nextId, id + 1);
-            }
             Name = name;
             UnitTemplate = template;
             Faction = template.Faction;
             _squads = squads;
             ChildUnits = [];
         }
-        public Unit(string name, UnitTemplate template)
+        public Unit(string name, UnitTemplate template, IPersistentIdAllocator identity)
         {
-            Id = Interlocked.Exchange(ref _nextId, _nextId + 1);
+            if (identity == null) throw new ArgumentNullException(nameof(identity));
+            Id = identity.GetNextUnitId();
             Name = name;
             Faction = template.Faction;
             UnitTemplate = template;
@@ -70,7 +64,7 @@ namespace OnlyWar.Models.Units
             _squads = [];
             if (template.HQSquad != null)
             {
-                AddSquad(new Squad(name + " HQ Squad", this, template.HQSquad));
+                AddSquad(new Squad(name + " HQ Squad", this, template.HQSquad, identity));
                 i++;
             }
             // Only the always-present squads (MinCount, e.g. the chapter's command
@@ -80,10 +74,19 @@ namespace OnlyWar.Models.Units
             {
                 for (int n = 0; n < slot.MinCount; n++)
                 {
-                    AddSquad(new Squad(slot.Template.Name, this, slot.Template));
+                    AddSquad(new Squad(slot.Template.Name, this, slot.Template, identity));
                     i++;
                 }
             }
+        }
+
+        /// <summary>
+        /// Compatibility overload for fixture and extension callers that have not yet adopted
+        /// session identity injection. It owns only a short-lived local allocator.
+        /// </summary>
+        public Unit(string name, UnitTemplate template)
+            : this(name, template, new CompatibilityPersistentIdAllocator())
+        {
         }
         public IEnumerable<ISoldier> GetAllMembers()
         {

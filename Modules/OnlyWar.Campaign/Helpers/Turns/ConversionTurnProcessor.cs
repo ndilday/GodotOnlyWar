@@ -21,11 +21,16 @@ namespace OnlyWar.Helpers.Turns
             DefenseType.Entrenchment
         ];
 
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
 
         internal ConversionTurnProcessor(ICampaignSimulationSession session)
+            : this(CampaignTurnContext.From(session))
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal ConversionTurnProcessor(CampaignTurnContext turn)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
         }
 
         internal void ProcessPlanet(Planet planet)
@@ -172,12 +177,12 @@ namespace OnlyWar.Helpers.Turns
                 loyalist.AddDefense(defenseType, -share);
                 revolting.AddDefense(defenseType, share);
             }
-            loyalist.Organization = (int)(_session.Random.GetLinearDouble() * 100);
+            loyalist.Organization = (int)(_turn.Random.GetLinearDouble() * 100);
         }
 
         private double DrawRevoltDefenseShare(double defense) => defense <= 0
             ? 0
-            : Math.Clamp(defense / 2.0 + _session.Random.NextRandomZValue(), 0.0, defense);
+            : Math.Clamp(defense / 2.0 + _turn.Random.NextRandomZValue(), 0.0, defense);
     }
 }
 

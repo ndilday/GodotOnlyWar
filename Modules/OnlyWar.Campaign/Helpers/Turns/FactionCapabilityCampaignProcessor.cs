@@ -19,9 +19,14 @@ namespace OnlyWar.Helpers.Turns
         private readonly StrategicInvasionLifecycleProcessor _strategicInvasionLifecycleProcessor;
 
         internal FactionCapabilityCampaignProcessor(ICampaignSimulationSession session)
+            : this(CampaignTurnContext.From(session))
+        {
+        }
+
+        internal FactionCapabilityCampaignProcessor(CampaignTurnContext turn)
         {
             StrategicInvasionLifecycleProcessor lifecycle =
-                new StrategicInvasionLifecycleProcessor(session);
+                new StrategicInvasionLifecycleProcessor(turn);
             _dormantPopulationProcessor = new DormantPopulationProcessor(lifecycle);
             _invasionGenerationProcessor = new InvasionGenerationProcessor(lifecycle);
             _strategicInvasionLifecycleProcessor = lifecycle;

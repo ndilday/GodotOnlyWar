@@ -6,6 +6,11 @@ namespace OnlyWar.Abstractions
     public interface IPersistentIdAllocator : IEntityIdAllocator
     {
         int GetNextSoldierId();
+        int GetNextCharacterId();
+        int GetNextPlanetId();
+        int GetNextUnitId();
+        int GetNextSquadId();
+        int GetNextTaskForceId();
         int GetNextRequestId();
         int GetNextMissionId();
         int GetNextOrderId();

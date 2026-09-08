@@ -24,11 +24,16 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class StrategicInvasionLifecycleProcessor
     {
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
 
         internal StrategicInvasionLifecycleProcessor(ICampaignSimulationSession session)
+            : this(CampaignTurnContext.From(session))
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal StrategicInvasionLifecycleProcessor(CampaignTurnContext turn)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
         }
 
         internal static void SeedGhostSources(Sector sector, GameRulesData rules, IRNG random)
@@ -85,10 +90,10 @@ namespace OnlyWar.Helpers.Turns
         internal void ProcessWeeklyState(Sector sector)
         {
             Faction dormantFaction = FactionCapabilities.WithCapability(
-                _session.Rules.Factions, FactionBehavior.HasDormantPopulations).FirstOrDefault();
+                _turn.Rules.Factions, FactionBehavior.HasDormantPopulations).FirstOrDefault();
             Faction invasionFaction = FactionCapabilities.WithCapability(
-                _session.Rules.Factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
-            FactionBehaviorRulesProfile behaviorRules = _session.Rules.FactionBehaviorRules;
+                _turn.Rules.Factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
+            FactionBehaviorRulesProfile behaviorRules = _turn.Rules.FactionBehaviorRules;
             if (sector == null || behaviorRules == null) return;
 
             if (dormantFaction != null)
@@ -100,14 +105,14 @@ namespace OnlyWar.Helpers.Turns
             {
                 if (source.FactionId.HasValue
                     && !FactionCapabilities.GeneratesInvasions(
-                        _session.Rules.Factions.FirstOrDefault(faction => faction.Id == source.FactionId.Value)))
+                        _turn.Rules.Factions.FirstOrDefault(faction => faction.Id == source.FactionId.Value)))
                 {
                     continue;
                 }
-                ApplyLogisticGrowth(source, _session.Random, behaviorRules);
+                ApplyLogisticGrowth(source, _turn.Random, behaviorRules);
                 source.Consolidation = DormantPopulationRules.UpdateConsolidation(
                     behaviorRules, source.Consolidation,
-                    _session.Random.NextRandomZValue());
+                    _turn.Random.NextRandomZValue());
                 if (source.Consolidation >= 1.0 && invasionFaction != null)
                 {
                     FormInvasionFromGhostSource(sector, source, invasionFaction);
@@ -177,7 +182,7 @@ namespace OnlyWar.Helpers.Turns
         internal void ProcessAttractionAndFragmentation(Sector sector)
         {
             Faction invasionFaction = FactionCapabilities.WithCapability(
-                _session.Rules.Factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
+                _turn.Rules.Factions, FactionBehavior.GeneratesInvasions).FirstOrDefault();
             if (sector == null || invasionFaction == null) return;
 
             AttractUnaffiliatedPopulation(sector, invasionFaction);
@@ -200,7 +205,7 @@ namespace OnlyWar.Helpers.Turns
             if (presences.Count == 0) return null;
 
             long id = sector.GetNextStrategicInvasionForceId();
-            Squad command = CreateCommandSquad(invasionFaction, id, _session.Random);
+            Squad command = CreateCommandSquad(invasionFaction, id, _turn.Random);
             RegisterCommandUnit(sector, invasionFaction, command, id);
             Region primary = presences
                 .OrderByDescending(presence => presence.OrganizedMilitaryStrength)
@@ -318,7 +323,7 @@ namespace OnlyWar.Helpers.Turns
                 long losses = invasionAttacked ? result.AttackerLosses : result.DefenderLosses;
                 double chance = 0.5 * Math.Clamp(
                     losses / (double)Math.Max(1L, committed), 0.0, 1.0);
-                if (_session.Random.GetLinearDouble() < chance) KillAndFragmentForce(sector, invasionForce);
+                if (_turn.Random.GetLinearDouble() < chance) KillAndFragmentForce(sector, invasionForce);
             }
         }
 
@@ -381,8 +386,8 @@ namespace OnlyWar.Helpers.Turns
         {
             long dispatchedBattleValue = (long)Math.Floor(
                 source.Population * DormantPopulationRules.MobilizationFraction(
-                    _session.Rules.FactionBehaviorRules,
-                    _session.Random.NextRandomZValue()));
+                    _turn.Rules.FactionBehaviorRules,
+                    _turn.Random.NextRandomZValue()));
             dispatchedBattleValue = Math.Clamp(dispatchedBattleValue, 0, source.Population);
             source.Population -= dispatchedBattleValue;
             source.Consolidation = source.PopulationCapacity <= 0
@@ -414,7 +419,7 @@ namespace OnlyWar.Helpers.Turns
             List<(Region Region, long BattleValue)> allocations = AllocateLanding(target, invasionFaction, dispatchedBattleValue);
             Region primary = allocations.FirstOrDefault(item => item.BattleValue > 0).Region
                 ?? target.Regions.OrderByDescending(region => region.Population).ThenBy(region => region.Id).First();
-            Squad commandSquad = CreateCommandSquad(invasionFaction, invasionForceId, _session.Random);
+            Squad commandSquad = CreateCommandSquad(invasionFaction, invasionForceId, _turn.Random);
             RegisterCommandUnit(sector, invasionFaction, commandSquad, invasionForceId);
             commandSquad.CurrentRegion = primary;
             StrategicInvasionForce invasionForce = new(invasionForceId, invasionFaction, commandSquad, primary, target);
@@ -454,7 +459,7 @@ namespace OnlyWar.Helpers.Turns
             }
 
             foreach (RegionFaction presence in surviving
-                .Where(item => item.OrganizedMilitaryStrength >= _session.Rules.FactionBehaviorRules.SuccessorGenerationMinimumBattleValue))
+                .Where(item => item.OrganizedMilitaryStrength >= _turn.Rules.FactionBehaviorRules.SuccessorGenerationMinimumBattleValue))
             {
                 CreateSuccessorForce(sector, invasionForce.Faction, presence);
             }
@@ -463,7 +468,7 @@ namespace OnlyWar.Helpers.Turns
         private void CreateSuccessorForce(Sector sector, Faction faction, RegionFaction presence)
         {
             long id = sector.GetNextStrategicInvasionForceId();
-            Squad command = CreateCommandSquad(faction, id, _session.Random);
+            Squad command = CreateCommandSquad(faction, id, _turn.Random);
             RegisterCommandUnit(sector, faction, command, id);
             long survivingBattleValue = presence.OrganizedMilitaryStrength;
             Planet destination = ChooseSuccessorDestination(sector, faction, presence);
@@ -515,8 +520,8 @@ namespace OnlyWar.Helpers.Turns
         {
             long defending = DefendingBattleValue(region, faction);
             long required = defending > 0
-                ? (long)Math.Ceiling(defending * _session.Rules.FactionBehaviorRules.DefendedLandingRatio)
-                : _session.Rules.FactionBehaviorRules.UndefendedLandingBattleValue;
+                ? (long)Math.Ceiling(defending * _turn.Rules.FactionBehaviorRules.DefendedLandingRatio)
+                : _turn.Rules.FactionBehaviorRules.UndefendedLandingBattleValue;
             return available >= required;
         }
 
@@ -526,16 +531,16 @@ namespace OnlyWar.Helpers.Turns
             FleetRouteScope scope = FleetRouteCalculator.DetermineScope(
                 origin,
                 destination,
-                _session.Rules.SectorGenerationProfile.MaxSubsectorDiameter);
+                _turn.Rules.SectorGenerationProfile.MaxSubsectorDiameter);
             FleetRoute route = new FleetRouteCalculator().CalculateBestRoute(
                 origin,
                 destination,
                 sector.WarpLanes,
                 scope,
-                _session.Random.NextRandomZValue(),
-                _session.Random.NextRandomZValue());
+                _turn.Random.NextRandomZValue(),
+                _turn.Random.NextRandomZValue());
             return Math.Max(1, (int)Math.Ceiling(
-                route.ObjectiveTotalWeeks * _session.Rules.FactionBehaviorRules.TravelMultiplier));
+                route.ObjectiveTotalWeeks * _turn.Rules.FactionBehaviorRules.TravelMultiplier));
         }
 
         private void MergeSuccessorForces(Sector sector, Faction faction)
@@ -557,7 +562,7 @@ namespace OnlyWar.Helpers.Turns
                 long combined = invasionForces.Sum(invasionForce => invasionForce.OrganizedBattleValue);
                 long merged = (long)Math.Floor(combined * Math.Max(
                     0.0,
-                    1.0 - _session.Rules.FactionBehaviorRules.SuccessorMergeLeaderLoss * (invasionForces.Count - 1)));
+                    1.0 - _turn.Rules.FactionBehaviorRules.SuccessorMergeLeaderLoss * (invasionForces.Count - 1)));
                 long mergedId = sector.GetNextStrategicInvasionForceId();
                 StrategicInvasionForce mergedForce = new(
                     mergedId,
@@ -649,7 +654,7 @@ namespace OnlyWar.Helpers.Turns
             Faction invasionFaction,
             bool canGenerateInvasions)
         {
-            FactionBehaviorRulesProfile rules = _session.Rules.FactionBehaviorRules;
+            FactionBehaviorRulesProfile rules = _turn.Rules.FactionBehaviorRules;
             foreach (RegionFaction presence in AllCapabilityPresences(sector, dormantFaction)
                 .Where(presence => presence.StrategicInvasionForceId == null))
             {
@@ -659,13 +664,13 @@ namespace OnlyWar.Helpers.Turns
                 presence.GrowthMultiplier = 1.0f;
                 presence.DormantConsolidation = DormantPopulationRules.UpdateConsolidation(
                     rules, presence.DormantConsolidation,
-                    _session.Random.NextRandomZValue());
+                    _turn.Random.NextRandomZValue());
 
                 bool canEmerge = canGenerateInvasions
                     && presence.Population >= rules.DormantEmergenceMinimumPopulation
                     && presence.DormantConsolidation >= 1.0
                     && presence.OrganizedMilitaryStrength >= rules.SuccessorGenerationMinimumBattleValue;
-                if (canEmerge && _session.Random.GetLinearDouble() < rules.DormantEmergenceChance)
+                if (canEmerge && _turn.Random.GetLinearDouble() < rules.DormantEmergenceChance)
                 {
                     CreateSuccessorForce(sector, invasionFaction, presence);
                 }
@@ -737,7 +742,7 @@ namespace OnlyWar.Helpers.Turns
 
             return candidates
                 .Where(candidate => candidate.Defended > 0
-                    && available >= (long)Math.Ceiling(candidate.Defended * _session.Rules.FactionBehaviorRules.DefendedLandingRatio))
+                    && available >= (long)Math.Ceiling(candidate.Defended * _turn.Rules.FactionBehaviorRules.DefendedLandingRatio))
                 .OrderByDescending(candidate => candidate.Defended)
                 .ThenByDescending(candidate => candidate.Planet.Population)
                 .ThenBy(candidate => candidate.Planet.Id)
@@ -770,7 +775,7 @@ namespace OnlyWar.Helpers.Turns
             {
                 if (remaining <= 0) break;
                 long desired = (long)Math.Ceiling(
-                    DefendingBattleValue(region, invasionFaction) * _session.Rules.FactionBehaviorRules.DefendedLandingRatio);
+                    DefendingBattleValue(region, invasionFaction) * _turn.Rules.FactionBehaviorRules.DefendedLandingRatio);
                 long allocation = Math.Min(remaining, desired);
                 result.Add((region, allocation));
                 remaining -= allocation;
@@ -778,7 +783,7 @@ namespace OnlyWar.Helpers.Turns
             foreach (Region region in undefended)
             {
                 if (remaining <= 0) break;
-                long allocation = Math.Min(remaining, _session.Rules.FactionBehaviorRules.UndefendedLandingBattleValue);
+                long allocation = Math.Min(remaining, _turn.Rules.FactionBehaviorRules.UndefendedLandingBattleValue);
                 result.Add((region, allocation));
                 remaining -= allocation;
             }
@@ -802,7 +807,7 @@ namespace OnlyWar.Helpers.Turns
                     && FactionRelationshipService.AreHostile(
                         invasionFaction, presence.PlanetFaction.Faction, region.Planet))
                 .Sum(presence => StrategicCombatResolver.CalculateDefenderBattleValue(
-                    presence, _session.Sector.StrategicInvasionForces));
+                    presence, _turn.Sector.StrategicInvasionForces));
 
         private static RegionFaction EstablishFactionPresence(Faction invasionFaction, Region region, long battleValue)
         {
@@ -845,7 +850,7 @@ namespace OnlyWar.Helpers.Turns
             return SquadFactory.GenerateSquad(
                 template,
                 random,
-                _session.Identity,
+                _turn.Identity,
                 name: $"Invasion force {invasionForceId} command");
         }
 
@@ -853,11 +858,11 @@ namespace OnlyWar.Helpers.Turns
         {
             UnitTemplate template = faction.UnitTemplates?.Values.FirstOrDefault(candidate =>
                 candidate.HQSquad == commandSquad.SquadTemplate)
-                ?? _session.Rules.StrategicCommandUnitTemplate
+                ?? _turn.Rules.StrategicCommandUnitTemplate
                 ?? faction.UnitTemplates?.Values.FirstOrDefault();
             if (template == null) return;
 
-            int nextUnitId = _session.Rules.Factions
+            int nextUnitId = _turn.Rules.Factions
                 .SelectMany(candidate => candidate.Units ?? [])
                 .SelectMany(FlattenUnits)
                 .Select(unit => unit.Id)

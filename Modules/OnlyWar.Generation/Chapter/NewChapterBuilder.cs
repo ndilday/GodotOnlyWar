@@ -82,7 +82,8 @@ namespace OnlyWar.Builders
                     $"Player faction '{data.PlayerFaction.Name}' has no fleet template for chapter founding. "
                     + "Rules database validation should have rejected this before campaign generation.");
             }
-            chapter.Fleet.TaskForces.Add(new TaskForce(data.PlayerFaction, foundingFleetTemplate));
+            chapter.Fleet.TaskForces.Add(new TaskForce(
+                data.PlayerFaction, foundingFleetTemplate, support.Identity));
             List<string> foundingHistoryEntries = new List<string>
             {
                 $"The {chapterName} officially forms with its first {foundingSoldierCount:N0} battle brothers."
@@ -107,7 +108,7 @@ namespace OnlyWar.Builders
                                                                            chapterName,
                                                                            support);
             PopulateOrderOfBattle(trainingEndDate, support.FoundingRoles, unassignedSoldierMap,
-                chapter.Army.OrderOfBattle, doctrine, data.RatingConsumers);
+                chapter.Army.OrderOfBattle, doctrine, data.RatingConsumers, support.Identity);
             chapter.Army.PopulateSquadMap();
             return chapter;
         }
@@ -168,7 +169,8 @@ namespace OnlyWar.Builders
                                                   IFoundingRoleAdvisor foundingRoles,
                                                   Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                                   Unit oob, ChapterGenerationDoctrine templates,
-                                                  RatingConsumerBindings ratingBindings)
+                                                  RatingConsumerBindings ratingBindings,
+                                                  IPersistentIdAllocator identity)
         {
             // Rank every non-psyker for every founding role up front (score → derive
             // demand → consume; Design/Reference/FoundingRoleAssignment.md). Each list is consumed
@@ -197,7 +199,8 @@ namespace OnlyWar.Builders
                     isVeteranCompany: false);
             }
 
-            PopulateCompanies(year, unassignedSoldierMap, oob, templates, roleLists, ratingBindings);
+            PopulateCompanies(year, unassignedSoldierMap, oob, templates, roleLists,
+                ratingBindings, identity);
 
             // Remainder sweep: every unconsumed medical candidate staffs the Apothecarion...
             Squad apothecarion = oob.Squads.First(s => s.SquadTemplate == templates.Apothecarion);
@@ -217,7 +220,8 @@ namespace OnlyWar.Builders
             }
 
             // Everyone left becomes a scout.
-            AssignExcessToScouts(unassignedSoldierMap, oob, year, templates, ratingBindings);
+            AssignExcessToScouts(unassignedSoldierMap, oob, year, templates,
+                ratingBindings, identity);
         }
 
         // Companies are populated in order-of-battle order, so earlier companies draw
@@ -229,7 +233,8 @@ namespace OnlyWar.Builders
                                               Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                               Unit chapter, ChapterGenerationDoctrine templates,
                                               Dictionary<FoundingRole, List<PlayerSoldier>> roleLists,
-                                              RatingConsumerBindings ratingBindings)
+                                              RatingConsumerBindings ratingBindings,
+                                              IPersistentIdAllocator identity)
         {
             int veteranSquadSize = CalculateVeteranSquadSize(roleLists);
             bool lineListsBalanced = false;
@@ -284,11 +289,12 @@ namespace OnlyWar.Builders
                     FillCompanyWithSquads(unassignedSoldierMap, company, assignment.SquadTemplate,
                         assignment.MemberList, assignment.SergeantList,
                         assignment.MemberTemplate, assignment.SergeantTemplate,
-                        assignment.SquadSizeFunc, year);
+                        assignment.SquadSizeFunc, year, identity);
                 }
             }
 
-            SpillIntoVacantSeats(year, unassignedSoldierMap, chapter, templates, roleLists, ratingBindings);
+            SpillIntoVacantSeats(year, unassignedSoldierMap, chapter, templates, roleLists,
+                ratingBindings, identity);
         }
 
         // Ports the old AssignMarines overflow cascades: surplus tactical candidates
@@ -299,11 +305,12 @@ namespace OnlyWar.Builders
                                                   Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                                   Unit chapter, ChapterGenerationDoctrine templates,
                                                   Dictionary<FoundingRole, List<PlayerSoldier>> roleLists,
-                                                  RatingConsumerBindings ratingBindings)
+                                                  RatingConsumerBindings ratingBindings,
+                                                  IPersistentIdAllocator identity)
         {
             FillVacancies(year, unassignedSoldierMap, chapter, templates, roleLists,
                 templates.AssaultSquad, roleLists[FoundingRole.TacticalMarine],
-                roleLists[FoundingRole.AssaultSergeant], templates.AssaultMarine);
+                roleLists[FoundingRole.AssaultSergeant], templates.AssaultMarine, identity);
 
             // The devastator spill pool is whoever is left from the assault and tactical
             // pools with enough ranged skill to man a heavy weapon (the old ranged > 80
@@ -317,7 +324,7 @@ namespace OnlyWar.Builders
                 .ToList();
             FillVacancies(year, unassignedSoldierMap, chapter, templates, roleLists,
                 templates.DevastatorSquad, devastatorSpill,
-                roleLists[FoundingRole.DevastatorSergeant], templates.DevastatorMarine);
+                roleLists[FoundingRole.DevastatorSergeant], templates.DevastatorMarine, identity);
         }
 
         private static void FillVacancies(Date year,
@@ -327,7 +334,8 @@ namespace OnlyWar.Builders
                                           SquadTemplate squadTemplate,
                                           List<PlayerSoldier> memberList,
                                           List<PlayerSoldier> sergeantList,
-                                          SoldierTemplate memberTemplate)
+                                          SoldierTemplate memberTemplate,
+                                          IPersistentIdAllocator identity)
         {
             foreach (Unit company in chapter.ChildUnits)
             {
@@ -359,7 +367,7 @@ namespace OnlyWar.Builders
                 }
                 FillCompanyWithSquads(unassignedSoldierMap, company, squadTemplate,
                     memberList, sergeantList, memberTemplate, templates.Sergeant,
-                    CalculateSquadSize, year);
+                    CalculateSquadSize, year, identity);
             }
         }
 
@@ -528,12 +536,13 @@ namespace OnlyWar.Builders
             string chapterName,
             GenerationSupport support)
         {
-            Unit unit = rootTemplate.GenerateUnitFromTemplateWithoutChildren(chapterName);
+            Unit unit = rootTemplate.GenerateUnitFromTemplateWithoutChildren(
+                chapterName, support.Identity);
             Army army = new Army($"{chapterName} Ground Forces", null, null, unit, soldiers);
             Fleet fleet = new Fleet($"{chapterName} Fleet", null, null);
             PlayerForce chapter = new PlayerForce(faction, army, fleet);
             support.Narrative.AttachEventRecorder(chapter);
-            BuildUnitTreeHelper(chapter.Army.OrderOfBattle, rootTemplate, doctrine);
+            BuildUnitTreeHelper(chapter.Army.OrderOfBattle, rootTemplate, doctrine, support.Identity);
             // Register the army's root unit on the faction so it matches the post-load model:
             // the save path enumerates units via Faction.Units, so a freshly generated chapter
             // must be registered here or its soldiers are never written (FK failure on save).
@@ -547,7 +556,8 @@ namespace OnlyWar.Builders
         private static void BuildUnitTreeHelper(
             Unit rootUnit,
             UnitTemplate rootTemplate,
-            ChapterGenerationDoctrine doctrine)
+            ChapterGenerationDoctrine doctrine,
+            IPersistentIdAllocator identity)
         {
             string[] companyStrings = { "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth" };
             int stringIndex = 0;
@@ -570,10 +580,10 @@ namespace OnlyWar.Builders
                 {
                     name = child.Name;
                 }
-                Unit newUnit = child.GenerateUnitFromTemplateWithoutChildren(name);
+                Unit newUnit = child.GenerateUnitFromTemplateWithoutChildren(name, identity);
                 rootUnit.ChildUnits.Add(newUnit);
                 newUnit.ParentUnit = rootUnit;
-                BuildUnitTreeHelper(newUnit, child, doctrine);
+                BuildUnitTreeHelper(newUnit, child, doctrine, identity);
             }
         }
 
@@ -757,7 +767,8 @@ namespace OnlyWar.Builders
             SoldierTemplate soldierType,
             SoldierTemplate sgtType,
             Func<List<PlayerSoldier>, List<PlayerSoldier>, int> squadSizeFunc,
-            Date year)
+            Date year,
+            IPersistentIdAllocator identity)
         {
             int cap = GetSquadCap(company, squadTemplate);
             // Count squads of this template the company already holds (e.g. from the
@@ -767,7 +778,7 @@ namespace OnlyWar.Builders
                 && (CountAvailable(unassignedSoldierMap, soldierList) > 0
                     || CountAvailable(unassignedSoldierMap, sgtList) > 0))
             {
-                Squad squad = new Squad(squadTemplate.Name, company, squadTemplate);
+                Squad squad = new Squad(squadTemplate.Name, company, squadTemplate, identity);
                 company.AddSquad(squad);
                 if (sgtList.Count > 0)
                 {
@@ -794,7 +805,8 @@ namespace OnlyWar.Builders
 
         private static void AssignExcessToScouts(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                                   Unit chapter, Date year, ChapterGenerationDoctrine templates,
-                                                  RatingConsumerBindings ratingBindings)
+                                                  RatingConsumerBindings ratingBindings,
+                                                  IPersistentIdAllocator identity)
         {
             int sgtNeed = ((unassignedSoldierMap.Count - 1) / 10) + 1;
             List<PlayerSoldier> leaderList = unassignedSoldierMap.Values
@@ -812,7 +824,7 @@ namespace OnlyWar.Builders
             foreach (Unit company in scoutCompanies)
             {
                 FillCompanyWithSquads(unassignedSoldierMap, company, templates.ScoutSquad,
-                    scoutList, leaderList, scout, scoutSgt, (_, _) => 10, year);
+                    scoutList, leaderList, scout, scoutSgt, (_, _) => 10, year, identity);
             }
 
             // A founding chapter has far more recruits than the scout company's nominal
@@ -820,7 +832,8 @@ namespace OnlyWar.Builders
             Unit overflowCompany = scoutCompanies.LastOrDefault() ?? chapter.ChildUnits.LastOrDefault();
             while (overflowCompany != null && (scoutList.Count > 0 || leaderList.Count > 0))
             {
-                Squad squad = new Squad(templates.ScoutSquad.Name, overflowCompany, templates.ScoutSquad);
+                Squad squad = new Squad(
+                    templates.ScoutSquad.Name, overflowCompany, templates.ScoutSquad, identity);
                 overflowCompany.AddSquad(squad);
                 if (leaderList.Count > 0)
                 {

@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <ProjectReference Include="../OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Persistence.Abstractions/OnlyWar.Persistence.Abstractions.csproj" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
     <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />

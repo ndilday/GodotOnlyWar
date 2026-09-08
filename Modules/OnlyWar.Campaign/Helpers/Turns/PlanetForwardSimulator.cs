@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class PlanetForwardSimulator
     {
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
         private readonly TurnOrderPlanner _orderPlanner;
         private readonly MissionTurnProcessor _missionTurnProcessor;
         private readonly MissionAftermathProcessor _missionAftermathProcessor;
@@ -33,8 +33,29 @@ namespace OnlyWar.Helpers.Turns
             PlanetIntelligenceProcessor intelligenceProcessor,
             TurnIntelligenceLedger intelLedger,
             TurnResolutionResult result)
+            : this(
+                CampaignTurnContext.From(session),
+                orderPlanner,
+                missionTurnProcessor,
+                missionAftermathProcessor,
+                planetTurnProcessor,
+                intelligenceProcessor,
+                intelLedger,
+                result)
         {
-            _session = session;
+        }
+
+        internal PlanetForwardSimulator(
+            CampaignTurnContext turn,
+            TurnOrderPlanner orderPlanner,
+            MissionTurnProcessor missionTurnProcessor,
+            MissionAftermathProcessor missionAftermathProcessor,
+            PlanetTurnProcessor planetTurnProcessor,
+            PlanetIntelligenceProcessor intelligenceProcessor,
+            TurnIntelligenceLedger intelLedger,
+            TurnResolutionResult result)
+        {
+            _turn = turn ?? throw new System.ArgumentNullException(nameof(turn));
             _orderPlanner = orderPlanner;
             _missionTurnProcessor = missionTurnProcessor;
             _missionAftermathProcessor = missionAftermathProcessor;
@@ -46,7 +67,7 @@ namespace OnlyWar.Helpers.Turns
 
         internal void Simulate(Sector sector, Planet planet, int turns)
         {
-            Faction defaultFaction = _session.Rules.DefaultFaction;
+            Faction defaultFaction = _turn.Rules.DefaultFaction;
 
             GameLog.Info(() => $"SimulatePlanetForward '{planet.Name}': {turns} turns");
             for (int week = 0; week < turns; week++)
@@ -57,7 +78,7 @@ namespace OnlyWar.Helpers.Turns
                 ScenarioMetricsCollector.BeginScenarioRegionMetrics(planet, defaultFaction);
 
                 SimulationContext context = new(
-                    _session,
+                    _turn,
                     _result,
                     _intelLedger,
                     planetScope: planet);

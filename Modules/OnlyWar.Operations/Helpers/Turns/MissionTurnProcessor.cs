@@ -3,6 +3,7 @@ using OnlyWar.Builders;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Operations.Abstractions;
+using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
@@ -193,7 +194,7 @@ namespace OnlyWar.Helpers.Turns
 
                 bool isPlayerOrder = order.OwnerFaction?.IsPlayerFaction == true
                     || order.Force.AllPlayerSoldiers.Any();
-                TacticalEntityIdAllocator entityIds = new();
+                RuntimeTacticalEntityIdAllocator entityIds = new();
                 ChapterOperationalDoctrine doctrine = isPlayerOrder
                     ? _sector?.PlayerForce?.Army?.ChapterOperationalDoctrine ?? _doctrine
                     : null;
@@ -333,7 +334,7 @@ namespace OnlyWar.Helpers.Turns
                         _missionRules,
                         _random,
                         _engagements,
-                        new TacticalEntityIdAllocator(),
+                        new RuntimeTacticalEntityIdAllocator(),
                         new OnlyWar.Operations.Abstractions.MissionCampaignInputs(_currentDate,
                             _sector.PlayerForce?.Army?.ChapterOperationalDoctrine ?? _doctrine,
                             _recruitment,

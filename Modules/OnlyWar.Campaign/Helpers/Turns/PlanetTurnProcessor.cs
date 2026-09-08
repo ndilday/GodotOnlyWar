@@ -18,12 +18,12 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class PlanetTurnProcessor
     {
-        private readonly PlanetDemographicsProcessor _demographicsProcessor;
-        private readonly RegionControlTurnProcessor _regionControlProcessor;
-        private readonly ConversionTurnProcessor _conversionProcessor;
-        private readonly PlanetIntelligenceProcessor _intelligenceProcessor;
-        private readonly GovernorTurnProcessor _governorTurnProcessor;
-        private readonly CivilUnrestTurnProcessor _civilUnrestTurnProcessor;
+        private PlanetDemographicsProcessor _demographicsProcessor;
+        private RegionControlTurnProcessor _regionControlProcessor;
+        private ConversionTurnProcessor _conversionProcessor;
+        private PlanetIntelligenceProcessor _intelligenceProcessor;
+        private GovernorTurnProcessor _governorTurnProcessor;
+        private CivilUnrestTurnProcessor _civilUnrestTurnProcessor;
 
         internal PlanetTurnProcessor(
             ICampaignSimulationSession session,
@@ -32,15 +32,45 @@ namespace OnlyWar.Helpers.Turns
             ICollection<FortificationTransferReport> fortificationTransfers = null,
             ICollection<GovernorRequestReport> governorRequestReports = null)
         {
-            if (session == null) throw new ArgumentNullException(nameof(session));
+            Initialize(
+                CampaignTurnContext.From(session),
+                intelligenceProcessor,
+                growthLedger,
+                fortificationTransfers,
+                governorRequestReports);
+        }
+
+        internal PlanetTurnProcessor(
+            CampaignTurnContext turn,
+            PlanetIntelligenceProcessor intelligenceProcessor = null,
+            OrganicPopulationGrowthLedger growthLedger = null,
+            ICollection<FortificationTransferReport> fortificationTransfers = null,
+            ICollection<GovernorRequestReport> governorRequestReports = null)
+        {
+            Initialize(
+                turn,
+                intelligenceProcessor,
+                growthLedger,
+                fortificationTransfers,
+                governorRequestReports);
+        }
+
+        private void Initialize(
+            CampaignTurnContext turn,
+            PlanetIntelligenceProcessor intelligenceProcessor,
+            OrganicPopulationGrowthLedger growthLedger,
+            ICollection<FortificationTransferReport> fortificationTransfers,
+            ICollection<GovernorRequestReport> governorRequestReports)
+        {
+            if (turn == null) throw new ArgumentNullException(nameof(turn));
             growthLedger ??= new OrganicPopulationGrowthLedger();
             _intelligenceProcessor = intelligenceProcessor
-                ?? new PlanetIntelligenceProcessor(session, new List<Mission>());
-            _demographicsProcessor = new PlanetDemographicsProcessor(session, growthLedger);
+                ?? new PlanetIntelligenceProcessor(turn, new List<Mission>());
+            _demographicsProcessor = new PlanetDemographicsProcessor(turn, growthLedger);
             _regionControlProcessor = new RegionControlTurnProcessor(fortificationTransfers);
-            _conversionProcessor = new ConversionTurnProcessor(session);
-            _governorTurnProcessor = new GovernorTurnProcessor(session, governorRequestReports);
-            _civilUnrestTurnProcessor = new CivilUnrestTurnProcessor(session);
+            _conversionProcessor = new ConversionTurnProcessor(turn);
+            _governorTurnProcessor = new GovernorTurnProcessor(turn, governorRequestReports);
+            _civilUnrestTurnProcessor = new CivilUnrestTurnProcessor(turn);
         }
 
         internal void UpdatePlanets(IEnumerable<Planet> planets)

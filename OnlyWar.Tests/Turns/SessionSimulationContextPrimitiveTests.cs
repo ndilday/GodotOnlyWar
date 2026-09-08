@@ -41,9 +41,10 @@ public sealed class SessionSimulationContextPrimitiveTests
         Order secondOrder = CreateOrder(102);
         CountingEnumerable<Order> source = new([firstOrder, secondOrder]);
 
-        SimulationContext context = new(session, result, intelLedger, source, planet);
+        SimulationContext context = new(
+            CampaignTurnContext.From(session), result, intelLedger, source, planet);
 
-        Assert.Same(session, context.Session);
+        Assert.Same(session.Sector, context.Turn.Sector);
         Assert.Same(result, context.Result);
         Assert.Same(intelLedger, context.IntelLedger);
         Assert.Same(planet, context.PlanetScope);
@@ -65,7 +66,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     public void SimulationContext_NullOrderSourceProducesSeparateEmptyLists()
     {
         SimulationContext context = new(
-            CreateSession(),
+            CampaignTurnContext.From(CreateSession()),
             new TurnResolutionResult(),
             new TurnIntelligenceLedger(),
             playerOrders: null);
@@ -102,12 +103,12 @@ public sealed class SessionSimulationContextPrimitiveTests
         TurnResolutionResult result = new();
         TurnIntelligenceLedger intelLedger = new();
 
-        Assert.Equal("session", Assert.Throws<ArgumentNullException>(
+        Assert.Equal("turn", Assert.Throws<ArgumentNullException>(
             () => new SimulationContext(null, result, intelLedger)).ParamName);
         Assert.Equal("result", Assert.Throws<ArgumentNullException>(
-            () => new SimulationContext(session, null, intelLedger)).ParamName);
+            () => new SimulationContext(CampaignTurnContext.From(session), null, intelLedger)).ParamName);
         Assert.Equal("intelLedger", Assert.Throws<ArgumentNullException>(
-            () => new SimulationContext(session, result, null)).ParamName);
+            () => new SimulationContext(CampaignTurnContext.From(session), result, null)).ParamName);
     }
 
     private static GameSession CreateSession() => new(

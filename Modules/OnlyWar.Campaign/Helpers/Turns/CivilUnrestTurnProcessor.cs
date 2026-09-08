@@ -23,18 +23,23 @@ namespace OnlyWar.Helpers.Turns
         private const double FalseCrackdownWeeklyChanceScale = 0.10;
         private const double CrackdownArmedSuppressionPerPdf = 0.01;
 
-        private readonly ICampaignSimulationSession _session;
+        private readonly CampaignTurnContext _turn;
 
         internal CivilUnrestTurnProcessor(ICampaignSimulationSession session)
+            : this(CampaignTurnContext.From(session))
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        internal CivilUnrestTurnProcessor(CampaignTurnContext turn)
+        {
+            _turn = turn ?? throw new ArgumentNullException(nameof(turn));
         }
 
         internal void ProcessPlanet(Planet planet)
         {
             if (planet == null) return;
-            Faction defaultFaction = _session.Rules.DefaultFaction;
-            Faction unrestFaction = _session.Rules.SectorFactions.Insurrectionists;
+            Faction defaultFaction = _turn.Rules.DefaultFaction;
+            Faction unrestFaction = _turn.Rules.SectorFactions.Insurrectionists;
             if (!planet.PlanetFactionMap.TryGetValue(defaultFaction.Id, out PlanetFaction imperialPlanetFaction))
             {
                 return;
@@ -193,10 +198,10 @@ namespace OnlyWar.Helpers.Turns
             double unrestShare = unrest.Population /
                 (double)Math.Max(1L, imperial.Population + unrest.Population);
             bool foundRealEvidence = unrest.Population > 0
-                && _session.Random.GetLinearDouble()
+                && _turn.Random.GetLinearDouble()
                     < Math.Clamp(governor.Investigation * unrestShare * 10.0, 0.0, 1.0);
             bool falsePositive = !foundRealEvidence
-                && _session.Random.GetLinearDouble()
+                && _turn.Random.GetLinearDouble()
                     < governor.Paranoia * FalseCrackdownWeeklyChanceScale;
             if (!foundRealEvidence && !falsePositive) return;
 
@@ -322,7 +327,7 @@ namespace OnlyWar.Helpers.Turns
                 defender.AddDefense(defenseType, -moved);
                 insurgents.AddDefense(defenseType, moved);
             }
-            defender.Organization = (int)(_session.Random.GetLinearDouble() * 100);
+            defender.Organization = (int)(_turn.Random.GetLinearDouble() * 100);
         }
 
         private static readonly DefenseType[] RevealSeizureOrder =
@@ -336,7 +341,7 @@ namespace OnlyWar.Helpers.Turns
         {
             if (defense <= 0) return 0;
             return Math.Clamp(
-                defense / 2.0 + _session.Random.NextRandomZValue(), 0.0, defense);
+                defense / 2.0 + _turn.Random.NextRandomZValue(), 0.0, defense);
         }
 
         private void RemoveEmptyUnrestPresences(Planet planet, PlanetFaction unrestPlanetFaction)
@@ -360,8 +365,8 @@ namespace OnlyWar.Helpers.Turns
 
         private double NormalizeTax(int taxLevel)
         {
-            int minimum = _session.Rules.PlanetTemplateMap.Values.Min(template => template.TaxRange.MinValue);
-            int maximum = _session.Rules.PlanetTemplateMap.Values.Max(template => template.TaxRange.MaxValue);
+            int minimum = _turn.Rules.PlanetTemplateMap.Values.Min(template => template.TaxRange.MinValue);
+            int maximum = _turn.Rules.PlanetTemplateMap.Values.Max(template => template.TaxRange.MaxValue);
             return maximum <= minimum ? 0.0 : Math.Clamp((taxLevel - minimum) / (double)(maximum - minimum), 0.0, 1.0);
         }
 
@@ -447,7 +452,7 @@ namespace OnlyWar.Helpers.Turns
         {
             if (value <= 0) return 0;
             long whole = (long)Math.Floor(value);
-            return _session.Random.GetLinearDouble() < value - whole ? whole + 1 : whole;
+            return _turn.Random.GetLinearDouble() < value - whole ? whole + 1 : whole;
         }
 
         private long RoundSigned(double value) => value >= 0

@@ -2,6 +2,8 @@
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Runtime.Allocators;
+using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -51,6 +53,7 @@ namespace OnlyWar.Builders
             IRNG random,
             IEntityIdAllocator entityIds)
         {
+            entityIds ??= new RuntimeTacticalEntityIdAllocator();
             List<Squad> generatedForce;
             switch (request.Profile)
             {
@@ -71,10 +74,7 @@ namespace OnlyWar.Builders
             }
 
             NameGeneratedSquads(generatedForce);
-            if (entityIds != null)
-            {
-                NameTacticalSoldiers(generatedForce);
-            }
+            NameTacticalSoldiers(generatedForce);
             return generatedForce;
         }
 

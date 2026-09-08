@@ -6,6 +6,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using System;
 
 namespace OnlyWar.Helpers.Missions
@@ -51,7 +52,7 @@ namespace OnlyWar.Helpers.Missions
             MissionRules rules,
             IRNG random,
             IEngagementResolver engagements)
-            : this(state, rules, random, engagements, new TacticalEntityIdAllocator())
+            : this(state, rules, random, engagements, new RuntimeTacticalEntityIdAllocator())
         {
         }
 

@@ -482,7 +482,7 @@ namespace OnlyWar.Helpers.Battles
 
         private IReadOnlyList<int> GetAbleSquadSlots(BattleSquad squad)
         {
-            int generation = BattleSquad.AbleSoldiersGeneration;
+            int generation = squad.AbleSoldiersGeneration;
             int sourceCount = squad.Soldiers.Count;
             if (_ableSquadSlotCaches.TryGetValue(squad.Id, out AbleSquadSlotCache cache)
                 && cache.Generation == generation
@@ -502,7 +502,7 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
             AbleSquadSlotCache replacement = new(
-                BattleSquad.AbleSoldiersGeneration,
+                squad.AbleSoldiersGeneration,
                 sourceCount,
                 slots.ToArray());
             _ableSquadSlotCaches[squad.Id] = replacement;

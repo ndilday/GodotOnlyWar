@@ -13,20 +13,6 @@ namespace OnlyWar.Helpers.Battles
 
     public class BattleSquadLayoutHelper
     {
-        private static BattleSquadLayoutHelper _instance;
-        private BattleSquadLayoutHelper() { }
-        public static BattleSquadLayoutHelper Instance
-        {
-            get
-            {
-                if(_instance == null)
-                {
-                    _instance = new BattleSquadLayoutHelper();
-                }
-                return _instance;
-            }
-        }
-
         public BattleSquadLayout LayoutBattleSquad(BattleSquad squad, bool isLoose, IRNG random)
         {
             if (random == null) throw new ArgumentNullException(nameof(random));

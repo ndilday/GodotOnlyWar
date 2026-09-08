@@ -32,7 +32,7 @@ namespace OnlyWar.Builders
 
             RNG.Reset(seed);
             NameGenerator.Reset();
-            PlanetBuilder planetBuilder = new();
+            PlanetBuilder planetBuilder = new(support.Identity);
 
             SectorGenerationProfile profile = data.SectorGenerationProfile;
             for (ushort j = 0; j < profile.SectorHeight; j++)
