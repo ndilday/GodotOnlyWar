@@ -33,11 +33,11 @@ namespace OnlyWar.Helpers
         {
         }
 
-        internal SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
-                                           IEnumerable<TrainingProfile> trainingProfiles,
-                                           RatingCalculator ratingCalculator,
-                                           NamedSkillRegistry namedSkills,
-                                           IEnumerable<ScoutTrainingOption> scoutTrainingOptions = null)
+        public SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
+                                         IEnumerable<TrainingProfile> trainingProfiles,
+                                         RatingCalculator ratingCalculator,
+                                         NamedSkillRegistry namedSkills,
+                                         IEnumerable<ScoutTrainingOption> scoutTrainingOptions = null)
         {
             _skillsByKey = (baseSkills ?? throw new ArgumentNullException(nameof(baseSkills)))
                 .Where(bs => !string.IsNullOrWhiteSpace(bs.SkillKey))

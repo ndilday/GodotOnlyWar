@@ -35,6 +35,7 @@ namespace OnlyWar.Models.Missions
         public bool InvadesOnVictory { get; }
 
         public StrategicCombatMission(
+            int id,
             RegionFaction target,
             Faction attacker,
             long committedBattleValue,
@@ -42,7 +43,7 @@ namespace OnlyWar.Models.Missions
             Aggression aggression,
             bool invadesOnVictory,
             MissionType missionType = MissionType.Advance)
-            : base(missionType, target, 0)
+            : base(id, missionType, target, 0)
         {
             Attacker = attacker;
             CommittedBattleValue = committedBattleValue < 0 ? 0 : committedBattleValue;
@@ -52,6 +53,26 @@ namespace OnlyWar.Models.Missions
                 .AsReadOnly();
             Aggression = aggression;
             InvadesOnVictory = missionType == MissionType.LightningRaid ? false : invadesOnVictory;
+        }
+
+        public StrategicCombatMission(
+            RegionFaction target,
+            Faction attacker,
+            long committedBattleValue,
+            IEnumerable<StrategicCombatContribution> contributions,
+            Aggression aggression,
+            bool invadesOnVictory,
+            MissionType missionType = MissionType.Advance)
+            : this(
+                Guid.NewGuid().GetHashCode(),
+                target,
+                attacker,
+                committedBattleValue,
+                contributions,
+                aggression,
+                invadesOnVictory,
+                missionType)
+        {
         }
     }
 

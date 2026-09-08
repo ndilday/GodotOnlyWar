@@ -6,6 +6,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Runtime.Allocators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +18,13 @@ namespace OnlyWar.Helpers.Strategy;
 /// </summary>
 internal sealed class FactionReconPatrolPlanner
 {
+    private readonly IPersistentIdAllocator _identity;
+
+    internal FactionReconPatrolPlanner(IPersistentIdAllocator identity = null)
+    {
+        _identity = identity ?? new PersistentIdAllocator();
+    }
+
     internal const double PatrolForceFraction = 0.1;
     internal const double PolicingPatrolFraction = 0.05;
     internal const double WorthScreeningWorksLevel = 1.0;
@@ -49,14 +57,22 @@ internal sealed class FactionReconPatrolPlanner
                 Profile = ForceCompositionProfile.ScoutPatrol
             };
 
-            List<Squad> patrolSquads = ForceGenerator.GenerateForce(request, random);
+            List<Squad> patrolSquads = ForceGenerator.GenerateForce(request, random, _identity);
             if (patrolSquads.Count == 0) continue;
 
             // The patrol is a standing screen, not a sweep: its squads land in the faction's own
             // region and hold, joining the defence if the region is raided and intercepting enemy
             // recon that tries to scout it. These transient forces are cleared before the next pass.
-            Mission mission = new Mission(MissionType.Patrol, state.RegionFaction, 0);
-            Order order = new Order(patrolSquads, true, false, Aggression.Cautious, mission, faction);
+            Mission mission = new Mission(
+                _identity.GetNextMissionId(), MissionType.Patrol, state.RegionFaction, 0);
+            Order order = new Order(
+                _identity.GetNextOrderId(),
+                patrolSquads,
+                true,
+                false,
+                Aggression.Cautious,
+                mission,
+                faction);
             foreach (Squad squad in patrolSquads)
             {
                 squad.CurrentRegion = state.RegionFaction.Region;
@@ -101,7 +117,7 @@ internal sealed class FactionReconPatrolPlanner
             TargetBattleValue = requestedBattleValue,
             Profile = ForceCompositionProfile.AssaultForce
         };
-        List<Squad> scouts = ForceGenerator.GenerateForce(request, random);
+        List<Squad> scouts = ForceGenerator.GenerateForce(request, random, _identity);
         if (scouts.Count == 0)
         {
             GameLog.Debug(() =>
@@ -128,9 +144,17 @@ internal sealed class FactionReconPatrolPlanner
             }
         }
 
-        Mission mission = new Mission(MissionType.Recon, target.TargetFaction, 0);
+        Mission mission = new Mission(
+            _identity.GetNextMissionId(), MissionType.Recon, target.TargetFaction, 0);
         Aggression reconAggression = ChooseReconAggression(faction, target.TargetRegion);
-        Order order = new Order(scouts, true, false, reconAggression, mission, faction);
+        Order order = new Order(
+            _identity.GetNextOrderId(),
+            scouts,
+            true,
+            false,
+            reconAggression,
+            mission,
+            faction);
         allOrders.Add(order);
         GameLog.Debug(() =>
             $"AI recon {faction.Name}: target={DescribeOffensive(target)}, staging={stagingRegion.Name}, "

@@ -7,7 +7,7 @@ using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Operations.Contracts;
+namespace OnlyWar.Operations.Abstractions;
 
 /// <summary>
 /// Queries over personnel availability. Requests contain only immutable IDs and already-projected
@@ -24,8 +24,8 @@ public interface IPersonnelAvailabilityQueries
 
 /// <summary>
 /// Commands that mutate physical posting state. Aggregate handles are intentionally confined to
-/// this separate port: the operation has to update the authoritative roster and ship manifest, so a
-/// purely detached request would only hide the mutation rather than remove the coupling.
+/// this separate port: the operation has to update the authoritative roster and ship manifest, so
+/// a purely detached request would only hide the mutation rather than remove the coupling.
 /// </summary>
 public interface IPhysicalPostingCommands
 {

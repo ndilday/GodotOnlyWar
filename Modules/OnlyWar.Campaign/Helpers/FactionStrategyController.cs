@@ -11,16 +11,17 @@ using System.Linq;
 using System;
 using OnlyWar.Helpers.Strategy;
 using StrategyPotentialOffensive = OnlyWar.Helpers.Strategy.PotentialOffensive;
+using OnlyWar.Runtime.Allocators;
 
 public class FactionStrategyController
 {
     private readonly IRNG _random;
     private readonly FactionBehaviorRulesProfile _behaviorRules;
-    private readonly FactionReinforcementPlanner _reinforcementPlanner = new();
-    private readonly FactionDevelopmentPlanner _developmentPlanner = new();
-    private readonly FactionConsumptionPlanner _consumptionPlanner = new();
-    private readonly FactionReconPatrolPlanner _reconPatrolPlanner = new();
-    private readonly FactionOffensiveOrderBuilder _offensiveOrderBuilder = new();
+    private readonly FactionReinforcementPlanner _reinforcementPlanner;
+    private readonly FactionDevelopmentPlanner _developmentPlanner;
+    private readonly FactionConsumptionPlanner _consumptionPlanner;
+    private readonly FactionReconPatrolPlanner _reconPatrolPlanner;
+    private readonly FactionOffensiveOrderBuilder _offensiveOrderBuilder;
 
     /// <summary>
     /// Explicit planning dependencies used by session-owned production callers and isolated tests.
@@ -29,10 +30,17 @@ public class FactionStrategyController
     /// </summary>
     public FactionStrategyController(
         IRNG random,
-        FactionBehaviorRulesProfile behaviorRules = null)
+        FactionBehaviorRulesProfile behaviorRules = null,
+        IPersistentIdAllocator identity = null)
     {
         _random = random ?? throw new ArgumentNullException(nameof(random));
         _behaviorRules = behaviorRules;
+        identity ??= new PersistentIdAllocator();
+        _reinforcementPlanner = new FactionReinforcementPlanner();
+        _developmentPlanner = new FactionDevelopmentPlanner(identity);
+        _consumptionPlanner = new FactionConsumptionPlanner(identity);
+        _reconPatrolPlanner = new FactionReconPatrolPlanner(identity);
+        _offensiveOrderBuilder = new FactionOffensiveOrderBuilder(identity: identity);
     }
 
     private const int MaxMissionPlanningIterations = 24;

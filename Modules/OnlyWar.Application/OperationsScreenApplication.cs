@@ -12,7 +12,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Personnel;
 
 namespace OnlyWar.Application;
@@ -25,10 +25,7 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
     IOperationsScreenApplication
 {
     private readonly OperationsScreenQueries _queries;
-    private readonly IOperationsPersonnelSurface _personnelSurface;
-    private readonly IPersonnelAvailabilityQueries _personnelQueries;
-    private readonly IReadinessDecisions _readiness;
-    private readonly MedicalDetachmentService _medicalDetachments;
+    private OperationsCommandContext Command => Context.OperationsCommand;
 
     // One redeemable undo at a time, matching the screen's single UNDO affordance. It is discarded
     // whenever the session is replaced so a stale token can never reach a different campaign.
@@ -40,10 +37,6 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
     public OperationsScreenApplication(CampaignApplicationContext context) : base(context)
     {
         _queries = new OperationsScreenQueries(context);
-        _personnelSurface = Services.Operations.Personnel;
-        _personnelQueries = Services.Operations.Availability;
-        _readiness = Services.Readiness.Decisions;
-        _medicalDetachments = new MedicalDetachmentService(_personnelSurface);
         Context.SessionChanged += OnSessionChanged;
     }
 
@@ -86,7 +79,7 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Region region = _queries.FindRegion(command.RegionId);
         AvailableMission mission = _queries.FindMission(region, command.MissionKey);
         if (region == null || mission == null)
@@ -101,45 +94,42 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
             bool removing = context != null
                 && characters.All(character => ReferenceEquals(character.CurrentOrder, context));
             OrderMutationResult characterResult = removing
-                ? DetachSpecialists(sector, context, characters)
-                : OrderMutationService.CreateOrAdd(
-                    sector, region, mission, [], characters,
+                ? commandContext.DetachSpecialists(context, characters)
+                : commandContext.CreateOrAdd(
+                    region, mission, [], characters,
                     OperationsScreenQueries.ResolveTargetFactionId(region, mission),
-                    context?.LevelOfAggression ?? command.Aggression,
-                    _readiness, ActiveSession.CurrentDate, _personnelQueries);
+                    context?.LevelOfAggression ?? command.Aggression);
             return Project(characterResult, undo: null);
         }
 
-        List<Squad> squads = ResolveEligibleSquads(
-            sector, region, mission, context, command.SquadIds);
+        List<Squad> squads = commandContext.ResolveEligibleSquads(
+            region, mission, context, command.SquadIds);
         if (squads.Count == 0)
             return OperationsCommandResult.Rejected("Select at least one eligible squad.");
 
         bool created = context == null;
-        OrderMutationResult result = OrderMutationService.CreateOrAdd(
-            sector, region, mission, squads,
+        OrderMutationResult result = commandContext.CreateOrAdd(
+            region, mission, squads, [],
             OperationsScreenQueries.ResolveTargetFactionId(region, mission),
-            context?.LevelOfAggression ?? command.Aggression,
-            _readiness, ActiveSession.CurrentDate, _personnelQueries);
+            context?.LevelOfAggression ?? command.Aggression);
         if (!result.Succeeded) return Project(result, undo: null);
 
         Order issued = result.Order;
         return Project(result, created
-            ? Register("order creation", () => OrderMutationService.Cancel(sector, issued))
-            : Register("squad addition", () => RemoveMany(sector, issued, squads)));
+            ? Register("order creation", () => commandContext.Cancel(issued))
+            : Register("squad addition", () => commandContext.RemoveMany(issued, squads)));
     }
 
     public OperationsCommandResult RemoveOrderSquad(RemoveOrderSquadCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Order order = _queries.FindOrder(command.OrderId);
         Squad squad = order?.AssignedSquads.FirstOrDefault(item => item.Id == command.SquadId);
-        OrderMutationResult result = OrderMutationService.RemoveSquad(sector, order, squad);
+        OrderMutationResult result = commandContext.RemoveSquad(order, squad);
         return Project(result, result.Succeeded
-            ? Register("squad removal", () => OrderMutationService.RestoreSquad(
-                sector, order, squad, _readiness, ActiveSession.CurrentDate, _personnelQueries))
+            ? Register("squad removal", () => commandContext.RestoreSquad(order, squad))
             : null);
     }
 
@@ -147,17 +137,16 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Order order = _queries.FindOrder(command.OrderId);
         if (order == null) return OperationsCommandResult.Rejected("That order is no longer active.");
 
         // Capture the participants before the release so the undo restores the whole set as one
         // validated command rather than replaying individual assignments.
-        OrderRestoreToken token = OrderMutationService.CaptureCancellationUndo(sector, order);
-        OrderMutationResult result = OrderMutationService.Cancel(sector, order);
+        OrderRestoreToken token = commandContext.CaptureCancellationUndo(order);
+        OrderMutationResult result = commandContext.Cancel(order);
         return Project(result, result.Succeeded
-            ? Register("order cancellation", () => OrderMutationService.Restore(
-                sector, token, _readiness, ActiveSession.CurrentDate, _personnelQueries))
+            ? Register("order cancellation", () => commandContext.Restore(token))
             : null);
     }
 
@@ -165,15 +154,14 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Order order = _queries.FindOrder(command.OrderId);
         if (order == null) return OperationsCommandResult.Rejected("That order is no longer active.");
         Aggression previous = order.LevelOfAggression;
-        OrderMutationResult result = OrderMutationService.SetAggression(
-            sector, order, command.Aggression);
+        OrderMutationResult result = commandContext.SetAggression(order, command.Aggression);
         return Project(result, result.Succeeded && previous != command.Aggression
             ? Register("aggression change",
-                () => OrderMutationService.SetAggression(sector, order, previous))
+                () => commandContext.SetAggression(order, previous))
             : null);
     }
 
@@ -181,20 +169,18 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Order order = _queries.FindOrder(command.OrderId);
         if (order == null) return OperationsCommandResult.Rejected("That order is no longer active.");
         PlayerSoldier soldier = _queries.FindPlayerSoldier(command.SoldierId);
         bool attached = ReferenceEquals(soldier?.CurrentOrder, order);
         OrderMutationResult result = attached
-            ? OrderMutationService.DetachSpecialist(sector, order, soldier)
-            : OrderMutationService.AttachSpecialist(
-                sector, order, soldier, _readiness, ActiveSession.CurrentDate, _personnelQueries);
+            ? commandContext.DetachSpecialist(order, soldier)
+            : commandContext.AttachSpecialist(order, soldier);
         return Project(result, result.Succeeded
             ? Register(attached ? "specialist detachment" : "specialist attachment", () => attached
-                ? OrderMutationService.AttachSpecialist(
-                    sector, order, soldier, _readiness, ActiveSession.CurrentDate, _personnelQueries)
-                : OrderMutationService.DetachSpecialist(sector, order, soldier))
+                ? commandContext.AttachSpecialist(order, soldier)
+                : commandContext.DetachSpecialist(order, soldier))
             : null);
     }
 
@@ -221,47 +207,44 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Planet planet = _queries.FindPlanet(command.PlanetId);
         Region region = _queries.FindRegion(command.RegionId);
-        List<Squad> squads = OperationsScreenQueries
-            .OrbitingSquads(sector, planet)
+        List<Squad> squads = commandContext
+            .OrbitingSquads(planet)
             .Where(squad => command.SquadIds?.Contains(squad.Id) == true).ToList();
-        return Project(PlanetForceMovementService.Land(
-            sector, planet, region,
-            new MovementParty(squads, _queries.ResolveCharacters(command.CharacterIds)),
-            ActiveSession.CurrentDate, _personnelSurface));
+        return Project(commandContext.Land(
+            planet, region,
+            new MovementParty(squads, _queries.ResolveCharacters(command.CharacterIds))));
     }
 
     public OperationsCommandResult EmbarkForce(EmbarkForceCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Planet planet = _queries.FindPlanet(command.PlanetId);
         Region region = _queries.FindRegion(command.RegionId);
-        List<Squad> squads = (OperationsScreenQueries.PlayerPresence(sector, region)
+        List<Squad> squads = (commandContext.PlayerPresence(region)
                 ?.LandedSquads ?? [])
             .Where(squad => command.SquadIds?.Contains(squad.Id) == true).ToList();
-        return Project(PlanetForceMovementService.Embark(
-            sector, planet, region,
-            OperationsScreenQueries.FindOrbitingShip(
-                sector, planet, command.ShipId),
-            new MovementParty(squads, _queries.ResolveCharacters(command.CharacterIds)),
-            ActiveSession.CurrentDate, _personnelSurface));
+        return Project(commandContext.Embark(
+            planet, region,
+            commandContext.FindOrbitingShip(planet, command.ShipId),
+            new MovementParty(squads, _queries.ResolveCharacters(command.CharacterIds))));
     }
 
     public OperationsCommandResult DetachCasualties(DetachCasualtiesCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
         if (!IsCurrent(command.SessionToken)) return OperationsCommandResult.StaleSession;
-        Sector sector = ActiveSession.Sector;
+        OperationsCommandContext commandContext = Command;
         Planet planet = _queries.FindPlanet(command.PlanetId);
-        MedicalDetachmentResult result = _medicalDetachments.DetachToOrbit(
-            sector, planet, _queries.FindRegion(command.RegionId),
-            OperationsScreenQueries.FindOrbitingShip(
-                sector, planet, command.ShipId),
-            _queries.ResolveCharacters(command.SoldierIds), ActiveSession.CurrentDate);
+        MedicalDetachmentResult result = commandContext.DetachCasualties(
+            planet,
+            _queries.FindRegion(command.RegionId),
+            commandContext.FindOrbitingShip(planet, command.ShipId),
+            _queries.ResolveCharacters(command.SoldierIds));
         return new OperationsCommandResult(result.Succeeded, result.Message);
     }
 
@@ -284,44 +267,4 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         return _undo;
     }
 
-    private OrderMutationResult DetachSpecialists(
-        Sector sector, Order order, IReadOnlyList<PlayerSoldier> characters)
-    {
-        int removed = characters.Count(character =>
-            OrderMutationService.DetachSpecialist(sector, order, character).Succeeded);
-        return new OrderMutationResult(
-            removed == characters.Count,
-            removed == characters.Count
-                ? "Characters removed." : "Some characters could not be removed.",
-            OrderMutationKind.SpecialistDetached, order, ReleasedSpecialists: removed);
-    }
-
-    private OrderMutationResult RemoveMany(Sector sector, Order order, IReadOnlyList<Squad> squads)
-    {
-        OrderMutationResult last = new(true, "Change undone.", Order: order);
-        foreach (Squad squad in squads
-            .Where(squad => ReferenceEquals(squad.CurrentOrders, order)).ToList())
-        {
-            last = OrderMutationService.RemoveSquad(sector, order, squad);
-        }
-        return last;
-    }
-
-    private List<Squad> ResolveEligibleSquads(
-        Sector sector, Region region, AvailableMission mission, Order context,
-        IReadOnlyList<int> squadIds)
-    {
-        if (squadIds == null || squadIds.Count == 0) return [];
-        RegionalEligibilityResult eligibility = RegionalOrderEligibilityService.Build(
-            sector, region, _readiness, mission, context);
-        return eligibility.Groups.SelectMany(group => group.Candidates)
-            .Concat(eligibility.Excluded)
-            .Where(candidate => candidate.Exclusion == SquadEligibilityExclusion.None
-                && !candidate.IsAssignedToContext
-                && SpecialistAvailability.IsMissionSquadFormation(candidate.Squad)
-                && squadIds.Contains(candidate.Squad.Id))
-            .DistinctBy(candidate => candidate.Squad.Id)
-            .Select(candidate => candidate.Squad)
-            .ToList();
-    }
 }

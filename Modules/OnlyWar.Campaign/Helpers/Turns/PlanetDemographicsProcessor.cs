@@ -19,11 +19,11 @@ namespace OnlyWar.Helpers.Turns
         private const float ActiveAssaultGarrisonDraftRate = 0.15f;
         private const float OverrunRemnantGarrisonArmingRate = 1.0f;
 
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly OrganicPopulationGrowthLedger _growthLedger;
 
         internal PlanetDemographicsProcessor(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             OrganicPopulationGrowthLedger growthLedger)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));

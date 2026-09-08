@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class PlanetForwardSimulator
     {
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly TurnOrderPlanner _orderPlanner;
         private readonly MissionTurnProcessor _missionTurnProcessor;
         private readonly MissionAftermathProcessor _missionAftermathProcessor;
@@ -25,7 +25,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly TurnResolutionResult _result;
 
         internal PlanetForwardSimulator(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             TurnOrderPlanner orderPlanner,
             MissionTurnProcessor missionTurnProcessor,
             MissionAftermathProcessor missionAftermathProcessor,

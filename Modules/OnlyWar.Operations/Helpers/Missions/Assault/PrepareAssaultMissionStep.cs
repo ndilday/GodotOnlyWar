@@ -1,4 +1,4 @@
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;

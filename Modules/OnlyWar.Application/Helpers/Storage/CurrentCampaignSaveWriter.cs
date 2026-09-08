@@ -19,7 +19,7 @@ namespace OnlyWar.Helpers.Storage
         public CurrentCampaignSaveWriter(GameStateDataAccess dataAccess) =>
             _dataAccess = dataAccess ?? throw new ArgumentNullException(nameof(dataAccess));
 
-        public void Write(string filePath, ICampaignSession session)
+        public void Write(string filePath, ICampaignSimulationSession session)
         {
             if (session == null) throw new ArgumentNullException(nameof(session));
             var force = session.Sector.PlayerForce;

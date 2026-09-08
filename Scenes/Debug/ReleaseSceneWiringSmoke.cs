@@ -4,7 +4,6 @@ using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Host.Presentation.UI.SystemMenu;
 using OnlyWar.Models;
-using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -120,16 +119,16 @@ public partial class ReleaseSceneWiringSmoke : Node
             "Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection/DossierContent");
         Require(dossierSection?.Visible == true && dossierContent?.GetChildCount() > 0,
             "Selecting the initial planet did not show its world dossier.");
-        Planet selectedPlanet = mainGame.CampaignApplication.ActiveSession.Sector.Planets.Values.FirstOrDefault();
-        if (selectedPlanet != null)
+        int? selectedPlanetId = mainGame.CampaignApplication.QueryStartup().InitialPlanetId;
+        if (selectedPlanetId.HasValue)
         {
-            systemInspector.DisplayFleetContext(selectedPlanet.Id);
+            systemInspector.DisplayFleetContext(selectedPlanetId.Value);
             Require(!dossierSection.Visible,
                 "Selecting a non-planet map object left the world dossier visible.");
             systemInspector.DisplayEmptyState();
             Require(!dossierSection.Visible && dossierContent.GetChildCount() == 0,
                 "Clearing the map selection left dossier content visible.");
-            systemInspector.DisplayPlanet(selectedPlanet.Id);
+            systemInspector.DisplayPlanet(selectedPlanetId.Value);
         }
 
         Button systemOptionsButton = RequireNode<Button>(mainGame,
@@ -288,9 +287,8 @@ public partial class ReleaseSceneWiringSmoke : Node
 
         Button endTurnButton = RequireNode<Button>(mainGame,
             "UILayer/BottomMenu/Panel/MarginContainer/HBoxContainer/EndTurnButton");
-        EndTurnPreflightReport expectedPreflight = EndTurnPreflight.Evaluate(
-            mainGame.CampaignApplication.ActiveSession.Sector,
-            new EndTurnWarningPreferences());
+        EndTurnPreflightReport expectedPreflight = mainGame.CampaignApplication
+            .QueryEndTurnPreflight(new EndTurnWarningPreferences());
         if (Require(expectedPreflight.RequiresConfirmation,
                 "Preview campaign unexpectedly contains no End Turn attention; refusing to resolve a full turn."))
         {

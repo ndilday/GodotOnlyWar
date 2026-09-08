@@ -2,7 +2,7 @@ using OnlyWar.Helpers.Readiness;
 using OnlyWar.Builders;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
@@ -334,7 +334,7 @@ namespace OnlyWar.Helpers.Turns
                         _random,
                         _engagements,
                         new TacticalEntityIdAllocator(),
-                        new OnlyWar.Operations.Contracts.MissionCampaignInputs(_currentDate,
+                        new OnlyWar.Operations.Abstractions.MissionCampaignInputs(_currentDate,
                             _sector.PlayerForce?.Army?.ChapterOperationalDoctrine ?? _doctrine,
                             _recruitment,
                             _invasionForces,

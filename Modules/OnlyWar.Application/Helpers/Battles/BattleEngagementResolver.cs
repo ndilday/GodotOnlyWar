@@ -1,7 +1,7 @@
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Battles.Placers;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;

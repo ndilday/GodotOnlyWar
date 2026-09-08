@@ -2,9 +2,10 @@ using System;
 using OnlyWar.Application;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Application.Adapters.Operations;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Readiness;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Abstractions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Storage;
@@ -50,12 +51,16 @@ internal sealed class TestCampaignComposition
 
     public TurnController CreateTurnController(
         GameSession session,
-        ISoldierTrainingService trainingService = null) =>
-        new(
+        ISoldierTrainingService trainingService = null)
+    {
+        BattleEngagementResolver engagement = Services.Battle.CreateEngagementResolver(session);
+        return new TurnController(
             session,
             Services.Readiness.Decisions,
             Services.Operations.Personnel,
             Services.Operations.Commitments,
-            Services.Battle,
+            engagement,
+            engagement,
             trainingService);
+    }
 }

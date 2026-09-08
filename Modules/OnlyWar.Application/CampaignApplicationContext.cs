@@ -1,5 +1,6 @@
 using System;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Turns;
@@ -13,9 +14,16 @@ namespace OnlyWar.Application;
 /// </summary>
 public sealed class CampaignApplicationContext
 {
-    public CampaignServices Services { get; }
+    internal CampaignServices Services { get; }
     public CampaignRecoverabilityTracker Recoverability { get; } = new();
-    public GameSession ActiveSession { get; private set; }
+    internal GameSession ActiveSession { get; private set; }
+    internal OperationsReadContext OperationsRead { get; private set; }
+    internal OperationsCommandContext OperationsCommand { get; private set; }
+    internal MedicalReadContext MedicalRead { get; private set; }
+    internal MedicalCommandContext MedicalCommand { get; private set; }
+    internal RecoveryPlanService MedicalRecoveryPlans { get; }
+    internal FleetCommandContext FleetCommand { get; private set; }
+    internal TrainingContext Training { get; private set; }
     public Guid SessionToken { get; private set; } = Guid.NewGuid();
 
     public event EventHandler SessionChanged;
@@ -23,6 +31,9 @@ public sealed class CampaignApplicationContext
     public CampaignApplicationContext(CampaignServices services)
     {
         Services = services ?? throw new ArgumentNullException(nameof(services));
+        MedicalRecoveryPlans = new RecoveryPlanService(
+            Services.Operations.Personnel,
+            Services.Operations.Commitments);
     }
 
     public void Install(GameSession session)
@@ -37,12 +48,41 @@ public sealed class CampaignApplicationContext
         {
             Recoverability.BeginNewCampaign();
         }
+        OperationsRead = new OperationsReadContext(
+            session.Sector,
+            session.CurrentDate,
+            Services.Readiness.Decisions,
+            Services.Operations.Availability);
+        OperationsCommand = new OperationsCommandContext(
+            session.Sector,
+            session.CurrentDate,
+            session.Identity,
+            Services.Readiness.Decisions,
+            Services.Operations.Personnel,
+            Services.Operations.Availability);
+        MedicalRead = new MedicalReadContext(session.Sector, session.CurrentDate);
+        MedicalCommand = new MedicalCommandContext(
+            session.Sector,
+            session.CurrentDate,
+            MedicalRecoveryPlans);
+        FleetCommand = new FleetCommandContext(session.Sector, session.Rules);
+        Training = new TrainingContext(
+            session.Sector,
+            session.Rules,
+            session.CurrentDate,
+            session.Identity);
         ReplaceSessionToken();
     }
 
     public void Close()
     {
         ActiveSession = null;
+        OperationsRead = null;
+        OperationsCommand = null;
+        MedicalRead = null;
+        MedicalCommand = null;
+        FleetCommand = null;
+        Training = null;
         ReplaceSessionToken();
     }
 
@@ -50,12 +90,14 @@ public sealed class CampaignApplicationContext
     {
         GameSession target = session ?? ActiveSession
             ?? throw new InvalidOperationException("No campaign session is active.");
+        BattleEngagementResolver engagement = Services.Battle.CreateEngagementResolver(target);
         return new TurnController(
             target,
             Services.Readiness.Decisions,
             Services.Operations.Personnel,
             Services.Operations.Commitments,
-            Services.Battle).ProcessTurn(target.Sector);
+            engagement,
+            engagement).ProcessTurn(target.Sector);
     }
 
     public void Save(string filePath, GameSession session = null)

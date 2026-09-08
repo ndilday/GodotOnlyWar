@@ -11,41 +11,22 @@ namespace OnlyWar.Builders
 {
     class PlanetBuilder
     {
-        private PlanetBuilder() 
+        public PlanetBuilder()
         {
             _shuffledNameIndexes = [];
-        }
-        private static PlanetBuilder _instance;
-        public static PlanetBuilder Instance
-        {
-            get
-            {
-                _instance ??= new PlanetBuilder();
-                return _instance;
-            }
+            RefillNameIndexPool();
         }
 
         // Planet names are drawn without replacement. The pool is shuffled once per
         // sector and consumed from the tail: O(1) per planet, and it cannot stall the
         // way rejection sampling does as the pool drains.
-        private static List<int> _shuffledNameIndexes;
+        private readonly List<int> _shuffledNameIndexes;
 
-        private static int _nextPlanetId = 0;
-        private static int _nextLeaderId = 0;
-
-        // Resets the per-sector generation state: reshuffles the planet-name pool and
-        // zeroes the id counters, both of which otherwise accumulate across sectors.
-        // Must be called at the start of each sector generation, and after RNG.Reset so
-        // the shuffle is deterministic for a given seed.
-        public void Reset()
-        {
-            RefillNameIndexPool();
-            _nextPlanetId = 0;
-            _nextLeaderId = 0;
-        }
+        private int _nextPlanetId;
+        private int _nextLeaderId;
 
         // Rebuilds the name pool in a fresh random order (Fisher-Yates).
-        private static void RefillNameIndexPool()
+        private void RefillNameIndexPool()
         {
             _shuffledNameIndexes.Clear();
             for (int i = 0; i < TempPlanetList.PlanetNames.Length; i++)
@@ -63,7 +44,7 @@ namespace OnlyWar.Builders
         // Pops the next name index off the shuffled pool. If a sector ever needs more
         // planets than there are names, the pool is reshuffled and names start repeating,
         // which is strictly better than failing to place the planet.
-        private static int TakeNextNameIndex()
+        private int TakeNextNameIndex()
         {
             if (_shuffledNameIndexes.Count == 0)
             {

@@ -1,5 +1,6 @@
 using OnlyWar.Builders;
-using OnlyWar.Generation.Contracts;
+using OnlyWar.Abstractions;
+using OnlyWar.Generation.Abstractions;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Application.Adapters.Generation;
 using OnlyWar.Models;
@@ -16,8 +17,9 @@ internal static class TestGeneration
     internal static GenerationSupport Support(GameRulesData data, Date date)
     {
         TestCampaignComposition composition = TestPersonnelComposition.CreateCampaign();
+        IPersistentIdAllocator identity = new OnlyWar.Runtime.Allocators.PersistentIdAllocator();
         return composition.Services.Generation.CreateSupport(
-            data, date, composition.Services.Random);
+            data, date, composition.Services.Random, identity);
     }
 
     internal static Sector GenerateSector(

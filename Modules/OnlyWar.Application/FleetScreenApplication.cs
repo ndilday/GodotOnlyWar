@@ -18,11 +18,23 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
     private const string StaleSessionMessage = "This campaign is no longer active.";
 
     private readonly FleetScreenProjector _fleetProjector = new();
+    private FleetCommandContext Fleet => Context.FleetCommand;
 
     public FleetScreenApplication(CampaignApplicationContext context) : base(context) { }
 
-    public FleetRosterView QueryFleetScreen() =>
-        new(SessionToken, _fleetProjector.BuildPlayerFleets(ActiveSession?.Sector));
+    public FleetRosterView QueryFleetScreen()
+    {
+        FleetCommandContext fleet = Fleet;
+        return new(
+            SessionToken,
+            fleet == null
+                ? []
+                : _fleetProjector.BuildPlayerFleets(
+                    fleet.TaskForces,
+                    fleet.PlayerFaction,
+                    fleet.RecruitmentProgram,
+                    fleet.OperationalDoctrine));
+    }
 
     public bool CanTransferSquadToShip(int squadId, int shipId) =>
         FleetTransferService.CanTransferSquadToShip(FindLoadedSquad(squadId), FindShip(shipId));
@@ -92,7 +104,8 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
             return FleetMoveOptionsView.Unavailable;
         }
 
-        List<FleetDestinationOption> destinations = ActiveSession.Sector.Planets.Values
+        FleetCommandContext fleet = Fleet;
+        List<FleetDestinationOption> destinations = fleet.Planets
             .Where(planet => planet != taskForce.Planet)
             .OrderBy(planet => FleetRouteCalculator.CalculateDistance(taskForce.Planet, planet))
             .Select(planet => new FleetDestinationOption(planet.Id, planet.Name))
@@ -187,7 +200,7 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
                 "At least one ship must remain in the original task force.");
         }
 
-        ActiveSession.Sector.SplitOffNewFleet(taskForce, ships);
+        Fleet.Split(taskForce, ships);
         return FleetCommandResult.Ok();
     }
 
@@ -228,13 +241,13 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
         }
 
         // The clicked task force is retained; the selected target is folded into it.
-        ActiveSession.Sector.CombineFleets(taskForce, target);
+        Fleet.Combine(taskForce, target);
         return FleetCommandResult.Ok();
     }
 
     private FleetCommandResult RejectFleetCommand(Guid sessionToken)
     {
-        if (ActiveSession == null) return FleetCommandResult.Failed(NoCampaignMessage);
+        if (Fleet == null) return FleetCommandResult.Failed(NoCampaignMessage);
         if (sessionToken != SessionToken) return FleetCommandResult.Failed(StaleSessionMessage);
         return null;
     }
@@ -244,10 +257,11 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
     private bool TryGetActionableFleet(int fleetId, out TaskForce taskForce)
     {
         taskForce = null;
-        GameSession session = ActiveSession;
-        if (session == null) return false;
-        if (!session.Sector.Fleets.TryGetValue(fleetId, out TaskForce found)) return false;
-        if (found.Faction != session.Sector.PlayerForce.Faction) return false;
+        FleetCommandContext fleet = Fleet;
+        if (fleet == null) return false;
+        TaskForce found = fleet.FindTaskForce(fleetId);
+        if (found == null) return false;
+        if (found.Faction != fleet.PlayerFaction) return false;
         if (found.TravelPhase != FleetTravelPhase.InOrbit || found.Planet == null) return false;
 
         taskForce = found;
@@ -255,7 +269,7 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
     }
 
     private IEnumerable<TaskForce> MergeCandidates(TaskForce taskForce) =>
-        ActiveSession.Sector.Fleets.Values
+        Fleet.TaskForces
             .Where(other => other.Id != taskForce.Id
                 && other.Faction == taskForce.Faction
                 && other.Planet == taskForce.Planet
@@ -277,18 +291,15 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
         destination = null;
         route = null;
         if (!TryGetActionableFleet(fleetId, out taskForce)) return false;
-        if (!ActiveSession.Sector.Planets.TryGetValue(destinationPlanetId, out destination)
-            || destination == taskForce.Planet)
+        FleetCommandContext fleet = Fleet;
+        destination = fleet.FindPlanet(destinationPlanetId);
+        if (destination == null || destination == taskForce.Planet)
         {
             destination = null;
             return false;
         }
 
-        ushort maxDiameter = ActiveSession.Rules.SectorGenerationProfile.MaxSubsectorDiameter;
-        FleetRouteScope scope = FleetRouteCalculator.DetermineScope(
-            taskForce.Planet, destination, maxDiameter);
-        route = new FleetRouteCalculator().CalculateBestRoute(
-            taskForce.Planet, destination, ActiveSession.Sector.WarpLanes, scope);
+        route = fleet.CalculateRoute(taskForce, destination);
         return route != null;
     }
 
@@ -300,15 +311,10 @@ public sealed class FleetScreenApplication : CampaignScreenApplication, IFleetSc
     }
 
     private Ship FindShip(int shipId) =>
-        ActiveSession?.Sector.Fleets.Values
-            .SelectMany(fleet => fleet.Ships)
-            .FirstOrDefault(ship => ship.Id == shipId);
+        Fleet?.FindShip(shipId);
 
     private Squad FindLoadedSquad(int squadId) =>
-        ActiveSession?.Sector.Fleets.Values
-            .SelectMany(fleet => fleet.Ships)
-            .SelectMany(ship => ship.LoadedSquads)
-            .FirstOrDefault(squad => squad.Id == squadId);
+        Fleet?.FindLoadedSquad(squadId);
 
     private static Unit FindUnitOnShip(int unitId, Ship ship) =>
         ship?.LoadedSquads

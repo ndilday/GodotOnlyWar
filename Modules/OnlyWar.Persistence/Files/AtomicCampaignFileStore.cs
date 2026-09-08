@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using OnlyWar.Persistence.Contracts;
+using OnlyWar.Persistence.Abstractions;
 
 namespace OnlyWar.Persistence.Files;
 
@@ -37,4 +37,3 @@ public sealed class AtomicCampaignFileStore : IAtomicCampaignFileStore
         }
     }
 }
-

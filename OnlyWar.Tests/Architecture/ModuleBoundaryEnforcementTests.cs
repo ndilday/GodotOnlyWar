@@ -4,13 +4,15 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using OnlyWar.Battles.Abstractions;
+using OnlyWar.Application;
+using OnlyWar.Application.Abstractions;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -151,6 +153,109 @@ public class ModuleBoundaryEnforcementTests
     }
 
     [Fact]
+    public void CommonCampaignSessionSeamDoesNotExposeSimulationAggregate()
+    {
+        string[] commonProperties = typeof(ICampaignSession)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["Identity"], commonProperties);
+        Assert.Contains(nameof(ICampaignSimulationSession.Sector),
+            typeof(ICampaignSimulationSession).GetProperties()
+                .Select(property => property.Name));
+        Assert.Contains(nameof(ICampaignSimulationSession.Rules),
+            typeof(ICampaignSimulationSession).GetProperties()
+                .Select(property => property.Name));
+    }
+
+    [Fact]
+    public void OperationsReadServiceDoesNotTraverseTheActiveSessionGraph()
+    {
+        string path = Path.Combine(RulesDatabaseFixture.RepositoryRoot,
+            "Modules", "OnlyWar.Application", "Queries", "OperationsScreenQueries.cs");
+        string source = CodeOf(path);
+
+        Assert.DoesNotContain("ActiveSession.Sector", source);
+        Assert.DoesNotContain("ActiveSession.Rules", source);
+        Assert.DoesNotContain("ActiveSession.CurrentDate", source);
+        Assert.DoesNotContain("ActiveSession.Random", source);
+    }
+
+    [Fact]
+    public void FeatureScreenServicesUseFeatureContextsInsteadOfTheCampaignGraph()
+    {
+        string root = RulesDatabaseFixture.RepositoryRoot;
+        string[] screenFiles =
+        [
+            Path.Combine(root, "Modules", "OnlyWar.Application", "OperationsScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "MedicalScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "FleetScreenApplication.cs"),
+            Path.Combine(root, "Modules", "OnlyWar.Application", "TrainingScreenApplication.cs")
+        ];
+        string[] forbiddenHandles =
+        [
+            "ActiveSession",
+            "CampaignServices",
+            "GameSession",
+            "GameRulesData",
+            "Sector",
+            "StaticRNG"
+        ];
+
+        foreach (string path in screenFiles)
+        {
+            string source = CodeOf(path);
+            foreach (string handle in forbiddenHandles)
+            {
+                Assert.DoesNotContain(handle, source);
+            }
+        }
+    }
+
+    [Fact]
+    public void FeatureContextsKeepAggregateAndRulesHandlesPrivate()
+    {
+        Type[] contexts =
+        [
+            typeof(OperationsReadContext),
+            typeof(OperationsCommandContext),
+            typeof(MedicalReadContext),
+            typeof(MedicalCommandContext),
+            typeof(FleetCommandContext),
+            typeof(TrainingContext)
+        ];
+        Type[] forbidden = [typeof(Sector), typeof(GameRulesData)];
+
+        foreach (Type context in contexts)
+        {
+            IEnumerable<Type> exposed = context
+                .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Select(property => property.PropertyType)
+                .SelectMany(UnwrapTypes);
+            Assert.DoesNotContain(exposed, forbidden.Contains);
+        }
+    }
+
+    [Fact]
+    public void PublicCampaignFacadeDoesNotPublishLiveSessionOrServiceGraph()
+    {
+        Assert.Null(typeof(CampaignApplication).GetProperty(
+            nameof(CampaignApplication.ActiveSession),
+            BindingFlags.Public | BindingFlags.Instance));
+        Assert.Null(typeof(CampaignApplication).GetProperty(
+            nameof(CampaignApplication.Services),
+            BindingFlags.Public | BindingFlags.Instance));
+        Assert.NotNull(typeof(CampaignApplication).GetProperty(
+            nameof(CampaignApplication.Storage),
+            BindingFlags.Public | BindingFlags.Instance));
+        Assert.NotNull(typeof(CampaignApplication).GetProperty(
+            nameof(CampaignApplication.SaveManager),
+            BindingFlags.Public | BindingFlags.Instance));
+    }
+
+    [Fact]
     public void RetiredContractsHubIsAbsentFromTheCurrentProjectGraph()
     {
         string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
@@ -166,6 +271,28 @@ public class ModuleBoundaryEnforcementTests
         Assert.DoesNotContain(graphFiles,
             path => File.Exists(path)
                 && File.ReadAllText(path).Contains("OnlyWar.Contracts", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CrossModuleContractsDoNotRemainInImplementationProjects()
+    {
+        string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
+        string[] implementationProjects =
+            ["OnlyWar.Generation", "OnlyWar.Operations", "OnlyWar.Persistence", "OnlyWar.Runtime"];
+
+        string[] contractFiles = implementationProjects
+            .SelectMany(project =>
+            {
+                string contractsPath = Path.Combine(repositoryRoot, "Modules", project, "Contracts");
+                return Directory.Exists(contractsPath)
+                    ? Directory.EnumerateFiles(contractsPath, "*.cs", SearchOption.AllDirectories)
+                    : [];
+            })
+            .Select(path => Path.GetRelativePath(repositoryRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(contractFiles);
     }
 
     // The negative half of the fixture: a check that cannot fail proves nothing, so run the same

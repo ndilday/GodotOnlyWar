@@ -76,7 +76,7 @@ namespace OnlyWar.Models.Missions
             int missionSize,
             long? targetBattleValue = null)
             : this(
-                OnlyWar.Models.LegacyCampaignIds.GetNextMissionId(),
+                Guid.NewGuid().GetHashCode(),
                 missionType,
                 regionFaction,
                 missionSize,
@@ -90,7 +90,7 @@ namespace OnlyWar.Models.Missions
             int missionSize,
             long? targetBattleValue = null)
             : this(
-                OnlyWar.Models.LegacyCampaignIds.GetNextMissionId(),
+                Guid.NewGuid().GetHashCode(),
                 missionType,
                 region,
                 targetFaction,
@@ -108,7 +108,7 @@ namespace OnlyWar.Models.Missions
             DefenseType = defenseType;
         }
 
-        public SabotageMission(DefenseType defenseType, int size, RegionFaction regionFaction) : base(MissionType.Sabotage, regionFaction, size)
+        public SabotageMission(DefenseType defenseType, int size, RegionFaction regionFaction) : base(Guid.NewGuid().GetHashCode(), MissionType.Sabotage, regionFaction, size)
         {
             DefenseType = defenseType;
         }
@@ -129,17 +129,26 @@ namespace OnlyWar.Models.Missions
             BuildAmount = size;
         }
 
-        public ConstructionMission(DefenseType defenseType, int size, RegionFaction regionFaction) : base(MissionType.Construction, regionFaction, size)
+        public ConstructionMission(DefenseType defenseType, int size, RegionFaction regionFaction) : base(Guid.NewGuid().GetHashCode(), MissionType.Construction, regionFaction, size)
         {
             ConstructionType = defenseType;
             BuildAmount = size;
         }
 
-        public ConstructionMission(DefenseType defenseType, double buildAmount, RegionFaction regionFaction)
-            : base(MissionType.Construction, regionFaction, (int)Math.Ceiling(buildAmount))
+        public ConstructionMission(
+            int id,
+            DefenseType defenseType,
+            double buildAmount,
+            RegionFaction regionFaction)
+            : base(id, MissionType.Construction, regionFaction, (int)Math.Ceiling(buildAmount))
         {
             ConstructionType = defenseType;
             BuildAmount = buildAmount;
+        }
+
+        public ConstructionMission(DefenseType defenseType, double buildAmount, RegionFaction regionFaction)
+            : this(Guid.NewGuid().GetHashCode(), defenseType, buildAmount, regionFaction)
+        {
         }
     }
 
@@ -165,13 +174,19 @@ namespace OnlyWar.Models.Missions
         // straight into the biomass allocator's "troops" term with no conversion.
         public long CommittedBattleValue { get; private set; }
 
-        public FeedMission(long committedBattleValue, RegionFaction regionFaction)
+        public FeedMission(int id, long committedBattleValue, RegionFaction regionFaction)
             : base(
+                id,
                 MissionType.Feed,
                 regionFaction,
                 (int)Math.Clamp(committedBattleValue, 0L, int.MaxValue))
         {
             CommittedBattleValue = Math.Max(0L, committedBattleValue);
+        }
+
+        public FeedMission(long committedBattleValue, RegionFaction regionFaction)
+            : this(Guid.NewGuid().GetHashCode(), committedBattleValue, regionFaction)
+        {
         }
     }
 }

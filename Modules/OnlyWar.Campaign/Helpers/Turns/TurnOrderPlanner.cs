@@ -15,11 +15,11 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class TurnOrderPlanner
     {
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly FactionStrategyController _strategyController;
 
         internal TurnOrderPlanner(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             FactionStrategyController strategyController)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));

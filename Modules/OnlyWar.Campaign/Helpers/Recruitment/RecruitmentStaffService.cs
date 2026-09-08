@@ -29,7 +29,8 @@ namespace OnlyWar.Helpers.Recruitment
         }
 
         public void Synchronize(PlayerForce force, GameRulesData rules, Sector sector,
-            IReadinessDecisions readiness = null)
+            IReadinessDecisions readiness = null,
+            IPersistentIdAllocator identity = null)
         {
             RecruitmentProgram program = force?.RecruitmentProgram;
             if (program == null)
@@ -37,7 +38,7 @@ namespace OnlyWar.Helpers.Recruitment
                 return;
             }
 
-            Order taskOrder = EnsureTaskOrder(force, program, sector);
+            Order taskOrder = EnsureTaskOrder(force, program, sector, identity);
             program.StaffAssignments.Clear();
             Squad administrative = GetAdministrativeSquad(force, rules);
             if (administrative == null)
@@ -87,7 +88,8 @@ namespace OnlyWar.Helpers.Recruitment
         public static Order EnsureTaskOrder(
             PlayerForce force,
             RecruitmentProgram program,
-            Sector sector)
+            Sector sector,
+            IPersistentIdAllocator identity = null)
         {
             if (force == null || program == null || sector == null)
             {
@@ -114,12 +116,18 @@ namespace OnlyWar.Helpers.Recruitment
                 return existing;
             }
 
+            if (identity == null)
+            {
+                throw new ArgumentNullException(nameof(identity));
+            }
+
             program.TaskOrder = new Order(
+                identity.GetNextOrderId(),
                 [],
                 isQuiet: true,
                 isActivelyEngaging: false,
                 Aggression.Avoid,
-                new Mission(MissionType.Recruitment, capital, force.Faction, 0),
+                new Mission(identity.GetNextMissionId(), MissionType.Recruitment, capital, force.Faction, 0),
                 force.Faction);
             sector.AddNewOrder(program.TaskOrder);
             return program.TaskOrder;

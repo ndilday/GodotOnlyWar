@@ -4,7 +4,7 @@ using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 
-namespace OnlyWar.Operations.Contracts;
+namespace OnlyWar.Operations.Abstractions;
 
 /// <summary>
 /// Application-owned lifecycle for Operations mission elements. The operational model owns the

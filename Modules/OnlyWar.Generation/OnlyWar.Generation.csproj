@@ -6,8 +6,10 @@
   <ItemGroup>
     <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
     <ProjectReference Include="../OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
+    <ProjectReference Include="../OnlyWar.Generation.Abstractions/OnlyWar.Generation.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <Using Include="OnlyWar.Abstractions" />
+    <Using Include="OnlyWar.Generation.Abstractions" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
     <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>

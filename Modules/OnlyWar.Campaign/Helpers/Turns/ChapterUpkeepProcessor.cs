@@ -20,11 +20,11 @@ namespace OnlyWar.Helpers.Turns
     internal sealed class ChapterUpkeepProcessor
     {
         private const float WeeklyTrainingPoints = 0.2f;
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly ISoldierTrainingService _trainingService;
 
         internal ChapterUpkeepProcessor(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             ISoldierTrainingService trainingService = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -320,4 +320,3 @@ namespace OnlyWar.Helpers.Turns
         }
     }
 }
-

@@ -23,9 +23,9 @@ namespace OnlyWar.Helpers.Turns
         private const double FalseCrackdownWeeklyChanceScale = 0.10;
         private const double CrackdownArmedSuppressionPerPdf = 0.01;
 
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
 
-        internal CivilUnrestTurnProcessor(ICampaignSession session)
+        internal CivilUnrestTurnProcessor(ICampaignSimulationSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
         }

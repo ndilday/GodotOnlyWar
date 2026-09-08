@@ -3,7 +3,8 @@ using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
+using OnlyWar.Runtime.Allocators;
 using System;
 using System.Linq;
 
@@ -50,12 +51,22 @@ namespace OnlyWar.Helpers.Storage
             // Subsectors and warp lanes are derived deterministically from planet positions
             // rather than persisted, so rebuild them before returning the detached session.
             OnlyWar.Runtime.WorldGeometry.SectorTopologyBuilder.Rebuild(sector, gameRulesData);
-            GameSession session = new(gameRulesData, sector, gameState.CurrentDate, random)
+            PersistentIdAllocator identity = new(
+                NextIdAfter(gameState.HighestSoldierId),
+                NextIdAfter(gameState.HighestRequestId),
+                gameState.NextMissionId,
+                gameState.NextOrderId);
+            GameSession session = new(gameRulesData, sector, gameState.CurrentDate, random, identity)
             {
                 UpgradePending = gameState.UpgradePending
             };
             return session;
         }
+
+        private static int NextIdAfter(int highestId) =>
+            highestId == int.MaxValue
+                ? throw new InvalidOperationException("Persistent ID range is exhausted.")
+                : highestId + 1;
 
         private GameStateDataBlob LoadGameData(
             GameRulesData gameRulesData,

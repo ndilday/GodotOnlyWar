@@ -41,6 +41,6 @@ internal static class RulesDatabaseFixture
 
     public static GameRulesBlob LoadRules()
     {
-        return GameRulesDataAccess.Instance.GetData(DatabasePath);
+        return new GameRulesDataAccess().GetData(DatabasePath);
     }
 }

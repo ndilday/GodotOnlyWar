@@ -23,7 +23,7 @@ public partial class MainGamePreviewBootstrap : Node
                 new SeededRNG(Seed), storage));
         _campaignApplication.StartNewCampaign(
             GameRulesLoader.Load(
-                _campaignApplication.Services.Persistence.Storage.RulesDatabasePath),
+                _campaignApplication.Storage.RulesDatabasePath),
             new Date(39, 500, 1),
             ChapterName,
             Seed);

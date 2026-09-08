@@ -17,6 +17,10 @@
     <ProjectReference Include="Modules/OnlyWar.Domain/OnlyWar.Domain.csproj" />
     <ProjectReference Include="Modules/OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
     <ProjectReference Include="Modules/OnlyWar.Application.Abstractions/OnlyWar.Application.Abstractions.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Generation.Abstractions/OnlyWar.Generation.Abstractions.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Operations.Abstractions/OnlyWar.Operations.Abstractions.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Persistence.Abstractions/OnlyWar.Persistence.Abstractions.csproj" />
+    <ProjectReference Include="Modules/OnlyWar.Runtime.Abstractions/OnlyWar.Runtime.Abstractions.csproj" />
     <ProjectReference Include="Modules/OnlyWar.Battles.Abstractions/OnlyWar.Battles.Abstractions.csproj" />
     <ProjectReference Include="Modules/OnlyWar.Medical.Abstractions/OnlyWar.Medical.Abstractions.csproj" />
     <ProjectReference Include="Modules/OnlyWar.Application/OnlyWar.Application.csproj" />
@@ -28,7 +32,7 @@
     <ProjectReference Include="Modules/OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <Using Include="OnlyWar.Abstractions" />
     <Using Include="OnlyWar.Medical.Abstractions" />
-    <Using Include="OnlyWar.Generation.Contracts" />
+    <Using Include="OnlyWar.Generation.Abstractions" />
   </ItemGroup>
 </Project>
 

@@ -4,7 +4,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-using OnlyWar.Generation.Contracts;
+using OnlyWar.Generation.Abstractions;
+using OnlyWar.Abstractions;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Helpers;
@@ -55,7 +56,13 @@ namespace OnlyWar.Builders
             Date trainingEndDate =
                 new Date(trainingStartDate.GetTotalWeeks() + INITIAL_TRAINING_DURATION_WEEKS);
             List<PlayerSoldier> soldiers = GenerateInitialSoldiers(
-                data, trainingService, trainingStartDate, date, trainingEndDate, foundingSoldierCount);
+                data,
+                trainingService,
+                trainingStartDate,
+                date,
+                trainingEndDate,
+                foundingSoldierCount,
+                support.Identity);
 
             PlayerForce chapter = BuildChapterStructure(
                 data, support, doctrine, trainingEndDate, soldiers, chapterName);
@@ -111,14 +118,16 @@ namespace OnlyWar.Builders
             Date trainingStartDate,
             Date date,
             Date trainingEndDate,
-            int foundingSoldierCount)
+            int foundingSoldierCount,
+            IEntityIdAllocator entityIds)
         {
             SoldierTemplate soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
-            Soldier[] generatedSoldiers = SoldierFactory.Instance.GenerateNewSoldiers(
+            Soldier[] generatedSoldiers = new SoldierFactory().GenerateNewSoldiers(
                 foundingSoldierCount,
                 soldierTemplate.Species,
                 data.SkillTemplateList,
-                new StaticRNG());
+                new StaticRNG(),
+                entityIds);
 
             // A founding starts a fresh, shuffled draw from each name pool. With the
             // production 1,000-soldier chapter, neither component repeats.

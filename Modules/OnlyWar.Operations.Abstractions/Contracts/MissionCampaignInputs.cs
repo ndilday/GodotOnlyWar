@@ -8,7 +8,7 @@ using OnlyWar.Models.FactionBehaviors;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 
-namespace OnlyWar.Operations.Contracts;
+namespace OnlyWar.Operations.Abstractions;
 
 /// <summary>Campaign facts selected by the caller for mission execution.</summary>
 public sealed record MissionCampaignInputs(

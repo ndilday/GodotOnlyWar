@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly CivilUnrestTurnProcessor _civilUnrestTurnProcessor;
 
         internal PlanetTurnProcessor(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             PlanetIntelligenceProcessor intelligenceProcessor = null,
             OrganicPopulationGrowthLedger growthLedger = null,
             ICollection<FortificationTransferReport> fortificationTransfers = null,

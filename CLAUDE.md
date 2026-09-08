@@ -1,4 +1,6 @@
 # OnlyWar — working agreements
+## Basic rules
+In communication with the user, use ASD-STE100 Simplified Technical English.
 
 ## Tool discipline (applies from your first tool call)
 

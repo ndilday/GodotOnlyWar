@@ -4,7 +4,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using System;
 using System.Linq;
 
@@ -15,12 +15,12 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class ScenarioTurnProcessor
     {
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly IOperationsPersonnelSurface _personnel;
         private readonly IOrderCommitmentSurface _commitments;
 
         internal ScenarioTurnProcessor(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             IOperationsPersonnelSurface personnel,
             IOrderCommitmentSurface commitments)
         {
@@ -141,7 +141,8 @@ namespace OnlyWar.Helpers.Turns
             RecruitmentStaffService.EnsureTaskOrder(
                 _session.Sector.PlayerForce,
                 program,
-                _session.Sector);
+                _session.Sector,
+                _session.Identity);
             return program;
         }
 

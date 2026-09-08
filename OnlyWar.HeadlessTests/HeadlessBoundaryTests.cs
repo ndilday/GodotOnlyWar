@@ -5,8 +5,8 @@ using System.Linq;
 using System.Reflection;
 using OnlyWar.Builders;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Persistence.Contracts;
-using OnlyWar.Runtime.Contracts;
+using OnlyWar.Persistence.Abstractions;
+using OnlyWar.Runtime.Abstractions;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Battles;
@@ -34,17 +34,22 @@ public class HeadlessBoundaryTests
              ["OnlyWar.Domain", "OnlyWar.Persistence", "OnlyWar.Campaign", "OnlyWar.Operations",
              "OnlyWar.Generation", "OnlyWar.Battles", "OnlyWar.Medical.Abstractions",
              "OnlyWar.Abstractions", "OnlyWar.Battles.Abstractions", "OnlyWar.Application.Abstractions",
-             "OnlyWar.Runtime", "OnlyWar.Medical"]);
+             "OnlyWar.Runtime", "OnlyWar.Runtime.Abstractions", "OnlyWar.Medical",
+             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions",
+             "OnlyWar.Persistence.Abstractions"]);
         AssertReferences(typeof(CampaignApplication).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Persistence", "OnlyWar.Campaign", "OnlyWar.Operations",
              "OnlyWar.Generation", "OnlyWar.Battles", "OnlyWar.Medical.Abstractions",
              "OnlyWar.Abstractions", "OnlyWar.Battles.Abstractions", "OnlyWar.Application.Abstractions",
-             "OnlyWar.Runtime", "OnlyWar.Medical"]);
+             "OnlyWar.Runtime", "OnlyWar.Runtime.Abstractions", "OnlyWar.Medical",
+             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions",
+             "OnlyWar.Persistence.Abstractions"]);
         AssertReferences(typeof(FactionStrategyController).Assembly,
             ["OnlyWar.Abstractions", "OnlyWar.Domain", "OnlyWar.Medical.Abstractions",
              "OnlyWar.Operations", "OnlyWar.Medical", "OnlyWar.Generation",
              "OnlyWar.Application.Abstractions", "OnlyWar.Runtime", "OnlyWar.Battles",
-             "OnlyWar.Battles.Abstractions"]);
+             "OnlyWar.Battles.Abstractions", "OnlyWar.Generation.Abstractions",
+             "OnlyWar.Operations.Abstractions"]);
         // Tactical execution reaches nothing but the shared domain and its boundary contracts: no
         // Engine bridge, no campaign orchestration, no current session (SB-06).
         AssertReferences(typeof(OnlyWar.Helpers.Battles.BattleTurnResolver).Assembly,
@@ -53,20 +58,31 @@ public class HeadlessBoundaryTests
         AssertReferences(typeof(OnlyWar.Medical.Readiness.DutyReadinessPolicy).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Medical.Abstractions", "OnlyWar.Abstractions"]);
         AssertReferences(typeof(OnlyWar.Persistence.Files.AtomicCampaignFileStore).Assembly,
-            ["OnlyWar.Domain"], allowSqlite: true);
+            ["OnlyWar.Domain", "OnlyWar.Persistence.Abstractions"], allowSqlite: true);
         AssertReferences(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly,
-            ["OnlyWar.Domain", "OnlyWar.Abstractions"]);
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Runtime.Abstractions"]);
         // Operations owns order/mission sequencing and carries only neutral operational elements;
         // the Application adapter owns the tactical BattleSquad projection (SB-12).
         AssertReferences(typeof(OnlyWar.Models.Missions.MissionContext).Assembly,
             ["OnlyWar.Battles.Abstractions", "OnlyWar.Domain", "OnlyWar.Medical.Abstractions",
-             "OnlyWar.Abstractions", "OnlyWar.Runtime"]);
+             "OnlyWar.Abstractions", "OnlyWar.Runtime", "OnlyWar.Operations.Abstractions"]);
         // Generation constructs initial state over explicit ports; it never references campaign
         // orchestration or turn simulation, which is what keeps the two acyclic (SB-09).
         AssertReferences(typeof(SectorBuilder).Assembly,
-            ["OnlyWar.Domain", "OnlyWar.Runtime", "OnlyWar.Abstractions"]);
+            ["OnlyWar.Domain", "OnlyWar.Runtime", "OnlyWar.Abstractions",
+             "OnlyWar.Generation.Abstractions"]);
         Assert.DoesNotContain(AppDomain.CurrentDomain.GetAssemblies(),
             assembly => assembly.GetName().Name is "OnlyWarGodot" or "GodotSharp");
+    }
+
+    [Fact]
+    public void CampaignDoesNotGrantApplicationFriendAccess()
+    {
+        Assembly campaign = typeof(FactionStrategyController).Assembly;
+
+        Assert.DoesNotContain(
+            campaign.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>(),
+            friend => friend.AssemblyName == "OnlyWar.Application");
     }
 
     [Fact]
@@ -92,7 +108,7 @@ public class HeadlessBoundaryTests
         Assembly persistence = typeof(IAtomicCampaignFileStore).Assembly;
         IEnumerable<Type> publicSurface = persistence.GetExportedTypes()
             .Where(type => type.Namespace?.StartsWith(
-                "OnlyWar.Persistence.Contracts", StringComparison.Ordinal) == true)
+                "OnlyWar.Persistence.Abstractions", StringComparison.Ordinal) == true)
             .SelectMany(type => new[] { type }
                 .Concat(type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
                     .SelectMany(method => new[] { method.ReturnType }
@@ -254,7 +270,7 @@ public class HeadlessBoundaryTests
         }
         Assert.All(assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>(),
             friend => Assert.Contains(friend.AssemblyName,
-                new[] { "OnlyWar.Tests", "OnlyWar.HeadlessTests", "OnlyWar.Application" }));
+                new[] { "OnlyWar.Tests", "OnlyWar.HeadlessTests" }));
     }
 
     private static IEnumerable<Type> UnwrapTypes(Type type)

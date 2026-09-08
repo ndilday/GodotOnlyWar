@@ -41,7 +41,7 @@ namespace OnlyWar.Models.Orders
         public OrderForce Force => new(this);
 
         public Order(List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
-            : this(OnlyWar.Models.LegacyCampaignIds.GetNextOrderId(), orderedSquads, isQuiet, isActivelyEngaging,
+            : this(Guid.NewGuid().GetHashCode(), orderedSquads, isQuiet, isActivelyEngaging,
                    levelOfAggression, mission, orderedSquads?.Select(s => s?.Faction).FirstOrDefault(f => f != null)) {}
 
         public Order(
@@ -52,7 +52,7 @@ namespace OnlyWar.Models.Orders
             Mission mission,
             Faction ownerFaction,
             IEnumerable<PlayerSoldier> assignedCharacters = null)
-            : this(OnlyWar.Models.LegacyCampaignIds.GetNextOrderId(), orderedSquads, isQuiet, isActivelyEngaging,
+            : this(Guid.NewGuid().GetHashCode(), orderedSquads, isQuiet, isActivelyEngaging,
                    levelOfAggression, mission, ownerFaction, assignedCharacters)
         {
         }

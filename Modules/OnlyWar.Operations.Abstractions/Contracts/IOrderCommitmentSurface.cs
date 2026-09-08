@@ -1,7 +1,7 @@
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 
-namespace OnlyWar.Operations.Contracts;
+namespace OnlyWar.Operations.Abstractions;
 
 /// <summary>
 /// The operational commitments Campaign personnel is allowed to release (SB-05b-1).

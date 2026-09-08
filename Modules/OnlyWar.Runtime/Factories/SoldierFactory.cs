@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Runtime.Contracts;
+using OnlyWar.Runtime.Abstractions;
+using OnlyWar.Runtime.Allocators;
 using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 using RuntimeFactory = OnlyWar.Runtime.Factories.RuntimeSoldierFactory;
@@ -9,21 +11,14 @@ namespace OnlyWar.Builders;
 
 /// <summary>
 /// Materializer for the campaign soldier entity. Stat/body construction is owned by RuntimeFactory;
-/// this class preserves the live-entity API and the legacy persistent ID seed that save loading
-/// re-seeds, until Campaign registration moves in SB-10. It is Runtime-owned (plan §3.2) so that
-/// generation and live simulation share one construction path and one ID counter.
+/// this class preserves the live-entity API while keeping identity allocation explicit. It is
+/// Runtime-owned (plan §3.2) so generation and live simulation share one construction path.
 /// </summary>
 public sealed class SoldierFactory
 {
-    private static readonly SoldierFactory _instance = new();
-    private static int _nextId;
     private readonly RuntimeFactory _runtime = new();
 
-    private SoldierFactory() { }
-
-    public static SoldierFactory Instance => _instance;
-
-    public void SetCurrentHighestSoldierId(int highestId) => _nextId = highestId + 1;
+    public SoldierFactory() { }
 
     public Soldier GenerateNewSoldier(SoldierTemplate template, IRNG random) =>
         GenerateNewSoldier(template, random, null);
@@ -33,10 +28,11 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
+        entityIds ??= CreateTransientAllocator();
         RuntimeSoldier generated = _runtime.Create(
             template,
             random,
-            entityIds ?? new PersistentIdAllocator());
+            entityIds);
         return Materialize(generated);
     }
 
@@ -52,11 +48,12 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
+        entityIds ??= CreateTransientAllocator();
         RuntimeSoldier generated = _runtime.Create(
             species,
             newRecruitSkills,
             random,
-            entityIds ?? new PersistentIdAllocator());
+            entityIds);
         return Materialize(generated);
     }
 
@@ -69,6 +66,7 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
+        entityIds ??= CreateTransientAllocator();
         Soldier[] result = new Soldier[count];
         for (int i = 0; i < count; i++)
             result[i] = GenerateNewSoldier(template, random, entityIds);
@@ -89,6 +87,7 @@ public sealed class SoldierFactory
         IRNG random,
         IEntityIdAllocator entityIds)
     {
+        entityIds ??= CreateTransientAllocator();
         Soldier[] result = new Soldier[count];
         for (int i = 0; i < count; i++)
             result[i] = GenerateNewSoldier(species, newRecruitSkills, random, entityIds);
@@ -115,9 +114,7 @@ public sealed class SoldierFactory
         return soldier;
     }
 
-    private sealed class PersistentIdAllocator : IEntityIdAllocator
-    {
-        public int GetNextId() => _nextId++;
-    }
-}
+    private static IEntityIdAllocator CreateTransientAllocator() =>
+        new SequentialEntityIdAllocator(Guid.NewGuid().GetHashCode() & 0x3FFFFFFF);
 
+}

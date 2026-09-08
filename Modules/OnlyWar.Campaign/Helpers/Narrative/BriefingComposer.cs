@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using OnlyWar.Generation.Contracts;
+using OnlyWar.Generation.Abstractions;
 using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Helpers.Narrative
 {
-    // BriefingTokens is a boundary value and lives in OnlyWar.Generation.Contracts; Generation
+    // BriefingTokens is a boundary value and lives in OnlyWar.Generation.Abstractions; Generation
     // resolves the tokens and this composer, the narrative owner, turns them into prose.
 
     // Minimal token-substitution composer for the "Promised World" founding directive

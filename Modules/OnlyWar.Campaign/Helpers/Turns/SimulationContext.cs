@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class SimulationContext
     {
-        internal ICampaignSession Session { get; }
+        internal ICampaignSimulationSession Session { get; }
         internal TurnResolutionResult Result { get; }
         internal TurnIntelligenceLedger IntelLedger { get; }
         internal List<Order> PlayerOrders { get; }
@@ -25,7 +25,7 @@ namespace OnlyWar.Helpers.Turns
         internal bool IsPlanetSimulation => PlanetScope != null;
 
         internal SimulationContext(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             TurnResolutionResult result,
             TurnIntelligenceLedger intelLedger,
             IEnumerable<Order> playerOrders = null,

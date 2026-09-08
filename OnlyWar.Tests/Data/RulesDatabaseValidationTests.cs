@@ -25,7 +25,7 @@ public class RulesDatabaseValidationTests
         try
         {
             File.Copy(RulesDatabaseFixture.DatabasePath, path);
-            values = OnlyWar.Helpers.Database.GameRules.GameRulesDataAccess.Instance.GetData(path);
+            values = new OnlyWar.Helpers.Database.GameRules.GameRulesDataAccess().GetData(path);
         }
         finally
         {

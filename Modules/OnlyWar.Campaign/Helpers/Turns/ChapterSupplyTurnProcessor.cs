@@ -10,9 +10,9 @@ namespace OnlyWar.Helpers.Turns
 {
     internal sealed class ChapterSupplyTurnProcessor
     {
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
 
-        internal ChapterSupplyTurnProcessor(ICampaignSession session)
+        internal ChapterSupplyTurnProcessor(ICampaignSimulationSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
         }

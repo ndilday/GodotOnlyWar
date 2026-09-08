@@ -4,7 +4,7 @@ using OnlyWar.Abstractions;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 
-namespace OnlyWar.Runtime.Contracts;
+namespace OnlyWar.Runtime.Abstractions;
 
 /// <summary>Portable result of constructing one soldier; no Campaign entity is returned.</summary>
 public sealed record RuntimeSoldier(

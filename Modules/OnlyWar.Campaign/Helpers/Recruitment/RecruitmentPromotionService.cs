@@ -33,9 +33,9 @@ namespace OnlyWar.Helpers.Recruitment
     {
         private const float BlackCarapaceReadinessRangedRating = 105f;
 
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
 
-        public RecruitmentPromotionService(ICampaignSession session)
+        public RecruitmentPromotionService(ICampaignSimulationSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
         }
@@ -64,9 +64,10 @@ namespace OnlyWar.Helpers.Recruitment
                 return Failure(targetError);
             }
 
-            Soldier generated = SoldierFactory.Instance.GenerateNewSoldier(
+            Soldier generated = new SoldierFactory().GenerateNewSoldier(
                 _session.Rules.ChapterDoctrine.ScoutMarine,
-                _session.Random);
+                _session.Random,
+                _session.Identity);
             generated.Template = _session.Rules.ChapterDoctrine.ScoutMarine;
             generated.Strength = aspirant.Attributes.Strength;
             generated.Constitution = aspirant.Attributes.Constitution;
@@ -164,7 +165,8 @@ namespace OnlyWar.Helpers.Recruitment
             {
                 return PlanFailure("The Chapter has no recruitment program.");
             }
-            new RecruitmentStaffService().Synchronize(force, _session.Rules, _session.Sector);
+            new RecruitmentStaffService().Synchronize(
+                force, _session.Rules, _session.Sector, identity: _session.Identity);
             if (!force.Army.PlayerSoldierMap.TryGetValue(
                     soldierId, out PlayerSoldier neophyte)
                 || neophyte.Template != _session.Rules.ChapterDoctrine.ScoutMarine)

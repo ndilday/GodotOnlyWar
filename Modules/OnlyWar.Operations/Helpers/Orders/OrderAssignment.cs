@@ -1,4 +1,4 @@
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
@@ -10,6 +10,7 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Operations.Personnel;
+using OnlyWar.Runtime.Allocators;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -130,8 +131,13 @@ namespace OnlyWar.Helpers.Orders
                 return null;
             }
 
+            IPersistentIdAllocator identity = campaign.Identity ?? CreateTransientIdentity();
             Mission builtMission = BuildMission(
-                targetRegion, mission, targetFactionId, campaign.PlayerFaction);
+                targetRegion,
+                mission,
+                targetFactionId,
+                campaign.PlayerFaction,
+                identity);
             if (builtMission == null)
             {
                 return null;
@@ -145,6 +151,7 @@ namespace OnlyWar.Helpers.Orders
             // The Order constructor sets squad.CurrentOrders = this for every squad passed in,
             // so assigning CurrentOrders separately afterwards is unnecessary.
             Order newOrder = new Order(
+                identity.GetNextOrderId(),
                 distinctSquads,
                 true,
                 false,
@@ -217,8 +224,13 @@ namespace OnlyWar.Helpers.Orders
                 return null;
             }
 
+            IPersistentIdAllocator identity = campaign.Identity ?? CreateTransientIdentity();
             Mission builtMission = BuildMission(
-                targetRegion, mission, targetFactionId, campaign.PlayerFaction);
+                targetRegion,
+                mission,
+                targetFactionId,
+                campaign.PlayerFaction,
+                identity);
             if (builtMission == null) return null;
 
             List<Order> equivalentOrders = sector.Orders.Values
@@ -240,6 +252,7 @@ namespace OnlyWar.Helpers.Orders
                     .FirstOrDefault(faction => faction != null)
                     ?? sector.PlayerForce?.Faction;
                 targetOrder = new Order(
+                    identity.GetNextOrderId(),
                     [],
                     isQuiet: true,
                     isActivelyEngaging: false,
@@ -419,6 +432,13 @@ namespace OnlyWar.Helpers.Orders
                     && order?.Force?.AllPlayerSoldiers?.Any() == true);
         }
 
+        private static IPersistentIdAllocator CreateTransientIdentity() =>
+            new PersistentIdAllocator(
+                System.Guid.NewGuid().GetHashCode(),
+                System.Guid.NewGuid().GetHashCode(),
+                System.Guid.NewGuid().GetHashCode(),
+                System.Guid.NewGuid().GetHashCode());
+
         private static bool RepresentsEffectiveMission(
             Order order,
             Region targetRegion,
@@ -516,7 +536,11 @@ namespace OnlyWar.Helpers.Orders
         }
 
         private static Mission BuildMission(
-            Region selectedRegion, AvailableMission mission, int targetFactionId, Faction playerFaction)
+            Region selectedRegion,
+            AvailableMission mission,
+            int targetFactionId,
+            Faction playerFaction,
+            IPersistentIdAllocator identity)
         {
             switch (mission.Kind)
             {
@@ -530,7 +554,8 @@ namespace OnlyWar.Helpers.Orders
                         {
                             return null;
                         }
-                        return new Mission(MissionType.Recon, enemyRegionFaction, 0);
+                        return new Mission(
+                            identity.GetNextMissionId(), MissionType.Recon, enemyRegionFaction, 0);
                     }
                 case MissionAvailabilityKind.Attack:
                     {
@@ -547,23 +572,45 @@ namespace OnlyWar.Helpers.Orders
                         {
                             return null;
                         }
-                        return new Mission(MissionType.Advance, enemyRegionFaction, 0);
+                        return new Mission(
+                            identity.GetNextMissionId(), MissionType.Advance, enemyRegionFaction, 0);
                     }
                 case MissionAvailabilityKind.Move:
                     return new Mission(
+                        identity.GetNextMissionId(),
                         MissionType.Advance,
                         GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction),
                         0);
                 case MissionAvailabilityKind.Defend:
-                    return new Mission(MissionType.DefenseInDepth, GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction), 0);
+                    return new Mission(
+                        identity.GetNextMissionId(),
+                        MissionType.DefenseInDepth,
+                        GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction),
+                        0);
                 case MissionAvailabilityKind.Patrol:
-                    return new Mission(MissionType.Patrol, GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction), 0);
+                    return new Mission(
+                        identity.GetNextMissionId(),
+                        MissionType.Patrol,
+                        GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction),
+                        0);
                 case MissionAvailabilityKind.FortifyEntrenchment:
-                    return new ConstructionMission(DefenseType.Entrenchment, 0, GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction));
+                    return new ConstructionMission(
+                        identity.GetNextMissionId(),
+                        DefenseType.Entrenchment,
+                        0,
+                        GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction));
                 case MissionAvailabilityKind.BuildListeningPost:
-                    return new ConstructionMission(DefenseType.ListeningPost, 0, GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction));
+                    return new ConstructionMission(
+                        identity.GetNextMissionId(),
+                        DefenseType.ListeningPost,
+                        0,
+                        GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction));
                 case MissionAvailabilityKind.BuildAntiAir:
-                    return new ConstructionMission(DefenseType.AntiAir, 0, GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction));
+                    return new ConstructionMission(
+                        identity.GetNextMissionId(),
+                        DefenseType.AntiAir,
+                        0,
+                        GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction));
                 case MissionAvailabilityKind.Diversion:
                     {
                         // Diversion: feint against an enemy-held region while the squad stays in
@@ -574,7 +621,8 @@ namespace OnlyWar.Helpers.Orders
                         {
                             return null;
                         }
-                        return new Mission(MissionType.Diversion, enemyRegionFaction, 0);
+                        return new Mission(
+                            identity.GetNextMissionId(), MissionType.Diversion, enemyRegionFaction, 0);
                     }
                 case MissionAvailabilityKind.Special:
                     return mission.SpecialMission;

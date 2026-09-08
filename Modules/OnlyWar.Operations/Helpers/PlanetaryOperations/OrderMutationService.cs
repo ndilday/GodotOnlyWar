@@ -1,4 +1,4 @@
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
@@ -85,10 +85,11 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Aggression aggression,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IPersonnelAvailabilityQueries personnel = null)
+            IPersonnelAvailabilityQueries personnel = null,
+            IPersistentIdAllocator identity = null)
         {
             return CreateOrAdd(sector, target, mission, selectedSquads, [],
-                targetFactionId, aggression, readiness, currentDate, personnel);
+                targetFactionId, aggression, readiness, currentDate, personnel, identity);
         }
 
         // currentDate stamps any operational posting the issue creates. It is an explicit input so
@@ -103,7 +104,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             Aggression aggression,
             IReadinessDecisions readiness,
             Date currentDate = null,
-            IPersonnelAvailabilityQueries personnel = null)
+            IPersonnelAvailabilityQueries personnel = null,
+            IPersistentIdAllocator identity = null)
         {
             if (sector == null || target == null || mission == null)
             {
@@ -162,7 +164,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
             }
 
             Order result = OrderAssignment.AssignParticipantsToMission(
-                new OrderCommandContext(sector, currentDate, readiness, personnel),
+                new OrderCommandContext(sector, currentDate, readiness, personnel, identity),
                 squads, characters, target, mission, targetFactionId, aggression);
             if (result == null)
             {

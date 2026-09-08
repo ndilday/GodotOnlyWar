@@ -333,8 +333,8 @@ public class PlanetaryOperationsServiceTests
 
         Squad unassigned = AddPlayerSquad(fixture, region, "Unassigned Squad");
         Squad assigned = AddPlayerSquad(fixture, region, "Assigned Squad");
-        Mission assignedMission = new(MissionType.Ambush, enemy, 1);
-        Mission openMission = new(MissionType.Sabotage, enemy, 1);
+        Mission assignedMission = new(42, MissionType.Ambush, enemy, 1);
+        Mission openMission = new(43, MissionType.Sabotage, enemy, 1);
         region.SpecialMissions.Add(assignedMission);
         region.SpecialMissions.Add(openMission);
         fixture.Sector.AddNewOrder(new Order(

@@ -7,6 +7,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Runtime.Allocators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,12 +25,16 @@ namespace OnlyWar.Helpers.Strategy;
 /// </remarks>
 internal sealed class FactionOffensiveOrderBuilder
 {
+    private readonly IPersistentIdAllocator _identity;
     private readonly Func<ForceGenerationRequest, IRNG, List<Squad>> _forceGenerator;
 
     internal FactionOffensiveOrderBuilder(
-        Func<ForceGenerationRequest, IRNG, List<Squad>> forceGenerator = null)
+        Func<ForceGenerationRequest, IRNG, List<Squad>> forceGenerator = null,
+        IPersistentIdAllocator identity = null)
     {
-        _forceGenerator = forceGenerator ?? ForceGenerator.GenerateForce;
+        _identity = identity ?? new PersistentIdAllocator();
+        _forceGenerator = forceGenerator
+            ?? ((request, random) => ForceGenerator.GenerateForce(request, random, _identity));
     }
 
     internal bool IssueAssault(
@@ -140,6 +145,7 @@ internal sealed class FactionOffensiveOrderBuilder
         if (useStrategicCombat)
         {
             StrategicCombatMission strategicMission = new(
+                _identity.GetNextMissionId(),
                 chosenOffensive.TargetFaction,
                 faction,
                 committedBattleValue,
@@ -147,7 +153,14 @@ internal sealed class FactionOffensiveOrderBuilder
                 aggression,
                 faction.HasBehavior(FactionBehavior.InvadesOnVictory),
                 missionType);
-            allOrders.Add(new Order(new List<Squad>(), false, true, aggression, strategicMission, faction));
+            allOrders.Add(new Order(
+                _identity.GetNextOrderId(),
+                new List<Squad>(),
+                false,
+                true,
+                aggression,
+                strategicMission,
+                faction));
             return true;
         }
 
@@ -190,8 +203,10 @@ internal sealed class FactionOffensiveOrderBuilder
             squad.CurrentRegion = stagingRegion;
         }
 
-        Mission newMission = new(missionType, chosenOffensive.TargetFaction, 0);
+        Mission newMission = new(
+            _identity.GetNextMissionId(), missionType, chosenOffensive.TargetFaction, 0);
         Order newOrder = new(
+            _identity.GetNextOrderId(),
             generatedSquads,
             missionType == MissionType.LightningRaid,
             true,

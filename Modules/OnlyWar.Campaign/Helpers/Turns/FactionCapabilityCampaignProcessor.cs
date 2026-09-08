@@ -18,7 +18,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly InvasionGenerationProcessor _invasionGenerationProcessor;
         private readonly StrategicInvasionLifecycleProcessor _strategicInvasionLifecycleProcessor;
 
-        internal FactionCapabilityCampaignProcessor(ICampaignSession session)
+        internal FactionCapabilityCampaignProcessor(ICampaignSimulationSession session)
         {
             StrategicInvasionLifecycleProcessor lifecycle =
                 new StrategicInvasionLifecycleProcessor(session);

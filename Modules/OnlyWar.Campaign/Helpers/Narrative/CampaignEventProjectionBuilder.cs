@@ -10,9 +10,9 @@ namespace OnlyWar.Helpers.Narrative
     /// Rebuilds current presentation views from the canonical current-format event ledgers.
     /// It is not a save migrator and never imports legacy history tables.
     /// </summary>
-    internal static class CampaignEventProjectionBuilder
+    public static class CampaignEventProjectionBuilder
     {
-        internal static void PopulateSoldierServiceRecords(
+        public static void PopulateSoldierServiceRecords(
             CampaignEventLedger ledger,
             IEnumerable<PlayerSoldier> soldiers,
             CampaignIdentity identity)
@@ -38,7 +38,7 @@ namespace OnlyWar.Helpers.Narrative
             }
         }
 
-        internal static Dictionary<Date, List<EventHistory>> BuildBattleHistoryView(
+        public static Dictionary<Date, List<EventHistory>> BuildBattleHistoryView(
             ChapterChronicleLedger chronicle,
             CampaignEventLedger events)
         {

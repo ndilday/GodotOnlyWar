@@ -1,8 +1,9 @@
+using OnlyWar.Abstractions;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Models;
 using OnlyWar.Models.Recruitment;
 
-namespace OnlyWar.Operations.Contracts;
+namespace OnlyWar.Operations.Abstractions;
 
 /// <summary>
 /// The campaign an order command resolves against. Order lifecycle mutations register and retire
@@ -14,7 +15,8 @@ public sealed record OrderCommandContext(
     Sector Sector,
     Date Date,
     IReadinessDecisions Readiness = null,
-    IPersonnelAvailabilityQueries Personnel = null)
+    IPersonnelAvailabilityQueries Personnel = null,
+    IPersistentIdAllocator Identity = null)
 {
     /// <summary>
     /// The readiness capability this command evaluates participants with (SB-05b-1). Order policy

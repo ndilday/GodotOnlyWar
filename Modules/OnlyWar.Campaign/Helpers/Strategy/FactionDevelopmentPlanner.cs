@@ -6,6 +6,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Runtime.Allocators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +18,13 @@ namespace OnlyWar.Helpers.Strategy;
 /// </summary>
 internal sealed class FactionDevelopmentPlanner
 {
+    private readonly IPersistentIdAllocator _identity;
+
+    internal FactionDevelopmentPlanner(IPersistentIdAllocator identity = null)
+    {
+        _identity = identity ?? new PersistentIdAllocator();
+    }
+
     // Each pass either completes a whole level or drains a region below the minimum spend. The cap is
     // a backstop against degenerate floating-point behaviour.
     private const int MaxDevelopmentIterations = 256;
@@ -67,7 +75,11 @@ internal sealed class FactionDevelopmentPlanner
             long spend;
             if (best.Option.DefenseType == DefenseType.Organization)
             {
-                mission = new ConstructionMission(DefenseType.Organization, 1, best.State.RegionFaction);
+                mission = new ConstructionMission(
+                    _identity.GetNextMissionId(),
+                    DefenseType.Organization,
+                    1,
+                    best.State.RegionFaction);
                 spend = best.Option.Cost * 100L;
                 org++;
             }
@@ -84,7 +96,11 @@ internal sealed class FactionDevelopmentPlanner
                 long costPerLevel = best.Option.Cost * 100L;
                 double amount = Math.Min(toNextLevel, (double)best.State.SpareTroops / costPerLevel);
                 spend = (long)Math.Ceiling(amount * costPerLevel);
-                mission = new ConstructionMission(best.Option.DefenseType, amount, best.State.RegionFaction);
+                mission = new ConstructionMission(
+                    _identity.GetNextMissionId(),
+                    best.Option.DefenseType,
+                    amount,
+                    best.State.RegionFaction);
                 switch (best.Option.DefenseType)
                 {
                     case DefenseType.ListeningPost:
@@ -99,7 +115,14 @@ internal sealed class FactionDevelopmentPlanner
                 }
             }
 
-            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Avoid, mission, faction));
+            allOrders.Add(new Order(
+                _identity.GetNextOrderId(),
+                new List<Squad>(),
+                true,
+                false,
+                Aggression.Avoid,
+                mission,
+                faction));
             best.State.SpareTroops = Math.Max(0, best.State.SpareTroops - spend);
             projected[best.State] = (org, det, ent, aa);
 
@@ -137,8 +160,18 @@ internal sealed class FactionDevelopmentPlanner
                 (double)state.SpareTroops / costPerLevel);
             long spend = (long)Math.Ceiling(amount * costPerLevel);
 
-            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Avoid,
-                new ConstructionMission(DefenseType.ListeningPost, amount, state.RegionFaction), faction));
+            allOrders.Add(new Order(
+                _identity.GetNextOrderId(),
+                new List<Squad>(),
+                true,
+                false,
+                Aggression.Avoid,
+                new ConstructionMission(
+                    _identity.GetNextMissionId(),
+                    DefenseType.ListeningPost,
+                    amount,
+                    state.RegionFaction),
+                faction));
             state.SpareTroops = Math.Max(0, state.SpareTroops - spend);
             GameLog.Trace(() =>
                 $"AI border listening post {faction.Name}/{state.RegionFaction.Region.Planet.Name}/"

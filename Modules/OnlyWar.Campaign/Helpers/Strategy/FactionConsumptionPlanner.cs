@@ -6,6 +6,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Runtime.Allocators;
 using System;
 using System.Collections.Generic;
 
@@ -16,6 +17,13 @@ namespace OnlyWar.Helpers.Strategy;
 /// </summary>
 internal sealed class FactionConsumptionPlanner
 {
+    private readonly IPersistentIdAllocator _identity;
+
+    internal FactionConsumptionPlanner(IPersistentIdAllocator identity = null)
+    {
+        _identity = identity ?? new PersistentIdAllocator();
+    }
+
     /// <summary>Moves a budget-sized share toward richer adjacent ground.</summary>
     internal void PlanConsumptionExpansionOnPlanet(
         Faction faction,
@@ -52,8 +60,16 @@ internal sealed class FactionConsumptionPlanner
             if (state.SpareTroops <= 0) continue;
 
             long committed = state.SpareTroops;
-            FeedMission mission = new FeedMission(committed, state.RegionFaction);
-            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Cautious, mission, faction));
+            FeedMission mission = new FeedMission(
+                _identity.GetNextMissionId(), committed, state.RegionFaction);
+            allOrders.Add(new Order(
+                _identity.GetNextOrderId(),
+                new List<Squad>(),
+                true,
+                false,
+                Aggression.Cautious,
+                mission,
+                faction));
             state.SpareTroops = 0;
 
             GameLog.Debug(() =>

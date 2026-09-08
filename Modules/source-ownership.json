@@ -39,7 +39,8 @@
   ],
   "Abstractions": [
     "Random/IRNG.cs",
-    "Entities/IEntityIdAllocator.cs"
+    "Entities/IEntityIdAllocator.cs",
+    "Entities/IPersistentIdAllocator.cs"
   ],
   "ApplicationAbstractions": [
     "CampaignSessionContracts.cs"
@@ -59,6 +60,24 @@
     "Contracts/ReadinessDecisions.cs",
     "Contracts/SquadDeploymentContext.cs"
   ],
+  "GenerationAbstractions": [
+    "Contracts/GenerationBoundaryContracts.cs",
+    "Contracts/ISoldierTrainingService.cs"
+  ],
+  "OperationsAbstractions": [
+    "Contracts/IEngagementElementFactory.cs",
+    "Contracts/IOperationsPersonnelSurface.cs",
+    "Contracts/IOrderCommitmentSurface.cs",
+    "Contracts/MissionCampaignInputs.cs",
+    "Contracts/OrderCommandContext.cs",
+    "Models/Missions/OperationalMissionElement.cs"
+  ],
+  "PersistenceAbstractions": [
+    "Contracts/PersistenceBoundaryContracts.cs"
+  ],
+  "RuntimeAbstractions": [
+    "Contracts/RuntimeBoundaryContracts.cs"
+  ],
   "Medical": [
     "Readiness/DutyReadinessPolicy.cs",
     "Readiness/SquadReadinessPolicy.cs",
@@ -70,7 +89,6 @@
     "Treatment/MedicalProcedureRules.cs"
   ],
   "Persistence": [
-    "Contracts/PersistenceBoundaryContracts.cs",
     "Files/AtomicCampaignFileStore.cs",
     "Helpers/Database/DbCommandExtensions.cs",
     "Helpers/Database/GameRules/BaseSkillDataAccess.cs",
@@ -125,13 +143,11 @@
     "Helpers/Storage/SaveGameMetadata.cs"
   ],
   "Runtime": [
-    "Contracts/RuntimeBoundaryContracts.cs",
     "Logging/GameLog.cs",
     "Logging/SoldierProgressLog.cs",
     "Allocators/SequentialEntityIdAllocator.cs",
+    "Allocators/PersistentIdAllocator.cs",
     "Builders/ForceGenerator.cs",
-    "Builders/IdGenerator.cs",
-    "Builders/IdGenerator.Legacy.cs",
     "Builders/SquadFactory.cs",
     "Builders/TacticalEntityIdAllocator.cs",
     "Builders/TacticalEntityIdAllocator.Legacy.cs",
@@ -151,8 +167,6 @@
     "WorldGeometry/WarpLaneBuilder.cs"
   ],
   "Generation": [
-    "Contracts/GenerationBoundaryContracts.cs",
-    "Contracts/ISoldierTrainingService.cs",
     "Chapter/NewChapterBuilder.cs",
     "Scenarios/ScenarioBuilder.cs",
     "World/CharacterBuilder.cs",
@@ -176,11 +190,6 @@
     "Host/Presentation/UI/WoundPresentationPalette.cs"
   ],
   "Operations": [
-    "Contracts/IEngagementElementFactory.cs",
-    "Contracts/IOperationsPersonnelSurface.cs",
-    "Contracts/IOrderCommitmentSurface.cs",
-    "Contracts/MissionCampaignInputs.cs",
-    "Contracts/OrderCommandContext.cs",
     "Builders/MissionStepOrchestrator.cs",
     "Helpers/Extensions/RegionDetectionExtensions.cs",
     "Helpers/Extensions/RegionFactionDescriptionExtensions.cs",
@@ -252,8 +261,7 @@
     "Helpers/Turns/MissionAftermathProcessor.cs",
     "Helpers/Turns/MissionTurnDependencies.cs",
     "Helpers/Turns/MissionTurnProcessor.cs",
-    "Models/Missions/MissionContext.cs",
-    "Models/Missions/OperationalMissionElement.cs"
+    "Models/Missions/MissionContext.cs"
   ],
   "Campaign": [
     "Builders/RequestFactory.cs",
@@ -293,6 +301,7 @@
     "Helpers/RoleSuitabilityService.cs",
     "Helpers/Settings/EndTurnWarningPreferences.cs",
     "Helpers/Simulation/CampaignEventBindings.cs",
+    "Helpers/Simulation/CampaignGenerationSeeding.cs",
     "Helpers/Simulation/FactionRevealService.cs",
     "Helpers/Simulation/GovernorCivilAssessmentService.cs",
     "Helpers/SoldierDossierService.cs",
@@ -345,6 +354,7 @@
     "Helpers/Turns/TurnIntelligenceLedger.cs",
     "Helpers/Turns/TurnOrderPlanner.cs",
     "Helpers/Turns/TurnResolutionResult.cs",
+    "Helpers/TurnController.cs",
     "Helpers/VoronoiSubsectorMapper.cs",
     "Models/Command/CommandWorkspaceModels.cs",
     "Models/Events/CampaignEventClassifier.cs",
@@ -356,6 +366,12 @@
     "Models/PresenceRequest.cs"
   ],
   "Application": [
+    "Contexts/OperationsReadContext.cs",
+    "Contexts/OperationsCommandContext.cs",
+    "Contexts/MedicalReadContext.cs",
+    "Contexts/MedicalCommandContext.cs",
+    "Contexts/FleetCommandContext.cs",
+    "Contexts/TrainingContext.cs",
     "MedicalScreenApplication.cs",
     "OperationsScreenApplication.cs",
     "SessionControlApplication.cs",
@@ -422,6 +438,5 @@
     "Helpers/Simulation/GameSession.cs",
     "Helpers/Storage/CampaignLoader.cs",
     "Helpers/Storage/CurrentCampaignSaveWriter.cs",
-    "Helpers/TurnController.cs",
   ]
 }

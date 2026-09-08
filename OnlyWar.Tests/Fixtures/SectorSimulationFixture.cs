@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -43,7 +44,7 @@ internal sealed class SectorSimulationFixture
     /// Explicit campaign inputs for order-lifecycle commands, so order tests name the sector they
     /// mutate rather than depending on whichever campaign happens to be active (SB-05a).
     /// </summary>
-    public OnlyWar.Operations.Contracts.OrderCommandContext OrderCommands =>
+    public OnlyWar.Operations.Abstractions.OrderCommandContext OrderCommands =>
         new(Sector, CurrentDate,
             new OnlyWar.Helpers.Readiness.MedicalReadinessDecisions(),
             Personnel: _personnel);
@@ -54,7 +55,7 @@ internal sealed class SectorSimulationFixture
         ?? System.Linq.Enumerable.Empty<OnlyWar.Models.Soldiers.PlayerSoldier>();
 
     private readonly RegionFaction[] _defaultRegionFactions = new RegionFaction[RegionCount];
-    private readonly OnlyWar.Operations.Contracts.IOperationsPersonnelSurface _personnel =
+    private readonly OnlyWar.Operations.Abstractions.IOperationsPersonnelSurface _personnel =
         TestPersonnelComposition.CreatePersonnel();
 
     public RegionFaction DefaultRegionFaction(int region) => _defaultRegionFactions[region];
@@ -216,16 +217,21 @@ internal sealed class SectorSimulationFixture
     {
         TestCampaignComposition composition =
             TestPersonnelComposition.CreateCampaign(new StaticRNG());
-        new TurnController(
-            new OnlyWar.Helpers.Simulation.GameSession(
+        OnlyWar.Helpers.Simulation.GameSession session =
+            new(
                 Rules ?? throw new InvalidOperationException("This fixture has no rules."),
                 Sector,
                 CurrentDate,
-                new StaticRNG()),
+                new StaticRNG());
+        BattleEngagementResolver engagement = composition.Services.Battle
+            .CreateEngagementResolver(session);
+        new TurnController(
+            session,
             composition.Services.Readiness.Decisions,
             composition.Services.Operations.Personnel,
             composition.Services.Operations.Commitments,
-            composition.Services.Battle)
+            engagement,
+            engagement)
             .ProcessTurn(Sector);
     }
 

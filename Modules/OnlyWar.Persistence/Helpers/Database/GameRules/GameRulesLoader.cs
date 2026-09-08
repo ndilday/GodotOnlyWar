@@ -5,5 +5,5 @@ namespace OnlyWar.Helpers.Database.GameRules;
 public static class GameRulesLoader
 {
     public static GameRulesData Load(string databasePath) =>
-        new(GameRulesDataAccess.Instance.GetData(databasePath));
+        new(new GameRulesDataAccess().GetData(databasePath));
 }

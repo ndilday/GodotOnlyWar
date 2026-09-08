@@ -7,6 +7,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using SequentialEntityIdAllocator = OnlyWar.Runtime.Allocators.SequentialEntityIdAllocator;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -110,8 +111,8 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 1, 1);
         Faction faction = CreateFaction(line);
         var random = new RecordingRng();
-        SoldierFactory.Instance.SetCurrentHighestSoldierId(500_000);
-        Squad persistentBefore = SquadFactory.GenerateSquad(line, random);
+        var persistentIds = new SequentialEntityIdAllocator(500_000);
+        Squad persistentBefore = SquadFactory.GenerateSquad(line, random, persistentIds);
 
         ForceGenerator.GenerateForce(new ForceGenerationRequest
         {
@@ -120,11 +121,11 @@ public class ForceGeneratorTests
             Profile = ForceCompositionProfile.AssaultForce
         }, random, new TacticalEntityIdAllocator());
 
-        Squad persistentAfter = SquadFactory.GenerateSquad(line, random);
+        Squad persistentAfter = SquadFactory.GenerateSquad(line, random, persistentIds);
 
-        Assert.Equal(persistentBefore.Id + 1, persistentAfter.Id);
+        Assert.Equal(persistentBefore.Id + 2, persistentAfter.Id);
         Assert.Equal(
-            persistentBefore.Members.Single().Id + 1,
+            persistentBefore.Members.Single().Id + 2,
             persistentAfter.Members.Single().Id);
     }
 

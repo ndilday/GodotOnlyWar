@@ -1,6 +1,6 @@
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;

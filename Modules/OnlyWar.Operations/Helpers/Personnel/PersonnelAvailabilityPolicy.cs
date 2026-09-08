@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 
 namespace OnlyWar.Operations.Personnel;
 

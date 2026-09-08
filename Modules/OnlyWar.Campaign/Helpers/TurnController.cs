@@ -1,13 +1,9 @@
 using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Helpers.Application.Adapters.Operations;
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -18,7 +14,6 @@ using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Events;
 using OnlyWar.Helpers.Extensions;
-using OnlyWar.Application;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -38,31 +33,38 @@ namespace OnlyWar.Helpers
         private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
         private readonly RecruitmentTurnProcessor _recruitmentTurnProcessor;
         private readonly FactionCapabilityCampaignProcessor _factionCapabilityCampaignProcessor;
-        private readonly GameSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly TurnIntelligenceLedger _intelLedger;
         private readonly OrganicPopulationGrowthLedger _organicPopulationGrowthLedger;
         private readonly TurnResolutionResult _lastResult;
         private readonly IReadinessDecisions _readiness;
         private readonly IOperationsPersonnelSurface _personnel;
         private readonly IOrderCommitmentSurface _commitments;
-        private readonly BattleServices _battle;
+        private readonly IEngagementResolver _engagements;
+        private readonly IEngagementElementFactory _engagementElements;
 
         public TurnController(
-            GameSession session,
+            ICampaignSimulationSession session,
             IReadinessDecisions readiness,
             IOperationsPersonnelSurface personnel,
             IOrderCommitmentSurface commitments,
-            BattleServices battle,
+            IEngagementResolver engagements,
+            IEngagementElementFactory engagementElements,
             ISoldierTrainingService trainingService = null)
         {
             _session = session ?? throw new System.ArgumentNullException(nameof(session));
             _readiness = readiness ?? throw new System.ArgumentNullException(nameof(readiness));
             _personnel = personnel ?? throw new System.ArgumentNullException(nameof(personnel));
             _commitments = commitments ?? throw new System.ArgumentNullException(nameof(commitments));
-            _battle = battle ?? throw new System.ArgumentNullException(nameof(battle));
+            _engagements = engagements ?? throw new System.ArgumentNullException(nameof(engagements));
+            _engagementElements = engagementElements
+                ?? throw new System.ArgumentNullException(nameof(engagementElements));
             _orderPlanner = new TurnOrderPlanner(
                 _session,
-                new FactionStrategyController(_session.Random, _session.Rules.FactionBehaviorRules));
+                new FactionStrategyController(
+                    _session.Random,
+                    _session.Rules.FactionBehaviorRules,
+                    _session.Identity));
             _chapterUpkeepProcessor = new ChapterUpkeepProcessor(_session, trainingService);
             _fleetTurnProcessor = new FleetTurnProcessor(_chapterUpkeepProcessor);
             _lastResult = new TurnResolutionResult();
@@ -78,8 +80,6 @@ namespace OnlyWar.Helpers
                 _organicPopulationGrowthLedger,
                 _lastResult.FortificationTransfers,
                 _lastResult.GovernorRequestReports);
-            BattleEngagementResolver engagementAdapter =
-                _battle.CreateEngagementResolver(_session);
             _missionTurnProcessor = new MissionTurnProcessor(new MissionTurnDependencies
             {
                 Sector = _session.Sector,
@@ -87,7 +87,7 @@ namespace OnlyWar.Helpers
                 CurrentDate = _session.CurrentDate,
                 Random = _session.Random,
                 Readiness = _readiness,
-                Engagements = engagementAdapter,
+                Engagements = _engagements,
                 MissionRules = new MissionRules(
                     _session.Rules.Skills.Stealth,
                     _session.Rules.Skills.Tactics),
@@ -96,7 +96,7 @@ namespace OnlyWar.Helpers
                 InvasionForces = _session.Sector.StrategicInvasionForces,
                 FactionRules = _session.Rules.FactionBehaviorRules,
                 Personnel = _personnel,
-                EngagementElements = engagementAdapter,
+                EngagementElements = _engagementElements,
                 ApplyDailyHealing = MedicalTurnProcessor.ApplyDailyHealing,
                 ResolveMedicalSkills = () => FieldCareService.ResolveMedicalSkills(
                     _session.Rules.RatingDefinitions,

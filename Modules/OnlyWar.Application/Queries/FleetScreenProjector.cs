@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 
@@ -16,18 +17,31 @@ namespace OnlyWar.Helpers.UI
     {
         private static readonly SquadRowViewModelBuilder SquadRowBuilder = new();
 
-        public IReadOnlyList<TreeNode> BuildPlayerFleets(Sector sector)
+        public IReadOnlyList<TreeNode> BuildPlayerFleets(
+            IEnumerable<TaskForce> taskForces,
+            Faction playerFaction,
+            RecruitmentProgram recruitmentProgram,
+            ChapterOperationalDoctrine doctrine)
         {
-            if (sector?.PlayerForce == null) return [];
-            PlayerForce force = sector.PlayerForce;
-            return sector.Fleets.Values
-                .Where(taskForce => taskForce.Faction == force.Faction)
+            if (playerFaction == null) return [];
+            return (taskForces ?? [])
+                .Where(taskForce => taskForce.Faction == playerFaction)
                 .OrderBy(taskForce => taskForce.Id)
-                .Select(taskForce => BuildFleetNode(taskForce, force))
+                .Select(taskForce => BuildFleetNode(
+                    taskForce, recruitmentProgram, doctrine))
                 .ToList();
         }
 
         public TreeNode BuildFleetNode(TaskForce taskForce, PlayerForce force)
+            => BuildFleetNode(
+                taskForce,
+                force?.RecruitmentProgram,
+                force?.Army?.OperationalDoctrine);
+
+        private TreeNode BuildFleetNode(
+            TaskForce taskForce,
+            RecruitmentProgram recruitmentProgram,
+            ChapterOperationalDoctrine doctrine)
         {
             // A task force in the Warp is out of contact: it, its ships, and the marines
             // aboard are listed for accounting but cannot be selected or inspected.
@@ -44,7 +58,7 @@ namespace OnlyWar.Helpers.UI
                         $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})";
                     List<TreeNode> squadNodes = isInWarp
                         ? []
-                        : BuildLoadedUnitNodes(ship, force).ToList();
+                        : BuildLoadedUnitNodes(ship, recruitmentProgram, doctrine).ToList();
                     return new TreeNode(
                         ship.Id, shipText, squadNodes, selectable: !isInWarp, kind: TreeNodeKind.Ship);
                 })
@@ -59,6 +73,15 @@ namespace OnlyWar.Helpers.UI
         }
 
         public IReadOnlyList<TreeNode> BuildLoadedUnitNodes(Ship ship, PlayerForce force)
+            => BuildLoadedUnitNodes(
+                ship,
+                force?.RecruitmentProgram,
+                force?.Army?.OperationalDoctrine);
+
+        private IReadOnlyList<TreeNode> BuildLoadedUnitNodes(
+            Ship ship,
+            RecruitmentProgram recruitmentProgram,
+            ChapterOperationalDoctrine doctrine)
         {
             return ship.LoadedSquads
                 .Where(squad => squad.IsPresentOperationalForce && squad.Members.Count > 0)
@@ -84,8 +107,8 @@ namespace OnlyWar.Helpers.UI
                                     isSelectable: true,
                                     isEnabled: true,
                                     contextBadge: "TRANSFER"),
-                                force?.RecruitmentProgram,
-                                force?.Army?.OperationalDoctrine)))
+                                recruitmentProgram,
+                                doctrine)))
                         .ToList();
                     return new TreeNode(
                         unit?.Id ?? 0,

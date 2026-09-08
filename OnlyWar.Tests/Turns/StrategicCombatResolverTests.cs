@@ -9,7 +9,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Application.Adapters.Operations;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.FactionBehaviors;

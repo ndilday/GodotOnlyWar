@@ -24,9 +24,9 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class StrategicInvasionLifecycleProcessor
     {
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
 
-        internal StrategicInvasionLifecycleProcessor(ICampaignSession session)
+        internal StrategicInvasionLifecycleProcessor(ICampaignSimulationSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
         }
@@ -827,7 +827,7 @@ namespace OnlyWar.Helpers.Turns
             return presence;
         }
 
-        private static Squad CreateCommandSquad(Faction faction, long invasionForceId, IRNG random)
+        private Squad CreateCommandSquad(Faction faction, long invasionForceId, IRNG random)
         {
             SquadTemplate template = faction.SquadTemplates?.Values
                 .Where(candidate => candidate.BattleValue > 0
@@ -842,7 +842,11 @@ namespace OnlyWar.Helpers.Turns
                 throw new InvalidOperationException(
                     $"Faction '{faction.Name}' has no HQ squad template with a command role.");
             }
-            return SquadFactory.GenerateSquad(template, random, name: $"Invasion force {invasionForceId} command");
+            return SquadFactory.GenerateSquad(
+                template,
+                random,
+                _session.Identity,
+                name: $"Invasion force {invasionForceId} command");
         }
 
         private void RegisterCommandUnit(Sector sector, Faction faction, Squad commandSquad, long invasionForceId)

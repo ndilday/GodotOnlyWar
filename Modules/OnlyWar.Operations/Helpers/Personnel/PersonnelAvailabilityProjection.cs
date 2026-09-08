@@ -10,7 +10,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 
 namespace OnlyWar.Operations.Personnel;
 

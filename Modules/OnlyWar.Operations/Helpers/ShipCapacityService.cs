@@ -1,6 +1,6 @@
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Squads;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Personnel;
 using System.Linq;
 

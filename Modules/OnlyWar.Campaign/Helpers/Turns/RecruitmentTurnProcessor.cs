@@ -29,14 +29,14 @@ namespace OnlyWar.Helpers.Turns
         private const float CandidateAttributeSigma = 2f;
         private const float ImplantPhysicalGrowth = 0.25f;
 
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly OrganicPopulationGrowthLedger _growthLedger;
         private readonly IReadinessDecisions _readiness;
         private readonly RecruitmentStaffService _staffService = new();
         private readonly RecruitmentForecastService _forecastService = new();
 
         internal RecruitmentTurnProcessor(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             OrganicPopulationGrowthLedger growthLedger,
             IReadinessDecisions readiness)
         {
@@ -60,7 +60,12 @@ namespace OnlyWar.Helpers.Turns
                 return null;
             }
 
-            _staffService.Synchronize(force, _session.Rules, _session.Sector, _readiness);
+            _staffService.Synchronize(
+                force,
+                _session.Rules,
+                _session.Sector,
+                _readiness,
+                _session.Identity);
             Planet homeWorld = _session.Sector.GetPlanet(program.HomeWorldPlanetId);
             Faction chapter = force.Faction;
             long population = GetChapterPopulation(homeWorld, chapter.Id);

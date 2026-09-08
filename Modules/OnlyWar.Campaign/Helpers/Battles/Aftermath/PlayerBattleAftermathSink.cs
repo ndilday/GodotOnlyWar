@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Battles.Aftermath
 {
-    internal sealed class PlayerBattleAftermathSink :
+    public sealed class PlayerBattleAftermathSink :
         IPlayerBattleAftermathSink,
         IPlayerCampaignEventSink,
         IPlayerNarrativeEventSink

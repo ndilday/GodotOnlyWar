@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
@@ -151,7 +150,6 @@ namespace OnlyWar.Helpers
                     order.Mission?.MissionType == Models.Missions.MissionType.Recruitment
                     && order.OwnerFaction == playerForce.Faction);
             }
-            RestoreRuntimeIds(gameState);
             return sector;
         }
 
@@ -300,14 +298,6 @@ namespace OnlyWar.Helpers
                     location,
                     Date.FromTotalWeeks(record.StartedDate));
             }
-        }
-
-        private static void RestoreRuntimeIds(GameStateDataBlob gameState)
-        {
-            SoldierFactory.Instance.SetCurrentHighestSoldierId(gameState.HighestSoldierId);
-            RequestFactory.Instance.SetCurrentHighestRequestId(gameState.HighestRequestId);
-            OnlyWar.Runtime.IdGenerator.SetNextMissionId(gameState.NextMissionId);
-            OnlyWar.Runtime.IdGenerator.SetNextOrderId(gameState.NextOrderId);
         }
 
         private static void RestoreFactionCapabilityState(

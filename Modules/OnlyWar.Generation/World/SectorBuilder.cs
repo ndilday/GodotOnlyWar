@@ -1,4 +1,4 @@
-using OnlyWar.Generation.Contracts;
+using OnlyWar.Generation.Abstractions;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models;
@@ -32,7 +32,7 @@ namespace OnlyWar.Builders
 
             RNG.Reset(seed);
             NameGenerator.Reset();
-            PlanetBuilder.Instance.Reset();
+            PlanetBuilder planetBuilder = new();
 
             SectorGenerationProfile profile = data.SectorGenerationProfile;
             for (ushort j = 0; j < profile.SectorHeight; j++)
@@ -42,7 +42,7 @@ namespace OnlyWar.Builders
                     double random = RNG.GetLinearDouble();
                     if (random <= profile.PlanetSpawnProbability)
                     {
-                        Planet planet = GeneratePlanet(new Coordinate(i, j), data);
+                        Planet planet = GeneratePlanet(planetBuilder, new Coordinate(i, j), data);
                         planetList.Add(planet);
 
                         if (planet.PlanetFactionMap[planet.GetControllingFaction().Id].Leader != null)
@@ -79,13 +79,16 @@ namespace OnlyWar.Builders
             return sector;
         }
 
-        private static Planet GeneratePlanet(Coordinate position, GameRulesData data)
+        private static Planet GeneratePlanet(
+            PlanetBuilder planetBuilder,
+            Coordinate position,
+            GameRulesData data)
         {
             // Every generated world starts under the configured default-faction control unless a
             // data-authored public presence rule takes it over. Hidden and public faction starts are
             // applied by the same declarative policy surface, so adding a new faction does not
             // require another faction-specific branch here.
-            Planet planet = PlanetBuilder.Instance.GenerateNewPlanet(
+            Planet planet = planetBuilder.GenerateNewPlanet(
                 data.PlanetTemplateMap, position, data.DefaultFaction);
             foreach (FactionPlanetPresenceRule rule in data.FactionPlanetPresence
                          .GetApplicableRules(SectorGenerationProfileKeys.Standard, planet.Template.Id))

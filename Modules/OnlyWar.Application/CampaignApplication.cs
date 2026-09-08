@@ -9,6 +9,7 @@ using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
+using OnlyWar.Runtime.Allocators;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Command;
 using OnlyWar.Models.Events;
@@ -75,8 +76,14 @@ public sealed class CampaignApplication :
         _training = new TrainingScreenApplication(_context);
     }
 
-    public CampaignServices Services => _context.Services;
-    public GameSession ActiveSession => _context.ActiveSession;
+    // The public facade deliberately publishes screen contracts and lifecycle commands, not the
+    // live session aggregate or the complete service graph. Tests and application-internal
+    // composition retain friend/internal access while host code uses these narrow persistence
+    // capabilities where it genuinely needs them.
+    internal CampaignServices Services => _context.Services;
+    internal GameSession ActiveSession => _context.ActiveSession;
+    public GameStorage Storage => _context.Services.Persistence.Storage;
+    public SaveGameManager SaveManager => _context.Services.Persistence.SaveManager;
     public Guid SessionToken => _context.SessionToken;
 
     public event EventHandler SessionChanged
@@ -118,14 +125,15 @@ public sealed class CampaignApplication :
         if (rules == null) throw new ArgumentNullException(nameof(rules));
         if (date == null) throw new ArgumentNullException(nameof(date));
 
+        PersistentIdAllocator identity = new();
         Sector candidate = SectorBuilder.GenerateSector(
             seed,
             rules,
             date,
-            Services.Generation.CreateSupport(rules, date, Services.Random),
+            Services.Generation.CreateSupport(rules, date, Services.Random, identity),
             chapterName,
             invaderSelection);
-        return new GameSession(rules, candidate, date, Services.Random);
+        return new GameSession(rules, candidate, date, Services.Random, identity);
     }
 
     public GameSession LoadCampaign(string savePath) =>

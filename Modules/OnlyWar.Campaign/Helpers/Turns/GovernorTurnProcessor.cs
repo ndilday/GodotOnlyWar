@@ -20,11 +20,11 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class GovernorTurnProcessor
     {
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
         private readonly ICollection<GovernorRequestReport> _requestReports;
 
         internal GovernorTurnProcessor(
-            ICampaignSession session,
+            ICampaignSimulationSession session,
             ICollection<GovernorRequestReport> requestReports = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -196,7 +196,7 @@ namespace OnlyWar.Helpers.Turns
             int deliveryDelayWeeks = scheduleKind == PledgeScheduleKind.Standing
                 ? supplyRules.StandingCadenceWeeks
                 : supplyRules.DefaultDeliveryWeeks;
-            IRequest request = RequestFactory.Instance.GenerateNewRequest(
+            IRequest request = new RequestFactory(_session.Identity).GenerateNewRequest(
                 planet,
                 planetFaction.Leader,
                 threatFaction,
@@ -247,6 +247,7 @@ namespace OnlyWar.Helpers.Turns
             capital.SpecialMissions.RemoveAll(
                 mission => mission.MissionType == MissionType.ShowOfForce);
             capital.SpecialMissions.Add(new Mission(
+                _session.Identity.GetNextMissionId(),
                 MissionType.ShowOfForce,
                 playerRegionFaction,
                 request.Commitment.PackageCount));

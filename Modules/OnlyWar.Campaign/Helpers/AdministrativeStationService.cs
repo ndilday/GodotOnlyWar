@@ -5,7 +5,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;

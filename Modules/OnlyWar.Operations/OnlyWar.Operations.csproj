@@ -6,13 +6,14 @@
   <ItemGroup>
     <ProjectReference Include="../OnlyWar.Domain/OnlyWar.Domain.csproj" />
     <ProjectReference Include="../OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
+    <ProjectReference Include="../OnlyWar.Operations.Abstractions/OnlyWar.Operations.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Battles.Abstractions/OnlyWar.Battles.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Medical.Abstractions/OnlyWar.Medical.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <Using Include="OnlyWar.Abstractions" />
     <Using Include="OnlyWar.Medical.Abstractions" />
     <Using Include="OnlyWar.Models.Missions" />
-    <Using Include="OnlyWar.Operations.Contracts" />
+    <Using Include="OnlyWar.Operations.Abstractions" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
     <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>

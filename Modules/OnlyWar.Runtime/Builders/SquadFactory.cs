@@ -1,7 +1,10 @@
+using System;
 using OnlyWar.Helpers;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Runtime.Allocators;
+using OnlyWar.Runtime.Factories;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -118,17 +121,19 @@ namespace OnlyWar.Builders
             IEntityIdAllocator entityIds,
             string name)
         {
+            IEntityIdAllocator soldierIds = entityIds ?? new SequentialEntityIdAllocator(
+                Guid.NewGuid().GetHashCode() & 0x3FFFFFFF);
             Squad squad = entityIds == null
                 ? new Squad(name, null, squadTemplate)
                 : new Squad(entityIds.GetNextId(), name, null, squadTemplate);
             foreach (SquadTemplateElement element in squadTemplate.Elements)
             {
                 SoldierTemplate template = element.SoldierTemplate;
-                Soldier[] soldiers = SoldierFactory.Instance.GenerateNewSoldiers(
+                Soldier[] soldiers = new SoldierFactory().GenerateNewSoldiers(
                     counts[element],
                     template,
                     random,
-                    entityIds);
+                    soldierIds);
 
                 foreach (Soldier soldier in soldiers)
                 {

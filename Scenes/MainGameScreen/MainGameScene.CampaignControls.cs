@@ -100,9 +100,9 @@ public partial class MainGameScene
 
 		try
 		{
-			GameStorage storage = _campaignApplication.Services.Persistence.Storage;
+			GameStorage storage = _campaignApplication.Storage;
 			storage.InitializeUserStorage();
-			_saveGameManager = _campaignApplication.Services.Persistence.SaveManager;
+			_saveGameManager = _campaignApplication.SaveManager;
 			_saveCatalog = new SaveGameCatalog(storage.SaveDirectory);
 		}
 		catch (Exception exception)

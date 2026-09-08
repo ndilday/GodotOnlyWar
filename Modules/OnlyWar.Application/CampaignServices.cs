@@ -12,7 +12,7 @@ using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Readiness;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
 
@@ -137,11 +137,16 @@ public sealed class GenerationServices
         _battle = battle ?? throw new ArgumentNullException(nameof(battle));
     }
 
-    public GenerationSupport CreateSupport(GameRulesData rules, Date date, IRNG random) =>
+    public GenerationSupport CreateSupport(
+        GameRulesData rules,
+        Date date,
+        IRNG random,
+        IPersistentIdAllocator identity) =>
         CandidateGenerationSupport.For(
             rules,
             date,
             random,
+            identity,
             _readiness,
             _operations.Personnel,
             _operations.Commitments,

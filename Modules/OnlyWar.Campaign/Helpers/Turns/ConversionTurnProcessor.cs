@@ -21,9 +21,9 @@ namespace OnlyWar.Helpers.Turns
             DefenseType.Entrenchment
         ];
 
-        private readonly ICampaignSession _session;
+        private readonly ICampaignSimulationSession _session;
 
-        internal ConversionTurnProcessor(ICampaignSession session)
+        internal ConversionTurnProcessor(ICampaignSimulationSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
         }

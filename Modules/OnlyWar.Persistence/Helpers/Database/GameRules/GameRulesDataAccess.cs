@@ -34,9 +34,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private readonly SectorGenerationProfileDataAccess _sectorGenerationProfileDataAccess;
         private readonly FactionBehaviorRulesDataAccess _factionBehaviorRulesDataAccess;
 
-        private static GameRulesDataAccess _instance;
-
-        private GameRulesDataAccess()
+        public GameRulesDataAccess()
         {
             _baseSkillDataAccess = new BaseSkillDataAccess();
             _hitLocationDataAccess = new HitLocationTemplateDataAccess();
@@ -53,17 +51,6 @@ namespace OnlyWar.Helpers.Database.GameRules
             _factionBehaviorRulesDataAccess = new FactionBehaviorRulesDataAccess();
         }
 
-        public static GameRulesDataAccess Instance
-        {
-            get
-            {
-                if(_instance == null)
-                {
-                    _instance = new GameRulesDataAccess();
-                }
-                return _instance;
-            }
-        }
         public GameRulesBlob GetData(string filePath)
         {
             string fullPath = Path.GetFullPath(filePath);

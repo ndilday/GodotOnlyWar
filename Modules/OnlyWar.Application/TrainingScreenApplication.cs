@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
@@ -60,27 +59,26 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
         "The Chapter has no Home World. The 10th Company will establish its "
         + "recruitment program when the Promised World is liberated.";
 
-    private readonly RecruitmentStaffService _staffService = new();
     private readonly RecruitmentForecastService _forecastService = new();
     private readonly SquadRowViewModelBuilder _trainingRowBuilder = new();
+    private TrainingContext Training => Context.Training;
 
     public TrainingScreenApplication(CampaignApplicationContext context) : base(context) { }
 
     public bool IsRecruitmentSetupComplete =>
-        ActiveSession?.Sector.PlayerForce?.RecruitmentProgram?.IsSetupComplete == true;
+        Training?.Program?.IsSetupComplete == true;
 
     public RecruitmentDoctrineDraft QueryDoctrineDraft()
     {
-        RecruitmentProgram program = ActiveSession?.Sector.PlayerForce?.RecruitmentProgram;
+        RecruitmentProgram program = Training?.Program;
         return program == null ? null : CreateDraft(program);
     }
 
     public RecruitmentScreenSnapshot QueryRecruitmentScreen(
         RecruitmentDoctrineDraft draft, int? selectedSquadId)
     {
-        GameSession session = ActiveSession;
-        PlayerForce force = session?.Sector.PlayerForce;
-        RecruitmentProgram program = force?.RecruitmentProgram;
+        TrainingContext training = Training;
+        RecruitmentProgram program = training?.Program;
         if (program == null)
         {
             return new RecruitmentScreenSnapshot
@@ -91,14 +89,14 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
             };
         }
 
-        _staffService.Synchronize(force, session.Rules, session.Sector);
+        training.SynchronizeStaff();
         // A completed program is authoritative: an external change, including a loaded campaign,
         // becomes the new baseline rather than keeping a stale staged edit.
         RecruitmentDoctrineDraft effective =
             program.IsSetupComplete || draft == null ? CreateDraft(program) : draft;
 
-        Planet homeWorld = GetHomeWorld(session, force, program);
-        long population = GetChapterPopulation(homeWorld, force.Faction.Id);
+        Planet homeWorld = training.FindHomeWorld();
+        long population = GetChapterPopulation(homeWorld, training.FactionId);
 
         return new RecruitmentScreenSnapshot
         {
@@ -106,18 +104,18 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
             IsSetupComplete = program.IsSetupComplete,
             HomeWorldName = homeWorld?.Name ?? "Unknown Home World",
             ChapterPopulation = population,
-            Requisition = force.Army.Requisition,
-            Geneseed = force.GeneseedStockpile,
+            Requisition = training.Requisition,
+            Geneseed = training.GeneseedStockpile,
             Staff = SummarizeStaff(program),
             Doctrine = effective,
-            Forecast = CalculateForecast(session, force, program, homeWorld, effective),
+            Forecast = CalculateForecast(training, program, homeWorld, effective),
             Candidates = program.QualifiedCandidates
                 .OrderBy(candidate => candidate.QualifiedDate)
                 .ThenBy(candidate => candidate.Id)
                 .Select(candidate => new RecruitmentCandidateRow(
                     candidate.Id,
                     candidate.InductionDesignation,
-                    FormatAge(session, candidate.BirthDate),
+                    FormatAge(training.CurrentDate, candidate.BirthDate),
                     candidate.GeneticCompatibility))
                 .ToList(),
             Aspirants = program.Aspirants
@@ -128,11 +126,11 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                     aspirant.Id,
                     aspirant.InductionDesignation,
                     FormatPhase(aspirant.Phase),
-                    FormatAge(session, aspirant.BirthDate),
+                    FormatAge(training.CurrentDate, aspirant.BirthDate),
                     aspirant.TrainingProgress,
                     aspirant.Phase == RecruitmentPhase.Phase12))
                 .ToList(),
-            ScoutTrainingOptions = session.Rules.ScoutTrainingOptions.Options,
+            ScoutTrainingOptions = training.ScoutTrainingOptions.Options,
             ScoutSquads = QueryScoutSquads(selectedSquadId),
             RecentEvents = program.ProgramEvents
                 .OrderByDescending(programEvent => programEvent.Date)
@@ -144,28 +142,25 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
 
     public RecruitmentForecast PreviewForecast(RecruitmentDoctrineDraft draft)
     {
-        GameSession session = ActiveSession;
-        PlayerForce force = session?.Sector.PlayerForce;
-        RecruitmentProgram program = force?.RecruitmentProgram;
+        TrainingContext training = Training;
+        RecruitmentProgram program = training?.Program;
         if (program == null || draft == null) return null;
 
-        _staffService.Synchronize(force, session.Rules, session.Sector);
-        return CalculateForecast(
-            session, force, program, GetHomeWorld(session, force, program), draft);
+        training.SynchronizeStaff();
+        return CalculateForecast(training, program, training.FindHomeWorld(), draft);
     }
 
     public IReadOnlyList<ScoutSquadRow> QueryScoutSquads(int? selectedSquadId)
     {
-        GameSession session = ActiveSession;
-        PlayerForce force = session?.Sector.PlayerForce;
-        if (force?.Army?.OrderOfBattle == null) return [];
+        TrainingContext training = Training;
+        if (training?.Chapter == null) return [];
 
-        return OrderScoutSquads(force.Army.OrderOfBattle.GetAllSquads().Where(IsTrainingSquad))
+        return OrderScoutSquads(training.ChapterSquads.Where(IsTrainingSquad))
             .Select(squad => new ScoutSquadRow(
                 squad.Id,
-                DescribeSquadListLabel(squad, session.Rules.ScoutTrainingOptions),
+                DescribeSquadListLabel(squad, training.ScoutTrainingOptions),
                 squad.TrainingOptionKey,
-                BuildReadinessReport(session, squad),
+                BuildReadinessReport(training, squad),
                 squad.Members
                     .OfType<PlayerSoldier>()
                     .Where(soldier => !soldier.Template.IsSquadLeader)
@@ -173,7 +168,8 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                     .Select(soldier => new ScoutPromotionRow(
                         soldier.Id,
                         soldier.Name,
-                        GetReadinessLevel(session, GetLatestEvaluation(soldier)) > 0))
+                        GetReadinessLevel(
+                            training.RatingConsumers, GetLatestEvaluation(soldier)) > 0))
                     .ToList(),
                 _trainingRowBuilder.Build(
                     squad,
@@ -184,26 +180,26 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                         isSelectable: true,
                         isEnabled: true,
                         contextBadge: "SCOUT TRAINING"),
-                    force.RecruitmentProgram,
-                    force.Army.OperationalDoctrine)))
+                    training.Program,
+                    training.OperationalDoctrine)))
             .ToList();
     }
 
     public TrainingCommandResult ConfirmDoctrine(
         Guid sessionToken, RecruitmentDoctrineDraft draft)
     {
-        if (ActiveSession == null) return TrainingCommandResult.Failed(NoCampaignMessage);
+        TrainingContext training = Training;
+        if (training == null) return TrainingCommandResult.Failed(NoCampaignMessage);
         if (sessionToken != SessionToken)
             return TrainingCommandResult.Failed(StaleSessionMessage);
 
-        PlayerForce force = ActiveSession.Sector.PlayerForce;
-        RecruitmentProgram program = force?.RecruitmentProgram;
+        RecruitmentProgram program = training.Program;
         if (program == null || draft == null)
         {
             return TrainingCommandResult.Failed(RecruitmentLockedMessage);
         }
 
-        _staffService.Synchronize(force, ActiveSession.Rules, ActiveSession.Sector);
+        training.SynchronizeStaff();
         if (!SummarizeStaff(program).IsComplete)
         {
             return TrainingCommandResult.Failed(
@@ -231,11 +227,12 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
     public TrainingCommandResult SetScoutTrainingOption(
         Guid sessionToken, int squadId, string optionKey)
     {
-        if (ActiveSession == null) return TrainingCommandResult.Failed(NoCampaignMessage);
+        TrainingContext training = Training;
+        if (training == null) return TrainingCommandResult.Failed(NoCampaignMessage);
         if (sessionToken != SessionToken)
             return TrainingCommandResult.Failed(StaleSessionMessage);
 
-        Squad squad = ActiveSession.Sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
+        Squad squad = training.ChapterSquads
             .FirstOrDefault(candidate => candidate.Id == squadId && IsTrainingSquad(candidate));
         if (squad == null)
         {
@@ -244,7 +241,7 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
         if (squad.TrainingOptionKey == optionKey) return TrainingCommandResult.Failed(null);
 
         // Throws on an unknown key rather than silently recording an unrunnable regimen.
-        ActiveSession.Rules.ScoutTrainingOptions.GetRequired(optionKey);
+        training.ValidateTrainingOption(optionKey);
         squad.TrainingOptionKey = optionKey;
         return TrainingCommandResult.Ok();
     }
@@ -319,8 +316,7 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
     }
 
     private RecruitmentForecast CalculateForecast(
-        GameSession session,
-        PlayerForce force,
+        TrainingContext training,
         RecruitmentProgram program,
         Planet homeWorld,
         RecruitmentDoctrineDraft draft) =>
@@ -328,11 +324,11 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
             CreatePreviewProgram(program, draft),
             new RecruitmentForecastInput
             {
-                ChapterHomeWorldPopulation = GetChapterPopulation(homeWorld, force.Faction.Id),
+                ChapterHomeWorldPopulation = GetChapterPopulation(homeWorld, training.FactionId),
                 // Organic growth is recorded inside the active turn processor. Between turns,
                 // the historic birth proxy provides the stable planning estimate.
                 OrganicPopulationGrowth = 0,
-                PlayerReputation = GetChapterReputation(homeWorld, force.Faction.Id)
+                PlayerReputation = GetChapterReputation(homeWorld, training.FactionId)
             });
 
     private static RecruitmentStaffSummary SummarizeStaff(RecruitmentProgram program) => new(
@@ -382,13 +378,6 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
         return preview;
     }
 
-    private static Planet GetHomeWorld(
-        GameSession session, PlayerForce force, RecruitmentProgram program)
-    {
-        int planetId = force.HomeWorldPlanetId ?? program.HomeWorldPlanetId;
-        return session.Sector.Planets.TryGetValue(planetId, out Planet planet) ? planet : null;
-    }
-
     internal static long GetChapterPopulation(Planet planet, int chapterFactionId)
     {
         if (planet == null) return 0;
@@ -408,10 +397,7 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                 ? planetFaction.PlayerReputation
                 : 0;
 
-    private static RatingConsumerBindings RatingBindings(GameSession session) =>
-        session?.Rules?.RatingConsumers ?? RatingConsumerBindings.CreateDefault();
-
-    private static string BuildReadinessReport(GameSession session, Squad squad)
+    private static string BuildReadinessReport(TrainingContext training, Squad squad)
     {
         if (squad.Members.Count == 0)
         {
@@ -424,17 +410,17 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
                 .OfType<PlayerSoldier>()
                 .Where(soldier => !soldier.Template.IsSquadLeader)
                 .Select(soldier => GetScoutDescription(
-                    session, soldier.Id, soldier.Name, GetLatestEvaluation(soldier))));
+                    training, soldier.Id, soldier.Name, GetLatestEvaluation(soldier))));
     }
 
     private static SoldierEvaluation GetLatestEvaluation(PlayerSoldier soldier) =>
         soldier.SoldierEvaluationHistory.LastOrDefault();
 
-    private static int GetReadinessLevel(GameSession session, SoldierEvaluation evaluation)
+    private static int GetReadinessLevel(
+        RatingConsumerBindings bindings, SoldierEvaluation evaluation)
     {
         if (evaluation == null) return 0;
 
-        RatingConsumerBindings bindings = RatingBindings(session);
         float rangedRating = bindings.Get(evaluation, RatingConsumerRole.RangedCombat);
         float meleeRating = bindings.Get(evaluation, RatingConsumerRole.MeleeCombat);
         float leadershipRating = bindings.Get(evaluation, RatingConsumerRole.CommandLeadership);
@@ -454,10 +440,10 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
     }
 
     private static string GetScoutDescription(
-        GameSession session, int id, string name, SoldierEvaluation evaluation)
+        TrainingContext training, int id, string name, SoldierEvaluation evaluation)
     {
         string nameMarkup = $"[url={id}]{name}[/url]";
-        return GetReadinessLevel(session, evaluation) switch
+        return GetReadinessLevel(training.RatingConsumers, evaluation) switch
         {
             4 => nameMarkup + " is ready for his Black Carapace and assignment to a "
                 + "Devastator Squad; I believe he will rise to be a Sergeant himself "
@@ -471,14 +457,14 @@ public sealed class TrainingScreenApplication : CampaignScreenApplication,
         };
     }
 
-    private static string FormatAge(GameSession session, Date birthDate)
+    private static string FormatAge(Date currentDate, Date birthDate)
     {
-        if (birthDate == null || session?.CurrentDate == null)
+        if (birthDate == null || currentDate == null)
         {
             return "Unknown";
         }
 
-        double age = session.CurrentDate.GetWeeksDifference(birthDate) / 52.0;
+        double age = currentDate.GetWeeksDifference(birthDate) / 52.0;
         return $"{Math.Max(0, age):0.0} years";
     }
 

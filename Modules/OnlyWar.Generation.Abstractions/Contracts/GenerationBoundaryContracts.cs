@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using OnlyWar.Abstractions;
 using OnlyWar.Models;
 using OnlyWar.Models.Events;
 using OnlyWar.Models.Fleets;
@@ -8,7 +9,7 @@ using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Units;
 using OnlyWar.Helpers;
 
-namespace OnlyWar.Generation.Contracts;
+namespace OnlyWar.Generation.Abstractions;
 
 /// <summary>
 /// Tokens consumed by the opening-scenario briefing composer. All values are resolved by
@@ -136,4 +137,5 @@ public sealed record GenerationSupport(
     IGenerationFleetPort Fleet,
     IFoundingRoleAdvisor FoundingRoles,
     ICandidateWarmupSimulator Warmup,
-    ISoldierTrainingService Training);
+    ISoldierTrainingService Training,
+    IPersistentIdAllocator Identity);

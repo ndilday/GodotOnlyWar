@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using OnlyWar.Application;
-using OnlyWar.Generation.Contracts;
+using OnlyWar.Abstractions;
+using OnlyWar.Generation.Abstractions;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Operations.Contracts;
+using OnlyWar.Operations.Abstractions;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Narrative;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Turns;
@@ -33,6 +35,7 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
             GameRulesData rules,
             Date currentDate,
             IRNG random,
+            IPersistentIdAllocator identity,
             IReadinessDecisions readiness,
             IOperationsPersonnelSurface personnel,
             IOrderCommitmentSurface commitments,
@@ -40,18 +43,20 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
         {
             if (rules == null) throw new ArgumentNullException(nameof(rules));
             if (currentDate == null) throw new ArgumentNullException(nameof(currentDate));
+            if (identity == null) throw new ArgumentNullException(nameof(identity));
             if (readiness == null) throw new ArgumentNullException(nameof(readiness));
             if (personnel == null) throw new ArgumentNullException(nameof(personnel));
             if (commitments == null) throw new ArgumentNullException(nameof(commitments));
             if (battle == null) throw new ArgumentNullException(nameof(battle));
             return new GenerationSupport(
-                new CampaignGenerationSeedingAdapter(rules, currentDate, random),
+                new CampaignGenerationSeedingAdapter(rules, currentDate, random, identity),
                 new CampaignGenerationNarrativeAdapter(),
                 new CampaignGenerationFleetAdapter(personnel, commitments),
                 new FoundingRoleAdvisorAdapter(),
                 new CandidateSessionWarmupSimulator(
-                    random, readiness, personnel, commitments, battle),
-                BuildTrainingService(rules, random));
+                    random, readiness, personnel, commitments, battle, identity),
+                BuildTrainingService(rules, random),
+                identity);
         }
 
         /// <summary>
@@ -76,24 +81,32 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
         private readonly GameRulesData _rules;
         private readonly Date _currentDate;
         private readonly IRNG _random;
+        private readonly IPersistentIdAllocator _identity;
 
-        public CampaignGenerationSeedingAdapter(GameRulesData rules, Date currentDate, IRNG random)
+        public CampaignGenerationSeedingAdapter(
+            GameRulesData rules,
+            Date currentDate,
+            IRNG random,
+            IPersistentIdAllocator identity)
         {
             _rules = rules ?? throw new ArgumentNullException(nameof(rules));
             _currentDate = currentDate ?? throw new ArgumentNullException(nameof(currentDate));
             _random = random ?? throw new ArgumentNullException(nameof(random));
+            _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         }
 
         public void SeedGhostPopulations(Sector sector, GameRulesData rules) =>
-            GhostPlanetSeeder.Seed(sector, rules, _random);
+            CampaignGenerationSeeding.SeedGhostSources(sector, rules, _random);
 
         public void RevealRegionFaction(RegionFaction regionFaction) =>
             FactionRevealService.Reveal(regionFaction);
 
         public void EstablishOpeningInvasion(Sector sector, Planet planet, Faction invader) =>
-            new FactionCapabilityCampaignProcessor(
-                    new GameSession(_rules, sector, _currentDate, _random))
-                .EstablishOpeningInvasion(sector, planet, invader);
+            CampaignGenerationSeeding.EstablishOpeningInvasion(
+                new GameSession(_rules, sector, _currentDate, _random, _identity),
+                sector,
+                planet,
+                invader);
     }
 
     public sealed class CampaignGenerationNarrativeAdapter : IGenerationNarrativePort
@@ -187,6 +200,7 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
         private readonly IOperationsPersonnelSurface _personnel;
         private readonly IOrderCommitmentSurface _commitments;
         private readonly BattleServices _battle;
+        private readonly IPersistentIdAllocator _identity;
         private TurnController _controller;
 
         public CandidateSessionWarmupSimulator(
@@ -194,13 +208,15 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
             IReadinessDecisions readiness,
             IOperationsPersonnelSurface personnel,
             IOrderCommitmentSurface commitments,
-            BattleServices battle)
+            BattleServices battle,
+            IPersistentIdAllocator identity)
         {
             _random = random ?? throw new ArgumentNullException(nameof(random));
             _readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
             _personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
             _commitments = commitments ?? throw new ArgumentNullException(nameof(commitments));
             _battle = battle ?? throw new ArgumentNullException(nameof(battle));
+            _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         }
 
         // One controller drives every warm-up pass for a candidate, as it did when the generator
@@ -208,13 +224,18 @@ namespace OnlyWar.Helpers.Application.Adapters.Generation
         // intelligence ledger and planning state; building a fresh controller per pass would
         // silently reset both between them. Constructing the session here also keeps the campaign
         // event bindings attaching at exactly the point in the authored sequence they used to.
-        public void BeginCandidate(Sector sector, GameRulesData rules, Date currentDate) =>
+        public void BeginCandidate(Sector sector, GameRulesData rules, Date currentDate)
+        {
+            GameSession session = new(rules, sector, currentDate, _random, _identity);
+            BattleEngagementResolver engagement = _battle.CreateEngagementResolver(session);
             _controller = new TurnController(
-                new GameSession(rules, sector, currentDate, _random),
+                session,
                 _readiness,
                 _personnel,
                 _commitments,
-                _battle);
+                engagement,
+                engagement);
+        }
 
         public void SimulatePlanetForward(Sector sector, Planet planet, int turns)
         {
