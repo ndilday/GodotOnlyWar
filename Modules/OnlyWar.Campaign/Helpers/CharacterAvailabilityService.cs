@@ -167,41 +167,6 @@ namespace OnlyWar.Campaign
             return CharacterAvailabilityEvaluation.Allowed;
         }
 
-        public CharacterAvailabilityEvaluation EvaluateLocalSupport(PlayerSoldier character)
-        {
-            if (character == null)
-            {
-                return Reject(CharacterAvailabilityReasonCode.MissingCharacter, "No character selected.");
-            }
-            if (character.CurrentOrder != null)
-            {
-                return Reject(
-                    CharacterAvailabilityReasonCode.AssignedElsewhere,
-                    $"{character.Name} is assigned to an order.");
-            }
-            if (character.IndividualPosting?.Purpose == IndividualPostingPurpose.Medical)
-            {
-                return Reject(
-                    CharacterAvailabilityReasonCode.ContinuousTaskCommitment,
-                    $"{character.Name} is in medical care.");
-            }
-            return CharacterAvailabilityEvaluation.Allowed;
-        }
-
-        public CharacterAvailabilityEvaluation EvaluateContinuousTask(
-            PlayerSoldier character,
-            Order taskOrder,
-            Region taskLocation,
-            ChapterOperationalDoctrine doctrine = null,
-            RecruitmentProgram program = null)
-        {
-            CharacterAvailabilityEvaluation baseEvaluation =
-                EvaluateOrderAssignment(character, taskOrder, taskLocation,
-                    doctrine: doctrine, program: program);
-            if (!baseEvaluation.IsAllowed) return baseEvaluation;
-            return CharacterAvailabilityEvaluation.Allowed;
-        }
-
         private static bool IsAtOrigin(
             CampaignLocation location,
             Region explicitOrigin,

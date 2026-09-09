@@ -105,18 +105,6 @@ namespace OnlyWar.Domain.Equippables
         {
         }
 
-        public static EquipmentRequirement FactionAllowList(params int[] ids) =>
-            new(EquipmentRequirementKind.Faction, ids);
-
-        public static EquipmentRequirement SpeciesAllowList(params int[] ids) =>
-            new(EquipmentRequirementKind.Species, ids);
-
-        public static EquipmentRequirement RoleAllowList(params int[] ids) =>
-            new(EquipmentRequirementKind.PersonalEquipmentRole, ids);
-
-        public static EquipmentRequirement SoldierTemplateAllowList(params int[] ids) =>
-            new(EquipmentRequirementKind.SoldierTemplate, ids);
-
         public static EquipmentRequirement MinimumStrength(float value) =>
             new(EquipmentRequirementKind.MinimumStrength, minimumValue: value);
 
@@ -126,11 +114,6 @@ namespace OnlyWar.Domain.Equippables
         public static EquipmentRequirement RequiredTag(EquipmentTags tag) =>
             new(EquipmentRequirementKind.RequiredEquipmentTag, equipmentTag: tag);
 
-        public static EquipmentRequirement ProhibitedTag(EquipmentTags tag) =>
-            new(EquipmentRequirementKind.ProhibitedEquipmentTag, equipmentTag: tag);
-
-        public static EquipmentRequirement MaxDuplicates(int count) =>
-            new(EquipmentRequirementKind.MaximumDuplicateCount, maximumDuplicates: count);
     }
 
     public sealed class AmmunitionType : IEquatable<AmmunitionType>

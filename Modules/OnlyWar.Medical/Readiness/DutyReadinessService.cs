@@ -101,27 +101,4 @@ namespace OnlyWar.Medical.Readiness
         public static int SeverityIndex(WoundLevel level) =>
             MedicalDutyReadinessPolicy.SeverityIndex(level);
     }
-
-    // Name used by a few domain-facing callers; keep it as a thin façade so there is still one
-    // implementation and one result vocabulary.
-    public static class ChapterDutyReadinessService
-    {
-        public static DutyReadinessEvaluation Evaluate(
-            PlayerSoldier soldier,
-            ChapterOperationalDoctrine doctrine = null,
-            RecruitmentProgram recruitmentProgram = null) =>
-            DutyReadinessService.Evaluate(soldier, doctrine, recruitmentProgram);
-
-        public static bool IsDutyReady(
-            PlayerSoldier soldier,
-            ChapterOperationalDoctrine doctrine = null,
-            RecruitmentProgram recruitmentProgram = null) =>
-            DutyReadinessService.IsDutyReady(soldier, doctrine, recruitmentProgram);
-
-        public static WoundLevel GetWorstWoundLevel(Body body) =>
-            DutyReadinessService.GetWorstWoundLevel(body);
-
-        public static WoundLevel GetWorstWound(Body body) =>
-            DutyReadinessService.GetWorstWound(body);
-    }
 }
