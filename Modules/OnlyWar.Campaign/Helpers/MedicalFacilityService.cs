@@ -1,11 +1,11 @@
 using OnlyWar.Medical.Abstractions;
 using MedicalFacilityPolicy = OnlyWar.Medical.Treatment.MedicalFacilityPolicy;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public static class MedicalFacilityRules
     {
@@ -45,7 +45,7 @@ namespace OnlyWar.Helpers
                 PublicImperialPopulation: publicImperials.Sum(state => state.Population)));
         }
 
-        public bool SupportsMajorSurgery(Models.CampaignLocation location) =>
+        public bool SupportsMajorSurgery(OnlyWar.Domain.CampaignLocation location) =>
             location?.Ship != null
                 ? SupportsMajorSurgery(location.Ship.Template)
                 : SupportsMajorSurgery(location?.Region);

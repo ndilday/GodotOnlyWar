@@ -1,7 +1,7 @@
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>Seeds off-map ghost population sources for factions with that capability.</summary>
     internal static class GhostPlanetSeeder

@@ -1,5 +1,5 @@
 using System;
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 
 namespace OnlyWar.Application;
 

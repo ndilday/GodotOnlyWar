@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using OnlyWar.Generation.Abstractions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers.Narrative
+namespace OnlyWar.Campaign.Narrative
 {
     // BriefingTokens is a boundary value and lives in OnlyWar.Generation.Abstractions; Generation
     // resolves the tokens and this composer, the narrative owner, turns them into prose.

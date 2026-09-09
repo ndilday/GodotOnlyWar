@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System;
 using System.Linq;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     // Builds the closing facts appended to the end of a battle's player-facing log: casualties on
     // each side and who held the field. Pure and Godot-free (no Godot types) so it can be exercised

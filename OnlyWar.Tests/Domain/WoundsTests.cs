@@ -1,4 +1,4 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

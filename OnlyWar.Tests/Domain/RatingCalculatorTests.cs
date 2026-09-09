@@ -1,11 +1,10 @@
 using System.Collections.Generic;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
-using Attribute = OnlyWar.Models.Soldiers.Attribute;
+using Attribute = OnlyWar.Domain.Soldiers.Attribute;
 
 namespace OnlyWar.Tests.Domain;
 

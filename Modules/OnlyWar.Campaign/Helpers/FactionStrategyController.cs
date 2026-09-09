@@ -1,16 +1,16 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 using System.Linq;
 using System;
-using OnlyWar.Helpers.Strategy;
-using StrategyPotentialOffensive = OnlyWar.Helpers.Strategy.PotentialOffensive;
+using OnlyWar.Campaign.Strategy;
+using StrategyPotentialOffensive = OnlyWar.Campaign.Strategy.PotentialOffensive;
 using OnlyWar.Runtime.Allocators;
 
 public class FactionStrategyController

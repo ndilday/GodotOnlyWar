@@ -1,14 +1,14 @@
-﻿using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Runtime.Allocators;
+using OnlyWar.Runtime.Logging;
 using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Runtime.Factories
 {
     public enum ForceCompositionProfile
     {

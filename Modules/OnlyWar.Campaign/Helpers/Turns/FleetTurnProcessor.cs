@@ -1,7 +1,7 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Advances task-force travel for one campaign week and resolves the training earned

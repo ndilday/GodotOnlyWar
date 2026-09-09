@@ -10,7 +10,13 @@
     <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <Using Include="OnlyWar.Abstractions" />
     <Using Include="OnlyWar.Generation.Abstractions" />
+    <Using Include="OnlyWar.Domain.Formatting" />
+    <Using Include="OnlyWar.Domain.Intelligence" />
+    <Using Include="OnlyWar.Domain.Simulation" />
+    <Using Include="OnlyWar.Generation.Chapter" />
+    <Using Include="OnlyWar.Generation.Scenarios" />
+    <Using Include="OnlyWar.Generation.World" />
+    <Using Include="OnlyWar.Runtime.Random" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
-    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>
 </Project>

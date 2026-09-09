@@ -1,17 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Builders;
+using OnlyWar.Runtime.Factories;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Operations.Missions.Recon;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Missions.Raid
+namespace OnlyWar.Operations.Missions.Raid
 {
     public class LightningRaidMissionStep : IMissionStep
     {

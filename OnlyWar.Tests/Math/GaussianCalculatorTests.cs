@@ -1,5 +1,5 @@
 using System;
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 using Xunit;
 
 namespace OnlyWar.Tests.Math;

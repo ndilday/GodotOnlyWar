@@ -1,8 +1,8 @@
 using System;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Intelligence;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     public readonly record struct FactionIntelKey
     {

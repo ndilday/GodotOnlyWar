@@ -1,11 +1,11 @@
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Mutable state shared by processors during one campaign or planet-scoped simulation run.

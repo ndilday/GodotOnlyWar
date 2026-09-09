@@ -1,9 +1,9 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using OnlyWar.Application.Abstractions;
 using OnlyWar.Runtime.Allocators;
 using System;
 
-namespace OnlyWar.Helpers.Simulation
+namespace OnlyWar.Application.Session
 {
     /// <summary>
     /// Immutable dependencies shared by simulations belonging to one loaded game session.

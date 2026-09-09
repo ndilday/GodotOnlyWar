@@ -1,10 +1,10 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Strategy;
+namespace OnlyWar.Campaign.Strategy;
 
 /// <summary>
 /// Selects the order in which public staging regions should contribute to an operation.

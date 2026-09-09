@@ -1,13 +1,13 @@
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Strategy;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Strategy;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Runs the planet-scoped subset of weekly resolution used while stamping the

@@ -1,9 +1,8 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

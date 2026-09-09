@@ -1,10 +1,10 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// The distance at which a mission's engagement opens, slid between the two sides' preferred

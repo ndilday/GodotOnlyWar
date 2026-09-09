@@ -1,11 +1,11 @@
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Aftermath;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using System.Drawing;
@@ -226,7 +226,7 @@ public class PlayerIncapacitationTests
 
     // A week of natural healing, the only time-passing thing that touches a downed brother.
     private static void MedicalTurnProcessorWeek(PlayerSoldier soldier) =>
-        OnlyWar.Helpers.MedicalTurnProcessor.ApplyWeeklyHealing(soldier.Body);
+        OnlyWar.Medical.Treatment.MedicalHealthPolicy.ApplyWeeklyHealing(soldier.Body);
 
     private static void CrippleVitalLocation(ISoldier soldier)
     {
@@ -352,10 +352,10 @@ public class PlayerIncapacitationTests
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate> { [TestModelFactory.MarineTemplate.Id] = TestModelFactory.MarineTemplate },
             new Dictionary<int, SquadTemplate>(),
-            new Dictionary<int, Models.Units.UnitTemplate>(),
-            new Dictionary<int, Models.Fleets.BoatTemplate>(),
-            new Dictionary<int, Models.Fleets.ShipTemplate>(),
-            new Dictionary<int, Models.Fleets.FleetTemplate>());
+            new Dictionary<int, OnlyWar.Domain.Units.UnitTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
 
     private sealed class RecordingSink : IPlayerBattleAftermathSink
     {

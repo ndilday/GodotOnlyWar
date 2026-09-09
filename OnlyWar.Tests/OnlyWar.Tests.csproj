@@ -26,7 +26,7 @@
     <Using Include="OnlyWar.Abstractions" />
     <Using Include="OnlyWar.Medical.Abstractions" />
     <Using Include="OnlyWar.Generation.Abstractions" />
-    <Using Include="OnlyWar.Models.Missions" />
+    <Using Include="OnlyWar.Domain.Missions" />
   </ItemGroup>
 
   <ItemGroup>

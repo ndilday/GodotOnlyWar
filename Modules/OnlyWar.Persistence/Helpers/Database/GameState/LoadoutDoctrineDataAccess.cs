@@ -1,13 +1,13 @@
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     internal sealed class LoadoutDoctrineDataAccess
     {

@@ -1,6 +1,6 @@
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// When during a day a step resolves. The day scheduler runs every active mission's Shaping

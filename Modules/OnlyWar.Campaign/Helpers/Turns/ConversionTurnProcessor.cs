@@ -1,12 +1,12 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Resolves maneuvers, revolts, and suppression for factions whose growth trait is Conversion.

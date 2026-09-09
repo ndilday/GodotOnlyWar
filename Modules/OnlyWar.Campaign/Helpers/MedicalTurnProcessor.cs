@@ -1,10 +1,10 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Treatment;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     // Campaign cadence adapter for the weekly medical resolution (PRD 4.8 / 5.3 Apothecary
     // second pass). The headless Medical module owns body/procedure transitions; this adapter

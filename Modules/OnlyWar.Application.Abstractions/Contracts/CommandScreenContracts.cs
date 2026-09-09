@@ -1,10 +1,9 @@
-using OnlyWar.Models.Events;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace OnlyWar.Application;
+namespace OnlyWar.Application.Abstractions;
 
 public enum CommandBriefPriority
 {
@@ -37,6 +36,15 @@ public enum ChronicleFilter
     Brothers,
     Worlds,
     Chapter
+}
+
+/// <summary>Importance already classified for the Chronicle renderer.</summary>
+public enum ChronicleImportance
+{
+    Routine,
+    Notable,
+    Major,
+    Defining
 }
 
 public enum CampaignNavigationTargetKind
@@ -170,7 +178,7 @@ public sealed record ChronicleEntryViewModel(
     long EntryId,
     int OccurredWeek,
     string DateLabel,
-    CampaignEventImportance Importance,
+    ChronicleImportance Importance,
     ChronicleFilter Category,
     string Title,
     string Body,

@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using OnlyWar.Tests.Fixtures;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Battles.Models;
 using Xunit;
 
 namespace OnlyWar.Tests.Battles;
@@ -147,7 +147,7 @@ public class BattleSummaryBuilderTests
         BattleHistory history = new();
         history.Turns.Add(new BattleTurn(
             new BattleState(new Dictionary<int, BattleSquad>(), new Dictionary<int, BattleSquad>()),
-            new List<OnlyWar.Helpers.Battles.Actions.IAction>()));
+            new List<OnlyWar.Battles.Actions.IAction>()));
         history.ClosingSummary.AddRange(BattleSummaryBuilder.Build(
             "Blood Ravens", "Cult Mob", 10, 6, 8, 0, 3, false));
 

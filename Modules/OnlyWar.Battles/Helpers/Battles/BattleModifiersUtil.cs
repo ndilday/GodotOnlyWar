@@ -1,8 +1,8 @@
 using System;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     public static class BattleModifiersUtil
     {

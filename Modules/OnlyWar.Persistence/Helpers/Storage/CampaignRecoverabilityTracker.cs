@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Storage
+namespace OnlyWar.Persistence.Storage
 {
     public readonly record struct CampaignRevision(long Value);
 

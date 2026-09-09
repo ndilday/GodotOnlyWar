@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
 namespace OnlyWar.Application;
 

@@ -1,9 +1,9 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Squads
+namespace OnlyWar.Domain.Squads
 {
     /// <summary>
     /// A player-selectable scout training choice. The key is the stable rules/save identity;

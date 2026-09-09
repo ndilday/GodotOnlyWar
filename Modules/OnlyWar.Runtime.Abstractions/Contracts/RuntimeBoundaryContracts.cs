@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using OnlyWar.Abstractions;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Runtime.Abstractions;
 

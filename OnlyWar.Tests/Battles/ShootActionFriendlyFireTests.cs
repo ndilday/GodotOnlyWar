@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -73,7 +73,7 @@ public class ShootActionFriendlyFireTests
         BattleSoldier shooter = shooters.Soldiers[0];
         BattleSoldier target = targets.Soldiers[0];
         var weapon = shooter.EquippedRangedWeapons[0];
-        shooter.Aim = new ValueTuple<int, Models.Equippables.RangedWeapon, int>(
+        shooter.Aim = new ValueTuple<int, OnlyWar.Domain.Equippables.RangedWeapon, int>(
             target.Soldier.Id,
             weapon,
             0);

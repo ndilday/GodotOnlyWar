@@ -2,12 +2,12 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Application.Battles;
 
 public sealed class CampaignBattleEquipmentSource : IBattleEquipmentSource
 {

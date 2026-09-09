@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Runtime.Random
 {
     /// <summary>
     /// Deterministic <see cref="IRNG"/> backed by its own seeded <see cref="Random"/>
@@ -9,11 +9,11 @@ namespace OnlyWar.Helpers
     /// </summary>
     public sealed class SeededRNG : IRNG
     {
-        private readonly Random _random;
+        private readonly System.Random _random;
 
         public SeededRNG(int seed)
         {
-            _random = new Random(seed);
+            _random = new System.Random(seed);
         }
 
         public double GetDoubleInRange(double lowerBound, double upperBound)

@@ -1,11 +1,12 @@
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models {
+namespace OnlyWar.Campaign.Operations {
     /// <summary>
     /// The first governor-request vertical slice. A confirmed threat is outcome based;
     /// a false alarm asks for a sustained, strength-weighted Astartes presence. Both use
@@ -219,8 +220,8 @@ namespace OnlyWar.Models {
         {
             if (rules == null) throw new ArgumentNullException(nameof(rules));
             Faction playerFaction = rules.PlayerFaction;
-            IEnumerable<Planets.Region> regions = requireShowOfForce
-                ? [Helpers.Turns.GovernorTurnProcessor.GetCapitalRegion(TargetPlanet)]
+            IEnumerable<Region> regions = requireShowOfForce
+                ? [GovernorTurnProcessor.GetCapitalRegion(TargetPlanet)]
                 : TargetPlanet.Regions;
             return regions
                 .Where(region => region != null
@@ -228,23 +229,23 @@ namespace OnlyWar.Models {
                 .SelectMany(region => region.RegionFactionMap[playerFaction.Id].LandedSquads)
                 .Distinct()
                 .Where(squad => !requireShowOfForce
-                    || squad.CurrentOrders?.Mission.MissionType == Missions.MissionType.ShowOfForce)
+                    || squad.CurrentOrders?.Mission.MissionType == MissionType.ShowOfForce)
                 .Where(squad => SquadMatchesQualifications(
                     squad, rules.ChapterDoctrine?.Techmarine))
                 .Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
         }
 
         private bool SquadMatchesQualifications(
-            Models.Squads.Squad squad,
+            OnlyWar.Domain.Squads.Squad squad,
             SoldierTemplate techmarine)
         {
             foreach (string tag in Commitment.QualificationTags)
             {
                 if (tag.Equals("Scout", StringComparison.OrdinalIgnoreCase)
-                    && !squad.SquadTemplate.SquadType.HasFlag(Models.Squads.SquadTypes.Scout))
+                    && !squad.SquadTemplate.SquadType.HasFlag(OnlyWar.Domain.Squads.SquadTypes.Scout))
                     return false;
                 if (tag.Equals("Covert", StringComparison.OrdinalIgnoreCase)
-                    && !squad.SquadTemplate.SquadType.HasFlag(Models.Squads.SquadTypes.Scout)
+                    && !squad.SquadTemplate.SquadType.HasFlag(OnlyWar.Domain.Squads.SquadTypes.Scout)
                     && !(squad.CurrentOrders?.IsQuiet ?? false))
                     return false;
                 if (tag.Equals("Techmarine", StringComparison.OrdinalIgnoreCase)

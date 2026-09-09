@@ -1,16 +1,16 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Runtime.Allocators;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Strategy;
+namespace OnlyWar.Campaign.Strategy;
 
 /// <summary>
 /// Plans the two Consumption-faction policies that consume the residual regional budget.

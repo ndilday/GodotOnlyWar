@@ -1,15 +1,14 @@
 using System;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Application.Adapters.Operations;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Domain;
+using OnlyWar.Application.Adapters.Operations;
+using OnlyWar.Battles;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Medical.Readiness;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Abstractions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Storage;
-using OnlyWar.Models;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Persistence.Storage;
 
 namespace OnlyWar.Tests.Fixtures;
 

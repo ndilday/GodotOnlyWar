@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Supply;
+namespace OnlyWar.Domain.Supply;
 
 public sealed record ThroughputPremiumBand(long MaximumBattleValuePerWeek, decimal Multiplier);
 

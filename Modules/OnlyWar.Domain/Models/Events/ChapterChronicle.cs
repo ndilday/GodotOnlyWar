@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Domain.Events
 {
     public enum ChapterChronicleCategory
     {
@@ -169,7 +169,7 @@ namespace OnlyWar.Models.Events
                     InsertInPageOrder(entries, entry);
                 }
             }
-            _nextId = Math.Max(_nextId, entry.Id + 1);
+            _nextId = System.Math.Max(_nextId, entry.Id + 1);
             return entry;
         }
 
@@ -184,7 +184,7 @@ namespace OnlyWar.Models.Events
             if (_annotations.Any(item => item.DedupeKey == annotation.DedupeKey))
                 throw new InvalidDataException($"Chronicle annotation key '{annotation.DedupeKey}' is duplicated.");
             _annotations.Add(annotation);
-            _nextAnnotationId = Math.Max(_nextAnnotationId, annotation.Id + 1);
+            _nextAnnotationId = System.Math.Max(_nextAnnotationId, annotation.Id + 1);
             return annotation;
         }
 

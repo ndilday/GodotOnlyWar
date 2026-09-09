@@ -1,7 +1,7 @@
-using OnlyWar.Models;
-using OnlyWar.Helpers.Fleets;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Fleets;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
 using System;
 using Xunit;
 

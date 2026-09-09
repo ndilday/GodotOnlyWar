@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Math;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Grenade scoring: picks the aim point whose expected blast is worth the throw, integrating

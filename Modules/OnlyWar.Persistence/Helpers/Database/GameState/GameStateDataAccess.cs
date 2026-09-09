@@ -1,24 +1,24 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
-using OnlyWar.Models.Orders;
-using OnlyWar.Helpers.Storage;
-using OnlyWar.Models.Supply;
-using OnlyWar.Models.Reports;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Persistence.Storage;
+using OnlyWar.Domain.Supply;
+using OnlyWar.Domain.Reports;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.FactionBehaviors;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     public class GameStateDataBlob
     {

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Withdrawal geometry and cover-squad selection. Both are deterministic and stateless: the

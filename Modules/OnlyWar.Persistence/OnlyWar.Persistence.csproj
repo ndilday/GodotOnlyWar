@@ -8,7 +8,6 @@
     <ProjectReference Include="../OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Persistence.Abstractions/OnlyWar.Persistence.Abstractions.csproj" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
-    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />

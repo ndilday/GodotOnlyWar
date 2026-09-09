@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Per-turn, shared-across-workers memo for the pure, frozen-state targeting computations that

@@ -1,12 +1,12 @@
-using OnlyWar.Helpers.Database;
-using OnlyWar.Models.Events;
+using OnlyWar.Persistence.Database;
+using OnlyWar.Domain.Events;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     internal sealed class ChapterChronicleDataAccess
     {

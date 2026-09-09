@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles.Actions;
+namespace OnlyWar.Battles.Actions;
 
 /// <summary>
 /// A squad-level intent whose concrete destinations and defenders are selected only after ordinary

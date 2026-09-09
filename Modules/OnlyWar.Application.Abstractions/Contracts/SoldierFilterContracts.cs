@@ -1,4 +1,4 @@
-namespace OnlyWar.Application;
+namespace OnlyWar.Application.Abstractions;
 
 // The attribute a filter condition tests. The set is intentionally small and enum-driven so new
 // fields can be added by extending this contract plus the application query and filter service.

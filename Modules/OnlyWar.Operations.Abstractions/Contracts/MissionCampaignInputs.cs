@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using OnlyWar.Abstractions;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
 
 namespace OnlyWar.Operations.Abstractions;
 

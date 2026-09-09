@@ -1,9 +1,9 @@
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Squads
+namespace OnlyWar.Domain.Squads
 {
     /// <summary>
     /// Sparse persistent overrides for the itemized equipment model. Missing entries mean inherit;

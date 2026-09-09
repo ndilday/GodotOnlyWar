@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Math;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// The removal currency every battle scorer is denominated in: how much of a target's battle

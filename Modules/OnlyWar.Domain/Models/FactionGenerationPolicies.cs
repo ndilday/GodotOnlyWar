@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Stable roles that identify faction responsibilities outside the faction's display identity.

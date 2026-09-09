@@ -1,8 +1,7 @@
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Missions;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Missions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models.Missions;
+using OnlyWar.Campaign.Turns;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

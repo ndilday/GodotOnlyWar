@@ -1,7 +1,7 @@
 using System;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Domain.Intelligence
 {
     public static class FactionIntelligenceRules
     {
@@ -23,7 +23,7 @@ namespace OnlyWar.Helpers
 
         public static float ClampEvidence(float evidence) =>
             float.IsFinite(evidence)
-                ? Math.Clamp(evidence, 0f, MaxEvidence)
+                ? System.Math.Clamp(evidence, 0f, MaxEvidence)
                 : throw new ArgumentOutOfRangeException(nameof(evidence));
 
         public static float DecayEvidence(float evidence) =>

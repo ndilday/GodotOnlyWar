@@ -1,10 +1,10 @@
 using System;
 using System.Linq;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Helpers.Readiness;
-namespace OnlyWar.Helpers.Battles { public static class BattleSquadReadinessExtensions {
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Medical.Readiness;
+namespace OnlyWar.Campaign.Battles { public static class BattleSquadReadinessExtensions {
         public static void RefreshDutyReadyParticipants(this BattleSquad squad, ChapterOperationalDoctrine doctrine = null, RecruitmentProgram program = null)
         {
             if (!squad.IsPlayerSquad) return;

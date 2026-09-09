@@ -1,6 +1,6 @@
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// What a force does with the ground when its objective is resolved.

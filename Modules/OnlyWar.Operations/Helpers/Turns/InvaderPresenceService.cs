@@ -1,7 +1,7 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Operations.Turns
 {
     /// <summary>
     /// Establishes or reinforces a public regional foothold for surviving invaders.

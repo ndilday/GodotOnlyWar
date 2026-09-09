@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.Readiness;
+namespace OnlyWar.Operations.Readiness;
 
 // Shared explanations for order/mission reports; rows style these as presentation tokens.
 public static class ReadinessDescriptions

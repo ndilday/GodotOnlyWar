@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Models.Squads
+namespace OnlyWar.Domain.Squads
 {
     /// <summary>
     /// Describes whether a squad template is a manoeuvre formation, a seated formation whose
@@ -80,7 +80,7 @@ namespace OnlyWar.Models.Squads
         // many squads; for a fixed element the average IS the maximum, so every template authored
         // before variable strength existed prices exactly as it always did.
         public int BattleValue => IsPresentOperationalForce
-            ? (int)Math.Round(
+            ? (int)System.Math.Round(
                 Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.ExpectedNumber) ?? 0f,
                 MidpointRounding.AwayFromZero)
             : 0;

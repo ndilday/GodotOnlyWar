@@ -1,7 +1,7 @@
-﻿using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Squads;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

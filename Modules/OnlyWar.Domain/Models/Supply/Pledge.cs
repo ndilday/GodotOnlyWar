@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Models.Supply
+namespace OnlyWar.Domain.Supply
 {
     public enum PledgePayloadKind
     {

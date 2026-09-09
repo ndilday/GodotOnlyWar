@@ -1,14 +1,14 @@
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Generation.World;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Campaign.Recruitment;
 using OnlyWar.Operations.Abstractions;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Resolves campaign-scenario objectives after all other weekly simulation has settled.

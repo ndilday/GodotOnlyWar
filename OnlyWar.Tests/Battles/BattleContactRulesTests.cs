@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Battles;
 using Xunit;
 
 namespace OnlyWar.Tests.Battles;

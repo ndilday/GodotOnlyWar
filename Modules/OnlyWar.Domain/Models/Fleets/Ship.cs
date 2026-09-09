@@ -1,9 +1,9 @@
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Fleets
+namespace OnlyWar.Domain.Fleets
 {
     public class Boat
     {

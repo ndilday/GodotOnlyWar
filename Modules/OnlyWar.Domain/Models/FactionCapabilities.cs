@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Narrow capability queries shared by campaign, battle, mission, and presentation code.

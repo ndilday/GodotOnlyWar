@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Simulation;
+namespace OnlyWar.Domain.Simulation;
 
 /// <summary>
 /// Pure calculations for regional contentment and secular unrest. This class deliberately
@@ -51,7 +51,7 @@ public static class CivilUnrestRules
         double competence = Clamp01(normalizedCompetence);
         double severity = Clamp01(normalizedSeverity);
         double severityRange = 1.0 - SeverityPenaltyStart;
-        double highSeverity = Math.Max(0.0, severity - SeverityPenaltyStart) / severityRange;
+        double highSeverity = System.Math.Max(0.0, severity - SeverityPenaltyStart) / severityRange;
 
         return ClampContentment(
             BaseContentment
@@ -71,7 +71,7 @@ public static class CivilUnrestRules
             return 0.0;
 
         double fullCoverage = loyalPopulation * FullSecurityPdfShare;
-        return MaximumSecurityBenefit * Math.Clamp(loyalPdf / fullCoverage, 0.0, 1.0);
+        return MaximumSecurityBenefit * System.Math.Clamp(loyalPdf / fullCoverage, 0.0, 1.0);
     }
 
     public static double CalculateOvercrowdingPenalty(double population, double capacity)
@@ -79,8 +79,8 @@ public static class CivilUnrestRules
         if (population <= 0.0 || capacity <= 0.0)
             return 0.0;
 
-        double excessRatio = Math.Max(0.0, population / capacity - OvercrowdingPenaltyStart);
-        return Math.Min(MaximumOvercrowdingPenalty, OvercrowdingPenaltyPerCapacityRatio * excessRatio);
+        double excessRatio = System.Math.Max(0.0, population / capacity - OvercrowdingPenaltyStart);
+        return System.Math.Min(MaximumOvercrowdingPenalty, OvercrowdingPenaltyPerCapacityRatio * excessRatio);
     }
 
     public static double CalculateContentmentTarget(
@@ -106,7 +106,7 @@ public static class CivilUnrestRules
     public static double CalculateTargetUnrestShare(double contentment)
     {
         double deficit = CalculateUnrestDeficit(contentment);
-        return MaximumTargetUnrestShare * Math.Pow(deficit, UnrestShareExponent);
+        return MaximumTargetUnrestShare * System.Math.Pow(deficit, UnrestShareExponent);
     }
 
     public static double CalculateTargetArmedCivilianFraction(double contentment)
@@ -133,8 +133,8 @@ public static class CivilUnrestRules
     /// </summary>
     public static double CalculatePdfRecruitSelectionChance(double loyalPdf, double loyalCivilians)
     {
-        double weightedPdf = Math.Max(0.0, loyalPdf) * PdfInfiltrationWeight;
-        double civilians = Math.Max(0.0, loyalCivilians);
+        double weightedPdf = System.Math.Max(0.0, loyalPdf) * PdfInfiltrationWeight;
+        double civilians = System.Math.Max(0.0, loyalCivilians);
         double totalWeight = weightedPdf + civilians;
         return totalWeight <= 0.0 ? 0.0 : weightedPdf / totalWeight;
     }
@@ -147,7 +147,7 @@ public static class CivilUnrestRules
         if (hasPublicExternalEnemy || rebelMilitaryStrength <= 0.0)
             return false;
 
-        double loyalStrength = Math.Max(0.0, loyalAndAlliedLocalStrength);
+        double loyalStrength = System.Math.Max(0.0, loyalAndAlliedLocalStrength);
         return rebelMilitaryStrength >= PublicRevoltStrengthRatio * loyalStrength;
     }
 
@@ -155,8 +155,8 @@ public static class CivilUnrestRules
         double rebelMilitaryStrength,
         double loyalAndAlliedLocalStrength)
     {
-        double rebelStrength = Math.Max(0.0, rebelMilitaryStrength);
-        double loyalStrength = Math.Max(0.0, loyalAndAlliedLocalStrength);
+        double rebelStrength = System.Math.Max(0.0, rebelMilitaryStrength);
+        double loyalStrength = System.Math.Max(0.0, loyalAndAlliedLocalStrength);
         return rebelStrength < ReturnToHidingStrengthRatio * loyalStrength;
     }
 
@@ -165,13 +165,13 @@ public static class CivilUnrestRules
     /// during one weekly migration step. Routing and integer rounding belong to orchestration.
     /// </summary>
     public static double CalculateWeeklyMigration(double eligibleHiddenUnrestPopulation) =>
-        Math.Max(0.0, eligibleHiddenUnrestPopulation) * WeeklyMigrationRate;
+        System.Math.Max(0.0, eligibleHiddenUnrestPopulation) * WeeklyMigrationRate;
 
     private static double CalculateUnrestDeficit(double contentment) =>
-        Math.Clamp((UnrestContentmentThreshold - ClampContentment(contentment)) / UnrestContentmentThreshold, 0.0, 1.0);
+        System.Math.Clamp((UnrestContentmentThreshold - ClampContentment(contentment)) / UnrestContentmentThreshold, 0.0, 1.0);
 
     private static double ClampContentment(double value) =>
-        Math.Clamp(value, MinimumContentment, MaximumContentment);
+        System.Math.Clamp(value, MinimumContentment, MaximumContentment);
 
-    private static double Clamp01(double value) => Math.Clamp(value, 0.0, 1.0);
+    private static double Clamp01(double value) => System.Math.Clamp(value, 0.0, 1.0);
 }

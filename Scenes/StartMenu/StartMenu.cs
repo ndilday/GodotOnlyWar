@@ -1,8 +1,7 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Storage;
-using OnlyWar.Models;
+using OnlyWar.Domain;
+using OnlyWar.Persistence.Storage;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -65,13 +64,14 @@ public partial class StartMenu : Control
         {
             // Load once when the setup screen opens so its choices come from the same immutable
             // rules snapshot that will generate the campaign.
-			_newGameRulesData = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath);
+			_newGameRulesData = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath);
             ScenarioProfile profile = _newGameRulesData.ScenarioProfiles.GetRequired(
                 ScenarioKeys.PromisedWorld);
-            IReadOnlyList<Faction> invaderFactions = profile
+            IReadOnlyList<NewGameFactionOption> invaderFactions = profile
                 .GetFactionOptions(ScenarioFactionSlotKeys.Invader)
                 .Select(option => _newGameRulesData.Factions.Single(
                     faction => faction.Id == option.FactionId))
+                .Select(faction => new NewGameFactionOption(faction.Id, faction.Name))
                 .ToList();
 
             SetMenuButtonsVisible(false);
@@ -119,11 +119,11 @@ public partial class StartMenu : Control
 				OnlyWar.Host.Composition.GodotHostPaths.CreateCampaignServices(
 					new SeededRNG(settings.Seed), _storage));
 			_campaignApplication.StartNewCampaign(
-				_newGameRulesData ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath),
+				_newGameRulesData ?? OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 settings.ChapterName,
                 settings.Seed,
-                settings.InvaderSelection);
+                ToScenarioFactionSelection(settings.InvaderSelection));
             _newGameRulesData = null;
             string startupWarning = TryCreateInitialAutosave(settings.ChapterName);
             LaunchMainGameScene(startupWarning);
@@ -141,6 +141,15 @@ public partial class StartMenu : Control
     {
         GetNode<Control>("MenuButtons").Visible = isVisible;
     }
+
+    private static ScenarioFactionSelection ToScenarioFactionSelection(
+        NewGameInvaderSelection selection) => selection == null
+            ? ScenarioFactionSelection.Default
+            : selection.IsRandom
+                ? ScenarioFactionSelection.Random
+                : selection.FactionId.HasValue
+                    ? ScenarioFactionSelection.ForFaction(selection.FactionId.Value)
+                    : ScenarioFactionSelection.Default;
 
     private void LaunchMainGameScene(string startupWarning = null)
     {

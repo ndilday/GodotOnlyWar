@@ -1,10 +1,10 @@
-using OnlyWar.Helpers.Battles.Aftermath;
+using OnlyWar.Battles.Aftermath;
 using OnlyWar.Runtime.Allocators;
 using OnlyWar.Abstractions;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Immutable dependencies for one tactical battle. The mission layer creates this from its

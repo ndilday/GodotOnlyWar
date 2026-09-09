@@ -1,8 +1,8 @@
-﻿using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Recon
+namespace OnlyWar.Operations.Missions.Recon
 {
     public class CrossDetectionMissionStep : IMissionStep
     {

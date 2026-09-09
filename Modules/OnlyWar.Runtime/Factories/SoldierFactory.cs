@@ -2,11 +2,11 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Runtime.Abstractions;
 using OnlyWar.Runtime.Allocators;
-using OnlyWar.Helpers;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 using RuntimeFactory = OnlyWar.Runtime.Factories.RuntimeSoldierFactory;
 
-namespace OnlyWar.Builders;
+namespace OnlyWar.Runtime.Factories;
 
 /// <summary>
 /// Materializer for the campaign soldier entity. Stat/body construction is owned by RuntimeFactory;

@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Battle-scoped owner of one turn's squad-planning orchestration. It prepares the frozen read

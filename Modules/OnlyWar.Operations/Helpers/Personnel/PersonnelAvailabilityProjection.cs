@@ -1,15 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Operations.Abstractions;
 
 namespace OnlyWar.Operations.Personnel;
@@ -88,7 +87,7 @@ public static class PersonnelAvailabilityProjection
             return new PersonnelLocationSnapshot(
                 ShipId: location.Ship.Id,
                 IsInWarp: location.Ship.Fleet?.TravelPhase
-                    == Models.Fleets.FleetTravelPhase.InWarp);
+                    == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp);
         }
         return ForRegion(location?.Region);
     }

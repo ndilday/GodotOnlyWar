@@ -1,19 +1,19 @@
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.Extensions;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain.Extensions;
 using OnlyWar.Operations.Personnel;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.PlanetaryOperations
+namespace OnlyWar.Operations.Planetary
 {
     public enum OrderMutationKind
     {

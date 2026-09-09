@@ -1,8 +1,8 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     public class MedicalProcedureDataAccess
     {

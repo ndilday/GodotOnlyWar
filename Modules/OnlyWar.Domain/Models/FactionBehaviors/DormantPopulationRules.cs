@@ -1,7 +1,7 @@
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 using System;
 
-namespace OnlyWar.Models.FactionBehaviors
+namespace OnlyWar.Domain.FactionBehaviors
 {
     /// <summary>Pure rules for consolidation, mobilization, and dormant growth.</summary>
     public static class DormantPopulationRules
@@ -17,21 +17,21 @@ namespace OnlyWar.Models.FactionBehaviors
         public const double ExceptionalAssassinationMargin = 3.0;
 
         public static double UpdateConsolidation(double current, double zValue) =>
-            Math.Clamp(current + zValue / WeeklyConsolidationSigmaDivisor
+            System.Math.Clamp(current + zValue / WeeklyConsolidationSigmaDivisor
                 + WeeklyConsolidationDrift, 0.0, 1.0);
 
         public static double UpdateConsolidation(FactionBehaviorRulesProfile profile,
             double current, double zValue) =>
-            Math.Clamp(current + zValue / profile.WeeklyConsolidationSigmaDivisor
+            System.Math.Clamp(current + zValue / profile.WeeklyConsolidationSigmaDivisor
                 + profile.WeeklyConsolidationDrift, 0.0, 1.0);
 
         public static double MobilizationFraction(double zValue) =>
-            Math.Clamp(MobilizationMedian + MobilizationSigma * zValue,
+            System.Math.Clamp(MobilizationMedian + MobilizationSigma * zValue,
                 MobilizationMinimum, MobilizationMaximum);
 
         public static double MobilizationFraction(FactionBehaviorRulesProfile profile,
             double zValue) =>
-            Math.Clamp(profile.MobilizationMedian + profile.MobilizationSigma * zValue,
+            System.Math.Clamp(profile.MobilizationMedian + profile.MobilizationSigma * zValue,
                 profile.MobilizationMinimum, profile.MobilizationMaximum);
 
         public static double GrowthEfficiency(bool isPublic) =>

@@ -1,8 +1,8 @@
 using System.Linq;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Fleets;
-namespace OnlyWar.Models;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Fleets;
+namespace OnlyWar.Domain;
 public static class PhysicalPresence
 {
     public static int PresentCount(Squad squad) => squad?.Members.Count(

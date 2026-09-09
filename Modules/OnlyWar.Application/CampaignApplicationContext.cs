@@ -1,10 +1,10 @@
 using System;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Storage;
-using OnlyWar.Helpers.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Persistence.Storage;
+using OnlyWar.Campaign.Turns;
 
 namespace OnlyWar.Application;
 

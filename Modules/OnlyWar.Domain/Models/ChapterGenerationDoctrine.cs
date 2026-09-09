@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using OnlyWar.Helpers;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Closed vocabulary of template kinds. The vocabulary is code-owned; the row that fills

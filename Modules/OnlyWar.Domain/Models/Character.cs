@@ -1,7 +1,7 @@
-﻿using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     public class Character
     {

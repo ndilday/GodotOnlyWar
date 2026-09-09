@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     public class BattleGridManager : ICloneable
     {

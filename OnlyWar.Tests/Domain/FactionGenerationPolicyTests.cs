@@ -1,4 +1,4 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

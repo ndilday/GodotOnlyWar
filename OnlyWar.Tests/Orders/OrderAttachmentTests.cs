@@ -1,13 +1,12 @@
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Medical.Readiness;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

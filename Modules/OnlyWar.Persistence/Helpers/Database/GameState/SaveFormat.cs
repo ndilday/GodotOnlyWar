@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     public static class SaveFormat
     {

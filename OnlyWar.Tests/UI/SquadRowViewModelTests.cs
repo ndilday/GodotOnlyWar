@@ -1,7 +1,7 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using System.Linq;

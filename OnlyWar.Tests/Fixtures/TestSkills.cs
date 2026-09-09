@@ -1,4 +1,4 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Tests.Fixtures;
 

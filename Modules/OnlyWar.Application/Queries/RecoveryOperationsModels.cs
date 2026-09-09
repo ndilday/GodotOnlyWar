@@ -1,5 +1,4 @@
 using OnlyWar.Application;
-using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;
 
 namespace OnlyWar.Application
@@ -17,7 +16,7 @@ namespace OnlyWar.Application
         string Location,
         string WorstWound,
         int RecoveryWeeks,
-        WoundLevel WoundLevel,
+        MedicalWoundLevel WoundLevel,
         string PostingStatus,
         IReadOnlyList<string> CareGaps);
 

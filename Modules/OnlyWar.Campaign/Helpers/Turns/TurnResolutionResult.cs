@@ -1,11 +1,10 @@
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Supply;
-using OnlyWar.Models.Events;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Domain.Supply;
+using OnlyWar.Domain.Events;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Collects the player-facing output produced by one resolved campaign turn.

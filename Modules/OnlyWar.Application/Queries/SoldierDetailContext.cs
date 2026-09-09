@@ -1,6 +1,6 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers.Ratings;
 
 namespace OnlyWar.Application;
 

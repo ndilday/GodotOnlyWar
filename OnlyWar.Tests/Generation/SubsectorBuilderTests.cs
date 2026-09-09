@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OnlyWar.Models.Geometry;
-using OnlyWar.Builders;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Geometry;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

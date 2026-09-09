@@ -1,4 +1,4 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -21,7 +21,7 @@ public class PlanetaryOperationsIconAtlasTests
         Faction faction = SectorSimulationFixture.BuildTestFaction(
             1, name, isPlayer, isDefault);
 
-        Assert.Equal(expectedKey, IconAtlas.GetPlanetaryOperationsFactionIconKey(faction));
+        Assert.Equal(expectedKey, MapIconKeys.ForFaction(faction));
     }
 
     [Fact]
@@ -30,6 +30,6 @@ public class PlanetaryOperationsIconAtlasTests
         Faction faction = SectorSimulationFixture.BuildTestFaction(
             1, "Red Corsairs", isPlayer: false, isDefault: false);
 
-        Assert.Null(IconAtlas.GetPlanetaryOperationsFactionIconKey(faction));
+        Assert.Null(MapIconKeys.ForFaction(faction));
     }
 }

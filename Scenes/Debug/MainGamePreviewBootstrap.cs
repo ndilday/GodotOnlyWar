@@ -1,8 +1,7 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Database.GameRules;
-using OnlyWar.Models;
+using OnlyWar.Domain;
+using OnlyWar.Persistence.Database.GameRules;
 
 public partial class MainGamePreviewBootstrap : Node
 {
@@ -16,7 +15,7 @@ public partial class MainGamePreviewBootstrap : Node
 
     public override void _Ready()
     {
-        OnlyWar.Helpers.Storage.GameStorage storage =
+        OnlyWar.Persistence.Storage.GameStorage storage =
             OnlyWar.Host.Composition.GodotHostPaths.CreateStorage();
         _campaignApplication = new CampaignApplication(
             OnlyWar.Host.Composition.GodotHostPaths.CreateCampaignServices(

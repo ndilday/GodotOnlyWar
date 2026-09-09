@@ -1,6 +1,5 @@
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using System;
 using System.Collections.Generic;

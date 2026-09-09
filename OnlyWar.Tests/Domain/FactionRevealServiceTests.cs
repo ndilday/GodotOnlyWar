@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Drawing;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

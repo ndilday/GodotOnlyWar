@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Morale and synapse tunables (OnlyWar_TDD.md §6.6). Every morale-related

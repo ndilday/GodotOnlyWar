@@ -1,8 +1,8 @@
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Squads
+namespace OnlyWar.Domain.Squads
 {
     /// <summary>
     /// Sparse, template-keyed loadout policy. An absent entry means that this scope inherits

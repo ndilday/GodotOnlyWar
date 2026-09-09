@@ -1,8 +1,7 @@
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Geometry;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Geometry;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 using System.Linq;
 

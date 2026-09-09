@@ -1,7 +1,7 @@
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// A campaign location is exactly one embarked ship or one landed region.

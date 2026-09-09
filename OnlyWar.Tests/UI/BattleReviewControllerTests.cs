@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Models;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -31,9 +31,9 @@ public class BattleReviewControllerTests
         ]);
         BattleSquadSnapshot current = currentTurn.State.AttackerSquads[squadId];
 
-        Assert.Equal(ReplaySquadOverlay.Departure,
-            BattleReviewController.ClassifySquadOverlay(previous, current, currentTurn.Events));
-        Assert.False(BattleReviewController.ShouldDrawSquad(current));
+        Assert.Equal(BattleReplayMapTransitionKind.Departure,
+            BattleReplaySummaryBuilder.ClassifyMapTransition(previous, current, currentTurn.Events));
+        Assert.False(BattleReplaySummaryBuilder.ShouldDrawSquad(current));
     }
 
     [Fact]
@@ -49,9 +49,9 @@ public class BattleReviewControllerTests
         ]);
         BattleSquadSnapshot current = currentTurn.State.AttackerSquads[squadId];
 
-        Assert.Equal(ReplaySquadOverlay.Rout,
-            BattleReviewController.ClassifySquadOverlay(previous, current, currentTurn.Events));
-        Assert.True(BattleReviewController.ShouldDrawSquad(current));
+        Assert.Equal(BattleReplayMapTransitionKind.Rout,
+            BattleReplaySummaryBuilder.ClassifyMapTransition(previous, current, currentTurn.Events));
+        Assert.True(BattleReplaySummaryBuilder.ShouldDrawSquad(current));
     }
 
     [Fact]
@@ -62,9 +62,9 @@ public class BattleReviewControllerTests
         state.RemoveSquad(state.GetSquad(squadId));
         BattleSquadSnapshot current = new BattleTurn(state, []).State.AttackerSquads[squadId];
 
-        Assert.Equal(ReplaySquadOverlay.Casualty,
-            BattleReviewController.ClassifySquadOverlay(previous, current, []));
-        Assert.False(BattleReviewController.ShouldDrawSquad(current));
+        Assert.Equal(BattleReplayMapTransitionKind.Casualty,
+            BattleReplaySummaryBuilder.ClassifyMapTransition(previous, current, []));
+        Assert.False(BattleReplaySummaryBuilder.ShouldDrawSquad(current));
     }
 
     [Fact]
@@ -73,8 +73,8 @@ public class BattleReviewControllerTests
         (BattleState state, int squadId) = CreateState();
         BattleSquadSnapshot previous = new BattleTurn(state, []).State.AttackerSquads[squadId];
 
-        Assert.Equal(ReplaySquadOverlay.Rout,
-            BattleReviewController.ClassifySquadOverlay(previous, null, []));
+        Assert.Equal(BattleReplayMapTransitionKind.Rout,
+            BattleReplaySummaryBuilder.ClassifyMapTransition(previous, null, []));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class BattleReviewControllerTests
         BattleStateSnapshot snapshot = new BattleTurn(state, []).State;
 
         List<System.ValueTuple<int, int>> positions =
-            BattleReviewController.GetDeployedBoundaryPositions(snapshot).ToList();
+            BattleReplaySummaryBuilder.GetDeployedBoundaryPositions(snapshot).ToList();
 
         Assert.NotEmpty(positions);
         Assert.All(positions, position =>

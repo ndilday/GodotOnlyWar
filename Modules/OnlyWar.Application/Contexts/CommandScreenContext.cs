@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Command;
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Command;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
 
 namespace OnlyWar.Application;
 

@@ -1,8 +1,8 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Supply
+namespace OnlyWar.Domain.Supply
 {
     public enum SupplyWorldArchetype
     {

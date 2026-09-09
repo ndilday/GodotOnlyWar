@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Fortifications
+namespace OnlyWar.Domain.Fortifications
 {
     /// <summary>
     /// Converts between a defense <em>level</em> (the displayed strength of a position) and the
@@ -39,13 +39,13 @@ namespace OnlyWar.Helpers.Fortifications
         {
             if (level <= 0.0) return 0.0;
             if (level > MaxLevel) level = MaxLevel;
-            return (Math.Pow(10.0, level) - 1.0) / 9.0;
+            return (System.Math.Pow(10.0, level) - 1.0) / 9.0;
         }
 
         public static double PointsToLevel(double points)
         {
             if (points <= 0.0) return 0.0;
-            return Math.Min(MaxLevel, Math.Log10(9.0 * points + 1.0));
+            return System.Math.Min(MaxLevel, System.Math.Log10(9.0 * points + 1.0));
         }
 
         /// <summary>
@@ -62,7 +62,7 @@ namespace OnlyWar.Helpers.Fortifications
         /// costs ten times the last.
         /// </summary>
         public static double AddPoints(double level, double points) =>
-            PointsToLevel(LevelToPoints(level) + Math.Max(0.0, points));
+            PointsToLevel(LevelToPoints(level) + System.Math.Max(0.0, points));
 
         /// <summary>
         /// How much of the side's shared position a faction's own construction actually buys, as a
@@ -80,7 +80,7 @@ namespace OnlyWar.Helpers.Fortifications
         public static double SharedContributionEfficiency(double ownLevel, double sharedLevel)
         {
             if (sharedLevel <= ownLevel) return 1.0;
-            return Math.Pow(10.0, ownLevel - sharedLevel);
+            return System.Math.Pow(10.0, ownLevel - sharedLevel);
         }
     }
 }

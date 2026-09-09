@@ -1,7 +1,7 @@
 using System;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain.Recruitment;
 
-namespace OnlyWar.Helpers.Recruitment
+namespace OnlyWar.Operations.Recruitment
 {
     /// <summary>
     /// Central recruitment tuning. Candidate generation and forecasting should both use

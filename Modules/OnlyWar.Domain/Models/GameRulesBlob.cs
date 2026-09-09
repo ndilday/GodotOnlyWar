@@ -1,18 +1,19 @@
-﻿using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain.FactionBehaviors;
 
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     public class GameRulesBlob
     {
@@ -28,10 +29,10 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; set; }
         public IReadOnlyList<PlanetTemplateEligibilityAssignment> PlanetTemplateEligibilityAssignments { get; set; }
         public ScoutTrainingOptionCatalog ScoutTrainingOptions { get; set; }
-        public IReadOnlyList<Models.Soldiers.Ratings.RatingDefinition> RatingDefinitions { get; set; }
-        public IReadOnlyList<Models.Soldiers.Ratings.RatingAwardTier> RatingAwardTiers { get; set; }
-        public IReadOnlyList<Models.Soldiers.Ratings.RatingConsumerAssignment> RatingConsumerAssignments { get; set; }
-        public IReadOnlyList<Models.Soldiers.Ratings.AwardFamilyDefinition> AwardFamilies { get; set; }
+        public IReadOnlyList<RatingDefinition> RatingDefinitions { get; set; }
+        public IReadOnlyList<RatingAwardTier> RatingAwardTiers { get; set; }
+        public IReadOnlyList<RatingConsumerAssignment> RatingConsumerAssignments { get; set; }
+        public IReadOnlyList<AwardFamilyDefinition> AwardFamilies { get; set; }
         public IReadOnlyList<SkillRoleAssignment> SkillRoleAssignments { get; set; }
         public IReadOnlyList<FactionRoleAssignment> FactionRoleAssignments { get; set; }
         public IReadOnlyList<ScenarioProfile> ScenarioProfiles { get; set; }

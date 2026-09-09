@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     public class BattleSquadPlanner
     {

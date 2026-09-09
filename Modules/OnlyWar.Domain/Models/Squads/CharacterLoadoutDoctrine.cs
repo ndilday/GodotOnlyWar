@@ -1,7 +1,7 @@
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Squads
+namespace OnlyWar.Domain.Squads
 {
     /// <summary>
     /// Loadout policy for characters — command staff and specialists the player equips

@@ -1,8 +1,7 @@
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Drawing;
 using Xunit;

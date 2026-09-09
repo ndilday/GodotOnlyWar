@@ -1,8 +1,8 @@
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Battles.Aftermath
 {
     internal interface IBattleAftermathPolicy
     {

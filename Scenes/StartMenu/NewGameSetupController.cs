@@ -1,14 +1,25 @@
 using Godot;
-using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
+public sealed record NewGameFactionOption(int Id, string Name);
+
+public sealed record NewGameInvaderSelection(int? FactionId, bool IsRandom)
+{
+    public static NewGameInvaderSelection Default { get; } = new(null, false);
+    public static NewGameInvaderSelection Random { get; } = new(null, true);
+
+    public static NewGameInvaderSelection ForFaction(int factionId) =>
+        new(factionId, false);
+}
 
 public class NewGameSettings
 {
     public string ChapterName { get; set; }
     public int Seed { get; set; }
-    public ScenarioFactionSelection InvaderSelection { get; set; } = ScenarioFactionSelection.Default;
+    public NewGameInvaderSelection InvaderSelection { get; set; } =
+        NewGameInvaderSelection.Default;
 }
 
 public partial class NewGameSetupController : Control
@@ -16,7 +27,8 @@ public partial class NewGameSetupController : Control
     private const int MaxChapterNameLength = 40;
     private const int RandomSelectionId = int.MinValue;
 
-    private IReadOnlyList<Faction> _invaderFactions = Array.Empty<Faction>();
+    private IReadOnlyList<NewGameFactionOption> _invaderFactions =
+        Array.Empty<NewGameFactionOption>();
 
     private Panel _formPanel;
     private Panel _summaryPanel;
@@ -59,9 +71,9 @@ public partial class NewGameSetupController : Control
     /// the tree. The controller only needs display identity and stable faction ids; scenario rules
     /// stay in the rules-loading and generation layers.
     /// </summary>
-    public void ConfigureInvaderFactions(IReadOnlyList<Faction> invaderFactions)
+    public void ConfigureInvaderFactions(IReadOnlyList<NewGameFactionOption> invaderFactions)
     {
-        _invaderFactions = (invaderFactions ?? Array.Empty<Faction>())
+        _invaderFactions = (invaderFactions ?? Array.Empty<NewGameFactionOption>())
             .Where(faction => faction != null)
             .ToList();
         if (_invaderSelection != null)
@@ -136,14 +148,14 @@ public partial class NewGameSetupController : Control
         }
 
         int selectedId = _invaderSelection.GetItemId(_invaderSelection.Selected);
-        ScenarioFactionSelection invaderSelection;
+        NewGameInvaderSelection invaderSelection;
         if (selectedId == RandomSelectionId)
         {
-            invaderSelection = ScenarioFactionSelection.Random;
+            invaderSelection = NewGameInvaderSelection.Random;
         }
         else if (_invaderFactions.Any(faction => faction.Id == selectedId))
         {
-            invaderSelection = ScenarioFactionSelection.ForFaction(selectedId);
+            invaderSelection = NewGameInvaderSelection.ForFaction(selectedId);
         }
         else
         {
@@ -164,7 +176,7 @@ public partial class NewGameSetupController : Control
     private void PopulateInvaderSelection()
     {
         _invaderSelection.Clear();
-        foreach (Faction faction in _invaderFactions)
+        foreach (NewGameFactionOption faction in _invaderFactions)
         {
             _invaderSelection.AddItem(faction.Name, faction.Id);
         }

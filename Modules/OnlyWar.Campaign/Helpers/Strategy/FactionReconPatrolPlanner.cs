@@ -1,17 +1,17 @@
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Runtime.Allocators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Strategy;
+namespace OnlyWar.Campaign.Strategy;
 
 /// <summary>
 /// Plans reconnaissance and patrol taskings and owns their one-turn squad lifecycle.

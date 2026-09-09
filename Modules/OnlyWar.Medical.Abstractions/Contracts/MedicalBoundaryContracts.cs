@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Medical.Abstractions;
 

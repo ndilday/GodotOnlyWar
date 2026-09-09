@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 
 namespace OnlyWar.Application;
 

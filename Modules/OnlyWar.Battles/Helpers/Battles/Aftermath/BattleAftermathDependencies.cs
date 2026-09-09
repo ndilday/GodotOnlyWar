@@ -1,11 +1,12 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
 using System;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Battles.Aftermath
 {
     public sealed class BattleAftermathDependencies
     {

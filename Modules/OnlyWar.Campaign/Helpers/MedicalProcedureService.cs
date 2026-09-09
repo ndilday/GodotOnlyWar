@@ -1,12 +1,12 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     // Owns the gating and assignment of Apothecarium medical procedures (PRD 4.8 / 5.3).
     // The Apothecarium view renders the requisite breakdown this produces (green = met,

@@ -1,10 +1,10 @@
-using OnlyWar.Models.Battles;
-using OnlyWar.Models;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Battle-scoped owner of withdrawal, pursuit, contact, escape, and rear-guard lifecycle

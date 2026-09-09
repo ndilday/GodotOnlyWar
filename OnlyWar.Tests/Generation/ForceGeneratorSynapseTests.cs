@@ -1,13 +1,12 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -228,7 +227,7 @@ public class ForceGeneratorSynapseTests
             Value(0), Value(10), Value(6), Value(1),
             1, 1, 0f, 0f,
             abilities,
-            OnlyWar.Models.Soldiers.HumanBodyTemplate.Instance,
+            OnlyWar.Domain.Soldiers.HumanBodyTemplate.Instance,
             TestModelFactory.DefaultUnarmedWeapon,
             synapseRadius: abilities.HasFlag(SpeciesAbilities.Synapse) ? 1000f : 0f);
     }

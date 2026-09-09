@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     // Centralized tunables and formula for "learn by doing" field experience (PRD §4.12).
     // Every mission skill check (IndividualMissionTest / LeaderMissionTest / SquadMissionTest,

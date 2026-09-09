@@ -1,14 +1,14 @@
-﻿using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     public class SquadTemplateDataBlob
     {
@@ -141,7 +141,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                                 targetId,
                                 $"TrainingProfileEntry {trainingProfileId}.TargetId"),
                             weight)
-                        : new TrainingProfileEntry((Models.Soldiers.Attribute)targetId, weight);
+                        : new TrainingProfileEntry(
+                            (OnlyWar.Domain.Soldiers.Attribute)targetId, weight);
 
                     if (!entryMap.ContainsKey(trainingProfileId))
                     {

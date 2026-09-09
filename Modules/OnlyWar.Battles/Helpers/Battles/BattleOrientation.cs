@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Eight-way battle facing. Zero points toward increasing Y and headings advance in

@@ -1,10 +1,10 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Assault
+namespace OnlyWar.Operations.Missions.Assault
 {
     /// <summary>
     /// Resolves one day when two factions are actively assaulting one another in the same region.

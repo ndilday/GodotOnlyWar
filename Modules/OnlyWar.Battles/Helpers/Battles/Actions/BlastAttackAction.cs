@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles.Actions
+namespace OnlyWar.Battles.Actions
 {
     /// <summary>
     /// A thrown or launched blast (grenade) attack. The delivery check scatters the

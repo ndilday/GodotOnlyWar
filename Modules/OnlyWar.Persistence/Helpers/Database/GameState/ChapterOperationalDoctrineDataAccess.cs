@@ -1,8 +1,8 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     /// <summary>
     /// Persists the singleton policy owned by the player Chapter. It is intentionally separate
@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers.Database.GameState
             if (!reader.Read()) return doctrine;
 
             doctrine.Set(
-                reader.IsDBNull(0) ? null : (OnlyWar.Models.Soldiers.WoundLevel?)
+                reader.IsDBNull(0) ? null : (OnlyWar.Domain.Soldiers.WoundLevel?)
                     reader.GetInt32(0),
                 reader.GetBoolean(1),
                 reader.GetInt32(2));

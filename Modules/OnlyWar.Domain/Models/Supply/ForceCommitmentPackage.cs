@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Supply;
+namespace OnlyWar.Domain.Supply;
 
 /// <summary>
 /// A player-readable force commitment. Battle value is retained only as the hidden

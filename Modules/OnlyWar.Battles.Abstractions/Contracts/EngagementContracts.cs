@@ -1,7 +1,7 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -1,5 +1,5 @@
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Equippables;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

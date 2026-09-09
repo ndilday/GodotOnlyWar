@@ -1,6 +1,6 @@
 using System.Linq;
-using OnlyWar.Models.Recruitment;
-namespace OnlyWar.Helpers.Readiness;
+using OnlyWar.Domain.Recruitment;
+namespace OnlyWar.Medical.Readiness;
 
 public static class ReadinessReservations
 {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     /// <summary>
     /// Defines the rules-database schema boundary. The tables listed here are the tables the

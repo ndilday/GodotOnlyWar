@@ -1,20 +1,20 @@
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Operations.Recruitment;
 using OnlyWar.Operations.Personnel;
 using OnlyWar.Runtime.Allocators;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Orders
+namespace OnlyWar.Operations.Orders
 {
     // Pure-logic extraction of OrderDialogController.OnOrdersConfirmed's Mission-construction and
     // Order-creation logic, generalized to accept more than one squad at once (for a future

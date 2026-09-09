@@ -1,13 +1,12 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Aftermath;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using System;
 using System.Collections.Generic;
@@ -132,7 +131,7 @@ public class BattleAftermathPolicyTests
         player.ProgenoidImplantDate = new Date(1, 1, 1);
         BattleSquad attackers = CreateBattleSquad(playerFaction, "Strike Squad", player);
         BattleSquad defenders = CreateBattleSquad(enemyFaction, "Warband", CreateSoldier("Boy"));
-        Models.Army campaignArmy = new("Test Army", null, null, null, [player]);
+        OnlyWar.Domain.Army campaignArmy = new("Test Army", null, null, null, [player]);
         Squad assignedSquad = player.AssignedSquad;
         Region region = CreateRegion("Ash Wastes", "Calth");
         BattleAftermathContext context = new(
@@ -170,7 +169,7 @@ public class BattleAftermathPolicyTests
         PlayerSoldier player = CreatePlayerSoldier("Brother Boundary");
         BattleSquad battleSquad = CreateBattleSquad(playerFaction, "Strike Squad", player);
         Squad assignedSquad = battleSquad.Squad;
-        Models.Army army = new("Test Army", null, null, null, [player]);
+        OnlyWar.Domain.Army army = new("Test Army", null, null, null, [player]);
         PlayerForce force = new(playerFaction, army, null);
         PlayerBattleAftermathSink sink = new(force);
         Date date = new(1, 2, 3);
@@ -417,10 +416,10 @@ public class BattleAftermathPolicyTests
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate> { [TestModelFactory.MarineTemplate.Id] = TestModelFactory.MarineTemplate },
             new Dictionary<int, SquadTemplate>(),
-            new Dictionary<int, Models.Units.UnitTemplate>(),
-            new Dictionary<int, Models.Fleets.BoatTemplate>(),
-            new Dictionary<int, Models.Fleets.ShipTemplate>(),
-            new Dictionary<int, Models.Fleets.FleetTemplate>());
+            new Dictionary<int, OnlyWar.Domain.Units.UnitTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
     }
 
     private sealed class RecordingPlayerBattleAftermathSink : IPlayerBattleAftermathSink

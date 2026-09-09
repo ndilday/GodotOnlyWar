@@ -1,6 +1,6 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Models;
 using System.Linq;
 
 namespace OnlyWar.Tests.Fixtures;

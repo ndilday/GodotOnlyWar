@@ -1,5 +1,5 @@
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Orders;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Orders;
 using Xunit;
 
 namespace OnlyWar.Tests.Battles;

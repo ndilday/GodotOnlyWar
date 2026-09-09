@@ -1,9 +1,9 @@
-﻿using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     public class BaseSkillDataAccess
     {
@@ -19,7 +19,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int id = reader.GetInt32(0);
                     string name = reader[1].ToString();
                     SkillCategory category = (SkillCategory)reader.GetInt32(2);
-                    var attribute = (Models.Soldiers.Attribute)reader.GetInt32(3);
+                    var attribute = (OnlyWar.Domain.Soldiers.Attribute)reader.GetInt32(3);
                     float difficulty = Convert.ToSingle(reader[4]);
                     // SkillKey was appended to preserve compatibility with focused legacy
                     // fixtures. Production rules data must provide it; GameRulesData validates

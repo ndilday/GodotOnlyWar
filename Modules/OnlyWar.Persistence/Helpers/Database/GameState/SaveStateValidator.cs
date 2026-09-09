@@ -1,10 +1,10 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameState;
+namespace OnlyWar.Persistence.Database.GameState;
 
 /// <summary>
 /// Validates invariants owned by the save representation while it is still being read. It does

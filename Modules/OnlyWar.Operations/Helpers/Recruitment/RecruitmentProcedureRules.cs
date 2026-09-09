@@ -1,7 +1,7 @@
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain.Recruitment;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Recruitment;
+namespace OnlyWar.Operations.Recruitment;
 
 /// <summary>Small recruitment reservation query needed by order commitment policy.</summary>
 public static class RecruitmentProcedureRules

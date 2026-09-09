@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

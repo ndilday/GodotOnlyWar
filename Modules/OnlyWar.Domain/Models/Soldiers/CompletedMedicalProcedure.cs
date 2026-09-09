@@ -1,4 +1,4 @@
-namespace OnlyWar.Models.Soldiers;
+namespace OnlyWar.Domain.Soldiers;
 
 /// <summary>
 /// Engine compatibility projection of a Medical contract completion onto the live player soldier.

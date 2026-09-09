@@ -1,10 +1,10 @@
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     public sealed class ScoutTrainingOptionDataAccess
     {

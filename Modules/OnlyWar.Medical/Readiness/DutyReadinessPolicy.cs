@@ -1,7 +1,7 @@
 using System;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Medical.Readiness;
 

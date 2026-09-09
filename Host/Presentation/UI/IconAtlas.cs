@@ -1,6 +1,4 @@
 using Godot;
-using OnlyWar.Models;
-using OnlyWar.Models.Squads;
 using System.Collections.Generic;
 
 namespace OnlyWar.Host.Presentation.UI
@@ -137,24 +135,6 @@ namespace OnlyWar.Host.Presentation.UI
 				PlanetaryOperationsFactionCellSize, PlanetaryOperationsFactionCellSize,
 				PlanetaryOperationsFactionCellSize)
 		};
-
-		public static string GetFactionIconKey(Faction faction)
-		{
-			if (faction == null) return "hostile";
-			if (faction.IsPlayerFaction) return "player_forces";
-			if (faction.IsDefaultFaction) return "pdf_forces";
-
-			string name = faction.Name?.ToLowerInvariant() ?? "";
-			if (name.Contains("tyranid")) return "faction_tyranids";
-			if (name.Contains("genestealer")) return "faction_genestealer_cult";
-			if (name.Contains("chaos")) return "faction_chaos";
-			return "hostile";
-		}
-
-		public static string GetPlanetaryOperationsFactionIconKey(Faction faction) =>
-			MapIconKeys.ForFaction(faction);
-
-		public static string GetSquadIconKey(SquadTemplate template) => SquadIconKeys.For(template);
 
 		// One AtlasTexture per key, shared by every node that draws it. A list page previously
 		// allocated one Resource per icon per row (~280 for a full Muster candidate page), which

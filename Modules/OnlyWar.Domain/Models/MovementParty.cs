@@ -1,8 +1,8 @@
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// A transport action's complete passenger selection. A character batch is still a normal

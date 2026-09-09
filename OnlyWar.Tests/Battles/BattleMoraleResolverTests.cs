@@ -4,17 +4,16 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Helpers.Database.GameRules;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Aftermath;
+using OnlyWar.Persistence.Database.GameRules;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 
 using Xunit;
@@ -209,7 +208,7 @@ public class BattleMoraleResolverTests
         Aggression attackerAggression,
         Aggression defenderAggression)
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Date date = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try
@@ -294,10 +293,10 @@ public class BattleMoraleResolverTests
             new Dictionary<int, Species> { [template.Species.Id] = template.Species },
             new Dictionary<int, SoldierTemplate> { [template.Id] = template },
             new Dictionary<int, SquadTemplate>(),
-            new Dictionary<int, Models.Units.UnitTemplate>(),
-            new Dictionary<int, Models.Fleets.BoatTemplate>(),
-            new Dictionary<int, Models.Fleets.ShipTemplate>(),
-            new Dictionary<int, Models.Fleets.FleetTemplate>());
+            new Dictionary<int, OnlyWar.Domain.Units.UnitTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
     }
 
     private sealed class NoOpPlayerBattleAftermathSink : IPlayerBattleAftermathSink

@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Math;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Estimates the result of one conventional ranged shot or burst.

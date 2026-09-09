@@ -1,8 +1,8 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Preference-aware adapter over the shared command-attention evaluator. Preferences affect

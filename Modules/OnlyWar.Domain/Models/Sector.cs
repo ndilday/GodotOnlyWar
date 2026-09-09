@@ -1,14 +1,15 @@
 using OnlyWar.Abstractions;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Identity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     public class Sector
     {
@@ -213,7 +214,7 @@ namespace OnlyWar.Models
             if (_strategicInvasionForces.Any(existing => existing.Id == force.Id))
                 throw new InvalidOperationException($"Strategic invasion force id {force.Id} already exists.");
             _strategicInvasionForces.Add(force);
-            _nextStrategicInvasionForceId = Math.Max(_nextStrategicInvasionForceId, force.Id + 1);
+            _nextStrategicInvasionForceId = System.Math.Max(_nextStrategicInvasionForceId, force.Id + 1);
         }
 
         public bool RemoveStrategicInvasionForce(StrategicInvasionForce force)

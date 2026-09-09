@@ -1,8 +1,8 @@
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// A day of sweeping ground the force already holds, looking for anything moving through it.

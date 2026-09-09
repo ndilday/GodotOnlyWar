@@ -1,12 +1,12 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public enum EmptySquadLifecycleResult
     {

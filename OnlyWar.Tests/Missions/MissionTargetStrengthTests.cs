@@ -1,24 +1,22 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Missions.Ambush;
-using OnlyWar.Helpers.Missions.Assassinate;
-using OnlyWar.Helpers.Missions.Diversion;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Missions.Ambush;
+using OnlyWar.Operations.Missions.Assassinate;
+using OnlyWar.Operations.Missions.Diversion;
+using OnlyWar.Battles;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -293,7 +291,7 @@ public class MissionTargetStrengthTests
         region.RegionFactionMap[faction.Id] = horde;
 
         GameSession session = new(
-            OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath), new Sector(), new Date(1, 1, 1), new SequencedZRng(branchZ, sizeZ));
+            OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath), new Sector(), new Date(1, 1, 1), new SequencedZRng(branchZ, sizeZ));
         List<Mission> generated = [];
         return (new PlanetIntelligenceProcessor(session, generated), horde, generated);
     }

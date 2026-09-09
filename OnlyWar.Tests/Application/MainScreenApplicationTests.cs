@@ -4,16 +4,14 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Reports;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Reports;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -145,6 +143,9 @@ public sealed class MainScreenApplicationTests
     [InlineData(typeof(ResolveTurnView))]
     [InlineData(typeof(NeophytePlacementOptions))]
     [InlineData(typeof(NeophytePlacementResult))]
+    [InlineData(typeof(TurnReportView))]
+    [InlineData(typeof(EndOfTurnReportEntry))]
+    [InlineData(typeof(BattleReplayDisplay))]
     public void MainScreenBoundaryContainsNoLiveDomainGraph(Type root)
     {
         HashSet<Type> visited = [];
@@ -160,9 +161,6 @@ public sealed class MainScreenApplicationTests
                 foreach (Type argument in type.GetGenericArguments()) Inspect(argument);
                 return;
             }
-            // A debrief line is a mission runtime record and a battle replay, not the campaign
-            // graph: it names no squad, soldier, region or order, and Battle Review needs it.
-            if (type == typeof(MissionDebriefLine)) return;
             if (type.Assembly == typeof(Sector).Assembly) { forbidden.Add(type); return; }
             foreach (PropertyInfo property in type.GetProperties(
                 BindingFlags.Public | BindingFlags.Instance))

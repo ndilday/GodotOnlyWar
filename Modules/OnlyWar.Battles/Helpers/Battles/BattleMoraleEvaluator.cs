@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// The per-turn morale check (OnlyWar_TDD.md §6.6). Stateless and

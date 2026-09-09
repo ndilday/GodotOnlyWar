@@ -1,10 +1,10 @@
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Personnel;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Operations.Fleets
 {
     public static class ShipCapacityService
     {

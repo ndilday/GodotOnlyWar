@@ -1,6 +1,6 @@
 using System.Drawing;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

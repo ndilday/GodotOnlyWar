@@ -1,9 +1,9 @@
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Supply;
+namespace OnlyWar.Campaign.Supply;
 
 /// <summary>
 /// Prices a player-readable commitment using Battle-Value-Time as an internal accounting unit.

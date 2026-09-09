@@ -1,10 +1,10 @@
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Fleets
+namespace OnlyWar.Campaign.Fleets
 {
     public class FleetRouteCalculator
     {

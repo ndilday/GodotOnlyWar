@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers {
+namespace OnlyWar.Domain {
     public enum FoundingRole
     {
         ChapterMaster,

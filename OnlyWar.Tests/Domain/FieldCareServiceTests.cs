@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Medical;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Medical.Treatment;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -476,7 +475,7 @@ public class FieldCareServiceTests
     {
         BaseSkill firstAid = new(
             910, SkillCategory.Military, "First Aid",
-            OnlyWar.Models.Soldiers.Attribute.Intelligence, 0);
+            OnlyWar.Domain.Soldiers.Attribute.Intelligence, 0);
         PlayerSoldier apothecary = Apothecary("Kadmon", 100f);
         PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Critical);
         Order order = OrderFor(apothecary, patient);

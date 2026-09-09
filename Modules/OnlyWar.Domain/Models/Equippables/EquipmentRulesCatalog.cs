@@ -1,10 +1,10 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace OnlyWar.Models.Equippables
+namespace OnlyWar.Domain.Equippables
 {
     /// <summary>
     /// Runtime registry for the itemized rules vocabulary. The legacy loader uses this conversion

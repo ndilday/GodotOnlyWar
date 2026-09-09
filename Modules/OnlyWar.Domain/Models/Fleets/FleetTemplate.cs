@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-namespace OnlyWar.Models.Fleets
+namespace OnlyWar.Domain.Fleets
 {
     public class FleetTemplate
     {

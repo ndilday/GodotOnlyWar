@@ -1,7 +1,7 @@
-using OnlyWar.Helpers.Supply;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Supply;
+using OnlyWar.Campaign.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Supply;
 using System;
 using Xunit;
 
@@ -43,14 +43,14 @@ public class SupplyRequestValuationTests
         Assert.Equal(0.75m, rules.RelationshipBaseMultiplier);
         Assert.Equal(0.5m, rules.RelationshipOpinionScale);
         Assert.Equal(1.0m, rules.GetWorldRequisitionMultiplier(
-            new OnlyWar.Models.Planets.PlanetTemplate(
+            new OnlyWar.Domain.Planets.PlanetTemplate(
                 999,
                 "Unknown",
                 1,
-                new OnlyWar.Models.LogNormalValueTemplate { Floor = 0, Scale = 1 },
-                new OnlyWar.Models.LogNormalValueTemplate { Floor = 0, Scale = 1 },
-                new OnlyWar.Models.NormalizedValueTemplate { BaseValue = 0, StandardDeviation = 1 },
-                new OnlyWar.Models.LinearValueTemplate { MinValue = 0, MaxValue = 1 })));
+                new OnlyWar.Domain.LogNormalValueTemplate { Floor = 0, Scale = 1 },
+                new OnlyWar.Domain.LogNormalValueTemplate { Floor = 0, Scale = 1 },
+                new OnlyWar.Domain.NormalizedValueTemplate { BaseValue = 0, StandardDeviation = 1 },
+                new OnlyWar.Domain.LinearValueTemplate { MinValue = 0, MaxValue = 1 })));
     }
 
     [Fact]

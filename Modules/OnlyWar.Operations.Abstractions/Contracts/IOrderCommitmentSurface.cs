@@ -1,5 +1,5 @@
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Operations.Abstractions;
 

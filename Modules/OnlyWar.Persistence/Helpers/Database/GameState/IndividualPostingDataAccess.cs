@@ -1,12 +1,12 @@
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     public sealed class IndividualPostingDataAccess
     {

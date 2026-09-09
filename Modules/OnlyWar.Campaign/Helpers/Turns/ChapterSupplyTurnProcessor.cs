@@ -1,12 +1,12 @@
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Supply;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Supply;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Supply;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Supply;
 using System;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     internal sealed class ChapterSupplyTurnProcessor
     {

@@ -1,9 +1,9 @@
 
-using OnlyWar.Models.Planets;
-using OnlyWar.Models;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain;
 using System;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Domain.Missions
 {
     public enum DefenseType
     {
@@ -140,7 +140,7 @@ namespace OnlyWar.Models.Missions
             DefenseType defenseType,
             double buildAmount,
             RegionFaction regionFaction)
-            : base(id, MissionType.Construction, regionFaction, (int)Math.Ceiling(buildAmount))
+            : base(id, MissionType.Construction, regionFaction, (int)System.Math.Ceiling(buildAmount))
         {
             ConstructionType = defenseType;
             BuildAmount = buildAmount;
@@ -179,9 +179,9 @@ namespace OnlyWar.Models.Missions
                 id,
                 MissionType.Feed,
                 regionFaction,
-                (int)Math.Clamp(committedBattleValue, 0L, int.MaxValue))
+                (int)System.Math.Clamp(committedBattleValue, 0L, int.MaxValue))
         {
-            CommittedBattleValue = Math.Max(0L, committedBattleValue);
+            CommittedBattleValue = System.Math.Max(0L, committedBattleValue);
         }
 
         public FeedMission(long committedBattleValue, RegionFaction regionFaction)

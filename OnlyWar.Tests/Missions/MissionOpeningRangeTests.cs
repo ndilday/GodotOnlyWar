@@ -1,9 +1,9 @@
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Missions;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Missions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

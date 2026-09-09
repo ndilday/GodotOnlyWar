@@ -1,15 +1,15 @@
 using System;
-using OnlyWar.Helpers;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Runtime.Allocators;
 using OnlyWar.Runtime.Factories;
 using System.Collections.Generic;
 using System.Linq;
 using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Runtime.Factories
 {
     public static class SquadFactory
     {

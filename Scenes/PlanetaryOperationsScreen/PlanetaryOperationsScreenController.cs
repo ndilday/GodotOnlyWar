@@ -1,6 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Models.Orders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -302,7 +301,7 @@ public partial class PlanetaryOperationsScreenController : DialogController
             () => Apply(_operations.CancelOrder(new(token, id))));
     }
 
-    private void OnAggressionSelected(object sender, Aggression aggression)
+    private void OnAggressionSelected(object sender, OperationsAggression aggression)
     {
         if (_selectedOrderId is not int orderId) return;
         OperationsCommandResult result = _operations.SetOrderAggression(

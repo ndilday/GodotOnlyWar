@@ -1,7 +1,7 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Domain.Missions
 {
     /// <summary>
     /// What one squad-borne construction order actually accomplished this turn. Construction has no

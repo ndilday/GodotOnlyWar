@@ -1,11 +1,11 @@
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain;
 using OnlyWar.Application.Abstractions;
-using OnlyWar.Helpers.Simulation;
+using OnlyWar.Campaign.Simulation;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Storage
+namespace OnlyWar.Application.Storage
 {
     /// <summary>
     /// Captures the currently loaded campaign through the single production persistence path.

@@ -1,4 +1,4 @@
-using OnlyWar.Models.Events;
+using OnlyWar.Domain.Events;
 using System.Linq;
 using System.Collections.Generic;
 using Xunit;
@@ -89,7 +89,7 @@ public sealed class NarrativeClassifierAndVoiceTests
         CampaignEventPublication wrongOrder = classifier.Classify(new CampaignEventCandidate(
             CampaignEventType.SquadHeldAgainstOdds, 1, 1, context.CorrelationKey, "wrong-order", 1,
             new SquadHeldAgainstOddsPayload(context, 5, 1, 2, 0.6,
-                OnlyWar.Models.Missions.MissionType.Recon, null, true)));
+                OnlyWar.Domain.Missions.MissionType.Recon, null, true)));
 
         Assert.False(tooSmall.PublishesToTurnReport);
         Assert.True(survivor.PublishesToTurnReport);

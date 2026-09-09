@@ -1,12 +1,12 @@
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.PlanetaryOperations
+namespace OnlyWar.Operations.Planetary
 {
     public sealed record MedicalDetachmentResult(
         bool Succeeded,
@@ -26,8 +26,8 @@ namespace OnlyWar.Helpers.PlanetaryOperations
 
         public MedicalDetachmentResult DetachToOrbit(
             Sector sector,
-            Models.Planets.Planet planet,
-            Models.Planets.Region source,
+            OnlyWar.Domain.Planets.Planet planet,
+            OnlyWar.Domain.Planets.Region source,
             Ship destination,
             IReadOnlyList<PlayerSoldier> casualties,
             Date date)

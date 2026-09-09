@@ -1,4 +1,4 @@
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     /// <summary>
     /// The source of a data-driven requirement for promotion into a soldier template.

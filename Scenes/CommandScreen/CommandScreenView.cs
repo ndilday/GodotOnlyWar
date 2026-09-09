@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Models.Events;
 using System;
 using System.Collections.Generic;
 
@@ -430,7 +429,7 @@ public partial class CommandScreenView : MainScreenView
         title.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
         heading.AddChild(title);
         Label importance = new() { Text = entry.Importance.ToString().ToUpperInvariant() };
-        importance.AddThemeColorOverride("font_color", entry.Importance == CampaignEventImportance.Defining
+        importance.AddThemeColorOverride("font_color", entry.Importance == ChronicleImportance.Defining
             ? OnlyWarStyle.Gold : OnlyWarStyle.MutedText);
         heading.AddChild(importance);
         RichTextLabel body = new()

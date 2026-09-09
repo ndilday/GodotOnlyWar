@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-namespace OnlyWar.Models.Events {
+namespace OnlyWar.Campaign.Events {
     public sealed class ChapterChronicleComposer
     {
         private readonly CampaignIdentity _identity;

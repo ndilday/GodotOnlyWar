@@ -1,17 +1,19 @@
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Battles.Aftermath;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Runtime.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     public class BattleTurnResolver
     {
@@ -86,8 +88,8 @@ namespace OnlyWar.Helpers.Battles
                 opposingBattleSquads,
                 region,
                 execution,
-                new BattleSideProfile(Models.Orders.Aggression.Normal, BattleRole.Attacker),
-                new BattleSideProfile(Models.Orders.Aggression.Normal, BattleRole.Defender))
+                new BattleSideProfile(OnlyWar.Domain.Orders.Aggression.Normal, BattleRole.Attacker),
+                new BattleSideProfile(OnlyWar.Domain.Orders.Aggression.Normal, BattleRole.Defender))
         {
         }
 

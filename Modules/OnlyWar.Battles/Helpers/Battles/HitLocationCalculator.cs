@@ -1,7 +1,7 @@
-﻿using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     static public class HitLocationCalculator
     {

@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Application;
 

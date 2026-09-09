@@ -1,65 +1,27 @@
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Medical.Abstractions;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Operations.Missions
 {
-    public class MissionDebriefLine
-    {
-        public string Text { get; }
-        public IBattleReplay BattleHistory { get; }
-        public BattleDebriefReport BattleReport { get; }
-        public ushort? Day { get; }
-        public string SquadName { get; }
-        // A reloaded report retains the compact BattleReport but not the full replay graph. Both
-        // forms should render as battle content; only the history-backed form can open a replay.
-        public bool HasBattle => BattleHistory != null || BattleReport != null;
-
-        public MissionDebriefLine(
-            string text,
-            IBattleReplay battleHistory = null,
-            BattleDebriefReport battleReport = null,
-            ushort? day = null,
-            string squadName = null)
-        {
-            Text = text ?? "";
-            BattleHistory = battleHistory;
-            BattleReport = battleReport;
-            Day = day;
-            SquadName = squadName;
-        }
-    }
-
-    // Why an ambush never got to spring. Both failure points end in the same meeting engagement, and
-    // without this the debrief showed only "Force accepted engagement with ..." - indistinguishable
-    // from a mission that was never an ambush at all.
-    public enum AmbushSpoilStage
-    {
-        // Either not an ambush, or the ambush was sprung as intended.
-        NotSpoiled = 0,
-        // Spotted while moving into position: the ambush was never set (PositionAmbushMissionStep).
-        DuringSetup,
-        // Set successfully, then discovered before the enemy walked in (PerformAmbushMissionStep).
-        BeforeSpringing
-    }
-
-    public enum MissionAvailabilityStatus
+    internal enum MissionAvailabilityStatus
     {
         Ready = 0,
         NoDutyReadyParticipants,
         SquadStructuralBlocker
     }
 
-    public sealed record MissionSquadReadinessIssue(
+    internal sealed record MissionSquadReadinessIssue(
         Squad CampaignSquad,
         MissionAvailabilityStatus Status,
         IReadOnlyList<SquadReadinessBlocker> Blockers,
@@ -109,9 +71,9 @@ namespace OnlyWar.Models.Missions
         public Order Order { get; }
         public long? StrategicInvasionForceId => Order?.StrategicInvasionForceId;
         public ChapterOperationalDoctrine OperationalDoctrine { get; }
-        public MissionAvailabilityStatus AvailabilityStatus { get; private set; }
-        public IReadOnlyList<SquadReadinessBlocker> AvailabilityBlockers { get; private set; }
-        public List<MissionSquadReadinessIssue> ReadinessIssues { get; } = [];
+        internal MissionAvailabilityStatus AvailabilityStatus { get; private set; }
+        internal IReadOnlyList<SquadReadinessBlocker> AvailabilityBlockers { get; private set; }
+        internal List<MissionSquadReadinessIssue> ReadinessIssues { get; } = [];
 
         public List<OperationalMissionElement> MissionSquads { get; }
         /// <summary>
@@ -235,7 +197,7 @@ namespace OnlyWar.Models.Missions
         /// Order-wide, not element-wide: one order can produce several MissionContexts, and all of
         /// them carry the same report. The treatment itself ran exactly once.
         /// </summary>
-        public Helpers.Medical.FieldCareReport FieldCare { get; set; }
+        public FieldCareReport FieldCare { get; set; }
         private readonly HashSet<int> _friendlyDeadIds = [];
         private readonly HashSet<int> _friendlyIncapacitatedIds = [];
 
@@ -367,7 +329,7 @@ namespace OnlyWar.Models.Missions
             }
         }
 
-        public void MarkAvailabilityBlocked(
+        internal void MarkAvailabilityBlocked(
             MissionAvailabilityStatus status,
             IEnumerable<SquadReadinessBlocker> blockers = null)
         {
@@ -378,7 +340,7 @@ namespace OnlyWar.Models.Missions
                 .ToList();
         }
 
-        public void RecordReadinessIssue(MissionSquadReadinessIssue issue)
+        internal void RecordReadinessIssue(MissionSquadReadinessIssue issue)
         {
             if (issue == null || issue.CampaignSquad == null) return;
             if (ReadinessIssues.Any(existing => existing.SquadId == issue.SquadId)) return;

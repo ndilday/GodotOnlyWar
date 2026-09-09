@@ -1,10 +1,10 @@
-﻿using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     public class SoldierDataAccess
     {

@@ -1,11 +1,11 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Missions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Command
+namespace OnlyWar.Campaign.Command
 {
     public static class ChapterChronicleBrowser
     {
@@ -182,7 +182,7 @@ namespace OnlyWar.Helpers.Command
                 entry.Id,
                 entry.OccurredWeek,
                 dateLabel,
-                entry.Importance,
+                ToChronicleImportance(entry.Importance),
                 primaryCategory,
                 entry.Title,
                 annotations == null || annotations.Count == 0
@@ -191,6 +191,15 @@ namespace OnlyWar.Helpers.Command
                 links.AsReadOnly(),
                 relatedBattle);
         }
+
+        private static ChronicleImportance ToChronicleImportance(
+            CampaignEventImportance importance) => importance switch
+        {
+            CampaignEventImportance.Notable => ChronicleImportance.Notable,
+            CampaignEventImportance.Major => ChronicleImportance.Major,
+            CampaignEventImportance.Defining => ChronicleImportance.Defining,
+            _ => ChronicleImportance.Routine
+        };
 
         private static ChronicleEntityLink ToLink(
             CampaignEventEntityRef entity,

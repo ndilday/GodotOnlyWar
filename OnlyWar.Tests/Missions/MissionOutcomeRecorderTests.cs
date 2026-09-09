@@ -2,14 +2,13 @@ using System.Collections.Generic;
 using System.Drawing;
 using OnlyWar.Battles.Abstractions;
 using System.Linq;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -260,8 +259,8 @@ public class MissionOutcomeRecorderTests
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate> { [TestModelFactory.MarineTemplate.Id] = TestModelFactory.MarineTemplate },
             new Dictionary<int, SquadTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Units.UnitTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.BoatTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.ShipTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.FleetTemplate>());
+            new Dictionary<int, OnlyWar.Domain.Units.UnitTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
 }

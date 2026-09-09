@@ -1,17 +1,17 @@
 using System;
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Medical.Readiness;
 using System.Linq;
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers.Recruitment
+namespace OnlyWar.Campaign.Recruitment
 {
     /// <summary>
     /// Projects the members of the 10th Company administrative HQ into the staffing

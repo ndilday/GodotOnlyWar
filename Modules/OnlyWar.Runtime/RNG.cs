@@ -1,14 +1,14 @@
-﻿using System;
+using System;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Runtime.Random
 {
     public static class RNG
     {
-        private static Random _random = new Random();
+        private static System.Random _random = new System.Random();
 
         public static void Reset(int seed)
         {
-            _random = new Random(seed);
+            _random = new System.Random(seed);
         }
         public static double NextRandomZValue()
         {

@@ -1,9 +1,8 @@
-﻿using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Generation.World
 {
     public static class CharacterBuilder
     {

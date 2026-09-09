@@ -1,14 +1,12 @@
-﻿using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Generation.World
 {
     class PlanetBuilder
     {

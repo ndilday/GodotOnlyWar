@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// A scored single-target ranged action: which weapon, at what range, for how many shots, and

@@ -1,9 +1,9 @@
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using System;
 using System.Collections;
@@ -17,7 +17,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     [Fact]
     public void GameSession_ExposesConstructorDependenciesByIdentity()
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Sector sector = new();
         Date date = new(42, 123, 7);
         FixedRNG random = new();
@@ -81,7 +81,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     [Fact]
     public void GameSession_RejectsNullRequiredDependencies()
     {
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Sector sector = new();
         Date date = new(42, 123, 7);
         FixedRNG random = new();
@@ -112,7 +112,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     }
 
     private static GameSession CreateSession() => new(
-        OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath),
+        OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath),
         new Sector(),
         new Date(42, 123, 7),
         new FixedRNG());

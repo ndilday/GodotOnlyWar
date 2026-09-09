@@ -1,8 +1,52 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Missions;
 
 namespace OnlyWar.Application;
+
+public enum BattleCasualtyDispositionView
+{
+    Dead,
+    Incapacitated,
+    ReplacementRequired,
+    Recovering
+}
+
+public sealed record BattleCasualtyView(
+    int SoldierId,
+    string Name,
+    string Rank,
+    string Squad,
+    string Company,
+    BattleCasualtyDispositionView Disposition,
+    int RecoveryWeeks);
+
+/// <summary>
+/// Detached casualty facts for a debrief. This deliberately does not expose the battle module's
+/// report type so a Godot dialog cannot drift back into tactical/domain data.
+/// </summary>
+public sealed record BattleDebriefView(
+    int PlayerDeaths,
+    int OpposingDeaths,
+    IReadOnlyList<BattleCasualtyView> PlayerCasualties,
+    int PlayerIncapacitated = 0)
+{
+    public IReadOnlyList<BattleCasualtyView> Casualties { get; } =
+        PlayerCasualties ?? Array.Empty<BattleCasualtyView>();
+}
+
+/// <summary>
+/// One narrative line shown by the debrief dialog. A replay is addressed by an opaque application
+/// id; the dialog never receives the replay implementation or a mission runtime record.
+/// </summary>
+public sealed record MissionDebriefLineView(
+    string Text,
+    Guid? BattleReplayId = null,
+    BattleDebriefView BattleReport = null,
+    ushort? Day = null,
+    string SquadName = null)
+{
+    public bool HasBattle => BattleReplayId.HasValue || BattleReport != null;
+}
 
 /// <summary>
 /// One card in the turn report. Everything on it is already redacted and rendered: the screen
@@ -18,9 +62,9 @@ public sealed class EndOfTurnReportEntry
     public bool CanOpenDebrief { get; }
     public bool IsEnemyActivity { get; }
     // Computed once at entry-build time so the debrief never needs to read a MissionContext -
-    // NPC entries can open a (redacted) debrief without ever exposing the underlying mission.
+    // NPC entries can open a redacted debrief without ever exposing the underlying mission.
     public string OutcomeStatus { get; }
-    public IReadOnlyList<MissionDebriefLine> DebriefLines { get; }
+    public IReadOnlyList<MissionDebriefLineView> DebriefLines { get; }
 
     public EndOfTurnReportEntry(
         string title,
@@ -28,7 +72,7 @@ public sealed class EndOfTurnReportEntry
         string summary,
         bool canOpenDebrief,
         string outcomeStatus = "",
-        IReadOnlyList<MissionDebriefLine> debriefLines = null,
+        IReadOnlyList<MissionDebriefLineView> debriefLines = null,
         bool isEnemyActivity = false)
     {
         Title = title ?? "";
@@ -37,7 +81,7 @@ public sealed class EndOfTurnReportEntry
         CanOpenDebrief = canOpenDebrief;
         IsEnemyActivity = isEnemyActivity;
         OutcomeStatus = outcomeStatus ?? "";
-        DebriefLines = debriefLines ?? Array.Empty<MissionDebriefLine>();
+        DebriefLines = debriefLines ?? Array.Empty<MissionDebriefLineView>();
     }
 }
 

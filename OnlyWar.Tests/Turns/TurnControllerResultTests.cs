@@ -1,6 +1,6 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Turns;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

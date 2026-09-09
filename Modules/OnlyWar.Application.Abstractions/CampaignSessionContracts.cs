@@ -1,4 +1,4 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using OnlyWar.Abstractions;
 
 namespace OnlyWar.Application.Abstractions;

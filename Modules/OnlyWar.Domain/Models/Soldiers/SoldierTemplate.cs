@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public class SoldierTemplate
     {
@@ -67,7 +67,7 @@ namespace OnlyWar.Models.Soldiers
             WorkExperienceTrainingProfile = workExperienceTrainingProfile;
             BattleValue = battleValue;
             HasAuthoredMeleeFraction = meleeFraction.HasValue;
-            MeleeFraction = Math.Clamp(meleeFraction ?? 0, 0, 1);
+            MeleeFraction = System.Math.Clamp(meleeFraction ?? 0, 0, 1);
             PromotionRequirements = promotionRequirements ?? [];
             WeaponOptionsByGroup = weaponOptionsByGroup ?? EmptyWeaponOptions;
             EquipmentKitOptionsByGroup = equipmentKitOptionsByGroup ?? EmptyEquipmentOptions;

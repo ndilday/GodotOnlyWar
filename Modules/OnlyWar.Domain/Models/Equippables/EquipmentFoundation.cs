@@ -1,4 +1,4 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 
-namespace OnlyWar.Models.Equippables
+namespace OnlyWar.Domain.Equippables
 {
     /// <summary>
     /// Broad equipment interactions. Rules that need an exact eligibility decision use
@@ -336,7 +336,7 @@ namespace OnlyWar.Models.Equippables
         public IReadOnlyList<EquipmentRequirement> Requirements { get; }
 
         public bool IsWeapon => RangedProfile != null || MeleeProfile != null || Tags.HasFlag(EquipmentTags.Weapon);
-        public int HandGroupsRequired => Math.Max(
+        public int HandGroupsRequired => System.Math.Max(
             RangedProfile?.HandGroupsRequired ?? 0,
             MeleeProfile?.HandGroupsRequired ?? 0);
 

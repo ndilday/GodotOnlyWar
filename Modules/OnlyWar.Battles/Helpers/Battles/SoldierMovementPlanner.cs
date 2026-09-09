@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Commits a previously calculated movement intent -- a direction line and a speed budget --

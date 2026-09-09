@@ -1,6 +1,6 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Domain.Missions
 {
     /// <summary>
     /// Records that a faction's defensive works in a region changed hands to an ally, because the

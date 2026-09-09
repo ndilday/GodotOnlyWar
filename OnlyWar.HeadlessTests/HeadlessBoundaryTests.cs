@@ -3,21 +3,24 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using OnlyWar.Builders;
+using OnlyWar.Generation.World;
+using OnlyWar.Runtime.Factories;
+using OnlyWar.Runtime.Random;
+using OnlyWar.Runtime.WorldGeometry;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Persistence.Abstractions;
 using OnlyWar.Runtime.Abstractions;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Domain;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Battles;
 using OnlyWar.Application;
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Geometry;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Application.Battles;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Geometry;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -28,8 +31,8 @@ public class HeadlessBoundaryTests
     [Fact]
     public void AssembliesHaveOnlyTheirAllowedProductionDependencies()
     {
-        AssertReferences(typeof(Coordinate).Assembly, []);
-        AssertReferences(typeof(IRNG).Assembly, []);
+        AssertReferences(typeof(Coordinate).Assembly, ["OnlyWar.Abstractions"]);
+        AssertReferences(typeof(IRNG).Assembly, [], expectedFriends: []);
         AssertReferences(typeof(BattleSquadFactory).Assembly,
              ["OnlyWar.Domain", "OnlyWar.Persistence", "OnlyWar.Campaign", "OnlyWar.Operations",
              "OnlyWar.Generation", "OnlyWar.Battles", "OnlyWar.Medical.Abstractions",
@@ -52,18 +55,20 @@ public class HeadlessBoundaryTests
              "OnlyWar.Operations.Abstractions"]);
         // Tactical execution reaches nothing but the shared domain and its boundary contracts: no
         // Engine bridge, no campaign orchestration, no current session (SB-06).
-        AssertReferences(typeof(OnlyWar.Helpers.Battles.BattleTurnResolver).Assembly,
+        AssertReferences(typeof(OnlyWar.Battles.BattleTurnResolver).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Battles.Abstractions", "OnlyWar.Abstractions",
              "OnlyWar.Runtime"]);
         AssertReferences(typeof(OnlyWar.Medical.Readiness.DutyReadinessPolicy).Assembly,
-            ["OnlyWar.Domain", "OnlyWar.Medical.Abstractions", "OnlyWar.Abstractions"]);
+            ["OnlyWar.Domain", "OnlyWar.Medical.Abstractions", "OnlyWar.Abstractions"],
+            expectedFriends: []);
         AssertReferences(typeof(OnlyWar.Persistence.Files.AtomicCampaignFileStore).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Persistence.Abstractions"], allowSqlite: true);
         AssertReferences(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly,
-            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Runtime.Abstractions"]);
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Runtime.Abstractions"],
+            expectedFriends: []);
         // Operations owns order/mission sequencing and carries only neutral operational elements;
         // the Application adapter owns the tactical BattleSquad projection (SB-12).
-        AssertReferences(typeof(OnlyWar.Models.Missions.MissionContext).Assembly,
+        AssertReferences(typeof(OnlyWar.Operations.Missions.MissionContext).Assembly,
             ["OnlyWar.Battles.Abstractions", "OnlyWar.Domain", "OnlyWar.Medical.Abstractions",
              "OnlyWar.Abstractions", "OnlyWar.Runtime", "OnlyWar.Operations.Abstractions"]);
         // Generation constructs initial state over explicit ports; it never references campaign
@@ -83,6 +88,25 @@ public class HeadlessBoundaryTests
         Assert.DoesNotContain(
             campaign.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>(),
             friend => friend.AssemblyName == "OnlyWar.Application");
+    }
+
+    [Fact]
+    public void ProductionAssembliesExposeOnlyTheFullSuiteFriend()
+    {
+        AssertFriends(typeof(Coordinate).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(BattleSquadFactory).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(CampaignApplication).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(FactionStrategyController).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(OnlyWar.Battles.BattleTurnResolver).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(OnlyWar.Medical.Readiness.DutyReadinessPolicy).Assembly, []);
+        AssertFriends(typeof(OnlyWar.Persistence.Files.AtomicCampaignFileStore).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly, []);
+        AssertFriends(typeof(OnlyWar.Operations.Missions.MissionContext).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(SectorBuilder).Assembly, ["OnlyWar.Tests"]);
+
+        AssertFriends(typeof(IRNG).Assembly, []);
+        AssertFriends(typeof(IAtomicCampaignFileStore).Assembly, []);
+        AssertFriends(typeof(RuntimeSoldier).Assembly, []);
     }
 
     [Fact]
@@ -259,7 +283,11 @@ public class HeadlessBoundaryTests
         Assert.True(DutyReadinessService.Evaluate(soldier, doctrine, null).IsDutyReady);
     }
 
-    private static void AssertReferences(Assembly assembly, string[] allowed, bool allowSqlite = false)
+    private static void AssertReferences(
+        Assembly assembly,
+        string[] allowed,
+        bool allowSqlite = false,
+        string[] expectedFriends = null)
     {
         foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
         {
@@ -268,9 +296,20 @@ public class HeadlessBoundaryTests
             if (!allowSqlite)
                 Assert.DoesNotContain("Sqlite", reference.Name, StringComparison.OrdinalIgnoreCase);
         }
-        Assert.All(assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>(),
-            friend => Assert.Contains(friend.AssemblyName,
-                new[] { "OnlyWar.Tests", "OnlyWar.HeadlessTests" }));
+        AssertFriends(assembly, expectedFriends ?? ["OnlyWar.Tests"]);
+    }
+
+    private static void AssertFriends(Assembly assembly, string[] expected)
+    {
+        string[] actual = assembly
+            .GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>()
+            .Select(friend => friend.AssemblyName)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            expected.Order(StringComparer.Ordinal).ToArray(),
+            actual);
     }
 
     private static IEnumerable<Type> UnwrapTypes(Type type)

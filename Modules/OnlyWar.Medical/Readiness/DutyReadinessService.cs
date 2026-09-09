@@ -1,7 +1,7 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Readiness;
 using MedicalDutyReadinessPolicy = OnlyWar.Medical.Readiness.DutyReadinessPolicy;
@@ -9,7 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Readiness
+namespace OnlyWar.Medical.Readiness
 {
     /// <summary>
     /// The authoritative individual readiness policy. It has no Godot dependency and can be used

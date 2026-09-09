@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
 using System;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Domain.Missions
 {
     public enum StrategicCombatOutcome
     {

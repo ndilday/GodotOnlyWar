@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Models;
-using OnlyWar.Models.Units;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -103,7 +103,7 @@ public sealed class NewGameSaveFixture
     public NewGameSaveFixture()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        Data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        Data = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Sector = TestGeneration.GenerateSector(1, Data, Date, "New Game Save Fixture Chapter");
         RoundTrip = new GameStateRoundTripFixture(Data, Date);
     }

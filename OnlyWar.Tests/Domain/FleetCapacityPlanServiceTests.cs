@@ -1,6 +1,6 @@
-using OnlyWar.Helpers;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using System.Linq;
 using Xunit;

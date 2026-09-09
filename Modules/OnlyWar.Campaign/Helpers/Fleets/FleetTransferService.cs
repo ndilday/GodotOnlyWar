@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
-namespace OnlyWar.Helpers.Fleets
+namespace OnlyWar.Campaign.Fleets
 {
     /// <summary>
     /// Whether a squad or a whole formation may be moved between ships, and the move itself.

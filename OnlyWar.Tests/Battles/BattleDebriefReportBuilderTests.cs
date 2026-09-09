@@ -1,9 +1,9 @@
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using System;
 using System.Collections.Generic;

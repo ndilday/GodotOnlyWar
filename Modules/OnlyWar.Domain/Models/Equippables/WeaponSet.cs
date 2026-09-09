@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-namespace OnlyWar.Models.Equippables
+namespace OnlyWar.Domain.Equippables
 {
     public class WeaponSet
     {

@@ -1,18 +1,20 @@
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Runtime.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Battles.Aftermath
 {
     internal sealed class PlayerChapterBattleAftermathPolicy : IBattleAftermathPolicy
     {
@@ -222,15 +224,15 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     // existing use-count model (per-turn / per-wound), unchanged by the skill rework.
                     if (soldier.TurnsShooting > 0)
                     {
-                        soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Dexterity, soldier.TurnsShooting * 0.0005f);
+                        soldier.Soldier.AddAttributePoints(OnlyWar.Domain.Soldiers.Attribute.Dexterity, soldier.TurnsShooting * 0.0005f);
                     }
                     if (soldier.TurnsSwinging > 0)
                     {
-                        soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Strength, soldier.TurnsSwinging * 0.0005f);
+                        soldier.Soldier.AddAttributePoints(OnlyWar.Domain.Soldiers.Attribute.Strength, soldier.TurnsSwinging * 0.0005f);
                     }
                     if (soldier.WoundsTaken > 0)
                     {
-                        soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Constitution, soldier.WoundsTaken * 0.0005f);
+                        soldier.Soldier.AddAttributePoints(OnlyWar.Domain.Soldiers.Attribute.Constitution, soldier.WoundsTaken * 0.0005f);
                     }
                 }
             }

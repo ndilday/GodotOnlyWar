@@ -1,16 +1,16 @@
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Recruitment;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Orders
+namespace OnlyWar.Operations.Orders
 {
     /// <summary>
     /// The single mutation boundary for order participants. It keeps both sides of every
@@ -205,7 +205,7 @@ namespace OnlyWar.Helpers.Orders
         public static void RemoveIfEmpty(Order order)
         {
             if (order?.Force.IsEmpty != true
-                || order.Mission?.MissionType == Models.Missions.MissionType.Recruitment)
+                || order.Mission?.MissionType == OnlyWar.Domain.Missions.MissionType.Recruitment)
             {
                 return;
             }

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Application;
+namespace OnlyWar.Application.Abstractions;
 
 public enum EndTurnWarningCategory
 {

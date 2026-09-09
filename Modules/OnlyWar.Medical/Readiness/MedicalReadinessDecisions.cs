@@ -1,7 +1,7 @@
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Readiness;
 
-namespace OnlyWar.Helpers.Readiness;
+namespace OnlyWar.Medical.Readiness;
 
 /// <summary>
 /// Medical's implementation of the readiness capability Operations consumes (SB-05b-1). It is a

@@ -1,9 +1,9 @@
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// Resolves every active mission one campaign day at a time, instead of running each mission from
@@ -32,7 +32,7 @@ namespace OnlyWar.Helpers.Missions
 
         /// <param name="onDayStart">
         /// Called with the day number before anything resolves on it. This is where per-day world state
-        /// is reset - notably <see cref="Models.Planets.RegionFaction.CommittedAttention"/>, so that
+        /// is reset - notably <see cref="OnlyWar.Domain.Planets.RegionFaction.CommittedAttention"/>, so that
         /// attention a feint drew yesterday does not shelter an infiltrator today. Passed in rather than
         /// reached for directly because the scheduler has no business knowing about planets.
         /// </param>

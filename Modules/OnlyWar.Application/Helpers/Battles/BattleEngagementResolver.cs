@@ -1,19 +1,19 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Helpers.Battles.Placers;
+using OnlyWar.Battles.Aftermath;
+using OnlyWar.Battles.Placers;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Application.Battles;
 
 /// <summary>
 /// Composition adapter between Operations' engagement contract and the tactical Battles

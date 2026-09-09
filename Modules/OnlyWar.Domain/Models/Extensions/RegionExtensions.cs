@@ -1,10 +1,10 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Extensions
+namespace OnlyWar.Domain.Extensions
 {
     /// <summary>
     /// Intrinsic region queries: board geometry, adjacency, and questions answerable from the

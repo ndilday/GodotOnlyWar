@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Soldiers.Ratings
+namespace OnlyWar.Domain.Soldiers.Ratings
 {
     /// <summary>
     /// Stable string keys for the ratings the game logic references directly. The set

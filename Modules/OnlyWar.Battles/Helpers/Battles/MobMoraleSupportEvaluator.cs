@@ -1,11 +1,11 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Evaluates proximity-based mob morale for any faction with MobMentality. It does not infer

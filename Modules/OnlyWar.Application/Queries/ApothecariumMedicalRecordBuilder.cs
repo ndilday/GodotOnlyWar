@@ -1,8 +1,8 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -396,7 +396,7 @@ namespace OnlyWar.Application
                 location.IsCybernetic,
                 needsReplacement,
                 severity,
-                GetPrincipalWoundLevel(location.Wounds),
+                MedicalProcedureChoiceMapping.ToView(GetPrincipalWoundLevel(location.Wounds)),
                 location.IsSevered,
                 location.IsCrippled);
         }
@@ -440,7 +440,7 @@ namespace OnlyWar.Application
         private static MedicalTreatmentOptionView ProjectTreatmentOption(ReplacementOption option) =>
             new(
                 option.HitLocationId,
-                option.Type,
+                MedicalProcedureChoiceMapping.ToChoice(option.Type),
                 option.LocationName,
                 option.Title,
                 option.Description,

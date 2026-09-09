@@ -1,15 +1,14 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.PlanetaryOperations;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Operations.Planetary;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     // The kind of mission being offered. Mirrors the synthetic mission codes that
     // OrderDialogController.PopulateMissions used to hand the OptionButton directly

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Database.GameRules;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Persistence.Database.GameRules;
+using OnlyWar.Domain.Equippables;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

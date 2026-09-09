@@ -1,9 +1,9 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Battles.Abstractions
 {
     // Optional extension of the legacy aftermath sink. Existing test and NPC sinks remain valid;
     // the production player sink alone opts into canonical campaign-event recording.

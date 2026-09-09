@@ -1,5 +1,5 @@
 using System;
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public enum IndividualPostingPurpose
     {

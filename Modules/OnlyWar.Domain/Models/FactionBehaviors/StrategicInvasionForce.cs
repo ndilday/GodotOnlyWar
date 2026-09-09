@@ -1,11 +1,11 @@
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.FactionBehaviors
+namespace OnlyWar.Domain.FactionBehaviors
 {
     /// <summary>
     /// Persistent strategic identity for one invasion force. The force lifecycle is capability

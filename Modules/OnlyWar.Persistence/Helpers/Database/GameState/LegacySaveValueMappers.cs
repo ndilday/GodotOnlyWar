@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Database.GameState;
+namespace OnlyWar.Persistence.Database.GameState;
 
 /// <summary>
 /// Pure readers for values that older save formats did not persist. These are storage

@@ -1,7 +1,7 @@
 using OnlyWar.Abstractions;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
 
 namespace OnlyWar.Operations.Abstractions;
 

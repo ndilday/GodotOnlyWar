@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models;
-using OnlyWar.Models.Units;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Units;
 
 namespace OnlyWar.Tests.Fixtures;
 

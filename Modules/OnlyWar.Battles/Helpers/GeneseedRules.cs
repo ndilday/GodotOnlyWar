@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Battles
 {
     // Centralized tunables for the chapter's gene-seed (PRD 4.8 / 4.12). Purity is tracked
     // as an aggregate-only quality of the sealed stockpile for now; the recruitment/initiate

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Domain.Events
 {
     /// <summary>
     /// Persistable state machine for Imperial world-control episodes. A contested observation

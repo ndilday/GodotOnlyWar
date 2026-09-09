@@ -1,10 +1,10 @@
-using OnlyWar.Models.Missions;
-using OnlyWar.Helpers;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     public class Region
     {

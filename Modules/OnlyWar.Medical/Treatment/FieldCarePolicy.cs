@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Medical;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Medical.Treatment;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Medical.Treatment;
 

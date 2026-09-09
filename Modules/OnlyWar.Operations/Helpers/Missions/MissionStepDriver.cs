@@ -1,7 +1,7 @@
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// Drives one mission's step chain. Holds the position the chain has reached - which step is

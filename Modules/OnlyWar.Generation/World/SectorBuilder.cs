@@ -1,16 +1,15 @@
 using OnlyWar.Generation.Abstractions;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Events;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Events;
 using OnlyWar.Runtime.WorldGeometry;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Generation.World
 {
     /// <summary>
     /// Builds a complete candidate sector. Generation constructs state and returns it; it never

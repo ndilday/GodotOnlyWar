@@ -1,4 +1,4 @@
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     // Which framed opening a campaign was started with. None covers a future
     // plain-sandbox mode; when Sector.Scenario is null the game behaves as it did

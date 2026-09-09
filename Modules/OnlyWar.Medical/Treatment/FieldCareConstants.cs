@@ -1,6 +1,6 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Medical
+namespace OnlyWar.Medical.Treatment
 {
     /// <summary>
     /// Tunables for Apothecary field care (Design/Reference/CasualtyRealism.md §2.6, §3.2).

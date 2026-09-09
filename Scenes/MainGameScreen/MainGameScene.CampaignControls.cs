@@ -1,9 +1,9 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers.Diagnostics;
-using OnlyWar.Helpers.Storage;
+using OnlyWar.Campaign.Diagnostics;
+using OnlyWar.Persistence.Storage;
 using OnlyWar.Host.Presentation.UI.SystemMenu;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Globalization;

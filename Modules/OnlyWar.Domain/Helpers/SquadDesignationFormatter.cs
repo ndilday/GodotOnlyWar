@@ -1,11 +1,11 @@
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Domain.Formatting
 {
     public static class SquadDesignationFormatter
     {

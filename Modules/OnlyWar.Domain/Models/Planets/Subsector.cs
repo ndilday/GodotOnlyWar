@@ -1,11 +1,11 @@
-﻿using OnlyWar.Models.Geometry;
+using OnlyWar.Domain.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     public class Subsector
     {

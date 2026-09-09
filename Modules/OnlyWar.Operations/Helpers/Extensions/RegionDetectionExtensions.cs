@@ -1,11 +1,11 @@
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Extensions
+namespace OnlyWar.Operations.Extensions
 {
     /// <summary>
     /// Region queries that depend on mission detection policy. Split from the intrinsic

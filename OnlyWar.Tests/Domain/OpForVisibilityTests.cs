@@ -1,7 +1,7 @@
 using Godot;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -16,7 +16,7 @@ public class OpForVisibilityTests
     public void GetPopulationDescription_HiddenFaction_RevealsNothing()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
-        RegionFaction cult = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Logistic, population: 50000);
+        RegionFaction cult = fixture.AddHiddenFaction(0, OnlyWar.Domain.GrowthType.Logistic, population: 50000);
         fixture.DefaultPlanetFaction.SetRegionAwareness(fixture.Planet.Regions[0], 6f);
 
         // a non-public faction is never described, regardless of intelligence
@@ -153,7 +153,7 @@ public class OpForVisibilityTests
     public void GetVisibleEnemyRegionFaction_PublicEnemyTakesPriorityOverHiddenEnemy()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
-        RegionFaction hiddenCult = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Conversion, population: 5000);
+        RegionFaction hiddenCult = fixture.AddHiddenFaction(0, OnlyWar.Domain.GrowthType.Conversion, population: 5000);
         RegionFaction tyranids = fixture.AddConsumptionFaction(0, population: 12000, organization: 100);
 
         Assert.Same(tyranids, fixture.Planet.Regions[0].GetVisibleEnemyRegionFaction());

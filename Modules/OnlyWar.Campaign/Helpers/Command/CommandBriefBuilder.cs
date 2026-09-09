@@ -1,21 +1,21 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Reports;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Supply;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Reports;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Command
+namespace OnlyWar.Campaign.Command
 {
     /// <summary>
     /// Builds the live operational projection. It reads current state and a bounded recent-event

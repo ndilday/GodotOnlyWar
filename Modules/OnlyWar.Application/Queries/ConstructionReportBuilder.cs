@@ -1,5 +1,5 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
 using System;
 using System.Collections.Generic;
 using System.Linq;

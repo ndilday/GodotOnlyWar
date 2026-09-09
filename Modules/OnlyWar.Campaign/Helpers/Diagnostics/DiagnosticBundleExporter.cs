@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
-namespace OnlyWar.Helpers.Diagnostics
+namespace OnlyWar.Campaign.Diagnostics
 {
     public sealed record DiagnosticAttachment(string FileName, byte[] Content);
 

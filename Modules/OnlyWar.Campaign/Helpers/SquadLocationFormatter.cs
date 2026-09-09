@@ -1,9 +1,9 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public static class SquadLocationFormatter
     {

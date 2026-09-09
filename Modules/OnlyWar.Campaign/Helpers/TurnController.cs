@@ -1,23 +1,22 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.Medical;
-using OnlyWar.Helpers.Missions;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Medical.Treatment;
+using OnlyWar.Domain.Missions;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Builders;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Events;
-using OnlyWar.Helpers.Extensions;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public partial class TurnController
     {

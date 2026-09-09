@@ -1,19 +1,19 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Command;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Storage;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Command;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Persistence.Storage;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
 using OnlyWar.Runtime.Allocators;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Application;
 
@@ -111,6 +111,13 @@ public sealed class CampaignApplication :
     public ISessionControlApplication SessionControl => _sessionControl;
     public ISystemInspectorApplication SystemInspector => _systemInspector;
     public ITrainingScreenApplication TrainingScreen => _training;
+
+    /// <summary>
+    /// Composition-root hook for the host-owned tactical replay projector. Screen code receives
+    /// only BattleReplayDisplay values; the concrete replay implementation stays behind this seam.
+    /// </summary>
+    public void ConfigureBattleReplayProjector(IBattleReplayProjector projector) =>
+        _main.ConfigureBattleReplayProjector(projector);
 
     public GameSession CreateNewCampaign(
         GameRulesData rules,
@@ -301,6 +308,8 @@ public sealed class CampaignApplication :
     public void AcknowledgeOpeningBrief(Guid sessionToken) =>
         _main.AcknowledgeOpeningBrief(sessionToken);
     public TurnReportView QueryLastTurnReport() => _main.QueryLastTurnReport();
+    public BattleReplayDisplay QueryBattleReplay(BattleReplayQuery query) =>
+        _main.QueryBattleReplay(query);
     public ResolveTurnView ResolveTurn(Guid sessionToken) => _main.ResolveTurn(sessionToken);
     public NeophytePlacementOptions QueryNeophytePlacementTargets() =>
         _main.QueryNeophytePlacementTargets();

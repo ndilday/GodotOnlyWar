@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,7 +6,7 @@ using System.Linq;
 public partial class WoundBodyMapView : Control
 {
     private sealed record RegionDefinition(string Name, string[] Locations, Vector2[] Polygon, Vector2 Label);
-    private sealed record RegionState(WoundLevel Level, bool Severed, bool Crippled, bool HealthyCybernetic);
+    private sealed record RegionState(MedicalWoundLevel Level, bool Severed, bool Crippled, bool HealthyCybernetic);
 
     private IReadOnlyList<WoundLocationSummary> _wounds = [];
     public IReadOnlyList<string> UnmappedLocations { get; private set; } = [];
@@ -34,7 +33,7 @@ public partial class WoundBodyMapView : Control
         HashSet<string> mapped = Regions.SelectMany(region => region.Locations)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         UnmappedLocations = _wounds
-            .Where(wound => (wound.PrincipalWoundLevel != WoundLevel.None || wound.IsSevered || wound.IsCrippled)
+            .Where(wound => (wound.PrincipalWoundLevel != MedicalWoundLevel.None || wound.IsSevered || wound.IsCrippled)
                 && !mapped.Contains(wound.LocationName))
             .Select(wound => wound.LocationName)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -55,9 +54,9 @@ public partial class WoundBodyMapView : Control
             Color fill = WoundPresentationPalette.For(state.Level, state.Severed, state.HealthyCybernetic);
             DrawColoredPolygon(polygon, fill);
             Vector2[] closed = polygon.Concat([polygon[0]]).ToArray();
-            float width = state.Level >= WoundLevel.Massive || state.Severed ? 4f : 2f;
+            float width = state.Level >= MedicalWoundLevel.Massive || state.Severed ? 4f : 2f;
             DrawPolyline(closed, outline, width, true);
-            if (state.Level >= WoundLevel.Mortal || state.Severed)
+            if (state.Level >= MedicalWoundLevel.Mortal || state.Severed)
             {
                 DrawPolyline(closed, new Color(outline, .55f), width + 4f, true);
             }
@@ -84,7 +83,7 @@ public partial class WoundBodyMapView : Control
 
             List<WoundLocationSummary> wounds = _wounds
                 .Where(wound => region.Locations.Contains(wound.LocationName, StringComparer.OrdinalIgnoreCase))
-                .Where(wound => wound.PrincipalWoundLevel != WoundLevel.None
+                .Where(wound => wound.PrincipalWoundLevel != MedicalWoundLevel.None
                     || wound.IsSevered || wound.IsCrippled || wound.IsCybernetic)
                 .ToList();
             if (wounds.Count == 0) return $"{region.Name}\nNo recorded injury or replacement.";
@@ -104,10 +103,10 @@ public partial class WoundBodyMapView : Control
             .Where(wound => region.Locations.Contains(wound.LocationName, StringComparer.OrdinalIgnoreCase))
             .ToList();
         return new RegionState(
-            wounds.Select(wound => wound.PrincipalWoundLevel).DefaultIfEmpty(WoundLevel.None).Max(),
+            wounds.Select(wound => wound.PrincipalWoundLevel).DefaultIfEmpty(MedicalWoundLevel.None).Max(),
             wounds.Any(wound => wound.IsSevered),
             wounds.Any(wound => wound.IsCrippled),
-            wounds.Count > 0 && wounds.All(wound => wound.IsCybernetic && wound.PrincipalWoundLevel == WoundLevel.None));
+            wounds.Count > 0 && wounds.All(wound => wound.IsCybernetic && wound.PrincipalWoundLevel == MedicalWoundLevel.None));
     }
 
     private void DrawRegionLabel(RegionDefinition region, Vector2[] polygon, RegionState state, Vector2 size, Color color)

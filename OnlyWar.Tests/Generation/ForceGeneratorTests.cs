@@ -1,12 +1,11 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using SequentialEntityIdAllocator = OnlyWar.Runtime.Allocators.SequentialEntityIdAllocator;
 using OnlyWar.Tests.Fixtures;

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Helpers.Database.GameRules;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Persistence.Database.GameRules;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
 using Microsoft.Data.Sqlite;
 using Xunit;
 

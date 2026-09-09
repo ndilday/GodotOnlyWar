@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 
-namespace OnlyWar.Helpers.Battles.Placers
+namespace OnlyWar.Battles.Placers
 {
     /// <summary>
     /// Shared geometry for the loose, sawtooth formation used by every battle placer.

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using OnlyWar.Battles.Abstractions;
 
-namespace OnlyWar.Models.Battles
+namespace OnlyWar.Battles.Models
 {
     public class BattleHistory : IBattleReplay
     {

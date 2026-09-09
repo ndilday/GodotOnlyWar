@@ -1,6 +1,6 @@
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Models.Units
+namespace OnlyWar.Domain.Units
 {
     // Describes how many squads of a given template a unit may hold. MinCount
     // squads are created eagerly when the unit is generated (e.g. the chapter's

@@ -1,10 +1,10 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Runtime.WorldGeometry
 {
     public static class WarpLaneBuilder
     {

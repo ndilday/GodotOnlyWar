@@ -1,29 +1,29 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Builders;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Runtime.Factories;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Operations.Abstractions;
 using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers.Medical;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Missions.Assault;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Fortifications;
+
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Missions.Assault;
+
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Operations.Turns
 {
     /// <summary>
     /// Executes the mission portion of a weekly turn. The caller owns the result collections and

@@ -1,4 +1,4 @@
-using OnlyWar.Models.Fleets;
+using OnlyWar.Domain.Fleets;
 
 namespace OnlyWar.Application;
 

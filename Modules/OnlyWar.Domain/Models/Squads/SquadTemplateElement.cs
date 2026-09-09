@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Models.Squads
+namespace OnlyWar.Domain.Squads
 {
     public enum SquadQuotaModelBasis
     {
@@ -60,8 +60,8 @@ namespace OnlyWar.Models.Squads
             int modelCount = ModelBasis == SquadQuotaModelBasis.Squad
                 ? squadModelCount
                 : elementModelCount;
-            int scaledMaximum = Math.Max(0, modelCount / ModelsPerBlock * SlotsPerBlock);
-            return Math.Min(MaximumAllowed, scaledMaximum);
+            int scaledMaximum = System.Math.Max(0, modelCount / ModelsPerBlock * SlotsPerBlock);
+            return System.Math.Min(MaximumAllowed, scaledMaximum);
         }
     }
 

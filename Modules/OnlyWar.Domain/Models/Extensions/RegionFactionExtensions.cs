@@ -1,10 +1,10 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Extensions
+namespace OnlyWar.Domain.Extensions
 {
     /// <summary>
     /// Intrinsic awareness and fielded-strength queries over the region graph. The intel-gated,

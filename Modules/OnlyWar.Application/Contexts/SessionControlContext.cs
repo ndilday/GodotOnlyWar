@@ -1,9 +1,9 @@
 using System;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Storage;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Persistence.Storage;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
 
 namespace OnlyWar.Application;
 

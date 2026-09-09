@@ -1,9 +1,9 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Supply;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     internal sealed class PledgeDataAccess
     {

@@ -1,15 +1,15 @@
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers;
+using OnlyWar.Generation.World;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Runtime.Allocators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Storage
+namespace OnlyWar.Application.Storage
 {
     /// <summary>
     /// Reconstructs a campaign from a selected save and publishes it only after the complete
@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Storage
             if (random == null) throw new ArgumentNullException(nameof(random));
             if (commitments == null) throw new ArgumentNullException(nameof(commitments));
 
-            GameRulesData gameRulesData = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(
+            GameRulesData gameRulesData = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(
                 _storage.RulesDatabasePath);
             GameStateDataBlob gameState = LoadGameData(gameRulesData, savePath);
             Sector sector = SavedGameLoader.BuildSectorFromBlob(

@@ -1,9 +1,9 @@
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     /// <summary>
     /// Loads capability-owned balance profiles. The legacy faction table is read only as a save/data

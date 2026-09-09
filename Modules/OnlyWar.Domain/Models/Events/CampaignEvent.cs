@@ -1,4 +1,4 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Domain.Events
 {
     // Persisted values are append-only. The values used by SoldierEventType are kept aligned so
     // the format-7 reader can map a legacy soldier row without inventing a second vocabulary.

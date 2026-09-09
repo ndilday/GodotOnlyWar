@@ -1,12 +1,12 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Sabotage
+namespace OnlyWar.Operations.Missions.Sabotage
 {
     public class PerformSabotageMissionStep : IMissionStep
     {

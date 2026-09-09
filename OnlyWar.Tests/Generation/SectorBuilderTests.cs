@@ -4,12 +4,11 @@ using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using OnlyWar.Application;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -150,7 +149,7 @@ public class SectorBuilderTests
                 command.ExecuteNonQuery();
             }
 
-            return OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(databasePath);
+            return OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(databasePath);
         }
         finally
         {

@@ -1,6 +1,6 @@
 using OnlyWar.Runtime.Allocators;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using Xunit;

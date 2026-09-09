@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Scores and selects the semantic engagement option for one squad.

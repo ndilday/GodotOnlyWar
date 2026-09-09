@@ -1,12 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using OnlyWar.Models.Geometry;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Geometry;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Runtime.WorldGeometry
 {
     public static class SubsectorBuilder
     {

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Battles;
 
 /// <summary>
 /// Builds both sides of the immutable Layer-1 engagement frame from the same turn-start state.

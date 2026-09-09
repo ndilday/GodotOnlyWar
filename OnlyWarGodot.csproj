@@ -32,8 +32,28 @@
     <ProjectReference Include="Modules/OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <Using Include="OnlyWar.Abstractions" />
     <Using Include="OnlyWar.Application" />
+    <Using Include="OnlyWar.Application.Abstractions" />
+    <Using Include="OnlyWar.Battles" />
+    <Using Include="OnlyWar.Battles.Models" />
+    <Using Include="OnlyWar.Campaign" />
+    <Using Include="OnlyWar.Campaign.Events" />
+    <Using Include="OnlyWar.Campaign.Medical" />
+    <Using Include="OnlyWar.Campaign.Turns" />
+    <Using Include="OnlyWar.Domain.Events" />
+    <Using Include="OnlyWar.Domain.Missions" />
+    <Using Include="OnlyWar.Domain.Soldiers" />
+    <Using Include="OnlyWar.Domain.Squads" />
     <Using Include="OnlyWar.Medical.Abstractions" />
     <Using Include="OnlyWar.Generation.Abstractions" />
+    <Using Include="OnlyWar.Generation.World" />
+    <Using Include="OnlyWar.Operations.Abstractions" />
+    <Using Include="OnlyWar.Operations.Missions" />
+    <Using Include="OnlyWar.Operations.Orders" />
+    <Using Include="OnlyWar.Persistence.Storage" />
+    <Using Include="OnlyWar.Runtime.Factories" />
+    <Using Include="OnlyWar.Runtime.Logging" />
+    <Using Include="OnlyWar.Runtime.Random" />
+    <Using Include="OnlyWar.Runtime.WorldGeometry" />
   </ItemGroup>
 </Project>
 

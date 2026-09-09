@@ -1,17 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.PlanetaryOperations;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Operations.Planetary;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Personnel;
 
@@ -98,7 +98,8 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
                 : commandContext.CreateOrAdd(
                     region, mission, [], characters,
                     OperationsCommandContext.ResolveTargetFactionId(region, mission),
-                    context?.LevelOfAggression ?? command.Aggression);
+                    context?.LevelOfAggression
+                        ?? OperationsAggressionMapping.ToDomain(command.Aggression));
             return Project(characterResult, undo: null);
         }
 
@@ -111,7 +112,8 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         OrderMutationResult result = commandContext.CreateOrAdd(
             region, mission, squads, [],
             OperationsCommandContext.ResolveTargetFactionId(region, mission),
-            context?.LevelOfAggression ?? command.Aggression);
+            context?.LevelOfAggression
+                ?? OperationsAggressionMapping.ToDomain(command.Aggression));
         if (!result.Succeeded) return Project(result, undo: null);
 
         Order issued = result.Order;
@@ -158,8 +160,9 @@ public sealed class OperationsScreenApplication : CampaignScreenApplication,
         Order order = commandContext.FindOrder(command.OrderId);
         if (order == null) return OperationsCommandResult.Rejected("That order is no longer active.");
         Aggression previous = order.LevelOfAggression;
-        OrderMutationResult result = commandContext.SetAggression(order, command.Aggression);
-        return Project(result, result.Succeeded && previous != command.Aggression
+        Aggression requested = OperationsAggressionMapping.ToDomain(command.Aggression);
+        OrderMutationResult result = commandContext.SetAggression(order, requested);
+        return Project(result, result.Succeeded && previous != requested
             ? Register("aggression change",
                 () => commandContext.SetAggression(order, previous))
             : null);

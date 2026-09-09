@@ -1,4 +1,4 @@
-namespace OnlyWar.Models.Recruitment
+namespace OnlyWar.Domain.Recruitment
 {
     /// <summary>
     /// Inputs that come from the public Chapter presence on the Home World.

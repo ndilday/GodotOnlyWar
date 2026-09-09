@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Battles
 {
     // Logging seam for the headless-runnable battle/turn engine. Engine code under Helpers must not
     // call Godot natives (e.g. GD.Print) directly: doing so access-violates when the simulation runs

@@ -1,8 +1,16 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Orders;
 
 namespace OnlyWar.Application;
+
+public enum OperationsAggression
+{
+    Avoid = 0,
+    Cautious = 1,
+    Normal = 2,
+    Attritional = 3,
+    Aggressive = 4
+}
 
 /// <summary>
 /// The outcome of a Planetary Operations command. It carries only identifiers, display text and an
@@ -34,11 +42,12 @@ public sealed record OrderParticipantsCommand(
     IReadOnlyList<int> SquadIds,
     IReadOnlyList<int> CharacterIds,
     int? OrderId = null,
-    Aggression Aggression = Aggression.Normal);
+    OperationsAggression Aggression = OperationsAggression.Normal);
 
 public sealed record RemoveOrderSquadCommand(Guid SessionToken, int OrderId, int SquadId);
 public sealed record CancelOrderCommand(Guid SessionToken, int OrderId);
-public sealed record SetOrderAggressionCommand(Guid SessionToken, int OrderId, Aggression Aggression);
+public sealed record SetOrderAggressionCommand(
+    Guid SessionToken, int OrderId, OperationsAggression Aggression);
 public sealed record ToggleOrderSpecialistCommand(Guid SessionToken, int OrderId, int SoldierId);
 
 /// <summary>

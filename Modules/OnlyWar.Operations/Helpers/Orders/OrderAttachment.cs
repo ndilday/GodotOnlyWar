@@ -1,14 +1,14 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Orders
+namespace OnlyWar.Operations.Orders
 {
     // Order-level attachment of individual specialists (Design/Reference/SpecialistAttachment.md,
     // Phase 2a). An attached specialist remains WITH the force at the campaign/order layer. When

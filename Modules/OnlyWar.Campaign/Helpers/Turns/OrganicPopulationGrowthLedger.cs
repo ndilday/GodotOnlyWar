@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Records demographic growth separately from deaths, migration, conversion, and consumption

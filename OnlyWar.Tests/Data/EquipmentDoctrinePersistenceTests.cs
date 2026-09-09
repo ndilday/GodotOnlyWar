@@ -1,7 +1,7 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Squads;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using Xunit;
 

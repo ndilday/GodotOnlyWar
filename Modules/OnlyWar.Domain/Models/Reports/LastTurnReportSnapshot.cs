@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace OnlyWar.Models.Reports
+namespace OnlyWar.Domain.Reports
 {
     /// <summary>
     /// The bounded, UI-safe representation of the most recently resolved turn report.

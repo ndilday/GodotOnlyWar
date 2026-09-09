@@ -1,8 +1,8 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Supply;
 
-namespace OnlyWar.Helpers.Database.GameState;
+namespace OnlyWar.Persistence.Database.GameState;
 
 /// <summary>
 /// Raw save relationships. Persistence reads these rows without applying Campaign or Operations

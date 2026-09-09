@@ -1,6 +1,6 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.FactionBehaviors;
 using System.Collections.Generic;
 using System.Linq;
 

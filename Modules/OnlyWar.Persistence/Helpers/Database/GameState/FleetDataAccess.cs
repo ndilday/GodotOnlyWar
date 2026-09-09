@@ -1,12 +1,12 @@
-﻿using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     public class FleetDataAccess
     {

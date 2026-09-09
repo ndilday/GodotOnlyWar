@@ -1,10 +1,10 @@
-﻿using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public class Soldier : ISoldier
     {
@@ -236,28 +236,28 @@ namespace OnlyWar.Models.Soldiers
             switch(attribute)
             {
                 case Attribute.Constitution:
-                    curPoints = (float)Math.Pow(2, Constitution - 11) * 10;
-                    Constitution = (float)Math.Log((curPoints + points) / 10.0f, 2) + 11;
+                    curPoints = (float)System.Math.Pow(2, Constitution - 11) * 10;
+                    Constitution = (float)System.Math.Log((curPoints + points) / 10.0f, 2) + 11;
                     break;
                 case Attribute.Dexterity:
-                    curPoints = (float)Math.Pow(2, Dexterity - 11) * 10;
-                    Dexterity = (float)Math.Log((curPoints + points) / 10.0f, 2) + 11;
+                    curPoints = (float)System.Math.Pow(2, Dexterity - 11) * 10;
+                    Dexterity = (float)System.Math.Log((curPoints + points) / 10.0f, 2) + 11;
                     break;
                 case Attribute.Ego:
-                    curPoints = (float)Math.Pow(2, Ego - 11) * 10;
-                    Ego = (float)Math.Log((curPoints + points) / 10.0f, 2) + 11;
+                    curPoints = (float)System.Math.Pow(2, Ego - 11) * 10;
+                    Ego = (float)System.Math.Log((curPoints + points) / 10.0f, 2) + 11;
                     break;
                 case Attribute.Intelligence:
-                    curPoints = (float)Math.Pow(2, Intelligence - 11) * 10;
-                    Intelligence = (float)Math.Log((curPoints + points) / 10.0f, 2) + 11;
+                    curPoints = (float)System.Math.Pow(2, Intelligence - 11) * 10;
+                    Intelligence = (float)System.Math.Log((curPoints + points) / 10.0f, 2) + 11;
                     break;
                 case Attribute.Presence:
-                    curPoints = (float)Math.Pow(2, Charisma - 11) * 10;
-                    Charisma = (float)Math.Log((curPoints + points) / 10.0f, 2) + 11;
+                    curPoints = (float)System.Math.Pow(2, Charisma - 11) * 10;
+                    Charisma = (float)System.Math.Log((curPoints + points) / 10.0f, 2) + 11;
                     break;
                 case Attribute.Strength:
-                    curPoints = (float)Math.Pow(2, Strength - 11) * 10;
-                    Strength = (float)Math.Log((curPoints + points) / 10.0f, 2) + 11;
+                    curPoints = (float)System.Math.Pow(2, Strength - 11) * 10;
+                    Strength = (float)System.Math.Log((curPoints + points) / 10.0f, 2) + 11;
                     break;
             }
 

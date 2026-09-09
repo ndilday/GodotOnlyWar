@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles.Resolutions
+namespace OnlyWar.Battles.Resolutions
 {
     public class WoundResolver : IResolver
     {

@@ -1,10 +1,10 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
 
-namespace OnlyWar.Helpers.Battles.Placers
+namespace OnlyWar.Battles.Placers
 {
     public class AmbushPlacer
     {
@@ -88,7 +88,7 @@ namespace OnlyWar.Helpers.Battles.Placers
 
         private static bool IsHqSquad(BattleSquad squad) =>
             squad?.Traits.IsHeadquarters == true
-            || squad?.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) == true;
+            || squad?.Squad?.SquadTemplate?.SquadType.HasFlag(OnlyWar.Domain.Squads.SquadTypes.HQ) == true;
 
         // A marching column keeps its command element mid-column, not at the head where the
         // ambush's short leg fires first: line squads front and rear, HQs between them.

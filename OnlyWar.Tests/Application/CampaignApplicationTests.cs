@@ -1,8 +1,7 @@
 using System;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Simulation;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

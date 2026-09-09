@@ -1,11 +1,10 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Supply;
 using OnlyWar.Tests.Fixtures;
 using System.Linq;
 using Xunit;
@@ -376,7 +375,7 @@ public class SectorEntityLogicTests
 
         Assert.Equal(beforeDelivery + request.OfferedRequisition,
             fixture.Sector.PlayerForce.Army.Requisition);
-        Assert.Equal(OnlyWar.Models.Supply.PledgeStatus.Completed,
+        Assert.Equal(OnlyWar.Domain.Supply.PledgeStatus.Completed,
             fixture.Sector.PlayerForce.Pledges[0].Status);
     }
 

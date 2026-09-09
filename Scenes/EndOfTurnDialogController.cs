@@ -1,6 +1,6 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Models.Battles;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -15,6 +15,7 @@ public partial class EndOfTurnDialogController : DialogController
     private MissionDebriefDialogController _missionDebriefDialog;
     private BattleReviewController _battleReviewDialog;
     private List<EndOfTurnReportEntry> _reportEntries = [];
+    private IMainScreenApplication _application;
 
     public override void _Ready()
     {
@@ -30,6 +31,9 @@ public partial class EndOfTurnDialogController : DialogController
             _view.EntrySelected -= OnEntrySelected;
         }
     }
+
+    public void Configure(IMainScreenApplication application) =>
+        _application = application ?? throw new ArgumentNullException(nameof(application));
 
     /// <summary>
     /// Renders a report projection. A restored snapshot's debriefs intentionally have no battle
@@ -85,9 +89,14 @@ public partial class EndOfTurnDialogController : DialogController
         _missionDebriefDialog.Visible = true;
     }
 
-    private void OnBattleReviewRequested(object sender, BattleHistory battleHistory)
+    private void OnBattleReviewRequested(object sender, Guid replayId)
     {
-        if (battleHistory == null)
+        if (replayId == Guid.Empty || _application == null)
+        {
+            return;
+        }
+
+        if (_application.QueryBattleReplay(new BattleReplayQuery(replayId, 0)) == null)
         {
             return;
         }
@@ -104,7 +113,8 @@ public partial class EndOfTurnDialogController : DialogController
             AddChild(_battleReviewDialog);
         }
 
-        _battleReviewDialog.LoadNewHistory(battleHistory);
+        _battleReviewDialog.Configure(_application);
+        _battleReviewDialog.LoadNewReplay(replayId);
         _missionDebriefDialog.Visible = false;
         _battleReviewDialog.Visible = true;
     }

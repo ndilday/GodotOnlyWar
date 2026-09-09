@@ -1,6 +1,6 @@
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// Describes whether the squads assigned to an order act as one tactical force or as

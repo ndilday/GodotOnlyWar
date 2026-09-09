@@ -1,9 +1,8 @@
 using OnlyWar.Application;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Reports;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Reports;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,18 +16,18 @@ public class LastTurnReportSnapshotBuilderTests
     [Fact]
     public void BuildSnapshot_PreservesAllPlayerFacingCardsAndCompactBattleData()
     {
-        BattleDebriefReport battle = new(
+        BattleDebriefView battle = new(
             PlayerDeaths: 1,
             OpposingDeaths: 2,
             PlayerCasualties:
             [
-                new BattleCasualtyEntry(
+                new BattleCasualtyView(
                     17,
                     "Brother Venn",
                     "Sergeant",
                     "Third Squad",
                     "First Company",
-                    BattleCasualtyDisposition.Dead,
+                    BattleCasualtyDispositionView.Dead,
                     0)
             ],
             PlayerIncapacitated: 0);
@@ -41,11 +40,11 @@ public class LastTurnReportSnapshotBuilderTests
                 "Recon completed.",
                 true,
                 "CONTACT",
-                [new MissionDebriefLine(
+                [new MissionDebriefLineView(
                     "Day 3: Contact confirmed.",
-                    battleReport: battle,
-                    day: 3,
-                    squadName: "Third Squad")]),
+                     BattleReport: battle,
+                     Day: 3,
+                     SquadName: "Third Squad")]),
             new EndOfTurnReportEntry("Strategic Combat", "Enemy activity", "Combat resolved.", false, isEnemyActivity: true),
             new EndOfTurnReportEntry("Construction", "Region One", "Fortifications improved.", false, "PROGRESSED"),
             new EndOfTurnReportEntry("Fortifications", "Works handed over", "The position still stands.", false, "HANDED OVER"),
@@ -155,16 +154,16 @@ public class LastTurnReportSnapshotBuilderTests
                 "Mission outcome",
                 true,
                 "COMPLETE",
-                [new MissionDebriefLine(
-                    "Battle summary",
-                    battleReport: new BattleDebriefReport(1, 3, [], 1))])]);
+                 [new MissionDebriefLineView(
+                     "Battle summary",
+                     BattleReport: new BattleDebriefView(1, 3, [], 1))])]);
 
         EndOfTurnReportEntry restored = Assert.Single(
             LastTurnReportSnapshotBuilder.BuildPresentationEntries(snapshot));
-        MissionDebriefLine line = Assert.Single(restored.DebriefLines);
+        MissionDebriefLineView line = Assert.Single(restored.DebriefLines);
 
         Assert.True(line.HasBattle);
-        Assert.Null(line.BattleHistory);
+        Assert.Null(line.BattleReplayId);
         Assert.NotNull(line.BattleReport);
         Assert.Equal(1, line.BattleReport.PlayerDeaths);
         Assert.Equal(1, line.BattleReport.PlayerIncapacitated);

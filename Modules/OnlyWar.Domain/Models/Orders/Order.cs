@@ -1,13 +1,13 @@
 
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 using System;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Orders
+namespace OnlyWar.Domain.Orders
 {
     // A squad order has two main descriptors:
     // 1) Whether the squad is actively engaging, or focused on observing; and

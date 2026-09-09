@@ -1,9 +1,9 @@
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Medical.Readiness;
 using OnlyWar.Application;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,7 +24,7 @@ namespace OnlyWar.Application
             CampaignLocation selectedDestination = null,
             RecoveryMovementChoice movement = RecoveryMovementChoice.None,
             int? selectedHitLocationId = null,
-            MedicalProcedureType? selectedProcedureType = null)
+            MedicalProcedureChoice? selectedProcedureType = null)
         {
             List<PlayerSoldier> patients = force?.Army?.PlayerSoldierMap?.Values
                 .Where(IsInRecoveryQueue).ToList() ?? [];
@@ -55,14 +55,16 @@ namespace OnlyWar.Application
             }
             IReadOnlyList<ReplacementOption> treatmentOptions =
                 _medical.BuildTreatmentOptions(patient, force);
+            MedicalProcedureType? selectedDomainProcedure =
+                MedicalProcedureChoiceMapping.ToDomain(selectedProcedureType);
             ReplacementOption option = treatmentOptions.FirstOrDefault(candidate =>
                 candidate.HitLocationId == selectedHitLocationId
-                && candidate.Type == selectedProcedureType)
+                && candidate.Type == selectedDomainProcedure)
                 ?? treatmentOptions.FirstOrDefault();
             MedicalTreatmentOptionView selectedTreatment = summary.ReplacementOptions
                 .FirstOrDefault(candidate => option != null
                     && candidate.HitLocationId == option.HitLocationId
-                    && candidate.Type == option.Type);
+                    && candidate.Type == MedicalProcedureChoiceMapping.ToChoice(option.Type));
             IReadOnlyList<CareDestinationCandidate> candidates = option == null
                 ? []
                 : _destinations.Enumerate(force, planets, patient, option);
@@ -118,7 +120,7 @@ namespace OnlyWar.Application
                 CampaignLocationService.Format(CampaignLocationService.ForSoldier(soldier)),
                 worst?.IsSevered == true ? "LOST" : worst?.PrincipalWoundLevel.ToString().ToUpperInvariant() ?? "RECOVERY",
                 summary.MaxRecoveryWeeks,
-                worst?.PrincipalWoundLevel ?? WoundLevel.None,
+                worst?.PrincipalWoundLevel ?? MedicalWoundLevel.None,
                 posting,
                 BuildCareGaps(
                     force, soldier, _medical.BuildTreatmentOptions(soldier, force)));

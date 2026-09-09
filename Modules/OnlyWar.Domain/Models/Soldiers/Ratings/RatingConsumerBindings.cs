@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Soldiers.Ratings
+namespace OnlyWar.Domain.Soldiers.Ratings
 {
     /// <summary>
     /// A code-owned capability that a gameplay subsystem needs from a soldier

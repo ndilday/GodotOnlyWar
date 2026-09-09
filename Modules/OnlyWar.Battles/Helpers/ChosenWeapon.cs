@@ -1,8 +1,8 @@
-﻿using System;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using System;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Battles
 {
     public class ChosenRangedWeapon
     {

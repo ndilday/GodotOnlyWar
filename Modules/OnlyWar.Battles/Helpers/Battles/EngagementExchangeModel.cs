@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// The per-turn exchange model behind posture choice: what a squad and its enemies would remove

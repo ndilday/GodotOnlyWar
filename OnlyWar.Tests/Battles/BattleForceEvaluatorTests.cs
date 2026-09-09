@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Orders;
 
 using Xunit;
 

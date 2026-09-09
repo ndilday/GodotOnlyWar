@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 
 namespace OnlyWar.Runtime.Naming;
 

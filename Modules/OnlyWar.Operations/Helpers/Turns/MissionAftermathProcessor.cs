@@ -1,18 +1,17 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Domain;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Operations.Turns
 {
     /// <summary>
     /// Applies resolved tactical-mission effects to strategic state, accounts for surviving

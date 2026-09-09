@@ -1,7 +1,7 @@
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain.Supply;
 using System;
 
-namespace OnlyWar.Helpers.Supply;
+namespace OnlyWar.Campaign.Supply;
 
 public static class GovernorOfferCalculator
 {

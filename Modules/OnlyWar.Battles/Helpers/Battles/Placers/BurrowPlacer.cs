@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles.Placers
+namespace OnlyWar.Battles.Placers
 {
     /// <summary>
     /// Burrow-arrival placement. After the normal placer has set up both

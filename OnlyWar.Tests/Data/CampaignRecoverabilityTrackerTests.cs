@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Storage;
+using OnlyWar.Persistence.Storage;
 using Xunit;
 
 namespace OnlyWar.Tests.Data;

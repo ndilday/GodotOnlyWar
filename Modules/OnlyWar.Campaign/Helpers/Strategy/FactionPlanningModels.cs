@@ -1,8 +1,8 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Strategy;
+namespace OnlyWar.Campaign.Strategy;
 
 /// <summary>
 /// Mutable planning data shared by the policies that participate in one planet pass.

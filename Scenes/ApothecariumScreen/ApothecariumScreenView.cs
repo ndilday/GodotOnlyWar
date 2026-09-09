@@ -1,6 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -463,7 +462,7 @@ public partial class ApothecariumScreenView : MainScreenView
     private Control CreateReplacementCard(MedicalTreatmentOptionView option)
     {
         PanelContainer panel = new() { CustomMinimumSize = new Vector2(0, 132), SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(option.Type == MedicalProcedureType.Cybernetic ? MedicalSeverity.Watch : MedicalSeverity.Critical, 0.75f));
+        OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(option.Type == MedicalProcedureChoice.Cybernetic ? MedicalSeverity.Watch : MedicalSeverity.Critical, 0.75f));
         VBoxContainer stack = new();
         stack.AddThemeConstantOverride("separation", 6);
         panel.AddChild(stack);
@@ -493,7 +492,7 @@ public partial class ApothecariumScreenView : MainScreenView
         actions.AddChild(CreateSmallChip($"{option.RequisitionCost} Req", MedicalSeverity.Critical));
         Button assignButton = new()
         {
-            Text = option.Type == MedicalProcedureType.Cybernetic ? "Assign Cybernetic" : "Request Vat Growth",
+            Text = option.Type == MedicalProcedureChoice.Cybernetic ? "Assign Cybernetic" : "Request Vat Growth",
             Disabled = !option.CanAssign,
             MouseDefaultCursorShape = CursorShape.PointingHand,
             SizeFlagsHorizontal = SizeFlags.ExpandFill

@@ -1,18 +1,32 @@
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Helpers;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Domain;
 using OnlyWar.Host.Presentation.UI;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Squads;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Host.Presentation.Battles
 {
-    public sealed class BattleReplaySummaryBuilder
+    /// <summary>
+    /// The host's single concrete replay adapter. It is intentionally the only Godot-facing
+    /// projection allowed to consume the concrete battle history and immediately returns detached
+    /// application data; scenes never receive this replay graph.
+    /// </summary>
+    public sealed class BattleReplaySummaryBuilder : IBattleReplayProjector
     {
+        BattleReplayDisplay IBattleReplayProjector.Build(
+            IBattleReplay replay,
+            int requestedTurnIndex,
+            int? selectedFormationId) =>
+            replay is BattleHistory history
+                ? Build(history, requestedTurnIndex, selectedFormationId)
+                : throw new ArgumentException("Unsupported battle replay implementation.", nameof(replay));
+
         public BattleReplayDisplay Build(BattleHistory history, int requestedTurnIndex, int? selectedFormationId = null)
         {
             if (history == null) throw new ArgumentNullException(nameof(history));
@@ -41,7 +55,9 @@ namespace OnlyWar.Host.Presentation.Battles
                 selectedFormation,
                 BuildEventEntries(currentTurn),
                 BuildTimeline(history, currentTurnIndex),
-                BuildCasualtySummaries(history));
+                BuildCasualtySummaries(history),
+                BuildMapFrame(history, currentTurnIndex),
+                BuildMapGeometry(history));
         }
 
         private static BattleStateSnapshot BuildBaselineState(BattleHistory history)
@@ -166,7 +182,10 @@ namespace OnlyWar.Host.Presentation.Battles
                 startingStrength,
                 currentStrength,
                 [],
-                source);
+                new SquadRowViewModelBuilder().BuildBattleSnapshot(
+                    source,
+                    startingStrength,
+                    currentStrength));
         }
 
         private static BattleFormationSummary BuildFormationSummary(BattleStateSnapshot initialState, BattleStateSnapshot currentState, int formationId)
@@ -346,6 +365,264 @@ namespace OnlyWar.Host.Presentation.Battles
 
             return summaries;
         }
+
+        private static BattleReplayMapFrame BuildMapFrame(BattleHistory history, int turnIndex)
+        {
+            BattleTurn currentTurn = history.Turns[turnIndex];
+            BattleStateSnapshot currentState = currentTurn.State;
+            BattleStateSnapshot previousState = turnIndex > 0
+                ? history.Turns[turnIndex - 1].State
+                : null;
+
+            IReadOnlyList<BattleReplayMapFormation> formations = GetAllSquads(currentState)
+                .Where(IsActive)
+                .OrderBy(squad => squad.Id)
+                .Select(ProjectMapFormation)
+                .ToList();
+            IReadOnlyList<BattleReplayMapSoldier> casualties = previousState == null
+                ? []
+                : previousState.Soldiers.Values
+                    .Where(soldier => !currentState.Soldiers.ContainsKey(soldier.Id))
+                    .OrderBy(soldier => soldier.Id)
+                    .Select(ProjectMapSoldier)
+                    .ToList();
+            IReadOnlyList<BattleReplayMapTransition> transitions = previousState == null
+                ? []
+                : BuildMapTransitions(previousState, currentState, currentTurn.Events);
+            IReadOnlyList<BattleReplayMapAction> actions = previousState == null
+                ? []
+                : BuildMapActions(previousState, currentState, currentTurn.Actions);
+
+            return new BattleReplayMapFrame(formations, casualties, transitions, actions);
+        }
+
+        private static BattleReplayMapGeometry BuildMapGeometry(BattleHistory history)
+        {
+            List<BattleReplayMapPoint> stableBounds = [];
+            foreach (BattleTurn turn in history.Turns)
+            {
+                AddBoundaryPoints(stableBounds, turn.State);
+            }
+
+            List<BattleReplayMapPoint> initialDeployment = [];
+            if (history.Turns.Count > 0)
+            {
+                AddBoundaryPoints(initialDeployment, history.Turns[0].State);
+            }
+
+            return new BattleReplayMapGeometry(stableBounds, initialDeployment);
+        }
+
+        private static void AddBoundaryPoints(
+            List<BattleReplayMapPoint> points,
+            BattleStateSnapshot state)
+        {
+            foreach (BattleSquadSnapshot squad in GetAllSquads(state).Where(IsActive))
+            {
+                foreach (BattleSoldierSnapshot soldier in squad.Soldiers)
+                {
+                    points.Add(new BattleReplayMapPoint(soldier.MinX, soldier.MinY));
+                    points.Add(new BattleReplayMapPoint(soldier.MaxX, soldier.MaxY));
+                }
+            }
+        }
+
+        private static BattleReplayMapFormation ProjectMapFormation(BattleSquadSnapshot squad) =>
+            new(
+                squad.Id,
+                squad.Name,
+                squad.IsPlayerAligned,
+                squad.Soldiers.Select(ProjectMapSoldier).ToList());
+
+        private static BattleReplayMapSoldier ProjectMapSoldier(BattleSoldierSnapshot soldier) =>
+            new(
+                soldier.Id,
+                soldier.CenterX,
+                soldier.CenterY,
+                soldier.MinX,
+                soldier.MaxX,
+                soldier.MinY,
+                soldier.MaxY,
+                soldier.IsInMelee);
+
+        private static IReadOnlyList<BattleReplayMapTransition> BuildMapTransitions(
+            BattleStateSnapshot previousState,
+            BattleStateSnapshot currentState,
+            IReadOnlyList<BattleEvent> events)
+        {
+            List<BattleReplayMapTransition> transitions = [];
+            foreach (BattleSquadSnapshot previousSquad in GetAllSquads(previousState)
+                .Where(squad => squad.Soldiers.Count > 0)
+                .OrderBy(squad => squad.Id))
+            {
+                BattleSquadSnapshot currentSquad = TryGetSquad(currentState, previousSquad.Id);
+                BattleReplayMapTransitionKind? kind = ClassifyMapTransition(
+                    previousSquad, currentSquad, events);
+                if (!kind.HasValue) continue;
+
+                transitions.Add(new BattleReplayMapTransition(
+                    previousSquad.Id,
+                    kind.Value,
+                    GetSquadCenter(previousSquad)));
+            }
+
+            return transitions;
+        }
+
+        internal static BattleReplayMapTransitionKind? ClassifyMapTransition(
+            BattleSquadSnapshot previousSquad,
+            BattleSquadSnapshot currentSquad,
+            IReadOnlyList<BattleEvent> events)
+        {
+            bool HasEvent(BattleEventType type) => (events ?? Array.Empty<BattleEvent>()).Any(battleEvent =>
+                battleEvent.Type == type
+                && (battleEvent.PrimarySquadId == previousSquad.Id
+                    || battleEvent.RelatedSquadIds.Contains(previousSquad.Id)));
+
+            if (HasEvent(BattleEventType.SquadDisengaged)
+                || HasEvent(BattleEventType.ForceDisengaged))
+            {
+                return BattleReplayMapTransitionKind.Departure;
+            }
+            if (HasEvent(BattleEventType.SquadRouted))
+            {
+                return BattleReplayMapTransitionKind.Rout;
+            }
+            if (currentSquad?.Status == BattleSquadStatus.Disengaged)
+            {
+                return previousSquad.Status != BattleSquadStatus.Disengaged
+                    ? BattleReplayMapTransitionKind.Departure
+                    : null;
+            }
+            if (currentSquad?.Status == BattleSquadStatus.Eliminated)
+            {
+                return BattleReplayMapTransitionKind.Casualty;
+            }
+            if (currentSquad?.WithdrawalRole == WithdrawalRole.Routing
+                && previousSquad.WithdrawalRole != WithdrawalRole.Routing)
+            {
+                return BattleReplayMapTransitionKind.Rout;
+            }
+            if (currentSquad?.Soldiers.Count > 0)
+            {
+                return null;
+            }
+
+            return BattleReplayMapTransitionKind.Rout;
+        }
+
+        private static IReadOnlyList<BattleReplayMapAction> BuildMapActions(
+            BattleStateSnapshot previousState,
+            BattleStateSnapshot currentState,
+            IReadOnlyList<IAction> actions)
+        {
+            List<BattleReplayMapAction> overlays = [];
+            foreach (IAction action in actions ?? [])
+            {
+                if (action is ShootAction shootAction
+                    && TryGetMapPoint(shootAction.ShooterId, currentState, previousState, out BattleReplayMapPoint shooter)
+                    && TryGetMapPoint(shootAction.TargetId, currentState, previousState, out BattleReplayMapPoint target))
+                {
+                    overlays.Add(new BattleReplayMapAction(
+                        BattleReplayMapActionKind.Ranged,
+                        shooter,
+                        target,
+                        $"{Math.Max(1, shootAction.NumberOfShots)} SHOTS"));
+                    continue;
+                }
+
+                if (action is MoveAction
+                    && TryGetMapPoint(action.ActorId, previousState, null, out BattleReplayMapPoint from)
+                    && TryGetMapPoint(action.ActorId, currentState, null, out BattleReplayMapPoint to)
+                    && !AreSamePoint(from, to))
+                {
+                    bool charge = currentState.Soldiers.TryGetValue(
+                        action.ActorId,
+                        out BattleSoldierSnapshot soldier)
+                        && soldier.IsInMelee;
+                    overlays.Add(new BattleReplayMapAction(
+                        BattleReplayMapActionKind.Movement,
+                        from,
+                        to,
+                        charge ? "CHARGE" : "MOVE"));
+                    continue;
+                }
+
+                int? targetId = GetActionTargetId(action);
+                if (targetId.HasValue
+                    && TryGetMapPoint(action.ActorId, currentState, previousState, out BattleReplayMapPoint actor)
+                    && TryGetMapPoint(targetId.Value, currentState, previousState, out BattleReplayMapPoint meleeTarget))
+                {
+                    overlays.Add(new BattleReplayMapAction(
+                        BattleReplayMapActionKind.Melee,
+                        actor,
+                        meleeTarget,
+                        "MELEE"));
+                }
+            }
+
+            return overlays;
+        }
+
+        private static int? GetActionTargetId(IAction action) => action switch
+        {
+            ShootAction shootAction => shootAction.TargetId,
+            MeleeAttackAction meleeAttackAction =>
+                meleeAttackAction.WoundResolutions.FirstOrDefault()?.Suffererer?.Soldier?.Id,
+            _ => null
+        };
+
+        private static bool TryGetMapPoint(
+            int soldierId,
+            BattleStateSnapshot primaryState,
+            BattleStateSnapshot fallbackState,
+            out BattleReplayMapPoint point)
+        {
+            if (primaryState != null
+                && primaryState.Soldiers.TryGetValue(soldierId, out BattleSoldierSnapshot primary))
+            {
+                point = new BattleReplayMapPoint(primary.CenterX, primary.CenterY);
+                return true;
+            }
+            if (fallbackState != null
+                && fallbackState.Soldiers.TryGetValue(soldierId, out BattleSoldierSnapshot fallback))
+            {
+                point = new BattleReplayMapPoint(fallback.CenterX, fallback.CenterY);
+                return true;
+            }
+
+            point = null;
+            return false;
+        }
+
+        private static BattleReplayMapPoint GetSquadCenter(BattleSquadSnapshot squad)
+        {
+            if (squad.Soldiers.Count == 0) return new BattleReplayMapPoint(0, 0);
+            return new BattleReplayMapPoint(
+                squad.Soldiers.Average(soldier => soldier.CenterX),
+                squad.Soldiers.Average(soldier => soldier.CenterY));
+        }
+
+        private static bool AreSamePoint(BattleReplayMapPoint left, BattleReplayMapPoint right) =>
+            Math.Abs(left.X - right.X) <= 0.01f && Math.Abs(left.Y - right.Y) <= 0.01f;
+
+        internal static bool ShouldDrawSquad(BattleSquadSnapshot squad) => IsActive(squad);
+
+        internal static IEnumerable<ValueTuple<int, int>> GetDeployedBoundaryPositions(
+            BattleStateSnapshot state)
+        {
+            foreach (BattleSquadSnapshot squad in GetAllSquads(state).Where(IsActive))
+            {
+                foreach (BattleSoldierSnapshot soldier in squad.Soldiers)
+                {
+                    yield return new ValueTuple<int, int>(soldier.MinX, soldier.MinY);
+                    yield return new ValueTuple<int, int>(soldier.MaxX, soldier.MaxY);
+                }
+            }
+        }
+
+        private static bool IsActive(BattleSquadSnapshot squad) =>
+            squad?.Status == BattleSquadStatus.Active;
 
         private static string BuildPhaseLabel(BattleTurn turn)
         {
@@ -689,7 +966,7 @@ namespace OnlyWar.Host.Presentation.Battles
             SquadTemplate template = squad.Squad?.SquadTemplate;
             if (squad.IsPlayerSquad)
             {
-                return IconAtlas.GetSquadIconKey(template);
+                return SquadIconKeys.For(template);
             }
 
             SquadTypes type = template?.SquadType ?? SquadTypes.None;

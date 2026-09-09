@@ -1,12 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Helpers;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Formatting;
+using OnlyWar.Domain.Identity;
 
-namespace OnlyWar.Models.Units
+namespace OnlyWar.Domain.Units
 {
     public class Unit
     {

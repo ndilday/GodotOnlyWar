@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -151,7 +151,7 @@ public class CivilUnrestTurnProcessorIntegrationTests
         internal static CivilFixture Create()
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+            GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             PlanetTemplate template = rules.PlanetTemplateMap.Values.First();
             int tax = rules.PlanetTemplateMap.Values.Max(item => item.TaxRange.MaxValue);
             Planet planet = new(900, "Unrest Integration World", new Coordinate(1, 1), 16,

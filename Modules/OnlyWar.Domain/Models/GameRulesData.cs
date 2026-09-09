@@ -1,17 +1,17 @@
-using OnlyWar.Helpers;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Supply;
-using OnlyWar.Models.Units;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Supply;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     public sealed class GameRulesData
     {

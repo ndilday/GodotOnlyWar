@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Diagnostics;
+using OnlyWar.Campaign.Diagnostics;
 using System;
 using System.IO;
 using System.IO.Compression;

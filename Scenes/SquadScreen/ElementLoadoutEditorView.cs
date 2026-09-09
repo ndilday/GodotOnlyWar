@@ -1,6 +1,5 @@
 using Godot;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Equippables;
 using System;
 using System.Collections.Generic;
 using System.Linq;

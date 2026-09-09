@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain.Orders;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Battles;
 
 /// <summary>
 /// Ordered by how much the pursuer commits to closing the distance. Never persisted or

@@ -1,8 +1,8 @@
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// Withdraws the force if it is still able to move and is standing on ground it does not hold.

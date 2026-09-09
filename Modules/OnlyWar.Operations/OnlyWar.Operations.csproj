@@ -12,9 +12,21 @@
     <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <Using Include="OnlyWar.Abstractions" />
     <Using Include="OnlyWar.Medical.Abstractions" />
-    <Using Include="OnlyWar.Models.Missions" />
+    <Using Include="OnlyWar.Domain.Missions" />
+    <Using Include="OnlyWar.Domain.Extensions" />
+    <Using Include="OnlyWar.Domain.Intelligence" />
+    <Using Include="OnlyWar.Domain.Math" />
     <Using Include="OnlyWar.Operations.Abstractions" />
+    <Using Include="OnlyWar.Operations.Extensions" />
+    <Using Include="OnlyWar.Operations.Fleets" />
+    <Using Include="OnlyWar.Operations.Intelligence" />
+    <Using Include="OnlyWar.Operations.Missions" />
+    <Using Include="OnlyWar.Operations.Missions.Recon" />
+    <Using Include="OnlyWar.Operations.Personnel" />
+    <Using Include="OnlyWar.Operations.Readiness" />
+    <Using Include="OnlyWar.Operations.Recruitment" />
+    <Using Include="OnlyWar.Runtime.Factories" />
+    <Using Include="OnlyWar.Runtime.Logging" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
-    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>
 </Project>

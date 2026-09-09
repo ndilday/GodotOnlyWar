@@ -1,4 +1,4 @@
-namespace OnlyWar.Models.Recruitment
+namespace OnlyWar.Domain.Recruitment
 {
     public enum RecruitmentPolicy
     {

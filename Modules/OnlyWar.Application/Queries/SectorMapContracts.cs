@@ -1,8 +1,15 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models;
 
 namespace OnlyWar.Application;
+
+public enum SectorMapRequestSeverity
+{
+    Concerned,
+    Serious,
+    Desperate,
+    Existential
+}
 
 /// <summary>A grid cell or a planet position, in sector-map grid coordinates.</summary>
 public readonly record struct SectorMapCell(int X, int Y);
@@ -38,7 +45,7 @@ public sealed record SectorMapPlanetLabelFacts(
     bool HasController,
     int ControllerColorArgb,
     bool HasActiveWork,
-    RequestSeverity RequestSeverity,
+    SectorMapRequestSeverity RequestSeverity,
     bool IsGovernanceSeat,
     int Importance);
 

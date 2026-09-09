@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     /// <summary>
     /// Evaluates the rules-database requirements attached to a destination soldier

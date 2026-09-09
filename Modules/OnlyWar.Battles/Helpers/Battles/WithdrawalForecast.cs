@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Battles;
 
 /// <summary>
 /// Deterministically compares an ordinary withdrawal projection with caller-produced,

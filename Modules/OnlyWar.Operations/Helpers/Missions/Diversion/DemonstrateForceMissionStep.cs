@@ -1,16 +1,16 @@
-using OnlyWar.Builders;
+using OnlyWar.Runtime.Factories;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Diversion
+namespace OnlyWar.Operations.Missions.Diversion
 {
     /// <summary>
     /// A day of overt demonstration against an adjacent region: the force is trying to BE seen, in

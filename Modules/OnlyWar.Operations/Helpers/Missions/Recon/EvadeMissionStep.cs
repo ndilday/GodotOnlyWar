@@ -1,10 +1,10 @@
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Recon
+namespace OnlyWar.Operations.Missions.Recon
 {
     public class EvadeMissionStep : IMissionStep
     {

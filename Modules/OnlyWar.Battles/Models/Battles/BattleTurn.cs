@@ -1,9 +1,9 @@
-﻿using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Actions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Battles
+namespace OnlyWar.Battles.Models
 {
     public class BattleTurn
     {

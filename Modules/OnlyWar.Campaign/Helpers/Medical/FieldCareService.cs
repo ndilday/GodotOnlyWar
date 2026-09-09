@@ -1,15 +1,15 @@
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Treatment;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Medical
+namespace OnlyWar.Campaign.Medical
 {
     // FieldCareTreatment and FieldCareReport are boundary values and live in
     // Modules/OnlyWar.Medical.Abstractions/Contracts/FieldCareReportValues.cs (SB-05b-1). This service is only
@@ -201,7 +201,7 @@ namespace OnlyWar.Helpers.Medical
             // Aboard ship beats a region: a boarded squad's CurrentRegion may still be set from
             // wherever it embarked, which is the same precedence MedicalProcedureService.SameLocation
             // applies.
-            Models.CampaignLocation location = CampaignLocationService.ForSoldier(soldier);
+            OnlyWar.Domain.CampaignLocation location = CampaignLocationService.ForSoldier(soldier);
             if (location?.Ship != null) return $"ship:{location.Ship.Id}";
             return location?.Region == null ? null : $"region:{location.Region.Id}";
         }

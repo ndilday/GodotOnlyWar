@@ -1,16 +1,16 @@
-using OnlyWar.Helpers.Medical;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Medical.Treatment;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Resolves the Chapter's weekly medical recovery and training. Fleet travel delegates

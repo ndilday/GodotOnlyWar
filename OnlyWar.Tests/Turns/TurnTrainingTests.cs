@@ -3,17 +3,16 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -213,7 +212,7 @@ public class TurnTrainingTests
         public static TurnTrainingFixture Create()
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+            GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Faction playerFaction = CreatePlayerFaction();
             SoldierTemplate soldierTemplate = CreateTrainingSoldierTemplate();
             SquadTemplate squadTemplate = CreateSquadTemplate(playerFaction);
@@ -330,7 +329,7 @@ public class TurnTrainingTests
             TaskForce.Planet = null;
             TaskForce.TravelPhase = FleetTravelPhase.InWarp;
             TaskForce.CurrentPhaseWeeksRemaining = currentPhaseWeeksRemaining;
-            TaskForce.TravelWeeksRemaining = currentPhaseWeeksRemaining + OnlyWar.Models.Fleets.TaskForce.SystemTransitWeeksPerEnd;
+            TaskForce.TravelWeeksRemaining = currentPhaseWeeksRemaining + OnlyWar.Domain.Fleets.TaskForce.SystemTransitWeeksPerEnd;
             TaskForce.WarpSubjectiveWeeks = subjectiveWarpWeeks;
             TaskForce.WarpObjectiveWeeks = currentPhaseWeeksRemaining;
             TaskForce.WarpSubjectiveTrainingApplied = false;

@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
 namespace OnlyWar.Application;
 
@@ -83,7 +83,8 @@ internal sealed class MedicalReadContext
                             {
                                 ReplacementOption treatment = treatmentOptions.FirstOrDefault(
                                     candidate => candidate.HitLocationId == option.HitLocationId
-                                        && candidate.Type == option.Type);
+                                        && MedicalProcedureChoiceMapping.ToChoice(candidate.Type)
+                                            == option.Type);
                                 IReadOnlyList<ProcedureRequisite> requisites =
                                     treatment == null
                                         ? []

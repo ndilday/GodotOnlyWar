@@ -1,16 +1,16 @@
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Campaign.Recruitment;
 using OnlyWar.Operations.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public sealed class RecoveryPlanService
     {
@@ -164,7 +164,7 @@ namespace OnlyWar.Helpers
                 throw new InvalidOperationException(
                     "This formation cannot move as a squad; move the character individually.");
             }
-            if (squad.CurrentOrders != null) Orders.OrderAssignment.UnassignSquads([squad]);
+            if (squad.CurrentOrders != null) OrderAssignment.UnassignSquads([squad]);
             squad.BoardedLocation?.RemoveSquad(squad);
             if (squad.Faction != null
                 && squad.CurrentRegion?.RegionFactionMap.TryGetValue(squad.Faction.Id, out RegionFaction oldFaction) == true)

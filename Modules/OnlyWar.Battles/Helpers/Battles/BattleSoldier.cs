@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     public class BattleSoldier
     {
@@ -142,7 +142,7 @@ namespace OnlyWar.Helpers.Battles
 
         /// <summary>
         /// What his motive wounds leave of his foot speed, 1.0 down to 0.0 -- see
-        /// <see cref="OnlyWar.Models.Soldiers.MotiveImpairment"/>. Replaces the old binary
+        /// <see cref="OnlyWar.Domain.Soldiers.MotiveImpairment"/>. Replaces the old binary
         /// <c>IsSlow</c> / flat x0.75, which fired at Major on any motive location and said
         /// nothing about how bad the wound was.
         /// </summary>

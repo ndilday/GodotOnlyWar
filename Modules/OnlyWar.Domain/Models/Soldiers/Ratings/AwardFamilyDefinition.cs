@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Soldiers.Ratings
+namespace OnlyWar.Domain.Soldiers.Ratings
 {
     /// <summary>
     /// Data-owned identity and presentation metadata for an award family. The

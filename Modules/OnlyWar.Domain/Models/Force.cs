@@ -1,16 +1,16 @@
 using System.Collections.Generic;
 using System;
 using System.Linq;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
-using OnlyWar.Models.Supply;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Reports;
-using OnlyWar.Models.Events;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain.Supply;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Reports;
+using OnlyWar.Domain.Events;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     public class EventHistory
     {
@@ -190,7 +190,7 @@ namespace OnlyWar.Models
         public PlayerForce(Faction faction, Army army, Fleet fleet)
             : base(faction, null, army, fleet)
         {
-            CampaignIdentity = OnlyWar.Models.Events.CampaignIdentity.CreateNew(1);
+            CampaignIdentity = OnlyWar.Domain.Events.CampaignIdentity.CreateNew(1);
             CampaignEventLedger = new CampaignEventLedger(id =>
                 army?.PlayerSoldierMap.GetValueOrDefault(id)
                 ?? army?.FallenBrothers.GetValueOrDefault(id));

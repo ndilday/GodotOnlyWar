@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Medical.Treatment;
 

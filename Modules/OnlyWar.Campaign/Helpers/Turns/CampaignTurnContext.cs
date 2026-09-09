@@ -1,10 +1,10 @@
 using System;
 using OnlyWar.Abstractions;
 using OnlyWar.Application.Abstractions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
 
-namespace OnlyWar.Helpers.Turns;
+namespace OnlyWar.Campaign.Turns;
 
 /// <summary>
 /// The stable campaign inputs shared by turn processors.

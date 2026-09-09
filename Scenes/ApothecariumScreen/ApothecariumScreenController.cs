@@ -1,6 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Models.Soldiers;
 using System;
 
 public partial class ApothecariumScreenController : MainScreenController
@@ -39,7 +38,7 @@ public partial class ApothecariumScreenController : MainScreenController
     private MedicalLocationId _recoveryDestination;
     private RecoveryMovementChoice _recoveryMovement;
     private int? _recoveryHitLocationId;
-    private MedicalProcedureType? _recoveryProcedureType;
+    private MedicalProcedureChoice? _recoveryProcedureType;
 
     public event EventHandler CampaignChanged;
 

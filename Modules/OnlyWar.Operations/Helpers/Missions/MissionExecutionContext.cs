@@ -1,15 +1,15 @@
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Builders;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Runtime.Factories;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using System;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// The named rules a mission may use. Keeping this projection deliberately small prevents
@@ -65,7 +65,7 @@ namespace OnlyWar.Helpers.Missions
             MissionCampaignInputs campaign = null,
             IEngagementElementFactory engagementElements = null)
         {
-            Campaign = campaign ?? new MissionCampaignInputs(new OnlyWar.Models.Date(1), state?.OperationalDoctrine, state?.RecruitmentProgram);
+            Campaign = campaign ?? new MissionCampaignInputs(new OnlyWar.Domain.Date(1), state?.OperationalDoctrine, state?.RecruitmentProgram);
             State = state ?? throw new ArgumentNullException(nameof(state));
             Rules = rules ?? throw new ArgumentNullException(nameof(rules));
             Random = random ?? throw new ArgumentNullException(nameof(random));

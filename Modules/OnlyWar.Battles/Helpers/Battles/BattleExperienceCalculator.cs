@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     // "Learn by doing" for battle skills, mirroring MissionExperienceCalculator (PRD §4.12) but for
     // per-attack combat rolls. Every shoot/melee roll produces a realized margin — how comfortably

@@ -2,10 +2,9 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 using Xunit.Abstractions;
@@ -22,7 +21,7 @@ public class ChapterMusterPerformanceTests
     {
         _output = output;
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        _data = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
     }
 
     [Trait("Category", "Slow")]

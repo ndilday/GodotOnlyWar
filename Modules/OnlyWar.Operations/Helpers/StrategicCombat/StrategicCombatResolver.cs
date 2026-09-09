@@ -1,16 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Operations.Turns;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers.StrategicCombat
+namespace OnlyWar.Operations.StrategicCombat
 {
     public class StrategicCombatResolver
     {

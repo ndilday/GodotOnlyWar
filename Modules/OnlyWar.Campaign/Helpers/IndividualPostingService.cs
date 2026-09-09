@@ -1,10 +1,10 @@
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     /// <summary>
     /// Owns physical posting and individual-ship-manifest invariants. Operational order membership
@@ -49,7 +49,7 @@ namespace OnlyWar.Helpers
                 reason = "This formation does not permit individual detachment.";
                 return false;
             }
-            if (location.Ship?.Fleet?.TravelPhase == Models.Fleets.FleetTravelPhase.InWarp)
+            if (location.Ship?.Fleet?.TravelPhase == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
             {
                 reason = "Individuals cannot be posted through the Warp.";
                 return false;
@@ -107,7 +107,7 @@ namespace OnlyWar.Helpers
                 throw new InvalidOperationException("The posting soldier has no organizational home.");
             if (location == null || location.IsShip == location.IsRegion)
                 throw new InvalidOperationException("The posting has an invalid location.");
-            if (location.Ship?.Fleet?.TravelPhase == Models.Fleets.FleetTravelPhase.InWarp)
+            if (location.Ship?.Fleet?.TravelPhase == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
                 throw new InvalidOperationException("Individuals cannot be posted through the Warp.");
             if (location.Ship != null
                 && soldier.IndividualPosting?.Location?.IsSamePlace(location) != true
@@ -133,7 +133,7 @@ namespace OnlyWar.Helpers
             {
                 throw new InvalidOperationException("Select exactly one ship or region.");
             }
-            if (location.Ship?.Fleet?.TravelPhase == Models.Fleets.FleetTravelPhase.InWarp)
+            if (location.Ship?.Fleet?.TravelPhase == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
             {
                 throw new InvalidOperationException("Individuals cannot move through the Warp.");
             }

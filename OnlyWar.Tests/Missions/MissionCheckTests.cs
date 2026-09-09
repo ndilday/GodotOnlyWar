@@ -1,8 +1,8 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using System.Linq;
 using Xunit;

@@ -1,10 +1,9 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

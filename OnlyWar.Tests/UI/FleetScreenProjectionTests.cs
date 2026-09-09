@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using OnlyWar.Helpers.Fleets;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Campaign.Fleets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -154,10 +154,10 @@ public class FleetScreenProjectionTests
             new RegionCoordinate(0, 0),
             0);
 
-        OnlyWar.Helpers.AdministrativeStationResult result =
-            new OnlyWar.Helpers.AdministrativeStationService(
+        OnlyWar.Campaign.AdministrativeStationResult result =
+            new OnlyWar.Campaign.AdministrativeStationService(
                 TestPersonnelComposition.CreatePersonnel(),
-                new OnlyWar.Helpers.Orders.OrderCommitmentSurface()).SeatFormation(
+                new OnlyWar.Operations.Orders.OrderCommitmentSurface()).SeatFormation(
             squad,
             CampaignLocation.Landed(stationRegion));
         Assert.True(result.Succeeded, result.Message);
@@ -343,8 +343,8 @@ public class FleetScreenProjectionTests
             false,
             FactionBehavior.None,
             GrowthType.None,
-            new Dictionary<int, OnlyWar.Models.Soldiers.Species>(),
-            new Dictionary<int, OnlyWar.Models.Soldiers.SoldierTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Soldiers.Species>(),
+            new Dictionary<int, OnlyWar.Domain.Soldiers.SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(),
             new Dictionary<int, UnitTemplate>(),
             new Dictionary<int, BoatTemplate>(),

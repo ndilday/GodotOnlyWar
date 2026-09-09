@@ -2,14 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
 namespace OnlyWar.Application;
 
@@ -242,7 +242,7 @@ internal sealed class ChapterScreenContext
             return new ChapterTransferResult(false, ChapterPrompt.None, false, false, null, null);
         }
 
-        Helpers.Orders.OrderForceService.RemoveCharacter(soldier);
+        Operations.Orders.OrderForceService.RemoveCharacter(soldier);
         return new ChapterTransferResult(
             true, ChapterPrompt.None, false, false, null, soldier.AssignedSquad?.Id);
     }

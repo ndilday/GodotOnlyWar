@@ -1,6 +1,6 @@
 using System.Linq;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     /// <summary>
     /// What a battle did to a soldier, resolved once the fighting stops

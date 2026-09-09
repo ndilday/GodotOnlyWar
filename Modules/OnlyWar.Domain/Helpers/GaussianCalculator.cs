@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Domain.Math
 {
     public static class GaussianCalculator
     {
@@ -17,9 +17,9 @@ namespace OnlyWar.Helpers
         }
 
         /// <summary>
-        /// 1/sqrt(2*pi), written out rather than as <c>Math.Sqrt(2 * Math.PI)</c>. Roslyn folds the
+        /// 1/sqrt(2*pi), written out rather than as <c>System.Math.Sqrt(2 * System.Math.PI)</c>. Roslyn folds the
         /// multiply, but it does not evaluate library calls at compile time, and RyuJIT expands
-        /// Math.Sqrt to a bare sqrtsd without noticing its operand is constant -- so the inline form
+        /// System.Math.Sqrt to a bare sqrtsd without noticing its operand is constant -- so the inline form
         /// cost a real square root on every call at every optimization level. Battle planning makes
         /// ~1.5e9 of these per seed.
         /// </summary>
@@ -109,7 +109,7 @@ namespace OnlyWar.Helpers
 
             double t = 1.0 / (1.0 + (k * x));
             double poly = t * (a1 + (t * (a2 + (t * (a3 + (t * (a4 + (t * a5))))))));
-            return InvSqrt2Pi * Math.Exp(-0.5 * x * x) * poly;
+            return InvSqrt2Pi * System.Math.Exp(-0.5 * x * x) * poly;
         }
 
         // =====================================================================================
@@ -157,7 +157,7 @@ namespace OnlyWar.Helpers
         }
 
         private static double LossExact(double x) =>
-            (InvSqrt2Pi * Math.Exp(-0.5 * x * x)) - (x * UpperTailExact(x));
+            (InvSqrt2Pi * System.Math.Exp(-0.5 * x * x)) - (x * UpperTailExact(x));
 
         /// <summary>
         /// The standard normal loss function <c>G(z) = E[(Z - z)+] = phi(z) - z*Q(z)</c>.
@@ -190,7 +190,7 @@ namespace OnlyWar.Helpers
 
         public static float ApproximateNormalCDF(float zScore)
         {
-            // Math.Abs is a call; the ternary is a sign-bit clear the JIT emits inline.
+            // System.Math.Abs is a call; the ternary is a sign-bit clear the JIT emits inline.
             float x = zScore < 0f ? -zScore : zScore;
 
             // The UPPER tail Q(x) = 1 - Phi(x), which is what A&S approximates and what the table
@@ -249,7 +249,7 @@ namespace OnlyWar.Helpers
                 p = 1 - probability;
             }
 
-            double t = Math.Sqrt(Math.Log(1 / (p * p)));
+            double t = System.Math.Sqrt(System.Math.Log(1 / (p * p)));
 
             double z = t - (c0 + c1 * t + c2 * t * t) / (1 + d1 * t + d2 * t * t + d3 * t * t * t);
 

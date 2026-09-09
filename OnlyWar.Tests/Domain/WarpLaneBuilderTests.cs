@@ -1,10 +1,10 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Geometry;
-using OnlyWar.Builders;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Geometry;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain.Planets;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

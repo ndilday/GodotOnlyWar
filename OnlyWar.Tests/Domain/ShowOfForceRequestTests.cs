@@ -1,9 +1,9 @@
-﻿using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Supply;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

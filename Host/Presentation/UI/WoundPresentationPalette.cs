@@ -1,5 +1,5 @@
 using Godot;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Application;
 
 namespace OnlyWar.Host.Presentation.UI
 {
@@ -17,32 +17,32 @@ namespace OnlyWar.Host.Presentation.UI
         public static readonly Color Lost = FromRgb(142, 31, 31);
         public static readonly Color HealthyCybernetic = FromRgb(77, 179, 199);
 
-        public static Color For(WoundLevel level, bool severed = false, bool healthyCybernetic = false)
+        public static Color For(MedicalWoundLevel level, bool severed = false, bool healthyCybernetic = false)
         {
             if (severed) return Lost;
-            if (healthyCybernetic && level == WoundLevel.None) return HealthyCybernetic;
+            if (healthyCybernetic && level == MedicalWoundLevel.None) return HealthyCybernetic;
             return level switch
             {
-                WoundLevel.Negligible => Negligible,
-                WoundLevel.Minor => Minor,
-                WoundLevel.Moderate => Moderate,
-                WoundLevel.Major => Major,
-                WoundLevel.Critical => Critical,
-                WoundLevel.Massive => Massive,
-                WoundLevel.Mortal => Mortal,
-                WoundLevel.Unsurvivable => Unsurvivable,
+                MedicalWoundLevel.Negligible => Negligible,
+                MedicalWoundLevel.Minor => Minor,
+                MedicalWoundLevel.Moderate => Moderate,
+                MedicalWoundLevel.Major => Major,
+                MedicalWoundLevel.Critical => Critical,
+                MedicalWoundLevel.Massive => Massive,
+                MedicalWoundLevel.Mortal => Mortal,
+                MedicalWoundLevel.Unsurvivable => Unsurvivable,
                 _ => Healthy
             };
         }
 
-        public static int SeverityTicks(WoundLevel level) => level switch
+        public static int SeverityTicks(MedicalWoundLevel level) => level switch
         {
-            WoundLevel.Negligible => 1,
-            WoundLevel.Minor => 2,
-            WoundLevel.Moderate => 3,
-            WoundLevel.Major => 4,
-            WoundLevel.Critical or WoundLevel.Massive or WoundLevel.Mortal
-                or WoundLevel.Unsurvivable => 5,
+            MedicalWoundLevel.Negligible => 1,
+            MedicalWoundLevel.Minor => 2,
+            MedicalWoundLevel.Moderate => 3,
+            MedicalWoundLevel.Major => 4,
+            MedicalWoundLevel.Critical or MedicalWoundLevel.Massive or MedicalWoundLevel.Mortal
+                or MedicalWoundLevel.Unsurvivable => 5,
             _ => 0
         };
 

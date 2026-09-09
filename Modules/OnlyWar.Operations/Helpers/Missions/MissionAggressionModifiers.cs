@@ -1,7 +1,7 @@
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain.Orders;
 using System;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     // Aggression trades EXPOSURE for EFFECT (OnlyWar_TDD.md §6.4).
     //

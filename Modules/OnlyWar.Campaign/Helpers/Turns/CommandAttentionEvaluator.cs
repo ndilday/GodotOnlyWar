@@ -1,21 +1,20 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     public enum CommandAttentionKind
     {

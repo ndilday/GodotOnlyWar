@@ -1,5 +1,4 @@
 using System;
-using OnlyWar.Builders;
 
 namespace OnlyWar.Runtime.Allocators;
 
@@ -22,4 +21,3 @@ public sealed class SequentialEntityIdAllocator : IEntityIdAllocator
         return _next++;
     }
 }
-

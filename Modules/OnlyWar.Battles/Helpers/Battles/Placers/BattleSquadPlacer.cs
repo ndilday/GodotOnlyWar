@@ -1,9 +1,9 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles.Placers
+namespace OnlyWar.Battles.Placers
 {
     public static class BattleSquadPlacer
     {

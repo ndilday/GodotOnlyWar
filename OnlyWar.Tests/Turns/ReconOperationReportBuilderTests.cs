@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -60,11 +60,11 @@ public class ReconOperationReportBuilderTests
     [Fact]
     public void DebriefLineGrouper_CombinesSquadActivitiesIntoOneEntryPerDay()
     {
-        MissionDebriefLine[] lines =
+        MissionDebriefLineView[] lines =
         [
-            new("Day 1: First activity", day: 1, squadName: "Faustus Squad"),
-            new("Day 1: Second activity", day: 1, squadName: "Thawn Squad"),
-            new("Day 2: Follow-up activity", day: 2, squadName: "Faustus Squad")
+            new("Day 1: First activity", Day: 1, SquadName: "Faustus Squad"),
+            new("Day 1: Second activity", Day: 1, SquadName: "Thawn Squad"),
+            new("Day 2: Follow-up activity", Day: 2, SquadName: "Faustus Squad")
         ];
 
         IReadOnlyList<MissionDebriefLineGroup> groups = MissionDebriefLineGrouper.GroupByDay(lines);

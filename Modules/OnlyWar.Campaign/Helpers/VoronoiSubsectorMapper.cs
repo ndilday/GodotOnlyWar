@@ -1,10 +1,10 @@
-using OnlyWar.Models.Geometry;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Geometry;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     /// <summary>
     /// PROTOTYPE: derives smooth subsector boundary polygons from a constrained

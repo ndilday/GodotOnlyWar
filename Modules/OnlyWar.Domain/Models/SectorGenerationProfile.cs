@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Data-owned inputs for sector generation. The generation algorithms remain code-owned;

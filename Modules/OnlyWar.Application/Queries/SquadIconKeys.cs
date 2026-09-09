@@ -1,4 +1,4 @@
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Application;
 

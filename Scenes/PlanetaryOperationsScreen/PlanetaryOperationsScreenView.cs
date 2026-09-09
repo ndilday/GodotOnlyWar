@@ -1,6 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Models.Orders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,7 +33,7 @@ public partial class PlanetaryOperationsScreenView : Control
     public event EventHandler<int> OrderSelected;
     public event EventHandler<int> RemoveSquadRequested;
     public event EventHandler<int> CancelOrderRequested;
-    public event EventHandler<Aggression> AggressionSelected;
+    public event EventHandler<OperationsAggression> AggressionSelected;
     public event EventHandler<int> SpecialistToggleRequested;
     public event EventHandler UndoRequested;
     public event EventHandler<int> ShipSelected;
@@ -478,7 +477,7 @@ public partial class PlanetaryOperationsScreenView : Control
         };
         aggression.AddThemeConstantOverride("separation", 2);
         ButtonGroup aggressionGroup = new();
-        foreach (Aggression level in Enum.GetValues<Aggression>())
+        foreach (OperationsAggression level in Enum.GetValues<OperationsAggression>())
         {
             CheckBox radio = new()
             {

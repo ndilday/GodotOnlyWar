@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Resolves sector relationship state and the small set of contextual planetary policies that

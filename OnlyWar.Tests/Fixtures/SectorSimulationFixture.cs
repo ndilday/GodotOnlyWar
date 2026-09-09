@@ -3,15 +3,14 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
 namespace OnlyWar.Tests.Fixtures;
 
@@ -46,13 +45,13 @@ internal sealed class SectorSimulationFixture
     /// </summary>
     public OnlyWar.Operations.Abstractions.OrderCommandContext OrderCommands =>
         new(Sector, CurrentDate,
-            new OnlyWar.Helpers.Readiness.MedicalReadinessDecisions(),
+            new OnlyWar.Medical.Readiness.MedicalReadinessDecisions(),
             Personnel: _personnel);
 
     /// <summary>Every player soldier the chapter could lend to an operation.</summary>
-    public System.Collections.Generic.IEnumerable<OnlyWar.Models.Soldiers.PlayerSoldier> ChapterRoster =>
+    public System.Collections.Generic.IEnumerable<OnlyWar.Domain.Soldiers.PlayerSoldier> ChapterRoster =>
         Sector?.PlayerForce?.Army?.PlayerSoldierMap?.Values
-        ?? System.Linq.Enumerable.Empty<OnlyWar.Models.Soldiers.PlayerSoldier>();
+        ?? System.Linq.Enumerable.Empty<OnlyWar.Domain.Soldiers.PlayerSoldier>();
 
     private readonly RegionFaction[] _defaultRegionFactions = new RegionFaction[RegionCount];
     private readonly OnlyWar.Operations.Abstractions.IOperationsPersonnelSurface _personnel =
@@ -111,7 +110,7 @@ internal sealed class SectorSimulationFixture
         fixture.Sector = new Sector(playerForce, [], [fixture.Planet], []);
         if (loadRules)
         {
-            GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+            GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             // These are single-planet simulations with one governor, so tests force or suppress a
             // request through the governor's traits alone. Pin out the sector-wide throttle (which
             // production sets low enough that a lone governor would almost never petition) so those
@@ -217,7 +216,7 @@ internal sealed class SectorSimulationFixture
     {
         TestCampaignComposition composition =
             TestPersonnelComposition.CreateCampaign(new StaticRNG());
-        OnlyWar.Helpers.Simulation.GameSession session =
+        OnlyWar.Application.Session.GameSession session =
             new(
                 Rules ?? throw new InvalidOperationException("This fixture has no rules."),
                 Sector,

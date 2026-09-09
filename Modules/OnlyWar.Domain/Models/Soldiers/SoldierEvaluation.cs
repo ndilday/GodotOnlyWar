@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Domain.Soldiers.Ratings;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public class SoldierEvaluation
     {

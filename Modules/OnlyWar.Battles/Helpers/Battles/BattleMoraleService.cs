@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Battle-scoped owner of morale bookkeeping, input gathering, checks, and morale events.

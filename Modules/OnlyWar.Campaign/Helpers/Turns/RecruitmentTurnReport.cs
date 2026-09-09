@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     public sealed record RecruitmentTurnReport(
         bool Processed,

@@ -1,11 +1,11 @@
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     public interface IMissionCheck
     {

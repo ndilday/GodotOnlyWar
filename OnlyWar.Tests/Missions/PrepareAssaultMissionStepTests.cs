@@ -1,19 +1,17 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers;
+using OnlyWar.Battles;
+using OnlyWar.Domain;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Missions.Assault;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Helpers.Strategy;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Operations.Missions.Assault;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Campaign.Strategy;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -222,11 +220,11 @@ public class PrepareAssaultMissionStepTests
 
     private static Faction CreateFaction(int id, string name, bool isPlayer = false, bool isDefault = false) =>
         new(id, name, Color.White, isPlayer, isDefault, FactionBehavior.None, GrowthType.Logistic,
-            new Dictionary<int, OnlyWar.Models.Soldiers.Species>(),
-            new Dictionary<int, OnlyWar.Models.Soldiers.SoldierTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Soldiers.Species>(),
+            new Dictionary<int, OnlyWar.Domain.Soldiers.SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Units.UnitTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.BoatTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.ShipTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.FleetTemplate>());
+            new Dictionary<int, OnlyWar.Domain.Units.UnitTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
 }

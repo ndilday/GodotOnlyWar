@@ -1,12 +1,12 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Storage
+namespace OnlyWar.Persistence.Storage
 {
     public enum SaveGameKind
     {

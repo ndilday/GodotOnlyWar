@@ -1,4 +1,3 @@
-using OnlyWar.Models;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -85,10 +84,10 @@ public class SectorMapLabelLayoutTests
     {
         var ordered = SectorMapLabelLayout.OrderPlanetPriorities(
         [
-            new SectorMapPlanetLabelPriority(4, false, RequestSeverity.Concerned, false, 99),
-            new SectorMapPlanetLabelPriority(3, false, RequestSeverity.Concerned, true, 1),
-            new SectorMapPlanetLabelPriority(2, true, RequestSeverity.Serious, false, 1),
-            new SectorMapPlanetLabelPriority(1, true, RequestSeverity.Serious, false, 1)
+            new SectorMapPlanetLabelPriority(4, false, SectorMapRequestSeverity.Concerned, false, 99),
+            new SectorMapPlanetLabelPriority(3, false, SectorMapRequestSeverity.Concerned, true, 1),
+            new SectorMapPlanetLabelPriority(2, true, SectorMapRequestSeverity.Serious, false, 1),
+            new SectorMapPlanetLabelPriority(1, true, SectorMapRequestSeverity.Serious, false, 1)
         ]);
 
         Assert.Equal([1, 2, 3, 4], ordered.Select(priority => priority.PlanetId));

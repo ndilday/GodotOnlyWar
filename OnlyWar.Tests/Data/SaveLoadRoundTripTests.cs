@@ -1,24 +1,23 @@
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Medical.Readiness;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
-using OnlyWar.Models.Supply;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Reports;
-using OnlyWar.Models.Events;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain.Supply;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Reports;
+using OnlyWar.Domain.Events;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -39,7 +38,7 @@ public class SaveLoadRoundTripTests
     public SaveLoadRoundTripTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        _data = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         // These tests exercise the save/load schema, not sector generation at scale: a
         // handful of planets stresses every persisted feature just as well as the full
         // 200x200 production sector and generates far faster. The 20x20 grid stays within
@@ -649,7 +648,7 @@ public class SaveLoadRoundTripTests
 
             // A fresh rules-data instance, exactly as the real load path constructs. Its
             // player faction starts with no units; the loader must populate them from the blob.
-            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+            GameRulesData freshRules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Assert.Empty(freshRules.PlayerFaction.Units);
 
             Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(
@@ -711,7 +710,7 @@ public class SaveLoadRoundTripTests
             GameStateDataBlob loaded = _roundTrip.Load(dbPath);
 
             // A fresh rules-data instance, exactly as the real StartMenu load path constructs.
-            GameRulesData freshRules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+            GameRulesData freshRules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(
                 loaded, freshRules, new OrderCommitmentSurface());
 
@@ -751,17 +750,17 @@ public class SaveLoadRoundTripTests
         return rootUnits.Sum(u => u.GetAllSquads().Count());
     }
 
-    private static long TotalCarryingCapacity(IEnumerable<Models.Planets.Planet> planets)
+    private static long TotalCarryingCapacity(IEnumerable<OnlyWar.Domain.Planets.Planet> planets)
     {
         return planets.Sum(p => p.Regions.Sum(r => r.CarryingCapacity));
     }
 
-    private static long TotalMaximumCarryingCapacity(IEnumerable<Models.Planets.Planet> planets)
+    private static long TotalMaximumCarryingCapacity(IEnumerable<OnlyWar.Domain.Planets.Planet> planets)
     {
         return planets.Sum(p => p.Regions.Sum(r => r.MaximumCarryingCapacity));
     }
 
-    private static long TotalPopulation(IEnumerable<Models.Planets.Planet> planets)
+    private static long TotalPopulation(IEnumerable<OnlyWar.Domain.Planets.Planet> planets)
     {
         return planets.Sum(p => p.Population);
     }

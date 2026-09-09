@@ -1,7 +1,7 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Helpers.Storage;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Persistence.Storage;
 using System;
 using System.Collections.Generic;
 
@@ -48,6 +48,9 @@ public partial class MainGameScene : Control
 	{
 		_campaignApplication = campaignApplication
 			?? throw new ArgumentNullException(nameof(campaignApplication));
+		// The scene is the ordinary host composition root. Install the host-only replay projector
+		// here, while keeping the application contract detached from BattleHistory and Godot types.
+		_campaignApplication.ConfigureBattleReplayProjector(new BattleReplaySummaryBuilder());
 	}
 
 	// The sector map is a scene child, so its own _Ready runs before this scene's. The host must
@@ -1122,6 +1125,7 @@ public partial class MainGameScene : Control
 		_endOfTurnDialog = (EndOfTurnDialogController)endOfTurnScene.Instantiate();
 		_endOfTurnDialog.CloseButtonPressed += OnDialogClosed;
 		_modalLayer.AddChild(_endOfTurnDialog);
+		_endOfTurnDialog.Configure(_campaignApplication);
 	}
 
 	private void OnSoldierSelectedForDisplay(object sender, int soldierId)

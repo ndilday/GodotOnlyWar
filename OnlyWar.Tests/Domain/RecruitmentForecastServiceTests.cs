@@ -1,6 +1,6 @@
 using System;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Domain.Recruitment;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

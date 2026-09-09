@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain.Recruitment;
 
-namespace OnlyWar.Helpers.Recruitment
+namespace OnlyWar.Campaign.Recruitment
 {
     /// <summary>
     /// Deterministic recruitment funnel calculation shared by previews and turn processing.

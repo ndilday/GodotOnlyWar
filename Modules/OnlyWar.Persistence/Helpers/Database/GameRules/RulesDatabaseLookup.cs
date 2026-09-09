@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     /// <summary>
     /// Resolves a rules-data reference with the source relation in the exception. Loaders should

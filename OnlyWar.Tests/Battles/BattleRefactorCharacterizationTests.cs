@@ -3,16 +3,15 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Battles.Aftermath;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 
 using Xunit;
@@ -53,7 +52,7 @@ public class BattleRefactorCharacterizationTests
         PlaceLine(grid, secondRight, side: false, x: 15, y: 4);
 
         SeededRNG random = new(90_123);
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         BattleAftermathDependencies aftermath = new(
             new Date(1, 1, 1), random, NoOpPlayerBattleAftermathSink.Instance);
         BattleExecutionContext execution = new(
@@ -171,10 +170,10 @@ public class BattleRefactorCharacterizationTests
                 [TestModelFactory.MarineTemplate.Id] = TestModelFactory.MarineTemplate
             },
             new Dictionary<int, SquadTemplate>(),
-            new Dictionary<int, Models.Units.UnitTemplate>(),
-            new Dictionary<int, Models.Fleets.BoatTemplate>(),
-            new Dictionary<int, Models.Fleets.ShipTemplate>(),
-            new Dictionary<int, Models.Fleets.FleetTemplate>());
+            new Dictionary<int, OnlyWar.Domain.Units.UnitTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
     }
 
     private sealed class NoOpPlayerBattleAftermathSink : IPlayerBattleAftermathSink

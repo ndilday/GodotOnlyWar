@@ -1,17 +1,17 @@
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain.Recruitment;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Battles;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     public class BattleSquad : ICloneable
     {

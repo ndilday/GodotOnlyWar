@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Application;
 
@@ -42,7 +42,7 @@ internal sealed class MedicalCommandContext
         // Resolve the exact displayed treatment again; never silently substitute another option.
         ReplacementOption option = _medicalRecords.BuildTreatmentOptions(patient, force)
             .FirstOrDefault(value => value.HitLocationId == command.HitLocationId
-                && value.Type == command.ProcedureType);
+                && value.Type == MedicalProcedureChoiceMapping.ToDomain(command.ProcedureType));
         if (option == null || _medicalProcedures.HasProcedureInProgress(
                 force, patient.Id, option.HitLocationId))
         {

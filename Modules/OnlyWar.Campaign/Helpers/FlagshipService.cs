@@ -1,11 +1,11 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     /// <summary>
     /// Deterministic flagship identity and succession. Administrative station relocation is kept

@@ -1,11 +1,11 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.PlanetaryOperations
+namespace OnlyWar.Operations.Planetary
 {
     public sealed record IntelEstimatePresentation(
         string Value,

@@ -37,6 +37,12 @@ public sealed class MainScreenApplication : CampaignScreenApplication, IMainScre
             "No previous turn report is available for this save.",
             []);
 
+    public BattleReplayDisplay QueryBattleReplay(BattleReplayQuery query) =>
+        Screen?.QueryBattleReplay(query);
+
+    public void ConfigureBattleReplayProjector(IBattleReplayProjector projector) =>
+        Screen?.ConfigureBattleReplayProjector(projector);
+
     public ResolveTurnView ResolveTurn(Guid sessionToken)
     {
         if (!IsCurrentSession(sessionToken))

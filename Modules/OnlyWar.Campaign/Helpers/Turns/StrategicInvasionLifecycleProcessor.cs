@@ -1,22 +1,22 @@
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fleets;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Fleets;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Resolves the strategic invasion lifecycle which is not expressible as ordinary faction growth: latent

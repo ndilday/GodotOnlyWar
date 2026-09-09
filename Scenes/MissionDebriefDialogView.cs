@@ -1,7 +1,6 @@
 using Godot;
+using OnlyWar.Application;
 using OnlyWar.Host.Presentation.Battles;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Missions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,7 +14,7 @@ public partial class MissionDebriefDialogView : DialogView
     private ScrollContainer _stepScroll;
     private VBoxContainer _lineList;
 
-    public event EventHandler<BattleHistory> BattleReviewRequested;
+    public event EventHandler<Guid> BattleReviewRequested;
 
     public override void _Ready()
     {
@@ -31,7 +30,7 @@ public partial class MissionDebriefDialogView : DialogView
     }
 
     public void SetMissionDebrief(string title, string subtitle, string outcomeStatus,
-        string outcomeSummary, IReadOnlyList<MissionDebriefLine> lines)
+        string outcomeSummary, IReadOnlyList<MissionDebriefLineView> lines)
     {
         _titleLabel.Text = (title ?? "Mission Debrief").ToUpperInvariant();
         _subtitleLabel.Text = subtitle ?? "";
@@ -42,7 +41,7 @@ public partial class MissionDebriefDialogView : DialogView
 
         if (lines == null || lines.Count == 0)
         {
-            AddTextLine(new MissionDebriefLine("No debrief lines were recorded for this mission."));
+            AddTextLine(new MissionDebriefLineView("No debrief lines were recorded for this mission."));
             return;
         }
 
@@ -59,7 +58,7 @@ public partial class MissionDebriefDialogView : DialogView
         }
     }
 
-    private void AddDayGroup(ushort day, IReadOnlyList<MissionDebriefLine> lines)
+    private void AddDayGroup(ushort day, IReadOnlyList<MissionDebriefLineView> lines)
     {
         PanelContainer panel = new();
         bool hasBattle = lines.Any(line => line.HasBattle);
@@ -76,7 +75,7 @@ public partial class MissionDebriefDialogView : DialogView
         heading.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         stack.AddChild(heading);
 
-        foreach (MissionDebriefLine line in lines)
+        foreach (MissionDebriefLineView line in lines)
         {
             if (line.HasBattle)
             {
@@ -91,7 +90,7 @@ public partial class MissionDebriefDialogView : DialogView
         _lineList.AddChild(panel);
     }
 
-    private void AddTextLine(MissionDebriefLine line)
+    private void AddTextLine(MissionDebriefLineView line)
     {
         PanelContainer panel = new();
         OnlyWarStyle.ApplyEventPanel(panel, line.HasBattle ? OnlyWarEventTone.Warning : OnlyWarEventTone.Normal);
@@ -142,11 +141,10 @@ public partial class MissionDebriefDialogView : DialogView
         stack.AddChild(text);
     }
 
-    private void AddBattleContent(VBoxContainer stack, MissionDebriefLine line, string prefix = "")
+    private void AddBattleContent(VBoxContainer stack, MissionDebriefLineView line, string prefix = "")
     {
-        BattleHistory battleHistory = line.BattleHistory as BattleHistory;
-        BattleDebriefReport report = line.BattleReport
-            ?? new BattleDebriefReport(0, 0, System.Array.Empty<BattleCasualtyEntry>());
+        BattleDebriefView report = line.BattleReport
+            ?? new BattleDebriefView(0, 0, System.Array.Empty<BattleCasualtyView>());
         Label summary = new()
         {
             Text = prefix + BattleDebriefPresentation.BuildSummaryLine(report),
@@ -182,7 +180,7 @@ public partial class MissionDebriefDialogView : DialogView
         };
         controls.AddChild(casualtyButton);
 
-        if (battleHistory != null)
+        if (line.BattleReplayId.HasValue)
         {
             Button reviewButton = new()
             {
@@ -190,18 +188,20 @@ public partial class MissionDebriefDialogView : DialogView
                 CustomMinimumSize = new Vector2(170, 34),
                 TooltipText = "Open the battle replay for this engagement"
             };
-            reviewButton.Pressed += () => BattleReviewRequested?.Invoke(this, battleHistory);
+            reviewButton.Pressed += () => BattleReviewRequested?.Invoke(
+                this,
+                line.BattleReplayId.Value);
             controls.AddChild(reviewButton);
         }
         stack.AddChild(controls);
     }
 
-    private static string BuildActivityPrefix(MissionDebriefLine line) =>
+    private static string BuildActivityPrefix(MissionDebriefLineView line) =>
         string.IsNullOrWhiteSpace(line.SquadName)
             ? "• "
             : $"• {line.SquadName} — ";
 
-    private static string BuildActivityText(MissionDebriefLine line, ushort day)
+    private static string BuildActivityText(MissionDebriefLineView line, ushort day)
     {
         string activity = StripDayPrefix(line.Text, day);
         if (string.IsNullOrWhiteSpace(line.SquadName))
@@ -232,11 +232,11 @@ public partial class MissionDebriefDialogView : DialogView
             : value;
     }
 
-    private static VBoxContainer BuildCasualtyList(BattleDebriefReport report)
+    private static VBoxContainer BuildCasualtyList(BattleDebriefView report)
     {
         VBoxContainer list = new();
         list.AddThemeConstantOverride("separation", 5);
-        if (report.PlayerCasualties.Count == 0)
+        if (report.Casualties.Count == 0)
         {
             Label empty = new() { Text = "No player soldiers were wounded or killed in this engagement." };
             empty.AddThemeColorOverride("font_color", OnlyWarStyle.MedicalStable);
@@ -244,11 +244,11 @@ public partial class MissionDebriefDialogView : DialogView
             return list;
         }
 
-        foreach (BattleCasualtyEntry casualty in report.PlayerCasualties)
+        foreach (BattleCasualtyView casualty in report.Casualties)
         {
             PanelContainer row = new();
             OnlyWarStyle.ApplyEventPanel(row,
-                casualty.Disposition == BattleCasualtyDisposition.Dead
+                casualty.Disposition == BattleCasualtyDispositionView.Dead
                     ? OnlyWarEventTone.Critical
                     : OnlyWarEventTone.Warning);
             HBoxContainer content = new();
@@ -282,7 +282,7 @@ public partial class MissionDebriefDialogView : DialogView
                 VerticalAlignment = VerticalAlignment.Center
             };
             status.AddThemeColorOverride("font_color",
-                casualty.Disposition == BattleCasualtyDisposition.Dead
+                casualty.Disposition == BattleCasualtyDispositionView.Dead
                     ? OnlyWarStyle.Critical
                     : OnlyWarStyle.MedicalWarning);
             content.AddChild(status);
@@ -292,14 +292,14 @@ public partial class MissionDebriefDialogView : DialogView
         return list;
     }
 
-    private static string BuildCasualtyStatus(BattleCasualtyEntry casualty)
+    private static string BuildCasualtyStatus(BattleCasualtyView casualty)
     {
         return casualty.Disposition switch
         {
-            BattleCasualtyDisposition.Dead => "DEAD",
-            BattleCasualtyDisposition.Incapacitated =>
+            BattleCasualtyDispositionView.Dead => "DEAD",
+            BattleCasualtyDispositionView.Incapacitated =>
                 $"INCAPACITATED  •  {casualty.RecoveryWeeks} {(casualty.RecoveryWeeks == 1 ? "WEEK" : "WEEKS")} RECOVERY",
-            BattleCasualtyDisposition.ReplacementRequired => "LIMB REPLACEMENT REQUIRED",
+            BattleCasualtyDispositionView.ReplacementRequired => "LIMB REPLACEMENT REQUIRED",
             _ => $"{casualty.RecoveryWeeks} {(casualty.RecoveryWeeks == 1 ? "WEEK" : "WEEKS")} RECOVERY"
         };
     }

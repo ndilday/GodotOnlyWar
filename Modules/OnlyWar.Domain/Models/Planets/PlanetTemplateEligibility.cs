@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     /// <summary>
     /// Stable generation contexts that consume planet-template eligibility assignments.

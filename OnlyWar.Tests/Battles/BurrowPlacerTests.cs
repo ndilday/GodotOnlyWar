@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Placers;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Placers;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

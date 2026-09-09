@@ -1,8 +1,11 @@
-using OnlyWar.Helpers;
+using OnlyWar.Runtime.Random;
 
 namespace OnlyWar;
 
-/// <summary>Legacy root façade; Runtime owns the implementation and resources.</summary>
+/// <summary>
+/// Compatibility façade for the historical root API. New code should use
+/// <see cref="Runtime.Naming.NameGenerator"/> directly.
+/// </summary>
 public static class NameGenerator
 {
     private static readonly Runtime.Naming.NameGenerator Generator = new();

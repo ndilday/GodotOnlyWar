@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Application
 {

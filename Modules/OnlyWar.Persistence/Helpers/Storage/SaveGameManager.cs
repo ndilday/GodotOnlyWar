@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace OnlyWar.Helpers.Storage
+namespace OnlyWar.Persistence.Storage
 {
     /// <summary>
     /// Assigns safe save paths and applies retention policy around the existing atomic game-state

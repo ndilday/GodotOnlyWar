@@ -1,9 +1,9 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Simulation;
+namespace OnlyWar.Campaign.Simulation;
 
 /// <summary>
 /// Produces the governor's qualitative, personality-biased claim about civil order. The Chapter

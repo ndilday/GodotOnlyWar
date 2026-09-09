@@ -1,10 +1,10 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     /// <summary>
     /// Reads the declarative faction, scenario-participant, and initial-presence policies. The

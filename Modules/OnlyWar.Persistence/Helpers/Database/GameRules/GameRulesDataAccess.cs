@@ -1,11 +1,12 @@
-﻿using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain;
+using OnlyWar.Persistence.Equipment;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain.FactionBehaviors;
 
 using System;
 using System.Collections.Generic;
@@ -16,7 +17,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     public class GameRulesDataAccess
     {
@@ -111,7 +112,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             var sectorGenerationProfiles =
                 _sectorGenerationProfileDataAccess.GetProfiles(dbCon);
             var factionBehaviorRulesProfiles = _factionBehaviorRulesDataAccess.GetProfiles(dbCon);
-            EquipmentRulesCatalog compatibilityEquipmentCatalog = OnlyWar.Helpers.Equipment.LegacyEquipmentCatalogBuilder.FromLegacyRules(
+            EquipmentRulesCatalog compatibilityEquipmentCatalog = LegacyEquipmentCatalogBuilder.FromLegacyRules(
                 squadDataBlob.RangedWeaponTemplateMap,
                 squadDataBlob.MeleeWeaponTemplateMap,
                 squadDataBlob.ArmorTemplates,
@@ -120,7 +121,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             EquipmentRulesCatalog equipmentCatalog;
             try
             {
-                equipmentCatalog = OnlyWar.Helpers.Database.GameRules.EquipmentCatalogLoader.FromDatabase(
+                equipmentCatalog = OnlyWar.Persistence.Database.GameRules.EquipmentCatalogLoader.FromDatabase(
                     dbCon,
                     baseSkills,
                     compatibilityEquipmentCatalog);

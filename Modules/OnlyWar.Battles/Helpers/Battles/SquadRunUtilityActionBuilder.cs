@@ -1,8 +1,8 @@
 using System.Linq;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Adds the small equip/reload actions permitted while a squad is moving at a run posture.

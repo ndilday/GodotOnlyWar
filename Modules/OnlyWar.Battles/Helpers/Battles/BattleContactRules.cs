@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Battles;
 
 public enum ContactBreakResult
 {

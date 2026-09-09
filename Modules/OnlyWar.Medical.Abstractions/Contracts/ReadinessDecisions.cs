@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 namespace OnlyWar.Medical.Abstractions
 {
     public enum DutyReadinessReasonCode

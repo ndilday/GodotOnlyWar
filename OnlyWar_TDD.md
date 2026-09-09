@@ -87,7 +87,7 @@ no shipping C#.
 
 | Project | Direct production references | Current responsibility |
 |---|---|---|
-| `OnlyWar.Domain` | None | Coordinates/date, body/wound and equipment primitives, independent soldier/planet/fleet templates, doctrine and rating values. |
+| `OnlyWar.Domain` | Abstractions | Coordinates/date, body/wound and equipment primitives, independent soldier/planet/fleet templates, doctrine and rating values. |
 | `OnlyWar.Abstractions` | None | Cross-cutting RNG and entity-ID allocation primitives. |
 | `OnlyWar.Application.Abstractions` | Domain, Abstractions | The narrow common `ICampaignSession` seam plus the explicitly wider `ICampaignSimulationSession` used by campaign simulation policy. |
 | `OnlyWar.Battles.Abstractions` | Domain | Tactical engagement facts/results plus battle-owned capability ports. No campaign aggregate crosses the engagement request. |
@@ -98,7 +98,7 @@ no shipping C#.
 | `OnlyWar.Battles` | Domain, Abstractions, Battles.Abstractions, Runtime | Tactical state, planning, actions, wounds, morale, withdrawal, battle-local aftermath and replay over explicit equipment/participant/rules inputs. |
 | `OnlyWar.Medical.Abstractions` | Domain | Readiness, health, procedure, facility and care facts/results. Readiness policy receives snapshots rather than campaign aggregates. |
 | `OnlyWar.Medical` | Domain, Abstractions, Medical.Abstractions | Headless readiness, health, procedure, facility and care policies over explicit medical facts. |
-| `OnlyWar.Persistence` | Domain, Persistence.Abstractions | Persistence adapters: rules/catalog readers, game-state readers, save writers, save catalog/retention/metadata, format validation and raw-record mapping. SQLite-owned surface. |
+| `OnlyWar.Persistence` | Domain, Abstractions, Persistence.Abstractions | Persistence adapters: rules/catalog readers, game-state readers, save writers, save catalog/retention/metadata, format validation and raw-record mapping. SQLite-owned surface. |
 | `OnlyWar.Runtime` | Domain, Abstractions, Runtime.Abstractions | Runtime soldier/squad/force factories, names, logging, explicit persistent/tactical ID allocators, and the deterministic sector topology/governance rebuild shared by new game and load. |
 | `OnlyWar.Generation` | Domain, Abstractions, Generation.Abstractions, Runtime | Initial sector/chapter/planet/character construction and the authored opening-scenario stamp over public generation ports. |
 | `OnlyWar.Operations` | Domain, Abstractions, Operations.Abstractions, Battles.Abstractions, Medical.Abstractions, Runtime | Neutral mission sequencing, personnel availability queries, order/mission policy and live-graph mutation adapters over the Operations boundary model. |
@@ -114,9 +114,64 @@ through the owning provider assembly. Campaign retains root compatibility façad
 model consumers; Application owns the explicit session API. Campaign exposes narrow public
 coordinators and projection/aftermath adapters for Application composition; production code has no
 Campaign→Application friend grant.
-Internal access is granted only to the two test assemblies. Existing host-facing APIs
+Internal access is granted only to the full regression test assembly. Existing host-facing APIs
 remain public where scene composition still consumes them; the architecture checks do not claim a
 fully compiler-enforced scene command boundary.
+
+### 2.0.1 Namespace ownership audit
+
+The namespace, not the historical folder name under a module, is the ownership boundary. The
+2026-09-08 audit found that the old `OnlyWar.Models`, `OnlyWar.Helpers`, and `OnlyWar.Builders`
+families were mixed buckets from the pre-module layout. Production declarations now follow this
+map; the complete machine-readable form is in `Modules/source-ownership.json`.
+
+The pre-edit spread register used to make the ownership decisions was:
+
+| Historical namespace | Observed owning modules | Decision |
+|---|---|---|
+| `OnlyWar` | Runtime | Keep only the legacy name-generator facade. |
+| `OnlyWar.Application` | Application and Application.Abstractions | Separate implementation from public application contracts. |
+| `OnlyWar.Builders` | Campaign, Generation, Operations, Runtime | Historical bucket; split by behavior. |
+| `OnlyWar.Helpers` | Application, Battles, Campaign, Domain, Medical, Operations, Runtime | Historical bucket; split by behavior. |
+| `OnlyWar.Helpers.Application.Adapters.*` | Application | Rename to `OnlyWar.Application.Adapters.*`. |
+| `OnlyWar.Helpers.Battles*` | Application, Battles, Campaign | Split application orchestration, tactical implementation, and campaign aftermath. |
+| `OnlyWar.Helpers.Extensions` | Battles, Domain, Operations | Keep extensions beside the types they extend. |
+| `OnlyWar.Helpers.Medical` | Campaign, Medical, Medical.Abstractions | Separate campaign orchestration, medical policy, and medical contracts. |
+| `OnlyWar.Helpers.Missions` | Operations and Operations.Abstractions | Separate mission implementation from outcome/port contracts. |
+| `OnlyWar.Helpers.Readiness` | Medical and Operations | Split medical readiness from operational readiness policy. |
+| `OnlyWar.Helpers.Recruitment` | Campaign and Operations | Split campaign recruitment from operational recruitment policy. |
+| `OnlyWar.Helpers.Simulation` | Application, Campaign, Domain | Split session orchestration, campaign simulation, and domain simulation rules. |
+| `OnlyWar.Helpers.Storage` | Application and Persistence | Split application storage ports/load orchestration from persistence adapters. |
+| `OnlyWar.Helpers.Strategy` | Campaign and Operations | Split faction campaign strategy from operational strategy. |
+| `OnlyWar.Helpers.Turns` | Campaign and Operations | Split campaign turns from mission/operational turns. |
+| `OnlyWar.Models` | Campaign and Domain | Split campaign aggregates from domain entities/value objects. |
+| `OnlyWar.Models.Events` | Campaign and Domain | Split campaign event spine/projections from domain events. |
+| `OnlyWar.Models.Missions` | Battles.Abstractions, Domain, Operations, Operations.Abstractions | Split mission value types, operational models, and tactical boundary records. |
+| `OnlyWar.Models.Soldiers` | Battles and Domain | Split tactical soldier projections from domain soldier aggregates. |
+| `OnlyWar.Contracts` | None in production | Retire the pre-refactor project; contracts stay in the owning abstraction module. |
+
+| Namespace family | Owning module | Decision |
+|---|---|---|
+| `OnlyWar.Domain.*` | `OnlyWar.Domain` | Domain entities, value objects, rules data, and domain events. |
+| `OnlyWar.Battles.*` | `OnlyWar.Battles` | Tactical state, planning, actions, aftermath, and replay. |
+| `OnlyWar.Campaign.*` | `OnlyWar.Campaign` | Campaign policy, turn orchestration, narrative projection, and campaign compatibility adapters. |
+| `OnlyWar.Generation.*` | `OnlyWar.Generation` | Initial-world, chapter, scenario, and authored generation. |
+| `OnlyWar.Medical.*` | `OnlyWar.Medical` | Headless medical and readiness policy. |
+| `OnlyWar.Operations.*` | `OnlyWar.Operations` | Mission, order, personnel, strategic-combat, and operational-turn policy. |
+| `OnlyWar.Persistence.*` | `OnlyWar.Persistence` | SQLite, save/load, game-state, rules, and storage adapters. |
+| `OnlyWar.Runtime.*` | `OnlyWar.Runtime` | Factories, deterministic randomness, naming, logging, IDs, and world geometry. |
+| `OnlyWar.Application.*` | `OnlyWar.Application` | Session lifetime, detached queries, UI-facing application contracts, and composition. |
+| `OnlyWar.*Abstractions` | Matching abstraction module | Public cross-module ports and boundary records stay beside their owning abstraction. |
+| `OnlyWar.Host.*` / `OnlyWar.Scenes.*` | `OnlyWarGodot` | Godot host composition and presentation only. |
+
+The retired broad roots are `OnlyWar.Models`, `OnlyWar.Helpers`, `OnlyWar.Builders`, and
+`OnlyWar.Contracts`. A source scanner in
+`OnlyWar.Tests/Architecture/NamespaceOwnershipEnforcementTests.cs` rejects new production
+declarations or imports from those roots. The only allowed legacy namespace is the explicitly
+listed `OnlyWar.Helpers` medical facade in `Modules/OnlyWar.Medical/Compatibility`; the runtime
+name-generator facade and Operations type-forwarders are likewise isolated under their owning
+module's `Compatibility` directory. These are compatibility surfaces for existing external/save
+consumers, not places for new production types.
 
 Service-dependent models remain in Campaign: Faction/Unit/Squad/PlayerSoldier and the
 planet graph still contain campaign policy, posting/order calls and global-ID behavior;
@@ -129,8 +184,45 @@ Intrinsic health/equipment operations moved down; soldier-dependent casualty eva
 stays with the battle implementation. This is an intermediate build seam, not completion
 of the subsystem or shared-mutation boundaries.
 
-The directory families below describe logical organization inside their owning project;
-consult the manifest for an exact source location.
+### 2.1 Contract and friend boundaries
+
+The `Modules/*Abstractions` projects are the owners of public cross-module boundaries: shared identity
+and RNG primitives in `OnlyWar.Abstractions`; session, detached command/preflight/filter and medical
+choice values in `OnlyWar.Application.Abstractions`; tactical facts/results and battle ports in
+`OnlyWar.Battles.Abstractions`; generation ports in `OnlyWar.Generation.Abstractions`; readiness and
+care facts in `OnlyWar.Medical.Abstractions`; personnel, order, mission and outcome ports in
+`OnlyWar.Operations.Abstractions`; provider-neutral persistence primitives in
+`OnlyWar.Persistence.Abstractions`; and runtime construction values in `OnlyWar.Runtime.Abstractions`.
+These projects do not depend on implementation assemblies, and their direct references are checked by
+the architecture test's exact acyclic matrix.
+
+The `OnlyWar.Application/Queries/*Contracts.cs` files and their adjacent query-model graph are
+composition-root-only contracts. They are public because `OnlyWarGodot` and Host presentation compose
+against them, but no Campaign or subsystem implementation consumes them; moving one file alone would
+only split an application-owned view graph. Campaign's `TurnResolutionResult` and Operations'
+aggregate-backed `MissionContext` are treated the same way: they remain compatibility/composition
+surfaces until their entire aggregate graph can be detached without introducing a new shared hub.
+
+Operations' neutral mission debrief and structured outcome values are the exception: they are consumed
+by Application and now live in `OnlyWar.Operations.Abstractions`. Their historical namespaces remain
+source-compatible, and `OnlyWar.Operations` contains type-forwarders for existing binary consumers.
+Readiness diagnostics used only by Operations' mission sequencing are internal implementation details.
+
+All remaining friend access is a test-only seam: the implementation assemblies with tested internal
+seams (`Application`, `Battles`, `Campaign`, `Domain`, `Generation`, `Operations`, and `Persistence`)
+and the Godot host grant only `OnlyWar.Tests`; `Medical` and `Runtime` now expose no friend assembly,
+and abstraction assemblies grant none. `OnlyWar.HeadlessTests` uses public contracts and receives no
+friend grant. There is no Campaign→Application friend relationship. The allowlist is checked both
+from project metadata and from the headless assembly reflection test.
+
+The old centralized `OnlyWar.Contracts` project is retired and must not return. The placement test
+requires implementation `Contracts` directories to remain empty, permits only the documented
+Application query contract files outside abstraction projects, and rejects the old namespace/project.
+
+The directory families below describe historical logical organization inside their owning project;
+they are retained for low-risk file moves only. Namespace ownership is authoritative, and new files
+should use the namespace map above rather than extending a `Helpers`, `Models`, or `Builders`
+namespace.
 
 ```
 /Assets                   Textures, icons, audio
@@ -1989,8 +2081,9 @@ activity and which battles may be reviewed; `ConstructionReportBuilder`,
 `MissionReportHeadlineBuilder`, `MissionReportSummaryBuilder`, `NpcMissionReportBuilder`,
 `ReconOperationReportBuilder` and `LastTurnReportSnapshotBuilder` moved to
 `Modules/OnlyWar.Application/Queries/` with it. `EndOfTurnDialogController` now only renders a
-`TurnReportView`, opens the debrief and hands a `BattleHistory` to Battle Review;
-`MissionDebriefLineGrouper` and `BattleReplaySummaryBuilder` remain host presentation.
+`TurnReportView`, opens the debrief by opaque replay id and asks the application for the detached
+Battle Review display; `MissionDebriefLineGrouper` and `BattleReplaySummaryBuilder` remain host
+presentation.
 `MainScreenApplicationTests` cover the header, startup, the stale-token refusals for the brief, the
 turn and placement, the saved/empty report, a detached-boundary audit and source audits that the
 dialog no longer names a mission and the scene no longer resolves those facts itself.
@@ -2027,7 +2120,11 @@ boundary. Every screen projection now passes the recruitment program and operati
 its parameter: `BuildBattleSnapshot`, the last caller, renders a historical battle formation and has
 no live force to be given, so it now simply passes none. The former singleton has no remaining
 production references; debug bootstraps create and configure a `CampaignApplication` explicitly.
-`Scenes/BattleMap` is an empty stub and carries no campaign access.
+`Scenes/BattleMap` is an empty stub and carries no campaign access. Battle Review has one explicit
+host projection exception: `BattleReplaySummaryBuilder` is the composition adapter that consumes
+the concrete battle replay, traverses its snapshots and actions, and immediately emits detached
+`BattleReplayDisplay` and map data. No Scene names those replay types; the architecture tests allow
+that one file and reject the same access everywhere else.
 
 The Operations personnel capability is composed by `CampaignApplication`'s constructor rather than
 as a side effect of first use, with `TestPersonnelComposition` as the test assembly's equivalent;

@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Battles.Aftermath
 {
     internal static class BattleAftermathPolicyFactory
     {

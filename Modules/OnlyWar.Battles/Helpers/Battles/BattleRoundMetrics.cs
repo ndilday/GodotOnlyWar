@@ -1,10 +1,10 @@
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Battles.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Battle-scoped owner of the recent round histories used by force-level decisions and of the

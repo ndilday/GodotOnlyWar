@@ -1,11 +1,11 @@
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Domain.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     public sealed class RatingDataAccess
     {
@@ -75,7 +75,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         /// <summary>
         /// Loads the data-owned mapping from gameplay capabilities to open-ended
         /// rating keys. Older rules databases predate this table and receive the
-        /// shipped default mapping in <see cref="Models.GameRulesData"/>.
+        /// shipped default mapping in <see cref="OnlyWar.Domain.GameRulesData"/>.
         /// </summary>
         public IReadOnlyList<RatingConsumerAssignment> GetRatingConsumerAssignments(
             IDbConnection connection)

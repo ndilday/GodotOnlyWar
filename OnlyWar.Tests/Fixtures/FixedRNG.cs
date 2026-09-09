@@ -1,4 +1,4 @@
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
 
 namespace OnlyWar.Tests.Fixtures;
 

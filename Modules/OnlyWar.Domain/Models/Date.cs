@@ -1,5 +1,5 @@
-﻿using System;
-namespace OnlyWar.Models
+using System;
+namespace OnlyWar.Domain
 {
     [Serializable]
     public class Date : IComparable

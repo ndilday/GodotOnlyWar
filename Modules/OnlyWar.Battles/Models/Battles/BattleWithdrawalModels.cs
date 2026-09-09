@@ -1,9 +1,9 @@
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain.Orders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Battles
+namespace OnlyWar.Battles.Models
 {
     public enum BattleSide
     {

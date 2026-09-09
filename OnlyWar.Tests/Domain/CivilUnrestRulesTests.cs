@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Simulation;
+using OnlyWar.Campaign.Simulation;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

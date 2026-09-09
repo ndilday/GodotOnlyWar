@@ -1,13 +1,13 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Campaign.Events
 {
     public sealed class CampaignEventRecorder
     {

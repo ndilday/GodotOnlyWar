@@ -1,10 +1,10 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     // What ONE enemy faction is doing to find an intruder on the ground it holds, kept split into the
     // three things it can be doing at once. A faction can watch (sensors and informants), sweep

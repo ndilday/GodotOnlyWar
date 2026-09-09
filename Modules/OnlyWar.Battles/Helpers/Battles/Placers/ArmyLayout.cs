@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles.Placers
+namespace OnlyWar.Battles.Placers
 {
     public class ArmyLayout
     {
@@ -39,23 +39,23 @@ namespace OnlyWar.Helpers.Battles.Placers
 
             foreach(BattleSquad squad in squads)
             {
-                Models.Squads.SquadTemplate template = squad.Squad?.SquadTemplate;
+                OnlyWar.Domain.Squads.SquadTemplate template = squad.Squad?.SquadTemplate;
                 if (squad.Traits.IsHeadquarters
-                    || (template?.SquadType & Models.Squads.SquadTypes.HQ)
-                            == Models.Squads.SquadTypes.HQ)
+                    || (template?.SquadType & OnlyWar.Domain.Squads.SquadTypes.HQ)
+                            == OnlyWar.Domain.Squads.SquadTypes.HQ)
                 {
                     hqSquads.Add(squad);
                 }
                 // later, scouts will get to deploy closer to the enemy
-                else if ((template?.SquadType & Models.Squads.SquadTypes.Fast)
-                            == Models.Squads.SquadTypes.Fast ||
-                        (template?.SquadType & Models.Squads.SquadTypes.Scout)
-                            == Models.Squads.SquadTypes.Scout)
+                else if ((template?.SquadType & OnlyWar.Domain.Squads.SquadTypes.Fast)
+                            == OnlyWar.Domain.Squads.SquadTypes.Fast ||
+                        (template?.SquadType & OnlyWar.Domain.Squads.SquadTypes.Scout)
+                            == OnlyWar.Domain.Squads.SquadTypes.Scout)
                 {
                     fastSquads.Add(squad);
                 }
-                else if ((template?.SquadType & Models.Squads.SquadTypes.Heavy)
-                            == Models.Squads.SquadTypes.Heavy)
+                else if ((template?.SquadType & OnlyWar.Domain.Squads.SquadTypes.Heavy)
+                            == OnlyWar.Domain.Squads.SquadTypes.Heavy)
                 {
                     heavySquads.Add(squad);
                 }

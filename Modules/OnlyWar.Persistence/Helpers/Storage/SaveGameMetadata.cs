@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 
-namespace OnlyWar.Helpers.Storage
+namespace OnlyWar.Persistence.Storage
 {
     internal sealed class SaveGameMetadata
     {

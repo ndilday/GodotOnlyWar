@@ -1,6 +1,6 @@
-﻿using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Linq;
 

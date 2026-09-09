@@ -1,13 +1,12 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Strategy;
+namespace OnlyWar.Operations.Strategy;
 
 /// <summary>
 /// Belief-backed and detached-fixture threat queries used by faction planning policies.

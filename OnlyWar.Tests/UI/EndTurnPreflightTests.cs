@@ -1,15 +1,15 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Settings;
-using OnlyWar.Helpers.Command;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Campaign.Settings;
+using OnlyWar.Campaign.Command;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using System;
 using System.Collections.Generic;
@@ -385,7 +385,7 @@ public class EndTurnPreflightTests
         lender.AddSquadMember(lent);
         campaign.RootUnit.AddSquad(lender);
         GetOrAddPlayerRegionFaction(campaign, campaign.Region).LandedSquads.Add(lender);
-        OnlyWar.Helpers.Orders.OrderAttachment.Attach(lent, order, new MedicalReadinessDecisions());
+        OnlyWar.Operations.Orders.OrderAttachment.Attach(lent, order, new MedicalReadinessDecisions());
 
         EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
             campaign.Sector,

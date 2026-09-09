@@ -1,8 +1,8 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     /// <summary>
     /// Reads data-owned planet-template eligibility assignments. Generation contexts remain

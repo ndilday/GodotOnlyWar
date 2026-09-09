@@ -1,13 +1,13 @@
-using OnlyWar.Models;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Missions.Ambush;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Missions.Ambush;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Orders
+namespace OnlyWar.Operations.Orders
 {
     // One player order aimed at a given region, plus the display strings both the Region Ops
     // dossier and the Planet Detail context panel render for it. Kept as a shared model so the

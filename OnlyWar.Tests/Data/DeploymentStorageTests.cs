@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Helpers.Storage;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Persistence.Storage;
 using System;
 using System.IO;
 using Xunit;

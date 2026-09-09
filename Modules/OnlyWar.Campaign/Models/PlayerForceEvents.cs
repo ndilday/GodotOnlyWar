@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-namespace OnlyWar.Models;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+namespace OnlyWar.Campaign.Events;
 
 /// <summary>Campaign event policy and recorder lifetime, outside shared campaign data.</summary>
 public static class PlayerForceEvents

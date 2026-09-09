@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using Attribute = OnlyWar.Models.Soldiers.Attribute;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using Attribute = OnlyWar.Domain.Soldiers.Attribute;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     /// <summary>
     /// Computes soldier ratings and applies rating-driven awards from data-driven

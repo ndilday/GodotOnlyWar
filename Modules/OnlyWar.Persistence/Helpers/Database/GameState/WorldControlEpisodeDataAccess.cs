@@ -1,9 +1,9 @@
-using OnlyWar.Helpers.Database;
-using OnlyWar.Models.Events;
+using OnlyWar.Persistence.Database;
+using OnlyWar.Domain.Events;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     internal sealed class WorldControlEpisodeDataAccess
     {

@@ -1,8 +1,8 @@
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public interface ISoldier : ICloneable
     {

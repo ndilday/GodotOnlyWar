@@ -1,16 +1,16 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Models.Units;
-using OnlyWar.Helpers.Extensions;
+using OnlyWar.Runtime.Factories;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain.Extensions;
 
-namespace OnlyWar.Helpers.Missions.Ambush
+namespace OnlyWar.Operations.Missions.Ambush
 {
     public class PerformAmbushMissionStep : IMissionStep
     {

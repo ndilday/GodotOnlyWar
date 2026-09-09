@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace OnlyWar.Helpers.Recruitment
+namespace OnlyWar.Campaign.Recruitment
 {
     public static class RecruitmentRateFormatter
     {

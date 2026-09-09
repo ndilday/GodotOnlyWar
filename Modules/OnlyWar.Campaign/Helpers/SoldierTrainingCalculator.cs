@@ -1,12 +1,12 @@
-﻿using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public class SoldierTrainingCalculator : ISoldierTrainingService
     {

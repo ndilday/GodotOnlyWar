@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public enum TrainingTargetType
     {

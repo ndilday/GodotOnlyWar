@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Models;
 using Xunit;
 
 namespace OnlyWar.Tests.Battles;

@@ -1,6 +1,6 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign.Medical
 {
     public sealed record ReplacementOption(
         int HitLocationId,

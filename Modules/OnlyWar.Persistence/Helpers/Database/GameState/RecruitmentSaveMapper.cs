@@ -1,10 +1,10 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
 using System;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     public static class RecruitmentSaveMapper
     {

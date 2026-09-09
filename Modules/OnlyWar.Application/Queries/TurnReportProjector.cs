@@ -1,14 +1,15 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,7 +33,8 @@ internal static class TurnReportProjector
         IEnumerable<GovernorRequestReport> governorRequestReports = null,
         RecruitmentTurnReport recruitmentReport = null,
         IEnumerable<CampaignEvent> campaignEvents = null,
-        CampaignIdentity campaignIdentity = null)
+        CampaignIdentity campaignIdentity = null,
+        Func<IBattleReplay, Guid?> replayIdFactory = null)
     {
         List<EndOfTurnReportEntry> entries = [];
         HashSet<MissionContext> reportedContexts = [];
@@ -52,11 +54,11 @@ internal static class TurnReportProjector
                 {
                     reportedContexts.Add(element);
                 }
-                entries.Add(BuildPlayerReconEntry(orderElements));
+                entries.Add(BuildPlayerReconEntry(orderElements, replayIdFactory));
                 continue;
             }
 
-            EndOfTurnReportEntry entry = BuildMissionEntry(context);
+            EndOfTurnReportEntry entry = BuildMissionEntry(context, replayIdFactory);
             if (entry != null)
             {
                 entries.Add(entry);
@@ -224,7 +226,8 @@ internal static class TurnReportProjector
     }
 
     private static EndOfTurnReportEntry BuildPlayerReconEntry(
-        IReadOnlyList<MissionContext> elementContexts)
+        IReadOnlyList<MissionContext> elementContexts,
+        Func<IBattleReplay, Guid?> replayIdFactory)
     {
         MissionContext first = elementContexts[0];
         Mission mission = first.Order.Mission;
@@ -243,12 +246,13 @@ internal static class TurnReportProjector
             region?.Name,
             region?.Planet?.Name);
         ReconOperationReport report = ReconOperationReportBuilder.Build(elementContexts, location);
-        IReadOnlyList<MissionDebriefLine> lines = elementContexts
+        IReadOnlyList<MissionDebriefLineView> lines = elementContexts
             .SelectMany(context => context.DebriefLines.Count > 0
                 ? context.DebriefLines
                 : context.Log.Select(line => new MissionDebriefLine(line)))
             .OrderBy(line => line.Day ?? ushort.MaxValue)
             .ThenBy(line => line.SquadName)
+            .Select(line => ProjectDebriefLine(line, replayIdFactory))
             .ToList();
 
         return new EndOfTurnReportEntry(
@@ -260,7 +264,9 @@ internal static class TurnReportProjector
             lines);
     }
 
-    private static EndOfTurnReportEntry BuildMissionEntry(MissionContext context)
+    private static EndOfTurnReportEntry BuildMissionEntry(
+        MissionContext context,
+        Func<IBattleReplay, Guid?> replayIdFactory)
     {
         Mission mission = context.Order?.Mission;
         Region region = mission?.RegionFaction?.Region;
@@ -288,9 +294,12 @@ internal static class TurnReportProjector
                 + MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(classification)
                 + MissionReportSummaryBuilder.BuildFieldCareLine(classification);
             string outcomeStatus = MissionReportSummaryBuilder.BuildOutcomeStatus(classification);
-            IReadOnlyList<MissionDebriefLine> lines = context.DebriefLines.Count > 0
+            IReadOnlyList<MissionDebriefLine> sourceLines = context.DebriefLines.Count > 0
                 ? context.DebriefLines
                 : context.Log.Select(line => new MissionDebriefLine(line)).ToList();
+            IReadOnlyList<MissionDebriefLineView> lines = sourceLines
+                .Select(line => ProjectDebriefLine(line, replayIdFactory))
+                .ToList();
 
             return new EndOfTurnReportEntry(
                 missionTypeName, subtitle, summary, true, outcomeStatus, lines);
@@ -329,14 +338,47 @@ internal static class TurnReportProjector
         List<MissionDebriefLine> battleLines = context.DebriefLines.Where(line => line.HasBattle).ToList();
         bool canOpenDebrief = playerForcesEngaged && battleLines.Count > 0;
         string engagementStatus = canOpenDebrief ? "ENGAGEMENT REPORT" : "";
-        IReadOnlyList<MissionDebriefLine> debriefLines = canOpenDebrief
-            ? battleLines
-            : Array.Empty<MissionDebriefLine>();
+        IReadOnlyList<MissionDebriefLineView> debriefLines = canOpenDebrief
+            ? battleLines.Select(line => ProjectDebriefLine(line, replayIdFactory)).ToList()
+            : Array.Empty<MissionDebriefLineView>();
 
         return new EndOfTurnReportEntry(
             report.Title, report.Subtitle, report.Summary, canOpenDebrief, engagementStatus, debriefLines,
             isEnemyActivity: true);
     }
+
+    private static MissionDebriefLineView ProjectDebriefLine(
+        MissionDebriefLine line,
+        Func<IBattleReplay, Guid?> replayIdFactory)
+    {
+        BattleDebriefView report = line.BattleReport == null
+            ? null
+            : new BattleDebriefView(
+                line.BattleReport.PlayerDeaths,
+                line.BattleReport.OpposingDeaths,
+                line.BattleReport.PlayerCasualties.Select(ProjectCasualty).ToArray(),
+                line.BattleReport.PlayerIncapacitated);
+        Guid? replayId = line.BattleHistory == null || replayIdFactory == null
+            ? null
+            : replayIdFactory(line.BattleHistory);
+        return new MissionDebriefLineView(line.Text, replayId, report, line.Day, line.SquadName);
+    }
+
+    private static BattleCasualtyView ProjectCasualty(BattleCasualtyEntry casualty) =>
+        new(
+            casualty.SoldierId,
+            casualty.Name,
+            casualty.Rank,
+            casualty.Squad,
+            casualty.Company,
+            casualty.Disposition switch
+            {
+                BattleCasualtyDisposition.Dead => BattleCasualtyDispositionView.Dead,
+                BattleCasualtyDisposition.Incapacitated => BattleCasualtyDispositionView.Incapacitated,
+                BattleCasualtyDisposition.ReplacementRequired => BattleCasualtyDispositionView.ReplacementRequired,
+                _ => BattleCasualtyDispositionView.Recovering
+            },
+            casualty.RecoveryWeeks);
 
     // No debrief to open: construction has no narrative log, and everything the player needs (the
     // levels, the week's output, and the projection to the next visible rating) is in the summary.

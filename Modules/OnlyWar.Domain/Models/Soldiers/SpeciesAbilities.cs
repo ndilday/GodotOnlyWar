@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     /// <summary>
     /// Engine-interpreted special capabilities a species may possess. Stored as a

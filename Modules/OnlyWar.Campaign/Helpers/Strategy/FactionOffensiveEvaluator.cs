@@ -1,15 +1,15 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Models;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Domain;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Strategy;
+namespace OnlyWar.Campaign.Strategy;
 
 /// <summary>
 /// Discovers and scores the offensive opportunities available to a faction on one planet.

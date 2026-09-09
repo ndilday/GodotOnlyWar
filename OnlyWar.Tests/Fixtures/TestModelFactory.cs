@@ -1,8 +1,8 @@
 using System;
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Tests.Fixtures;
 

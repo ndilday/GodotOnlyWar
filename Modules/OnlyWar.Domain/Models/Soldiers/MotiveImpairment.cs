@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     /// <summary>
     /// Tunables for graded casualty effects (Design/Reference/CasualtyRealism.md §2.1, §3.3).

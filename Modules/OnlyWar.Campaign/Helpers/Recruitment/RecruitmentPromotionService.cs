@@ -2,17 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
-using OnlyWar.Builders;
+using OnlyWar.Generation.World;
 using OnlyWar.Application.Abstractions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Helpers.Recruitment
+namespace OnlyWar.Campaign.Recruitment
 {
     public sealed record RecruitmentPromotionResult(
         bool Succeeded,
@@ -287,7 +287,7 @@ namespace OnlyWar.Helpers.Recruitment
         public static bool IsReservedForProcedure(
             RecruitmentProgram program,
             int soldierId) =>
-            OnlyWar.Helpers.Readiness.ReadinessReservations.IsReserved(program, soldierId);
+            OnlyWar.Medical.Readiness.ReadinessReservations.IsReserved(program, soldierId);
 
         private static int CountReservedSeats(
             RecruitmentProgram program,

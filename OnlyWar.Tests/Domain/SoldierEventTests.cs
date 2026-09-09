@@ -1,5 +1,5 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

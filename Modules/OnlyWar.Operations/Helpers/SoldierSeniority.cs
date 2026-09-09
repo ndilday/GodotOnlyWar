@@ -1,10 +1,10 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Operations.Personnel
 {
     // The single definition of "who is senior to whom": rank first, then subrank (which separates
     // roles sharing a Rank — a Veteran Sergeant outranks a plain Sergeant at Rank 5), then tenure,

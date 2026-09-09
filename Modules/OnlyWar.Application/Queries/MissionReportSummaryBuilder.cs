@@ -1,7 +1,7 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Missions;
 using System.Collections.Generic;
 
 namespace OnlyWar.Application

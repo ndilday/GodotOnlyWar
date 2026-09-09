@@ -1,10 +1,11 @@
-﻿using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
+using OnlyWar.Domain.Identity;
 
-namespace OnlyWar.Models.Fleets
+namespace OnlyWar.Domain.Fleets
 {
     public enum FleetTravelPhase
     {
@@ -148,7 +149,7 @@ namespace OnlyWar.Models.Fleets
             Planet = null;
             Origin = null;
             TravelPhase = FleetTravelPhase.InWarp;
-            TravelWeeksRemaining = Math.Max(1, travelWeeks);
+            TravelWeeksRemaining = System.Math.Max(1, travelWeeks);
             CurrentPhaseWeeksRemaining = TravelWeeksRemaining;
             WarpSubjectiveWeeks = 0;
             WarpObjectiveWeeks = TravelWeeksRemaining;
@@ -185,7 +186,7 @@ namespace OnlyWar.Models.Fleets
             WarpObjectiveWeeks = route.ObjectiveWarpWeeks;
             WarpSubjectiveTrainingApplied = false;
             TravelWeeksRemaining = SystemTransitWeeksPerEnd
-                + Math.Max(1, (int)Math.Ceiling(WarpObjectiveWeeks))
+                + System.Math.Max(1, (int)System.Math.Ceiling(WarpObjectiveWeeks))
                 + SystemTransitWeeksPerEnd;
         }
 
@@ -205,7 +206,7 @@ namespace OnlyWar.Models.Fleets
                     if (CurrentPhaseWeeksRemaining <= 0)
                     {
                         TravelPhase = FleetTravelPhase.InWarp;
-                        CurrentPhaseWeeksRemaining = Math.Max(1, (int)Math.Ceiling(WarpObjectiveWeeks));
+                        CurrentPhaseWeeksRemaining = System.Math.Max(1, (int)System.Math.Ceiling(WarpObjectiveWeeks));
                     }
                     break;
                 case FleetTravelPhase.InWarp:

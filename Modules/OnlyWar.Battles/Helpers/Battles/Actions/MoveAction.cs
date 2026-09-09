@@ -1,7 +1,7 @@
-﻿using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 using System;
 
-namespace OnlyWar.Helpers.Battles.Actions
+namespace OnlyWar.Battles.Actions
 {
     public class MoveAction : IAction
     {

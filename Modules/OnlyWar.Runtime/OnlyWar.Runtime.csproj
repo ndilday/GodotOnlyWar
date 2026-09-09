@@ -8,8 +8,6 @@
     <ProjectReference Include="../OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Runtime.Abstractions/OnlyWar.Runtime.Abstractions.csproj" />
     <Using Include="OnlyWar.Abstractions" />
-    <InternalsVisibleTo Include="OnlyWar.Tests" />
-    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Models/Soldiers/Names/given_names.txt" LogicalName="OnlyWar.SoldierNames.Given" />

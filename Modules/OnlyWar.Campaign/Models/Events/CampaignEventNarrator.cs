@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Campaign.Events
 {
     public static class CampaignEventNarrator
     {

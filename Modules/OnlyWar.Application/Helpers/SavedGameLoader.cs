@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Helpers.Narrative;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Campaign.Narrative;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Application.Storage
 {
     /// <summary>
     /// Rebuilds the in-memory <see cref="Sector"/> from a loaded <see cref="GameStateDataBlob"/>.
@@ -77,7 +77,7 @@ namespace OnlyWar.Helpers
                 army,
                 fleet);
             playerForce.CampaignIdentity = gameState.CampaignIdentity
-                ?? OnlyWar.Models.Events.CampaignIdentity.Empty;
+                ?? OnlyWar.Domain.Events.CampaignIdentity.Empty;
             foreach (var @event in gameState.CampaignEventLedger?.Events ?? [])
             {
                 playerForce.CampaignEventLedger.Append(@event);
@@ -147,7 +147,7 @@ namespace OnlyWar.Helpers
             if (playerForce.RecruitmentProgram != null)
             {
                 playerForce.RecruitmentProgram.TaskOrder = sector.Orders.Values.FirstOrDefault(order =>
-                    order.Mission?.MissionType == Models.Missions.MissionType.Recruitment
+                    order.Mission?.MissionType == OnlyWar.Domain.Missions.MissionType.Recruitment
                     && order.OwnerFaction == playerForce.Faction);
             }
             return sector;
@@ -373,9 +373,9 @@ namespace OnlyWar.Helpers
         private static void ValidateSquadLineageInvariants(PlayerForce force)
         {
             force.Army.PopulateSquadMap();
-            List<OnlyWar.Models.Squads.Squad> squads = force.Army.OrderOfBattle
+            List<OnlyWar.Domain.Squads.Squad> squads = force.Army.OrderOfBattle
                 .GetAllSquads().ToList();
-            foreach (OnlyWar.Models.Squads.Squad squad in squads.Where(squad => squad.Members.Count == 0))
+            foreach (OnlyWar.Domain.Squads.Squad squad in squads.Where(squad => squad.Members.Count == 0))
             {
                 if (squad.CurrentOrders != null || squad.BoardedLocation != null || squad.CurrentRegion != null)
                 {

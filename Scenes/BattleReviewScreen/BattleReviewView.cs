@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Models.Battles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -202,14 +201,11 @@ public partial class BattleReviewView : DialogView
         string nodeKey = BuildForceNodeKey(node, parentKey);
         bool hasChildren = node.Children.Count > 0;
         bool isCollapsed = hasChildren && _collapsedForceNodes.Contains(nodeKey);
-        if (!hasChildren && node.FormationId.HasValue && node.SquadSnapshot != null)
+        if (!hasChildren && node.FormationId.HasValue && node.SquadRow != null)
         {
             SquadRowView squadRow = new();
             squadRow.SetIndent(depth * 8);
-            squadRow.Configure(new SquadRowViewModelBuilder().BuildBattleSnapshot(
-                node.SquadSnapshot,
-                node.StartingStrength,
-                node.CurrentStrength));
+            squadRow.Configure(node.SquadRow);
             squadRow.SetSelected(node.IsSelected);
             squadRow.RowSelected += (_, _) => FormationSelected?.Invoke(
                 this, node.FormationId.Value);

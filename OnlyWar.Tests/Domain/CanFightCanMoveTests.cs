@@ -1,5 +1,5 @@
 using System.Linq;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

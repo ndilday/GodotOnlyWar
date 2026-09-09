@@ -1,12 +1,13 @@
 using OnlyWar.Application;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Reports;
-using OnlyWar.Models.Supply;
-using OnlyWar.Models.Events;
+using OnlyWar.Battles;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Reports;
+using OnlyWar.Domain.Supply;
+using OnlyWar.Domain.Events;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,7 +20,10 @@ namespace OnlyWar.Application
     /// </summary>
     internal static class LastTurnReportSnapshotBuilder
     {
-        internal static LastTurnReportBuildResult Build(Date resolvedDate, TurnResolutionResult result)
+        internal static LastTurnReportBuildResult Build(
+            Date resolvedDate,
+            TurnResolutionResult result,
+            Func<IBattleReplay, Guid?> replayIdFactory = null)
         {
             if (result == null)
             {
@@ -36,7 +40,8 @@ namespace OnlyWar.Application
                 result.GovernorRequestReports,
                 result.RecruitmentReport,
                 result.CampaignEvents,
-                result.CampaignIdentity);
+                result.CampaignIdentity,
+                replayIdFactory);
         }
 
         internal static LastTurnReportBuildResult Build(
@@ -49,7 +54,8 @@ namespace OnlyWar.Application
             IEnumerable<GovernorRequestReport> governorRequestReports = null,
             RecruitmentTurnReport recruitmentReport = null,
             IEnumerable<CampaignEvent> campaignEvents = null,
-            CampaignIdentity campaignIdentity = null)
+            CampaignIdentity campaignIdentity = null,
+            Func<IBattleReplay, Guid?> replayIdFactory = null)
         {
             List<EndOfTurnReportEntry> presentationEntries = TurnReportProjector.BuildReportEntries(
                 (missionContexts ?? Enumerable.Empty<MissionContext>()).ToList(),
@@ -60,7 +66,8 @@ namespace OnlyWar.Application
                 governorRequestReports,
                 recruitmentReport,
                 campaignEvents,
-                campaignIdentity);
+                campaignIdentity,
+                replayIdFactory);
 
             LastTurnReportSnapshot snapshot = BuildSnapshot(resolvedDate, presentationEntries);
             return new LastTurnReportBuildResult(snapshot, presentationEntries);
@@ -108,18 +115,16 @@ namespace OnlyWar.Application
                 debrief);
         }
 
-        private static LastTurnDebriefLineSnapshot ToSnapshot(MissionDebriefLine line)
+        private static LastTurnDebriefLineSnapshot ToSnapshot(MissionDebriefLineView line)
         {
-            BattleHistory history = line.BattleHistory as BattleHistory;
-            BattleDebriefReport report = line.BattleReport
-                ?? (history == null ? null : BattleDebriefReportBuilder.Build(history));
+            BattleDebriefView report = line.BattleReport;
             BattleSummarySnapshot battleSummary = report == null
                 ? null
                 : new BattleSummarySnapshot(
                     report.PlayerDeaths,
                     report.OpposingDeaths,
                     report.PlayerIncapacitated,
-                    report.PlayerCasualties.Select(ToSnapshot).ToList());
+                    report.Casualties.Select(ToSnapshot).ToList());
 
             return new LastTurnDebriefLineSnapshot(
                 line.Text,
@@ -128,7 +133,7 @@ namespace OnlyWar.Application
                 battleSummary);
         }
 
-        private static BattleCasualtySnapshot ToSnapshot(BattleCasualtyEntry casualty) =>
+        private static BattleCasualtySnapshot ToSnapshot(BattleCasualtyView casualty) =>
             new(
                 casualty.SoldierId,
                 casualty.Name,
@@ -161,32 +166,32 @@ namespace OnlyWar.Application
                 entry.IsEnemyActivity);
         }
 
-        private static MissionDebriefLine ToPresentationLine(LastTurnDebriefLineSnapshot line)
+        private static MissionDebriefLineView ToPresentationLine(LastTurnDebriefLineSnapshot line)
         {
-            BattleDebriefReport battleReport = line.BattleSummary == null
+            BattleDebriefView battleReport = line.BattleSummary == null
                 ? null
-                : new BattleDebriefReport(
+                : new BattleDebriefView(
                     line.BattleSummary.PlayerDeaths,
                     line.BattleSummary.OpposingDeaths,
                     line.BattleSummary.Casualties.Select(ToPresentationCasualty).ToList(),
                     line.BattleSummary.PlayerIncapacitated);
 
-            return new MissionDebriefLine(
+            return new MissionDebriefLineView(
                 line.Text,
-                battleReport: battleReport,
-                day: line.Day,
-                squadName: line.SquadName);
+                BattleReport: battleReport,
+                Day: line.Day,
+                SquadName: line.SquadName);
         }
 
-        private static BattleCasualtyEntry ToPresentationCasualty(BattleCasualtySnapshot casualty)
+        private static BattleCasualtyView ToPresentationCasualty(BattleCasualtySnapshot casualty)
         {
-            BattleCasualtyDisposition disposition = Enum.TryParse(
+            BattleCasualtyDispositionView disposition = Enum.TryParse(
                 casualty.Disposition,
                 ignoreCase: true,
-                out BattleCasualtyDisposition parsed)
+                out BattleCasualtyDispositionView parsed)
                 ? parsed
-                : BattleCasualtyDisposition.Recovering;
-            return new BattleCasualtyEntry(
+                : BattleCasualtyDispositionView.Recovering;
+            return new BattleCasualtyView(
                 casualty.SoldierId,
                 casualty.Name,
                 casualty.Rank,

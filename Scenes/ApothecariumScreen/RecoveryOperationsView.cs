@@ -1,6 +1,5 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -183,7 +182,7 @@ public partial class RecoveryOperationsView : Control
         ledger.AddChild(name);
         ledger.AddChild(Section("INJURY LEDGER"));
         foreach (WoundLocationSummary wound in _model.Patient.Wounds
-            .Where(wound => wound.PrincipalWoundLevel != WoundLevel.None || wound.IsSevered || wound.IsCrippled || wound.IsCybernetic)
+            .Where(wound => wound.PrincipalWoundLevel != MedicalWoundLevel.None || wound.IsSevered || wound.IsCrippled || wound.IsCybernetic)
             .OrderByDescending(wound => wound.IsSevered).ThenByDescending(wound => wound.PrincipalWoundLevel))
         {
             ledger.AddChild(Info($"{wound.LocationName} — {wound.Status} — {wound.Recovery}"));

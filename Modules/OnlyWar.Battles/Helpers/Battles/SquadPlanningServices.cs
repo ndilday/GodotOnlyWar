@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Shared planning-pass read capabilities: live grid/model references, rules, lazy tracing,

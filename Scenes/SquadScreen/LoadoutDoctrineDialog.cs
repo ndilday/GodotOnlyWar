@@ -1,6 +1,6 @@
 using Godot;
 using OnlyWar.Application;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 using System;
 using System.Collections.Generic;
 

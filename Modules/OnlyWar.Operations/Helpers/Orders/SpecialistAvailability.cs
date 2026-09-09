@@ -1,16 +1,16 @@
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Operations.Readiness;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Helpers.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Extensions;
 using OnlyWar.Operations.Personnel;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Orders
+namespace OnlyWar.Operations.Orders
 {
     // The rules behind the Planetary Operations "ATTACHMENTS" roster group, extracted out of
     // PlanetaryOperationsScreenController for the same reason OrderAssignment was: a Godot partial class

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Campaign.Events
 {
     /// <summary>
     /// Idempotent Chronicle projection boundary. Standalone events compose as soon as they are

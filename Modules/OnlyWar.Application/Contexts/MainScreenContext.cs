@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Reports;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Reports;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
 namespace OnlyWar.Application;
 
@@ -31,6 +32,9 @@ internal sealed class MainScreenContext
     private readonly Date _currentDate;
     private readonly RecruitmentPromotionService _promotionService;
     private readonly Func<TurnResolutionResult> _advanceTurn;
+    private readonly BattleReplayRegistry _battleReplays = new();
+    private IBattleReplayProjector _battleReplayProjector;
+    private TurnReportView _lastTurnReport;
 
     internal MainScreenContext(
         Sector sector,
@@ -76,13 +80,33 @@ internal sealed class MainScreenContext
     }
 
     internal TurnReportView QueryLastTurnReport() =>
-        BuildReportView(_sector.PlayerForce?.LastTurnReportSnapshot);
+        _lastTurnReport ?? BuildReportView(_sector.PlayerForce?.LastTurnReportSnapshot);
+
+    internal void ConfigureBattleReplayProjector(IBattleReplayProjector projector) =>
+        _battleReplayProjector = projector ?? throw new ArgumentNullException(nameof(projector));
+
+    internal BattleReplayDisplay QueryBattleReplay(BattleReplayQuery query)
+    {
+        if (query == null || query.ReplayId == Guid.Empty
+            || _battleReplayProjector == null
+            || !_battleReplays.TryGet(query.ReplayId, out IBattleReplay replay))
+        {
+            return null;
+        }
+
+        return _battleReplayProjector.Build(
+            replay,
+            query.TurnIndex,
+            query.SelectedFormationId);
+    }
 
     internal ResolveTurnView ResolveTurn()
     {
         TurnResolutionResult result = _advanceTurn();
         LastTurnReportBuildResult build = LastTurnReportSnapshotBuilder.Build(
-            _currentDate, result);
+            _currentDate,
+            result,
+            replayIdFactory: replay => _battleReplays.Register(replay));
 
         // Replace the persisted report only after resolution and report construction both
         // succeed. A failed turn therefore leaves the previous report available to the protected
@@ -93,11 +117,14 @@ internal sealed class MainScreenContext
             force.LastTurnReportSnapshot = build.Snapshot;
         }
 
+        TurnReportView report = new(
+            FormatResolvedDate(build.Snapshot), null, build.PresentationEntries);
+        _lastTurnReport = report;
+
         return new ResolveTurnView(
             true,
             null,
-            new TurnReportView(
-                FormatResolvedDate(build.Snapshot), null, build.PresentationEntries),
+            report,
             result.ScenarioNotification,
             RequiresRecruitmentSetup());
     }

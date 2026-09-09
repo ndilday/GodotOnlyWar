@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 
 namespace OnlyWar.Application;
 

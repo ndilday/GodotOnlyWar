@@ -1,6 +1,6 @@
-using OnlyWar.Helpers.Supply;
-using OnlyWar.Models;
-using OnlyWar.Models.Supply;
+using OnlyWar.Campaign.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Supply;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

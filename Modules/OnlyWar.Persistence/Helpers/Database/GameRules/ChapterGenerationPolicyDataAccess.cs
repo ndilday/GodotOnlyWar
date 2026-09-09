@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     internal sealed class ChapterGenerationPolicyDataAccess
     {

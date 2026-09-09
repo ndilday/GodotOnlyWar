@@ -1,8 +1,8 @@
 using System;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers.Missions;
+namespace OnlyWar.Operations.Missions;
 
 /// <summary>Projects a live campaign region into the detached tactical location reference.</summary>
 public static class EngagementLocationProjection

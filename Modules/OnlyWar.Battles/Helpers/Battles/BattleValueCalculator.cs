@@ -1,10 +1,11 @@
 using System;
-using OnlyWar.Helpers;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
-using SoldierAttribute = OnlyWar.Models.Soldiers.Attribute;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Math;
+using OnlyWar.Domain.Soldiers;
+using SoldierAttribute = OnlyWar.Domain.Soldiers.Attribute;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Battles;
 
 /// <summary>
 /// Deterministic valuation of a representative soldier by replaying the tactical

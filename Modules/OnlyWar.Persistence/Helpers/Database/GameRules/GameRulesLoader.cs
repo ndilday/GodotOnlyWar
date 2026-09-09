@@ -1,6 +1,6 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 
-namespace OnlyWar.Helpers.Database.GameRules;
+namespace OnlyWar.Persistence.Database.GameRules;
 
 public static class GameRulesLoader
 {

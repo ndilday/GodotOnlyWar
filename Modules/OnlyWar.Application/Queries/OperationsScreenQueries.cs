@@ -1,21 +1,21 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.PlanetaryOperations;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Operations.Planetary;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Personnel;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -641,7 +641,7 @@ internal sealed class OperationsScreenProjector
                 MissionAvailability.GetOrderLabel(order.Mission),
                 order.AssignedSquads.Count,
                 order.AssignedCharacters.Count,
-                order.LevelOfAggression,
+                OperationsAggressionMapping.ToView(order.LevelOfAggression),
                 MissionIconKeys.ForOrder(order.Mission),
                 BuildMissionTooltip(order, all))).ToList(),
             all.Where(option => option.Kind != MissionAvailabilityKind.Special)
@@ -697,7 +697,7 @@ internal sealed class OperationsScreenProjector
             MissionAvailability.GetOrderLabel(order.Mission),
             order.AssignedSquads.Count,
             order.AssignedCharacters.Count,
-            order.LevelOfAggression,
+            OperationsAggressionMapping.ToView(order.LevelOfAggression),
             order.AssignedSquads.Select(squad =>
                 new OrderParticipantView(squad.Id, squad.Name,
                     $"Release {squad.Name} from this order.")).ToList(),

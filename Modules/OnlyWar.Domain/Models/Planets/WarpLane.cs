@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     public class WarpLane
     {

@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models.Reports;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain.Reports;
 using System.Data;
 using Xunit;
 

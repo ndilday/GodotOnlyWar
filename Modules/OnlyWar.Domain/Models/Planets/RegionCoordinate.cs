@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     /// <summary>
     /// A region's position within a planet's diamond-shaped territory grid.

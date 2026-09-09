@@ -1,18 +1,18 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Operations.Recruitment;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.PlanetaryOperations
+namespace OnlyWar.Operations.Planetary
 {
     public enum SquadEligibilityExclusion
     {

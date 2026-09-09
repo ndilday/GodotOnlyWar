@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers.Simulation;
+namespace OnlyWar.Campaign.Simulation;
 
 /// <summary>Application-owned event subscriptions for one explicit campaign and date.</summary>
 public static class CampaignEventBindings

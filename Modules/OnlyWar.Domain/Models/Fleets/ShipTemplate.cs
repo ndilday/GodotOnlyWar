@@ -1,4 +1,4 @@
-﻿namespace OnlyWar.Models.Fleets
+namespace OnlyWar.Domain.Fleets
 {
     public class BoatTemplate
     {

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Belief-backed target queries for planning and presentation. This service deliberately never

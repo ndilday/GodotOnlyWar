@@ -1,9 +1,11 @@
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Orders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Battles
+namespace OnlyWar.Battles
 {
 	public class BattleState
 	{
@@ -31,8 +33,8 @@ namespace OnlyWar.Models.Battles
 		public BattleState(IReadOnlyDictionary<int, BattleSquad> attackerSquads,
 						   IReadOnlyDictionary<int, BattleSquad> opposingSquads)
 			: this(attackerSquads, opposingSquads,
-				new BattleSideProfile(Models.Orders.Aggression.Normal, BattleRole.Attacker),
-				new BattleSideProfile(Models.Orders.Aggression.Normal, BattleRole.Defender)) { }
+				new BattleSideProfile(OnlyWar.Domain.Orders.Aggression.Normal, BattleRole.Attacker),
+				new BattleSideProfile(OnlyWar.Domain.Orders.Aggression.Normal, BattleRole.Defender)) { }
 
 		public BattleState(IReadOnlyDictionary<int, BattleSquad> attackerSquads,
 						   IReadOnlyDictionary<int, BattleSquad> opposingSquads,

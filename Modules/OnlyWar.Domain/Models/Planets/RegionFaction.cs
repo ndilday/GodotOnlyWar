@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Squads;
 
 using System;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     public class RegionFaction
     {
@@ -109,7 +109,7 @@ namespace OnlyWar.Models.Planets
         }
 
         public long DisorganizedMilitaryStrength =>
-            Math.Max(0L, MilitaryStrength - OrganizedMilitaryStrength);
+            System.Math.Max(0L, MilitaryStrength - OrganizedMilitaryStrength);
 
         // The battle value this faction's controller actually COMMITTED to holding this region in its
         // last planning pass — the assignment, as opposed to the demand.
@@ -169,12 +169,12 @@ namespace OnlyWar.Models.Planets
                 if (!_organizedMilitaryStrength.HasValue) return _legacyOrganization;
                 long total = MilitaryStrength;
                 if (total <= 0) return _legacyOrganization;
-                return Math.Clamp((int)Math.Round(
+                return System.Math.Clamp((int)System.Math.Round(
                     OrganizedMilitaryStrength * 100.0 / total), 0, 100);
             }
             set
             {
-                _legacyOrganization = Math.Clamp(value, 0, 100);
+                _legacyOrganization = System.Math.Clamp(value, 0, 100);
                 _organizedMilitaryStrength = (long)(
                     MilitaryStrength * (_legacyOrganization / 100.0));
             }
@@ -248,7 +248,7 @@ namespace OnlyWar.Models.Planets
 
         public void SetDefense(DefenseType defenseType, double value)
         {
-            value = Math.Max(0.0, value);
+            value = System.Math.Max(0.0, value);
             switch (defenseType)
             {
                 case DefenseType.Entrenchment:
@@ -281,10 +281,10 @@ namespace OnlyWar.Models.Planets
         {
             if (battleValue <= 0) return;
             EnsureOrganizedMilitaryStrength();
-            long lost = Math.Min(MilitaryStrength, battleValue);
-            long organizedAfter = Math.Max(0L, OrganizedMilitaryStrength - lost);
+            long lost = System.Math.Min(MilitaryStrength, battleValue);
+            long organizedAfter = System.Math.Max(0L, OrganizedMilitaryStrength - lost);
             RemoveRawMilitaryStrength(lost);
-            _organizedMilitaryStrength = Math.Min(MilitaryStrength, organizedAfter);
+            _organizedMilitaryStrength = System.Math.Min(MilitaryStrength, organizedAfter);
         }
 
         // Normal military casualties come from the force that actually deployed. They reduce both
@@ -293,11 +293,11 @@ namespace OnlyWar.Models.Planets
         {
             if (battleValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long lost = Math.Min(OrganizedMilitaryStrength, battleValue);
+            long lost = System.Math.Min(OrganizedMilitaryStrength, battleValue);
             if (lost <= 0) return 0;
             long organizedAfter = OrganizedMilitaryStrength - lost;
             RemoveRawMilitaryStrength(lost);
-            _organizedMilitaryStrength = Math.Min(MilitaryStrength, organizedAfter);
+            _organizedMilitaryStrength = System.Math.Min(MilitaryStrength, organizedAfter);
             return lost;
         }
 
@@ -306,11 +306,11 @@ namespace OnlyWar.Models.Planets
         {
             if (battleValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long lost = Math.Min(DisorganizedMilitaryStrength, battleValue);
+            long lost = System.Math.Min(DisorganizedMilitaryStrength, battleValue);
             if (lost <= 0) return 0;
             long organizedBefore = OrganizedMilitaryStrength;
             RemoveRawMilitaryStrength(lost);
-            _organizedMilitaryStrength = Math.Min(MilitaryStrength, organizedBefore);
+            _organizedMilitaryStrength = System.Math.Min(MilitaryStrength, organizedBefore);
             return lost;
         }
 
@@ -318,7 +318,7 @@ namespace OnlyWar.Models.Planets
         {
             if (battleValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long moved = Math.Min(DisorganizedMilitaryStrength, battleValue);
+            long moved = System.Math.Min(DisorganizedMilitaryStrength, battleValue);
             _organizedMilitaryStrength += moved;
             return moved;
         }
@@ -327,7 +327,7 @@ namespace OnlyWar.Models.Planets
         {
             if (battleValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long moved = Math.Min(OrganizedMilitaryStrength, battleValue);
+            long moved = System.Math.Min(OrganizedMilitaryStrength, battleValue);
             _organizedMilitaryStrength -= moved;
             return moved;
         }
@@ -336,7 +336,7 @@ namespace OnlyWar.Models.Planets
         // the data layer does not need reflection or a persistence-only constructor.
         public void SetOrganizedMilitaryStrength(long battleValue)
         {
-            _organizedMilitaryStrength = Math.Clamp(battleValue, 0L, MilitaryStrength);
+            _organizedMilitaryStrength = System.Math.Clamp(battleValue, 0L, MilitaryStrength);
             _legacyOrganization = Organization;
         }
 
@@ -359,7 +359,7 @@ namespace OnlyWar.Models.Planets
             long after = MilitaryStrength;
             if (after > before)
             {
-                _organizedMilitaryStrength = Math.Min(
+                _organizedMilitaryStrength = System.Math.Min(
                     after,
                     _organizedMilitaryStrength.Value + (after - before));
             }
@@ -375,11 +375,11 @@ namespace OnlyWar.Models.Planets
             if (PlanetFaction.Faction.GrowthType == GrowthType.Unrest)
             {
                 long available = Garrison + ArmedCivilians;
-                long lost = Math.Min(available, battleValue);
+                long lost = System.Math.Min(available, battleValue);
                 if (lost <= 0) return;
                 long garrisonLost = available <= 0
                     ? 0
-                    : Math.Min(Garrison, (long)Math.Round(lost * (Garrison / (double)available)));
+                    : System.Math.Min(Garrison, (long)System.Math.Round(lost * (Garrison / (double)available)));
                 long civiliansLost = lost - garrisonLost;
                 if (civiliansLost > ArmedCivilians)
                 {

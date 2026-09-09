@@ -1,11 +1,11 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Battles.Abstractions
 {
     /// <summary>
     /// Typed campaign-event boundary for player battle aftermath. The legacy aftermath sink stays

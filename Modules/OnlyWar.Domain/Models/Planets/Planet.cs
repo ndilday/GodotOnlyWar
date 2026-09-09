@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain;
 
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     // Rank of the Imperial governor seated on a planet. Derived (recomputed at build/load),
     // not persisted — see Design/Reference/OpeningScenario.md

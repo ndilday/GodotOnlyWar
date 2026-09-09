@@ -1,5 +1,6 @@
 using System.Linq;
-namespace OnlyWar.Models.Soldiers
+using OnlyWar.Domain.Soldiers;
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Classifies a soldier's post-battle condition from his body alone, so the battle aftermath,

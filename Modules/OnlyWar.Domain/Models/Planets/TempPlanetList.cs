@@ -1,4 +1,4 @@
-﻿namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     public static class TempPlanetList
     {

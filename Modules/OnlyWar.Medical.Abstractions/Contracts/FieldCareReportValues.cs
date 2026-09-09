@@ -1,7 +1,7 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Medical
+namespace OnlyWar.Medical.Abstractions
 {
     /// <summary>One brother's wound stepped down one band by an Apothecary.</summary>
     public sealed record FieldCareTreatment(

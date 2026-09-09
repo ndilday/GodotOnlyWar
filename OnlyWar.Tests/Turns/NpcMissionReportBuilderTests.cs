@@ -1,6 +1,5 @@
-﻿using OnlyWar.Helpers;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
 using System;
 using Xunit;
 

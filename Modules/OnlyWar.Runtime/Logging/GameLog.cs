@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Runtime.Logging
 {
     // Verbosity levels for GameLog, coarsest (Error) to finest (Trace). Off disables all logging.
     // Higher value = more detail; a configured MinimumLevel emits everything at that level or coarser.

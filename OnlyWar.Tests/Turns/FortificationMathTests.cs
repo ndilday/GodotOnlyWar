@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Fortifications;
+using OnlyWar.Domain.Fortifications;
 using System;
 using Xunit;
 

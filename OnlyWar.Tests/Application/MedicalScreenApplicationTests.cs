@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -61,7 +60,7 @@ public sealed class MedicalScreenApplicationTests
     {
         var application = CreateApplication(out var patient);
         var result = application.ConfirmRecovery(new(application.SessionToken, patient.Id,
-            null, RecoveryMovementChoice.DetachCasualty, -1, MedicalProcedureType.Cybernetic));
+            null, RecoveryMovementChoice.DetachCasualty, -1, MedicalProcedureChoice.Cybernetic));
         Assert.False(result.Succeeded);
         Assert.Null(patient.IndividualPosting);
         Assert.Empty(application.ActiveSession.Sector.PlayerForce.Army.MedicalProcedures);

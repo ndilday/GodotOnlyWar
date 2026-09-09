@@ -1,13 +1,13 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     public class MeetingEngagementMissionStep : IMissionStep
     {

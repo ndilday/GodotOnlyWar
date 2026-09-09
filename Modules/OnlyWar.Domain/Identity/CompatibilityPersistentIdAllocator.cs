@@ -1,7 +1,7 @@
 using System;
 using OnlyWar.Abstractions;
 
-namespace OnlyWar.Models;
+namespace OnlyWar.Domain.Identity;
 
 /// <summary>
 /// Source-compatibility allocator for the old convenience constructors. It is deliberately

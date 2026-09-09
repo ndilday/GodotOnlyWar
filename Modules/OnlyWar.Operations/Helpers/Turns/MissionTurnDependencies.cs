@@ -1,22 +1,22 @@
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Medical;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Runtime.Factories;
+
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Readiness;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.FactionBehaviors;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Turns;
+namespace OnlyWar.Operations.Turns;
 
 /// <summary>
 /// Explicit inputs and host capabilities required by the weekly mission phase. The Operations

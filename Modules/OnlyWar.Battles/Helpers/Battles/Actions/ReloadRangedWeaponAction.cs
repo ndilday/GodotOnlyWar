@@ -1,7 +1,7 @@
-﻿using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles.Actions
+namespace OnlyWar.Battles.Actions
 {
     public class ReloadRangedWeaponAction : IAction
     {

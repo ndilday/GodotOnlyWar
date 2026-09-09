@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-namespace OnlyWar.Models.Missions {
+namespace OnlyWar.Battles.Abstractions {
     // Ordered worst-first: the debrief roster sorts on this.
     public enum BattleCasualtyDisposition
     {

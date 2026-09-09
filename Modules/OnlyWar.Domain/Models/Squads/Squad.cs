@@ -1,15 +1,16 @@
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
+using OnlyWar.Domain.Identity;
 
-namespace OnlyWar.Models.Squads
+namespace OnlyWar.Domain.Squads
 {
     public class Squad : ICloneable
     {

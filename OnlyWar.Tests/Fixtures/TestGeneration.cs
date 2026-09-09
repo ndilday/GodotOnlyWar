@@ -1,9 +1,8 @@
-using OnlyWar.Builders;
+using OnlyWar.Generation.World;
 using OnlyWar.Abstractions;
 using OnlyWar.Generation.Abstractions;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Application.Adapters.Generation;
-using OnlyWar.Models;
+using OnlyWar.Domain;
+using OnlyWar.Application.Adapters.Generation;
 
 namespace OnlyWar.Tests.Fixtures;
 

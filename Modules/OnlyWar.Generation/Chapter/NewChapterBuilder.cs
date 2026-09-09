@@ -6,16 +6,15 @@ using System.Linq;
 
 using OnlyWar.Generation.Abstractions;
 using OnlyWar.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
 using OnlyWar.Runtime.Factories;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Generation.Chapter
 {
     internal static class NewChapterBuilder
     {

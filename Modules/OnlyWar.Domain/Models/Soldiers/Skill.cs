@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public enum Attribute
     {
@@ -61,7 +61,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (PointsInvested == 0 ? -4 : (float)Math.Log(PointsInvested, 2)) - BaseSkill.Difficulty;
+                return (PointsInvested == 0 ? -4 : (float)System.Math.Log(PointsInvested, 2)) - BaseSkill.Difficulty;
             }
         }
         public Skill(BaseSkill baseSkill, float points = 0)

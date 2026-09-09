@@ -4,18 +4,22 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using OnlyWar.Battles.Abstractions;
 using OnlyWar.Application;
 using OnlyWar.Application.Abstractions;
-using OnlyWar.Helpers.Simulation;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Campaign.Simulation;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -76,7 +80,7 @@ public class ModuleBoundaryEnforcementTests
         string[] allowed =
         [
             Path.Combine("Modules", "OnlyWar.Runtime", "StaticRNG.cs"),
-            Path.Combine("Modules", "OnlyWar.Runtime", "Naming", "NameGeneratorFacade.cs"),
+            Path.Combine("Modules", "OnlyWar.Runtime", "Compatibility", "NameGeneratorFacade.cs"),
             Path.Combine("Modules", "OnlyWar.Generation", "Chapter", "NewChapterBuilder.cs"),
             Path.Combine(
                 "Modules", "OnlyWar.Application", "Helpers", "Application", "Adapters", "Generation",
@@ -148,11 +152,11 @@ public class ModuleBoundaryEnforcementTests
         string scenesRoot = Path.Combine(RulesDatabaseFixture.RepositoryRoot, "Scenes");
         string[] legacyProjectionNamespaces =
         [
-            "using OnlyWar.Helpers.UI;",
-            "using OnlyWar.Helpers.PlanetaryOperations;",
-            "using OnlyWar.Helpers.Recruitment;",
-            "using OnlyWar.Models.Command;",
-            "using OnlyWar.Helpers.Turns;"
+            "using OnlyWar.Domain.UI;",
+            "using OnlyWar.Operations.Planetary;",
+            "using OnlyWar.Campaign.Recruitment;",
+            "using OnlyWar.Domain.Command;",
+            "using OnlyWar.Campaign.Turns;"
         ];
 
         string[] offenders = Directory
@@ -167,15 +171,146 @@ public class ModuleBoundaryEnforcementTests
     }
 
     [Fact]
+    public void GodotFacingSourcesDoNotReachThroughLiveCampaignOrBattleReplay()
+    {
+        string root = RulesDatabaseFixture.RepositoryRoot;
+        string replayProjection = Path.Combine(
+            "Host", "Presentation", "Battles", "BattleReplaySummaryBuilder.cs");
+        string[] forbiddenHandles =
+        [
+            "ActiveSession",
+            "BattleHistory",
+            "BattleStateSnapshot",
+            "BattleSquadSnapshot",
+            "BattleSoldierSnapshot",
+            "MissionDebriefLine",
+            "MissionContext",
+            "using OnlyWar.Battles.Models;",
+            "using OnlyWar.Domain.Missions;",
+            "using OnlyWar.Domain.Orders;",
+            "using OnlyWar.Domain.Events;",
+            "using OnlyWar.Battles.Actions;",
+            "using OnlyWar.Battles.Resolutions;"
+        ];
+
+        IEnumerable<(string Full, string Relative)> godotFacingSources =
+            Directory.EnumerateFiles(Path.Combine(root, "Scenes"), "*.cs", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(
+                    Path.Combine(root, "Host", "Presentation"), "*.cs", SearchOption.AllDirectories))
+                .Select(path => (Full: path, Relative: Path.GetRelativePath(root, path)))
+                .Where(source => !string.Equals(
+                    source.Relative, replayProjection, StringComparison.Ordinal));
+
+        string[] offenders = godotFacingSources
+            .SelectMany(source => forbiddenHandles
+                .Where(handle => handle == "MissionDebriefLine"
+                    ? Regex.IsMatch(CodeOf(source.Full), @"\bMissionDebriefLine\b")
+                    : CodeOf(source.Full).Contains(handle, StringComparison.Ordinal))
+                .Select(handle => $"{source.Relative}: {handle}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void GodotFacingModelAndHelperImportsAreConfinedToDocumentedExceptions()
+    {
+        string root = RulesDatabaseFixture.RepositoryRoot;
+        string[] allowed =
+        [
+            Path.Combine("Host", "Presentation", "Battles", "BattleReplaySummaryBuilder.cs"),
+            Path.Combine("Host", "Presentation", "UI", "SystemMenu", "SaveSlotViewModelMapper.cs"),
+            Path.Combine("Scenes", "Debug", "MainGamePreviewBootstrap.cs"),
+            Path.Combine("Scenes", "Debug", "ReleaseSceneWiringSmoke.cs"),
+            Path.Combine("Scenes", "GodotLogBridge.cs"),
+            Path.Combine("Scenes", "MainGameScreen", "MainGameScene.CampaignControls.cs"),
+            Path.Combine("Scenes", "MainGameScreen", "MainGameScene.cs"),
+            Path.Combine("Scenes", "SquadScreen", "ElementLoadoutEditorView.cs"),
+            Path.Combine("Scenes", "SquadScreen", "EquipmentLoadoutEditorView.cs"),
+            Path.Combine("Scenes", "SquadScreen", "LoadoutDoctrineDialog.cs"),
+            Path.Combine("Scenes", "SquadScreen", "SquadScreenController.cs"),
+            Path.Combine("Scenes", "SquadScreen", "SquadScreenView.cs"),
+            Path.Combine("Scenes", "StartMenu", "StartMenu.ReleaseControls.cs"),
+            Path.Combine("Scenes", "StartMenu", "StartMenu.cs")
+        ];
+        string[] moduleNamespaces =
+        [
+            "using OnlyWar.Domain",
+            "using OnlyWar.Domain",
+            "using OnlyWar.Battles",
+            "using OnlyWar.Medical",
+            "using OnlyWar.Operations"
+        ];
+
+        string[] offenders = EnumerateProductionSources()
+            .Where(source => source.Relative.StartsWith(
+                "Scenes" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || source.Relative.StartsWith(
+                    "Host" + Path.DirectorySeparatorChar + "Presentation"
+                        + Path.DirectorySeparatorChar,
+                    StringComparison.Ordinal))
+            .Where(source => ContainsAny(CodeOf(source.Full), moduleNamespaces))
+            .Select(source => source.Relative)
+            .Where(relative => !allowed.Contains(relative, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void ViewProjectionBuildersAreInstalledOnlyAtCompositionRoots()
+    {
+        string root = RulesDatabaseFixture.RepositoryRoot;
+        string mainGameScene = Path.Combine(
+            "Scenes", "MainGameScreen", "MainGameScene.cs");
+        string[] forbiddenBuilders =
+        [
+            "new SquadRowViewModelBuilder(",
+            "new BattleReplaySummaryBuilder("
+        ];
+
+        string[] offenders = Directory
+            .EnumerateFiles(Path.Combine(root, "Scenes"), "*.cs", SearchOption.AllDirectories)
+            .Select(path => (Full: path, Relative: Path.GetRelativePath(root, path)))
+            .Where(source => !string.Equals(
+                source.Relative, mainGameScene, StringComparison.Ordinal))
+            .SelectMany(source => forbiddenBuilders
+                .Where(builder => CodeOf(source.Full).Contains(builder, StringComparison.Ordinal))
+                .Select(builder => $"{source.Relative}: {builder}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void CampaignConstructionAndReplayProjectionExceptionsAreExplicit()
+    {
+        string[] allowedCampaignComposition =
+        [
+            Path.Combine("Scenes", "StartMenu", "StartMenu.cs"),
+            Path.Combine("Scenes", "StartMenu", "StartMenu.ReleaseControls.cs"),
+            Path.Combine("Scenes", "Debug", "MainGamePreviewBootstrap.cs")
+        ];
+        string[] allowedReplayComposition =
+        [Path.Combine("Scenes", "MainGameScreen", "MainGameScene.cs")];
+
+        Assert.Empty(FindOffenders("new CampaignApplication(", allowedCampaignComposition));
+        Assert.Empty(FindOffenders("new BattleReplaySummaryBuilder(", allowedReplayComposition));
+    }
+
+    [Fact]
     public void ApplicationQueryContractsDoNotDeclareLegacyPresentationNamespaces()
     {
         string queriesRoot = Path.Combine(
             RulesDatabaseFixture.RepositoryRoot, "Modules", "OnlyWar.Application", "Queries");
         string[] legacyNamespaces =
         [
-            "namespace OnlyWar.Helpers.UI",
-            "namespace OnlyWar.Helpers.PlanetaryOperations",
-            "namespace OnlyWar.Helpers"
+            "namespace OnlyWar.Domain.UI",
+            "namespace OnlyWar.Operations.Planetary",
+            "namespace OnlyWar.Domain"
         ];
 
         string[] offenders = Directory
@@ -360,7 +495,18 @@ public class ModuleBoundaryEnforcementTests
             typeof(Ship),
             typeof(Faction),
             typeof(PlayerForce),
-            typeof(Unit)
+            typeof(Unit),
+            typeof(BattleHistory),
+            typeof(BattleStateSnapshot),
+            typeof(BattleSquadSnapshot),
+            typeof(BattleSoldierSnapshot),
+            typeof(MissionDebriefLine),
+            typeof(BattleDebriefReport),
+            typeof(CampaignEventImportance),
+            typeof(RequestSeverity),
+            typeof(Aggression),
+            typeof(MedicalProcedureType),
+            typeof(WoundLevel)
         ];
 
         string[] offenders = ContractSurface(screenPorts)
@@ -457,20 +603,31 @@ public class ModuleBoundaryEnforcementTests
         IEnumerable<string> graphFiles =
             new[] { Path.Combine(repositoryRoot, "OnlyWarGodot.sln") }
             .Concat(Directory.EnumerateFiles(
-                Path.Combine(repositoryRoot, "Modules"), "*.csproj", SearchOption.TopDirectoryOnly))
+                Path.Combine(repositoryRoot, "Modules"), "*.csproj", SearchOption.AllDirectories))
             .Append(Path.Combine(repositoryRoot, "OnlyWarGodot.csproj"));
 
         Assert.DoesNotContain(graphFiles,
             path => File.Exists(path)
                 && File.ReadAllText(path).Contains("OnlyWar.Contracts", StringComparison.Ordinal));
+
+        Assert.DoesNotContain(
+            EnumerateProductionSources(),
+            source => CodeOf(source.Full).Contains("namespace OnlyWar.Contracts", StringComparison.Ordinal)
+                || CodeOf(source.Full).Contains("using OnlyWar.Contracts", StringComparison.Ordinal));
     }
 
     [Fact]
     public void CrossModuleContractsDoNotRemainInImplementationProjects()
     {
         string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
-        string[] implementationProjects =
-            ["OnlyWar.Generation", "OnlyWar.Operations", "OnlyWar.Persistence", "OnlyWar.Runtime"];
+        string modulesRoot = Path.Combine(repositoryRoot, "Modules");
+        string[] implementationProjects = Directory
+            .EnumerateFiles(modulesRoot, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !IsBuildArtifact(path))
+            .Select(path => Path.GetFileNameWithoutExtension(path))
+            .Where(project => !project.EndsWith(".Abstractions", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
         string[] contractFiles = implementationProjects
             .SelectMany(project =>
@@ -485,6 +642,208 @@ public class ModuleBoundaryEnforcementTests
             .ToArray();
 
         Assert.Empty(contractFiles);
+    }
+
+    [Fact]
+    public void ModuleProjectReferencesMatchTheApprovedAcyclicMatrix()
+    {
+        string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
+        string modulesRoot = Path.Combine(repositoryRoot, "Modules");
+        Dictionary<string, string[]> expected = ApprovedModuleReferences();
+        string[] projectFiles = Directory
+            .EnumerateFiles(modulesRoot, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !IsBuildArtifact(path))
+            .ToArray();
+
+        Dictionary<string, string[]> actual = projectFiles.ToDictionary(
+            path => Path.GetFileNameWithoutExtension(path),
+            ReadProjectReferenceNames,
+            StringComparer.Ordinal);
+
+        Assert.Equal(
+            expected.Keys.Order(StringComparer.Ordinal),
+            actual.Keys.Order(StringComparer.Ordinal));
+
+        foreach ((string project, string[] references) in expected)
+        {
+            Assert.True(actual.ContainsKey(project), $"Missing project {project}.");
+            Assert.Equal(
+                references.Order(StringComparer.Ordinal),
+                actual[project]);
+        }
+
+        Dictionary<string, int> incoming = actual.Keys
+            .ToDictionary(project => project, _ => 0, StringComparer.Ordinal);
+        foreach (string reference in actual.Values.SelectMany(references => references))
+        {
+            Assert.True(incoming.ContainsKey(reference), $"Unknown project reference {reference}.");
+            incoming[reference]++;
+        }
+
+        Queue<string> ready = new(incoming
+            .Where(pair => pair.Value == 0)
+            .Select(pair => pair.Key)
+            .Order(StringComparer.Ordinal));
+        int visited = 0;
+        while (ready.Count > 0)
+        {
+            string project = ready.Dequeue();
+            visited++;
+            foreach (string reference in actual[project])
+            {
+                incoming[reference]--;
+                if (incoming[reference] == 0) ready.Enqueue(reference);
+            }
+        }
+
+        Assert.Equal(actual.Count, visited);
+    }
+
+    [Fact]
+    public void GodotCompositionRootReferencesTheApprovedModuleSet()
+    {
+        string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
+        string[] expected =
+        [
+            "OnlyWar.Abstractions",
+            "OnlyWar.Application.Abstractions",
+            "OnlyWar.Battles.Abstractions",
+            "OnlyWar.Campaign",
+            "OnlyWar.Domain",
+            "OnlyWar.Generation.Abstractions",
+            "OnlyWar.Medical",
+            "OnlyWar.Medical.Abstractions",
+            "OnlyWar.Operations",
+            "OnlyWar.Operations.Abstractions",
+            "OnlyWar.Persistence",
+            "OnlyWar.Persistence.Abstractions",
+            "OnlyWar.Runtime",
+            "OnlyWar.Runtime.Abstractions",
+            "OnlyWar.Application",
+            "OnlyWar.Battles"
+        ];
+
+        Assert.Equal(
+            expected.Order(StringComparer.Ordinal),
+            ReadProjectReferenceNames(Path.Combine(repositoryRoot, "OnlyWarGodot.csproj")));
+    }
+
+    [Fact]
+    public void ContractPlacementHasOneExplicitCompositionRootAllowlist()
+    {
+        string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
+        string modulesRoot = Path.Combine(repositoryRoot, "Modules");
+        string[] compositionRootContracts =
+        [
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "ChapterScreenContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "FleetScreenContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "LoadoutScreenContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "MainScreenContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "MedicalScreenContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "MusterScreenContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "NavigationContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "OperationsScreenContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "SectorMapContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "SessionControlContracts.cs"),
+            Path.Combine("Modules", "OnlyWar.Application", "Queries", "SystemInspectorContracts.cs")
+        ];
+
+        string[] namedContractSources = Directory
+            .EnumerateFiles(modulesRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildArtifact(path))
+            .Where(path => Path.GetFileName(path).EndsWith(
+                "Contracts.cs", StringComparison.OrdinalIgnoreCase))
+            .Select(path => Path.GetRelativePath(repositoryRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        string[] offenders = namedContractSources
+            .Where(relative => !IsAbstractionSource(relative)
+                && !compositionRootContracts.Contains(relative, StringComparer.Ordinal))
+            .ToArray();
+
+        Assert.Empty(offenders);
+        Assert.All(compositionRootContracts, relative => Assert.True(
+            File.Exists(Path.Combine(repositoryRoot, relative)),
+            $"Composition-root contract is missing: {relative}"));
+    }
+
+    [Fact]
+    public void OperationsOutcomeContractsLiveInTheOperationsAbstractionAssembly()
+    {
+        Type[] contracts =
+        [
+            typeof(MissionDebriefLine),
+            typeof(AmbushSpoilStage),
+            typeof(MissionOutcomeClassification),
+            typeof(MissionForceDisposition)
+        ];
+
+        Assert.All(contracts, contract =>
+        {
+            Assert.Equal("OnlyWar.Operations.Abstractions", contract.Assembly.GetName().Name);
+            Assert.Same(contract, typeof(MissionContext).Assembly.GetType(contract.FullName));
+        });
+    }
+
+    [Fact]
+    public void OperationsReadinessDiagnosticsRemainImplementationPrivate()
+    {
+        Assert.False(typeof(MissionAvailabilityStatus).IsPublic);
+        Assert.False(typeof(MissionSquadReadinessIssue).IsPublic);
+        Assert.Null(typeof(MissionContext).GetProperty(
+            nameof(MissionContext.AvailabilityStatus),
+            BindingFlags.Public | BindingFlags.Instance));
+        Assert.Null(typeof(MissionContext).GetProperty(
+            nameof(MissionContext.ReadinessIssues),
+            BindingFlags.Public | BindingFlags.Instance));
+    }
+
+    [Fact]
+    public void ProductionFriendAssembliesMatchTheIntentionalAllowlist()
+    {
+        string repositoryRoot = RulesDatabaseFixture.RepositoryRoot;
+        string[] projectFiles = Directory
+            .EnumerateFiles(Path.Combine(repositoryRoot, "Modules"), "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !IsBuildArtifact(path))
+            .ToArray();
+
+        foreach (string projectFile in projectFiles)
+        {
+            string project = Path.GetFileNameWithoutExtension(projectFile);
+            string[] expected = project switch
+            {
+                "OnlyWar.Application" or
+                "OnlyWar.Battles" or
+                "OnlyWar.Campaign" or
+                "OnlyWar.Domain" or
+                "OnlyWar.Generation" or
+                "OnlyWar.Operations" or
+                "OnlyWar.Persistence" => ["OnlyWar.Tests"],
+                "OnlyWar.Medical" or
+                "OnlyWar.Runtime" => [],
+                _ when project.EndsWith(".Abstractions", StringComparison.Ordinal) => [],
+                _ => throw new InvalidOperationException($"No friend-assembly policy exists for {project}.")
+            };
+
+            Assert.Equal(expected, ReadFriendAssemblies(projectFile));
+        }
+
+        string assemblyInfo = Path.Combine(repositoryRoot, "Properties", "AssemblyInfo.cs");
+        string[] rootFriends = Regex.Matches(
+                File.ReadAllText(assemblyInfo),
+                @"InternalsVisibleTo\(\s*""([^""]+)""\s*\)")
+            .Select(match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(["OnlyWar.Tests"], rootFriends);
+
+        string[] sourceDeclarations = EnumerateProductionSources()
+            .Where(source => CodeOf(source.Full).Contains("InternalsVisibleTo", StringComparison.Ordinal))
+            .Select(source => source.Relative)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Empty(sourceDeclarations);
     }
 
     // The negative half of the fixture: a check that cannot fail proves nothing, so run the same
@@ -513,6 +872,85 @@ public class ModuleBoundaryEnforcementTests
         {
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
+    }
+
+    private static Dictionary<string, string[]> ApprovedModuleReferences() => new(StringComparer.Ordinal)
+    {
+        ["OnlyWar.Abstractions"] = [],
+        ["OnlyWar.Application.Abstractions"] = ["OnlyWar.Abstractions", "OnlyWar.Domain"],
+        ["OnlyWar.Battles.Abstractions"] = ["OnlyWar.Domain"],
+        ["OnlyWar.Generation.Abstractions"] = ["OnlyWar.Domain", "OnlyWar.Abstractions"],
+        ["OnlyWar.Medical.Abstractions"] = ["OnlyWar.Domain"],
+        ["OnlyWar.Operations.Abstractions"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Battles.Abstractions",
+             "OnlyWar.Medical.Abstractions"],
+        ["OnlyWar.Persistence.Abstractions"] = [],
+        ["OnlyWar.Runtime.Abstractions"] = ["OnlyWar.Domain", "OnlyWar.Abstractions"],
+        ["OnlyWar.Domain"] = ["OnlyWar.Abstractions"],
+        ["OnlyWar.Application"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Application.Abstractions",
+             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions",
+             "OnlyWar.Persistence.Abstractions", "OnlyWar.Runtime.Abstractions",
+             "OnlyWar.Battles.Abstractions", "OnlyWar.Medical.Abstractions", "OnlyWar.Runtime",
+             "OnlyWar.Campaign", "OnlyWar.Battles", "OnlyWar.Medical", "OnlyWar.Operations",
+             "OnlyWar.Persistence", "OnlyWar.Generation"],
+        ["OnlyWar.Battles"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Battles.Abstractions", "OnlyWar.Runtime"],
+        ["OnlyWar.Campaign"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Application.Abstractions",
+             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions",
+             "OnlyWar.Battles.Abstractions", "OnlyWar.Medical.Abstractions", "OnlyWar.Runtime",
+             "OnlyWar.Battles", "OnlyWar.Medical", "OnlyWar.Operations", "OnlyWar.Generation"],
+        ["OnlyWar.Generation"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Generation.Abstractions", "OnlyWar.Runtime"],
+        ["OnlyWar.Medical"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Medical.Abstractions"],
+        ["OnlyWar.Operations"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Operations.Abstractions",
+             "OnlyWar.Battles.Abstractions", "OnlyWar.Medical.Abstractions", "OnlyWar.Runtime"],
+        ["OnlyWar.Persistence"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Persistence.Abstractions"],
+        ["OnlyWar.Runtime"] =
+            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Runtime.Abstractions"]
+    };
+
+    private static string[] ReadProjectReferenceNames(string projectFile)
+    {
+        string projectDirectory = Path.GetDirectoryName(projectFile);
+        return XDocument.Load(projectFile)
+            .Descendants("ProjectReference")
+            .Select(reference =>
+            {
+                string include = (string)reference.Attribute("Include");
+                Assert.False(string.IsNullOrWhiteSpace(include), $"Missing Include in {projectFile}.");
+                string referencedProject = Path.GetFullPath(Path.Combine(projectDirectory, include));
+                Assert.True(File.Exists(referencedProject), $"Missing project reference {referencedProject}.");
+                return Path.GetFileNameWithoutExtension(referencedProject);
+            })
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string[] ReadFriendAssemblies(string projectFile) =>
+        XDocument.Load(projectFile)
+            .Descendants("InternalsVisibleTo")
+            .Select(friend => (string)friend.Attribute("Include"))
+            .Where(friend => !string.IsNullOrWhiteSpace(friend))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    private static bool IsBuildArtifact(string path) =>
+        path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(segment => segment is "bin" or "obj");
+
+    private static bool IsAbstractionSource(string repositoryRelativePath)
+    {
+        string[] segments = repositoryRelativePath.Split(
+            Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar);
+        return segments.Length > 1
+            && string.Equals(segments[0], "Modules", StringComparison.Ordinal)
+            && segments[1].EndsWith(".Abstractions", StringComparison.Ordinal);
     }
 
     // ----- Scanner -------------------------------------------------------------------------

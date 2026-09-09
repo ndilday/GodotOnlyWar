@@ -1,16 +1,16 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Medical.Readiness;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public enum CharacterAvailabilityReasonCode
     {
@@ -81,7 +81,7 @@ namespace OnlyWar.Helpers
             {
                 return Reject(CharacterAvailabilityReasonCode.MissingLocation, "Select exactly one destination.");
             }
-            if (destination.Ship?.Fleet?.TravelPhase == Models.Fleets.FleetTravelPhase.InWarp)
+            if (destination.Ship?.Fleet?.TravelPhase == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
             {
                 return Reject(CharacterAvailabilityReasonCode.InWarp, "Characters cannot be independently moved through the Warp.");
             }
@@ -129,7 +129,7 @@ namespace OnlyWar.Helpers
             }
 
             CampaignLocation location = CampaignLocationService.ForSoldier(character);
-            if (location?.Ship?.Fleet?.TravelPhase == Models.Fleets.FleetTravelPhase.InWarp)
+            if (location?.Ship?.Fleet?.TravelPhase == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
             {
                 return Reject(
                     CharacterAvailabilityReasonCode.InWarp,
@@ -158,7 +158,7 @@ namespace OnlyWar.Helpers
                     $"{character.Name} must be removed from its current order first.");
             }
             if (CampaignLocationService.ForSoldier(character)?.Ship?.Fleet?.TravelPhase
-                == Models.Fleets.FleetTravelPhase.InWarp)
+                == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
             {
                 return Reject(
                     CharacterAvailabilityReasonCode.InWarp,

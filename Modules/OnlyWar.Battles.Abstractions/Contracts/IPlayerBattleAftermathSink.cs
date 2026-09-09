@@ -1,8 +1,8 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Battles.Abstractions
 {
     public interface IPlayerBattleAftermathSink
     {

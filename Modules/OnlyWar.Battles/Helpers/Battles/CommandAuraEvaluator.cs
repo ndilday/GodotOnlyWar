@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Per-turn command-aura modifier (OnlyWar_TDD.md §6.6): the

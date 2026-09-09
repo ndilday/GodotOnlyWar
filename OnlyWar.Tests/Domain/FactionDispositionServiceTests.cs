@@ -1,6 +1,5 @@
 using System;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

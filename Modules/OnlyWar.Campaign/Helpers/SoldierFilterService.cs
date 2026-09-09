@@ -1,11 +1,11 @@
 using OnlyWar.Application;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     // Applies a set of AND-combined filter conditions to a roster and surfaces the distinct
     // values (roles, honors) available for the filter dialog to offer within a given scope.

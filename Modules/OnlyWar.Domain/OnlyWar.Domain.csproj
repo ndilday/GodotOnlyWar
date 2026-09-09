@@ -8,6 +8,5 @@
     <ProjectReference Include="../OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
 
     <InternalsVisibleTo Include="OnlyWar.Tests" />
-    <InternalsVisibleTo Include="OnlyWar.HeadlessTests" />
   </ItemGroup>
 </Project>

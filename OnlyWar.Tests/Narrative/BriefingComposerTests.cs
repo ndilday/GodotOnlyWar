@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Generation.Abstractions;
-using OnlyWar.Helpers.Narrative;
-using OnlyWar.Models.Planets;
+using OnlyWar.Campaign.Narrative;
+using OnlyWar.Domain.Planets;
 using Xunit;
 
 namespace OnlyWar.Tests.Narrative;

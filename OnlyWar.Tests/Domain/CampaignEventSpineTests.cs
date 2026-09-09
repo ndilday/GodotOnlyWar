@@ -1,9 +1,8 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Command;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Command;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;

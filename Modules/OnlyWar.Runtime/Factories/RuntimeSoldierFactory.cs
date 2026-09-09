@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Builders;
 using OnlyWar.Runtime.Abstractions;
-using OnlyWar.Helpers;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
 
 namespace OnlyWar.Runtime.Factories;
 

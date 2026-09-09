@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Application;
 
@@ -9,7 +8,7 @@ public enum MedicalLocationKind { Ship, Region }
 public sealed record MedicalTreatmentRequisiteView(string Label, bool IsMet);
 public sealed record MedicalTreatmentOptionView(
     int HitLocationId,
-    MedicalProcedureType Type,
+    MedicalProcedureChoice Type,
     string LocationName,
     string Title,
     string Description,
@@ -33,11 +32,11 @@ public sealed record MedicalScreenView(
 public sealed record RecoveryQuery(
     int? SoldierId, RecoverySortMode Sort = RecoverySortMode.Severity, bool Ascending = false,
     MedicalLocationId Destination = null, RecoveryMovementChoice Movement = RecoveryMovementChoice.None,
-    int? HitLocationId = null, MedicalProcedureType? ProcedureType = null);
+    int? HitLocationId = null, MedicalProcedureChoice? ProcedureType = null);
 public sealed record RecoveryScreenView(Guid SessionToken, RecoveryOperationsViewModel Model);
 public sealed record ConfirmRecoveryCommand(
     Guid SessionToken, int SoldierId, MedicalLocationId Destination,
-    RecoveryMovementChoice Movement, int? HitLocationId, MedicalProcedureType? ProcedureType);
+    RecoveryMovementChoice Movement, int? HitLocationId, MedicalProcedureChoice? ProcedureType);
 
 public interface IMedicalScreenApplication
 {

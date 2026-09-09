@@ -1,8 +1,8 @@
-﻿using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Actions;
+using OnlyWar.Battles.Models;
 using System.Text;
 
-namespace OnlyWar.Helpers.Extensions
+namespace OnlyWar.Battles.Extensions
 {
     public static class BattleHistoryExtensions
     {

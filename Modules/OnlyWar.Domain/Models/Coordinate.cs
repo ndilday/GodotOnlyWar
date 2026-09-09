@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// An (X, Y) grid position. A value type with proper value equality, so two

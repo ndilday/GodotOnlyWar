@@ -1,5 +1,5 @@
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using System.Collections.Generic;
 using System.Linq;
 

@@ -1,5 +1,5 @@
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Missions;
 
 namespace OnlyWar.Application
 {

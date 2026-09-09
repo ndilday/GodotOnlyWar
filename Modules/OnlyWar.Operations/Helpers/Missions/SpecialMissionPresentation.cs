@@ -1,16 +1,16 @@
-using OnlyWar.Models;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using OnlyWar.Helpers.Missions.Ambush;
-using OnlyWar.Helpers.PlanetaryOperations;
+using OnlyWar.Operations.Missions.Ambush;
+using OnlyWar.Operations.Planetary;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     /// <summary>
     /// Builds the player-facing identity for intelligence-discovered missions. The mission type

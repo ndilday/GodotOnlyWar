@@ -1,18 +1,16 @@
 using System.Collections.Generic;
 using System.Drawing;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Missions;
+using OnlyWar.Battles;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Missions.Ambush;
-using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Operations.Missions.Ambush;
+using OnlyWar.Operations.Missions.Recon;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -254,10 +252,10 @@ public class MissionStepOutcomeSignalTests
         Faction faction = new(1, "Enemy", Color.Red, isPlayerFaction: false, isDefaultFaction: false,
             behavior: FactionBehavior.None, GrowthType.None,
             new Dictionary<int, Species>(), new Dictionary<int, SoldierTemplate>(),
-            new Dictionary<int, SquadTemplate>(), new Dictionary<int, OnlyWar.Models.Units.UnitTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.BoatTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.ShipTemplate>(),
-            new Dictionary<int, OnlyWar.Models.Fleets.FleetTemplate>());
+            new Dictionary<int, SquadTemplate>(), new Dictionary<int, OnlyWar.Domain.Units.UnitTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+            new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
         Planet planet = new(1, "Planet", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Region", new RegionCoordinate(0, 0), 0);
         planet.Regions[0] = region;

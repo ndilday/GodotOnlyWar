@@ -1,7 +1,7 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.IO;
-using OnlyWar.Helpers.Database.GameRules;
+using OnlyWar.Persistence.Database.GameRules;
 
 namespace OnlyWar.Tests.Fixtures;
 

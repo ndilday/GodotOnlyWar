@@ -1,11 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -47,9 +46,9 @@ public class ApothecariumMedicalRecordBuilderTests
 
         Assert.Contains(summary.Wounds, w => w.LocationName == "Left Arm" && w.NeedsReplacement && w.Severity == MedicalSeverity.Lost);
         Assert.Contains(summary.ReplacementOptions, o =>
-            o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.Cybernetic && o.Weeks == 4);
+            o.LocationName == "Left Arm" && o.Type == MedicalProcedureChoice.Cybernetic && o.Weeks == 4);
         Assert.Contains(summary.ReplacementOptions, o =>
-            o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.VatGrown && o.Weeks == 6);
+            o.LocationName == "Left Arm" && o.Type == MedicalProcedureChoice.VatGrown && o.Weeks == 6);
         Assert.Equal("Safe", summary.GeneSeedStatus);
     }
 
@@ -143,9 +142,9 @@ public class ApothecariumMedicalRecordBuilderTests
 
         Assert.False(arm.IsCybernetic);
         Assert.Contains(summary.ReplacementOptions,
-            option => option.LocationName == "Left Arm" && option.Type == MedicalProcedureType.Cybernetic);
+            option => option.LocationName == "Left Arm" && option.Type == MedicalProcedureChoice.Cybernetic);
         Assert.Contains(summary.ReplacementOptions,
-            option => option.LocationName == "Left Arm" && option.Type == MedicalProcedureType.VatGrown);
+            option => option.LocationName == "Left Arm" && option.Type == MedicalProcedureChoice.VatGrown);
         Assert.Contains(summary.Wounds,
             wound => wound.LocationName == "Left Arm" && !wound.IsCybernetic && wound.Status == "Severed");
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OnlyWar.Battles.Abstractions;
 
 namespace OnlyWar.Application;
 
@@ -34,6 +35,24 @@ public sealed record NeophytePlacementOptions(
 public sealed record NeophytePlacementResult(bool Succeeded, string Message);
 
 /// <summary>
+/// Opaque address for a current-session battle replay. The scene carries this id back to the
+/// application instead of carrying a BattleHistory or a battle snapshot through the UI tree.
+/// </summary>
+public sealed record BattleReplayQuery(Guid ReplayId, int TurnIndex, int? SelectedFormationId = null);
+
+/// <summary>
+/// Composition seam for the host's battle-review projection. The implementation owns the tactical
+/// replay shape; screen callers receive only the detached display model.
+/// </summary>
+public interface IBattleReplayProjector
+{
+    BattleReplayDisplay Build(
+        IBattleReplay replay,
+        int requestedTurnIndex,
+        int? selectedFormationId = null);
+}
+
+/// <summary>
 /// The main game screen's own campaign reads and commands. Navigation, dialogs and scene stacking
 /// stay in the host; deciding what the campaign says, and every write to it, live here.
 /// </summary>
@@ -54,6 +73,8 @@ public interface IMainScreenApplication
 
     /// <summary>The saved report for the previous turn, or an empty view when a save has none.</summary>
     TurnReportView QueryLastTurnReport();
+
+    BattleReplayDisplay QueryBattleReplay(BattleReplayQuery query);
 
     /// <summary>
     /// Advances the campaign, builds the turn report and - only once both succeed - replaces the

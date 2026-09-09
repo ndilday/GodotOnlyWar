@@ -1,7 +1,7 @@
 using System;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database
+namespace OnlyWar.Persistence.Database
 {
     internal static class DbCommandExtensions
     {

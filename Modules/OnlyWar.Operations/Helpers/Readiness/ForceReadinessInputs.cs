@@ -1,8 +1,8 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Helpers.Readiness;
+namespace OnlyWar.Operations.Readiness;
 
 /// <summary>
 /// Resolves the doctrine and reservation facts an Operations query needs against the force named by

@@ -1,6 +1,6 @@
-﻿using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles.Actions
+namespace OnlyWar.Battles.Actions
 {
     public interface IAction
     {

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Battles;
 
 /// <summary>
 /// Determines when an unpursued withdrawing squad is far enough outside the active engagement to

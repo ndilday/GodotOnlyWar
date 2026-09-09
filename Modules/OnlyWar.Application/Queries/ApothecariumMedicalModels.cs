@@ -1,5 +1,4 @@
-using OnlyWar.Helpers.Readiness;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Medical.Readiness;
 using System.Collections.Generic;
 
 namespace OnlyWar.Application
@@ -117,7 +116,7 @@ namespace OnlyWar.Application
         bool IsCybernetic,
         bool NeedsReplacement,
         MedicalSeverity Severity,
-        WoundLevel PrincipalWoundLevel = WoundLevel.None,
+        MedicalWoundLevel PrincipalWoundLevel = MedicalWoundLevel.None,
         bool IsSevered = false,
         bool IsCrippled = false);
 

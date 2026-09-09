@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Storage
+namespace OnlyWar.Persistence.Storage
 {
     /// <summary>
     /// Owns the boundary between immutable installed game data and writable player data.

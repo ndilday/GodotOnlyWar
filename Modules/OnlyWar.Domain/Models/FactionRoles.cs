@@ -1,4 +1,4 @@
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Intrinsic faction role identity. This is a property of the faction itself, not a

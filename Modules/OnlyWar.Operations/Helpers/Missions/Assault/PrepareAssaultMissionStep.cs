@@ -1,24 +1,24 @@
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Runtime.Factories;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
+using OnlyWar.Operations.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Recruitment;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Helpers.Strategy;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Operations.Strategy;
 
-namespace OnlyWar.Helpers.Missions.Assault
+namespace OnlyWar.Operations.Missions.Assault
 {
     public class PrepareAssaultMissionStep : IMissionStep
     {

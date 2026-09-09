@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Recruitment
+namespace OnlyWar.Domain.Recruitment
 {
     public sealed class RecruitmentCandidateAttributes
     {

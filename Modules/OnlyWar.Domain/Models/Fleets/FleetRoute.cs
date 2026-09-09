@@ -1,7 +1,7 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Fleets
+namespace OnlyWar.Domain.Fleets
 {
     public enum FleetRouteType
     {

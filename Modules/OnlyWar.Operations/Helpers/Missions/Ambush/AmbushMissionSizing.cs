@@ -1,8 +1,8 @@
-using OnlyWar.Helpers.StrategicCombat;
-using OnlyWar.Models.Missions;
+using OnlyWar.Operations.StrategicCombat;
+using OnlyWar.Domain.Missions;
 using System;
 
-namespace OnlyWar.Helpers.Missions.Ambush
+namespace OnlyWar.Operations.Missions.Ambush
 {
     /// <summary>
     /// Converts the intelligence-discovered ambush target into both its tactical force-generation

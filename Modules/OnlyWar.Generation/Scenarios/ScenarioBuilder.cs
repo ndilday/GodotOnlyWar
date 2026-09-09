@@ -3,16 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
 using OnlyWar.Generation.Abstractions;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Events;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Events;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Generation.Scenarios
 {
     // Stamps the "Promised World" opening scenario on top of an already-generated, already-
     // governed sector (Design/Reference/OpeningScenario.md). This is an override layer, not a fork of

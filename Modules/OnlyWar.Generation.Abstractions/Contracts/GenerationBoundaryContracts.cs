@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using OnlyWar.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Units;
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Units;
+using OnlyWar.Domain;
 
 namespace OnlyWar.Generation.Abstractions;
 

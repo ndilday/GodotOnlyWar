@@ -1,9 +1,9 @@
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     // Mission-specific façade over SoldierProgressLog: answers "what did a squad get for its week of
     // work?" by diffing each participating PlayerSoldier's skills/attributes across the whole mission.

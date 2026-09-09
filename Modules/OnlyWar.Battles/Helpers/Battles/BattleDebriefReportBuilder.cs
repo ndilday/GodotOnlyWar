@@ -1,10 +1,11 @@
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles.Models;
+using OnlyWar.Battles.Abstractions;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     public static class BattleDebriefReportBuilder
     {

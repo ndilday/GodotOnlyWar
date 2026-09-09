@@ -1,12 +1,12 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public sealed record SoldierDossier(
         IReadOnlyList<ValueTuple<string, string>> Data,

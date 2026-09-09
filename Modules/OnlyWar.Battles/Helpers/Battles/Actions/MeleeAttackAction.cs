@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models;
-using OnlyWar.Models.Battles;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Battles.Resolutions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Math;
+using OnlyWar.Battles.Models;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Soldiers;
 
-namespace OnlyWar.Helpers.Battles.Actions
+namespace OnlyWar.Battles.Actions
 {
     public class PlannedMeleeStrike
     {
@@ -354,7 +355,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         /// <summary>
         /// The melee-defence value of a soldier who is running rather than fighting: his foot
         /// speed, and nothing else. Deliberately not his melee skill — he is not using it — and
-        /// species <see cref="Models.Soldiers.Species.MeleeEvasion"/> is still added by the
+        /// species <see cref="OnlyWar.Domain.Soldiers.Species.MeleeEvasion"/> is still added by the
         /// contested roll on top, since innate agility does not depend on having a guard up.
         /// </summary>
         public static float GetRunningDefenderMeleeSkill(BattleSoldier defender) =>

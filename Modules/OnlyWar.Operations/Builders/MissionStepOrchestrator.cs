@@ -1,16 +1,16 @@
-﻿using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Missions.Ambush;
-using OnlyWar.Helpers.Missions.Assassinate;
-using OnlyWar.Helpers.Missions.Assault;
-using OnlyWar.Helpers.Missions.Diversion;
-using OnlyWar.Helpers.Missions.Raid;
-using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Helpers.Missions.Sabotage;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Missions.Ambush;
+using OnlyWar.Operations.Missions.Assassinate;
+using OnlyWar.Operations.Missions.Assault;
+using OnlyWar.Operations.Missions.Diversion;
+using OnlyWar.Operations.Missions.Raid;
+using OnlyWar.Operations.Missions.Recon;
+using OnlyWar.Operations.Missions.Sabotage;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System.Linq;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Operations.Missions
 {
     public static class MissionStepOrchestrator
     {

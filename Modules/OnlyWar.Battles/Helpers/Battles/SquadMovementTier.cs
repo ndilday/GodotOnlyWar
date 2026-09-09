@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// The movement and action restrictions selected for a squad during a battle turn.

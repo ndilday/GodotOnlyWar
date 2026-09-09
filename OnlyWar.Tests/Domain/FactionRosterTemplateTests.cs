@@ -1,10 +1,10 @@
 using System;
 using System.Linq;
 
-using OnlyWar.Builders;
-using OnlyWar.Models;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 
 using Xunit;
 

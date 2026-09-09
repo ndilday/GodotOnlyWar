@@ -1,6 +1,6 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Domain.Missions
 {
     /// <summary>
     /// A mission target identified by intelligence rather than by a guaranteed current presence.

@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Drawing;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 using Xunit;
 
 namespace OnlyWar.Tests.Domain;

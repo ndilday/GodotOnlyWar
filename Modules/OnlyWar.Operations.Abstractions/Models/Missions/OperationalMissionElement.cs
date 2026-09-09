@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Models.Missions;
+namespace OnlyWar.Operations.Abstractions;
 
 /// <summary>
 /// Operations' mutable mission element. It keeps campaign members and mission policy together,

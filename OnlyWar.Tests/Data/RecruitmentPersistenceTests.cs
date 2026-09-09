@@ -1,7 +1,7 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
 using System;
 using System.IO;
 using OnlyWar.Tests.Fixtures;

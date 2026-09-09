@@ -1,11 +1,11 @@
-using OnlyWar.Helpers.Database;
-using OnlyWar.Models.Reports;
+using OnlyWar.Persistence.Database;
+using OnlyWar.Domain.Reports;
 using System;
 using System.Data;
 using System.IO;
 using System.Text.Json;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     /// <summary>
     /// Reads and writes the optional, bounded report for the most recently resolved turn.

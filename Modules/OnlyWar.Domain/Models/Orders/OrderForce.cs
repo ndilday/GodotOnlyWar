@@ -1,9 +1,9 @@
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Orders
+namespace OnlyWar.Domain.Orders
 {
     /// <summary>
     /// The participant projection shared by orders, turn routing, reports, and support effects.

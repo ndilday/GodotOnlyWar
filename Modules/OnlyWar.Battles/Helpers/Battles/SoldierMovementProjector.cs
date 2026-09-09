@@ -1,7 +1,7 @@
 using System;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Calculates a soldier's movement result without reserving cells, emitting an action, or

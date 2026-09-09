@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Models.Supply
+namespace OnlyWar.Domain.Supply
 {
     /// <summary>Voiced petition kept separate from the authoritative mechanical terms.</summary>
     public sealed record GovernorRequestNarrative(string Flavor, string MechanicalSummary);
@@ -36,7 +36,7 @@ namespace OnlyWar.Models.Supply
             string action = request.FulfillmentKind == RequestFulfillmentKind.ThreatSuppressed
                 ? "break the threat before the appointed deadline."
                 : "make your strength visible in our capital until order is restored.";
-            string form = PetitionForms[Math.Abs(request.Id % PetitionForms.Length)]
+            string form = PetitionForms[System.Math.Abs(request.Id % PetitionForms.Length)]
                 .Replace("{address}", address, StringComparison.Ordinal)
                 .Replace("{danger}", danger, StringComparison.Ordinal)
                 .Replace("{chapterAction}", action, StringComparison.Ordinal);

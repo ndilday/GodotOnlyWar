@@ -1,4 +1,4 @@
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     // A value drawn from a normal distribution: value = BaseValue + z * StandardDeviation,
     // where z is a standard-normal sample. Symmetric around BaseValue.

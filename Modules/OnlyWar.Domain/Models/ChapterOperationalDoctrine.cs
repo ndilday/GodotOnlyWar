@@ -1,8 +1,8 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Player-Chapter policy for deciding which physically deployable brothers are withheld
@@ -49,7 +49,7 @@ namespace OnlyWar.Models
         public int MinimumDutyReadySquadStrength
         {
             get => _minimumDutyReadySquadStrength;
-            set => _minimumDutyReadySquadStrength = Math.Max(1, value);
+            set => _minimumDutyReadySquadStrength = System.Math.Max(1, value);
         }
 
         public bool IsIncapacitatedPolicy => !InjuryThreshold.HasValue;

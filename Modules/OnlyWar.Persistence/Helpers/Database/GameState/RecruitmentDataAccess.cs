@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     // Primitive save rows deliberately isolate SQLite from the recruitment domain. The
     // recruitment feature maps its aggregate at the save boundary, so simulation types can

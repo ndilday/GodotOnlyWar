@@ -1,10 +1,10 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Narrative
+namespace OnlyWar.Campaign.Narrative
 {
     /// <summary>
     /// Rebuilds current presentation views from the canonical current-format event ledgers.

@@ -5,19 +5,19 @@ using OnlyWar.Abstractions;
 using OnlyWar.Generation.Abstractions;
 using OnlyWar.Medical.Abstractions;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Narrative;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Soldiers.Ratings;
-using OnlyWar.Models.Units;
+using OnlyWar.Battles;
+using OnlyWar.Campaign.Narrative;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Units;
 
-namespace OnlyWar.Helpers.Application.Adapters.Generation
+namespace OnlyWar.Application.Adapters.Generation
 {
     /// <summary>
     /// Application-side implementations of the generation ports (plan §3.4). They live outside

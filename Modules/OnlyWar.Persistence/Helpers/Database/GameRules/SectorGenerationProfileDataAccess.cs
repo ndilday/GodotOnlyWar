@@ -1,9 +1,9 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.Data;
 
-namespace OnlyWar.Helpers.Database.GameRules
+namespace OnlyWar.Persistence.Database.GameRules
 {
     internal sealed class SectorGenerationProfileDataAccess
     {

@@ -4,14 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using OnlyWar.Application;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -348,7 +347,7 @@ public sealed class RosterAndMapScreenApplicationTests
     {
         CampaignApplication application = CreateChapterCampaign(out _);
         RecruitmentDoctrineDraft draft = new(
-            OnlyWar.Models.Recruitment.RecruitmentPolicy.VoluntaryPresentation,
+            OnlyWar.Domain.Recruitment.RecruitmentPolicy.VoluntaryPresentation,
             0, 0, 0, 0, 0, 0.5f);
         Guid staleToken = application.SessionToken;
         application.Install(CreateEmptySession(application.ActiveSession.Rules));
@@ -473,11 +472,11 @@ public sealed class RosterAndMapScreenApplicationTests
     }
 
     private static bool IsRulesTemplate(Type type) =>
-        type.Namespace == "OnlyWar.Models.Equippables"
-        || type.Namespace == "OnlyWar.Models.Squads"
-        || type.Namespace == "OnlyWar.Models.Soldiers"
-        || type.Namespace == "OnlyWar.Models.Readiness"
-        || type.Namespace == "OnlyWar.Models.Recruitment"
+        type.Namespace == "OnlyWar.Domain.Equippables"
+        || type.Namespace == "OnlyWar.Domain.Squads"
+        || type.Namespace == "OnlyWar.Domain.Soldiers"
+        || type.Namespace == "OnlyWar.Domain.Readiness"
+        || type.Namespace == "OnlyWar.Domain.Recruitment"
         || type == typeof(ChapterOperationalDoctrine);
 
     private static CampaignApplication InstallFixture(SectorSimulationFixture fixture)

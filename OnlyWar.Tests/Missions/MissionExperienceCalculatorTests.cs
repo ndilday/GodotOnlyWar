@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

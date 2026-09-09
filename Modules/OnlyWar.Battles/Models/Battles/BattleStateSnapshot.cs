@@ -1,11 +1,12 @@
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Orders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Battles
+namespace OnlyWar.Battles.Models
 {
     /// <summary>
     /// Compact immutable state retained for battle replay. The live simulation keeps one mutable
@@ -144,7 +145,7 @@ namespace OnlyWar.Models.Battles
     public sealed class BattleSideStateSnapshot
     {
         public BattleSideIntent Intent { get; }
-        public Models.Orders.Aggression Aggression { get; }
+        public Aggression Aggression { get; }
         public BattleRole BattleRole { get; }
         public int StartingBattleValue { get; }
         public int StartingSoldierCount { get; }

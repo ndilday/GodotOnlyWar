@@ -1,9 +1,9 @@
 using System;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Supply;
 
-namespace OnlyWar.Builders
+namespace OnlyWar.Campaign.Builders
 {
     internal sealed class RequestFactory
     {

@@ -1,14 +1,14 @@
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Operations.Missions.Recon;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     public class ExfiltrateMissionStep : IMissionStep
     {

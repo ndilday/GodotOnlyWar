@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Missions;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

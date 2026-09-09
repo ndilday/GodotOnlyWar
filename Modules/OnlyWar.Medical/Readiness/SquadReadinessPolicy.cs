@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Medical.Readiness;
 
 namespace OnlyWar.Medical.Readiness;
 

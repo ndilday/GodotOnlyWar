@@ -1,7 +1,7 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 using System;
 
-namespace OnlyWar.Models.FactionBehaviors
+namespace OnlyWar.Domain.FactionBehaviors
 {
     /// <summary>
     /// An off-map latent population source. It is not a Planet and is independent of visibility.
@@ -23,9 +23,9 @@ namespace OnlyWar.Models.FactionBehaviors
             FactionId = faction?.Id;
             Position = position;
             WorldType = worldType ?? throw new ArgumentNullException(nameof(worldType));
-            Population = Math.Max(0, population);
-            PopulationCapacity = Math.Max(1, populationCapacity);
-            Consolidation = Math.Clamp(consolidation, 0.0, 1.0);
+            Population = System.Math.Max(0, population);
+            PopulationCapacity = System.Math.Max(1, populationCapacity);
+            Consolidation = System.Math.Clamp(consolidation, 0.0, 1.0);
         }
     }
 }

@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Identity;
 
-namespace OnlyWar.Models.Units
+namespace OnlyWar.Domain.Units
 {
     public class UnitTemplate
     {

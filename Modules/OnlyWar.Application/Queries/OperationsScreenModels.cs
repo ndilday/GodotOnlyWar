@@ -1,5 +1,4 @@
-using OnlyWar.Helpers.PlanetaryOperations;
-using OnlyWar.Models.Orders;
+using OnlyWar.Operations.Planetary;
 using System.Collections.Generic;
 
 namespace OnlyWar.Application;
@@ -90,7 +89,7 @@ public sealed record ActiveOrderView(
     string Label,
     int SquadCount,
     int CharacterCount,
-    Aggression Aggression,
+    OperationsAggression Aggression,
     string IconKey,
     string Tooltip);
 
@@ -102,7 +101,7 @@ public sealed record OrderEditorView(
     string Label,
     int SquadCount,
     int CharacterCount,
-    Aggression Aggression,
+    OperationsAggression Aggression,
     IReadOnlyList<OrderParticipantView> AssignedSquads,
     IReadOnlyList<OrderParticipantView> AssignedCharacters,
     IReadOnlyList<OrderParticipantView> AvailableSpecialists,

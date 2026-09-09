@@ -1,7 +1,8 @@
-using OnlyWar.Helpers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Intelligence;
 using System;
 
-namespace OnlyWar.Models.FactionBehaviors
+namespace OnlyWar.Domain.FactionBehaviors
 {
     /// <summary>
     /// Data-owned numeric tuning for the reusable ghost, dormant-population, invasion, and mob

@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 
-namespace OnlyWar.Helpers.Settings
+namespace OnlyWar.Campaign.Settings
 {
     /// <summary>
     /// Persists global (not campaign-save) warning choices. Writes replace the small JSON file

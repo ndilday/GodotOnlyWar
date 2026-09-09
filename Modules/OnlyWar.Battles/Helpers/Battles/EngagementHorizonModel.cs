@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Derives the number of exchange turns for which a frozen engagement geometry is worth

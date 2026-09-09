@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
-using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Helpers.Storage;
+using OnlyWar.Persistence.Database.GameState;
+using OnlyWar.Persistence.Storage;
 using System;
 using System.IO;
 using System.Linq;
@@ -35,7 +35,7 @@ public sealed class SaveGameManagerTests : IDisposable
         Assert.NotEqual(first.FilePath, second.FilePath);
         Assert.Equal("My: Crusade?", first.DisplayName);
         Assert.Equal("Knights of Sol", first.CampaignName);
-        Assert.Equal(new OnlyWar.Models.Date(4, 221, 17), first.CampaignDate);
+        Assert.Equal(new OnlyWar.Domain.Date(4, 221, 17), first.CampaignDate);
         Assert.Equal(SaveGameKind.Manual, first.Kind);
         Assert.True(first.IsCompatible);
         Assert.StartsWith("manual-my-crusade-", Path.GetFileName(first.FilePath));

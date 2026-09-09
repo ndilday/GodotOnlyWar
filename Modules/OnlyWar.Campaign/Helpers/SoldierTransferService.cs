@@ -1,16 +1,16 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using OnlyWar.Abstractions;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Runtime.Allocators;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public sealed record SoldierTransferOption(
         int SquadId,

@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Domain.Events
 {
     public sealed class CampaignIdentity
     {

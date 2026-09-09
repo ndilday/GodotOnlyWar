@@ -1,8 +1,8 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 
-namespace OnlyWar.Models.Equippables
+namespace OnlyWar.Domain.Equippables
 {
     public enum EquipLocation
     {
@@ -223,7 +223,7 @@ namespace OnlyWar.Models.Equippables
         public ushort LoadedAmmo
         {
             get => _loadedAmmo;
-            set => _loadedAmmo = (ushort)Math.Min(value, Template?.AmmoCapacity ?? value);
+            set => _loadedAmmo = (ushort)System.Math.Min(value, Template?.AmmoCapacity ?? value);
         }
         public int ReserveAmmo
         {
@@ -232,7 +232,7 @@ namespace OnlyWar.Models.Equippables
                 : ReservePool.Get(Template.AmmunitionType);
             set
             {
-                int rounds = Math.Max(0, value);
+                int rounds = System.Math.Max(0, value);
                 if (ReservePool == null) _localReserveAmmo = rounds;
                 else ReservePool.Set(Template.AmmunitionType, rounds);
             }
@@ -295,7 +295,7 @@ namespace OnlyWar.Models.Equippables
             if (!CanReload) return;
 
             ReloadProgress++;
-            int reloadTime = Math.Max(1, (int)Template.ReloadTime);
+            int reloadTime = System.Math.Max(1, (int)Template.ReloadTime);
             if (ReloadProgress < reloadTime) return;
 
             if (Template.AmmunitionType == null)
@@ -305,10 +305,10 @@ namespace OnlyWar.Models.Equippables
             else
             {
                 int amount = Template.AmmunitionBehavior == AmmunitionBehavior.Incremental
-                    ? Math.Max(1, (int)Template.ReloadAmount)
+                    ? System.Math.Max(1, (int)Template.ReloadAmount)
                     : Template.AmmoCapacity - LoadedAmmo;
-                amount = Math.Min(amount, ReserveAmmo);
-                amount = Math.Min(amount, Template.AmmoCapacity - LoadedAmmo);
+                amount = System.Math.Min(amount, ReserveAmmo);
+                amount = System.Math.Min(amount, Template.AmmoCapacity - LoadedAmmo);
                 if (amount > 0)
                 {
                     LoadedAmmo = (ushort)(LoadedAmmo + amount);
@@ -328,9 +328,9 @@ namespace OnlyWar.Models.Equippables
             RecoveryProgress++;
             while (RecoveryProgress >= Template.RecoveryDuration && LoadedAmmo < Template.AmmoCapacity)
             {
-                LoadedAmmo = (ushort)Math.Min(
+                LoadedAmmo = (ushort)System.Math.Min(
                     Template.AmmoCapacity,
-                    LoadedAmmo + Math.Max(1, (int)Template.RecoveryAmount));
+                    LoadedAmmo + System.Math.Max(1, (int)Template.RecoveryAmount));
                 RecoveryProgress -= Template.RecoveryDuration;
             }
         }

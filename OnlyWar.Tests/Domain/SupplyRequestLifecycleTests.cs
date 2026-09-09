@@ -1,5 +1,5 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Supply;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

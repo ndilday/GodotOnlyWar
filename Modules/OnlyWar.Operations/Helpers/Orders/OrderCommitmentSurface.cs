@@ -1,8 +1,8 @@
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Helpers.Orders;
+namespace OnlyWar.Operations.Orders;
 
 /// <summary>
 /// Operations' implementation of the commitment-release surface Campaign personnel consumes

@@ -1,4 +1,4 @@
-namespace OnlyWar.Models.Soldiers.Ratings
+namespace OnlyWar.Domain.Soldiers.Ratings
 {
     public enum RatingAwardEffect
     {

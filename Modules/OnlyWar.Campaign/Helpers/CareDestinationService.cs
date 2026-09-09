@@ -1,12 +1,12 @@
-using OnlyWar.Models;
-using OnlyWar.Helpers.Recruitment;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Recruitment;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public sealed record CareDestinationCandidate(
         CampaignLocation Location,

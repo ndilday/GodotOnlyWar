@@ -1,10 +1,10 @@
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Campaign
 {
     public enum FleetCapacityPlanKind { NoRelocationRequired, Direct, Rebalance, Impossible }
     public sealed record FleetSquadMove(int SquadId, int? SourceShipId, int TargetShipId, int Headcount);

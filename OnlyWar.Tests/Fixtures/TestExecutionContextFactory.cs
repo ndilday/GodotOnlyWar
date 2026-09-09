@@ -1,14 +1,12 @@
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Aftermath;
-using OnlyWar.Helpers.Application.Adapters.Operations;
+using OnlyWar.Domain;
+using OnlyWar.Battles;
+using OnlyWar.Battles.Aftermath;
+using OnlyWar.Application.Adapters.Operations;
 using OnlyWar.Operations.Abstractions;
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
 using RuntimeTacticalEntityIdAllocator = OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator;
 using System.Collections.Generic;
 
@@ -21,7 +19,7 @@ internal static class TestExecutionContextFactory
         Region region = null)
     {
         random ??= new FixedRNG();
-        GameRulesData rules = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(RulesDatabaseFixture.DatabasePath);
+        GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(RulesDatabaseFixture.DatabasePath);
         BattleAftermathDependencies aftermath = new(
             new Date(1, 1, 1),
             random,

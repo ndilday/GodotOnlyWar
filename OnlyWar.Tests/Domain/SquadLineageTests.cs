@@ -1,8 +1,7 @@
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Recruitment;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Recruitment;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using System.Drawing;
@@ -110,13 +109,13 @@ public sealed class SquadLineageTests
     private static Faction CreatePlayerFaction() => new(
         9001, "Test Chapter", Color.Gold, true, false,
         FactionBehavior.None, GrowthType.None,
-        new Dictionary<int, OnlyWar.Models.Soldiers.Species>(),
-        new Dictionary<int, OnlyWar.Models.Soldiers.SoldierTemplate>(),
+        new Dictionary<int, OnlyWar.Domain.Soldiers.Species>(),
+        new Dictionary<int, OnlyWar.Domain.Soldiers.SoldierTemplate>(),
         new Dictionary<int, SquadTemplate>(),
         new Dictionary<int, UnitTemplate>(),
-        new Dictionary<int, OnlyWar.Models.Fleets.BoatTemplate>(),
-        new Dictionary<int, OnlyWar.Models.Fleets.ShipTemplate>(),
-        new Dictionary<int, OnlyWar.Models.Fleets.FleetTemplate>());
+        new Dictionary<int, OnlyWar.Domain.Fleets.BoatTemplate>(),
+        new Dictionary<int, OnlyWar.Domain.Fleets.ShipTemplate>(),
+        new Dictionary<int, OnlyWar.Domain.Fleets.FleetTemplate>());
 
     private static SquadTemplate CreateTemplate(Faction faction, SquadTypes type, string name)
     {

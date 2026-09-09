@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -99,7 +99,7 @@ public class BiomassConsumptionTests
         region.MaximumCarryingCapacity = 0;
         RegionFaction big = fixture.DefaultRegionFaction(0);
         big.Population = 900_000;
-        RegionFaction small = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Logistic, population: 100_000);
+        RegionFaction small = fixture.AddHiddenFaction(0, OnlyWar.Domain.GrowthType.Logistic, population: 100_000);
         fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
 
         ConsumptionTurnProcessor.ResolveFeeding(region);

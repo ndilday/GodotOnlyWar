@@ -1,11 +1,11 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Fortifications
+namespace OnlyWar.Domain.Fortifications
 {
     /// <summary>
     /// The defensive works standing in a region, as the side holding it experiences them.
@@ -90,7 +90,7 @@ namespace OnlyWar.Helpers.Fortifications
             if (contributors.Count == 0) return 0.0;
 
             double sharedBefore = GetShared(target, defenseType);
-            double sharedAfter = Math.Max(0.0, sharedBefore - levelReduction);
+            double sharedAfter = System.Math.Max(0.0, sharedBefore - levelReduction);
             double pointsBefore = FortificationMath.LevelToPoints(sharedBefore);
             double pointsAfter = FortificationMath.LevelToPoints(sharedAfter);
             double pointsLost = pointsBefore - pointsAfter;

@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     /// <summary>
     /// Mechanical faction traits authored by the rules database. Identity flags such as

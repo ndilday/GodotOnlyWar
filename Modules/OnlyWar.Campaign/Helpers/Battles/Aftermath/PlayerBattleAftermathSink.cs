@@ -1,14 +1,15 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
+using OnlyWar.Domain.Equippables;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Operations.Orders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles.Aftermath
+namespace OnlyWar.Campaign.Battles.Aftermath
 {
     public sealed class PlayerBattleAftermathSink :
         IPlayerBattleAftermathSink,
@@ -45,7 +46,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
             // Only his own death ends an assignment; releasing it here keeps a dead man out
             // of the order's AssignedCharacters projection and OrderCharacter save rows.
-            Orders.OrderForceService.RemoveCharacter(soldier);
+            OrderForceService.RemoveCharacter(soldier);
             Squad formerSquad = soldier.AssignedSquad;
             formerSquad?.RemoveSquadMember(soldier);
             if (formerSquad?.Members.Count == 0)

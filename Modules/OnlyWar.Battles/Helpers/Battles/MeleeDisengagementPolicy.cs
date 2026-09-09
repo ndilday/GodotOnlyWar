@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles.Models;
 
-namespace OnlyWar.Helpers.Battles;
+namespace OnlyWar.Battles;
 
 public enum MeleeDisengagementChoice
 {

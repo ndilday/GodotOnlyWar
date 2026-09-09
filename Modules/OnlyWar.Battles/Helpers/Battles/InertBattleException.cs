@@ -1,6 +1,6 @@
 using System;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// Raised when a battle stops progressing entirely -- no casualties on either side, no change

@@ -1,5 +1,5 @@
 using OnlyWar.Application;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using System.Linq;

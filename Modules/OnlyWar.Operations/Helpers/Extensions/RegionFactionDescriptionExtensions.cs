@@ -1,11 +1,11 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Extensions
+namespace OnlyWar.Operations.Extensions
 {
     /// <summary>
     /// Intel-gated, player-facing descriptions of a region faction. These need the intelligence

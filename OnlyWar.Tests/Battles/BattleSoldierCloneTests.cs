@@ -1,7 +1,7 @@
 using System;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Battles;
+using OnlyWar.Battles;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Battles.Models;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

@@ -1,7 +1,7 @@
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain.Planets;
 using System;
 
-namespace OnlyWar.Models.FactionBehaviors
+namespace OnlyWar.Domain.FactionBehaviors
 {
     public sealed record DormantPopulationCullingResult(
         bool WasBeliefEligible,
@@ -40,7 +40,7 @@ namespace OnlyWar.Models.FactionBehaviors
                     effectivePdfBattleValue < profile.DormantCullingOutsideHelpEffectivePdfFloor);
             }
 
-            long removed = Math.Min(target.Population, Math.Max(0L, (long)Math.Floor(
+            long removed = System.Math.Min(target.Population, System.Math.Max(0L, (long)System.Math.Floor(
                 target.Population * profile.DormantCullingPopulationReductionFraction)));
             double consolidationRemoved = target.DormantConsolidation
                 * profile.DormantCullingConsolidationReductionFraction;

@@ -1,8 +1,8 @@
 using System;
-using OnlyWar.Models;
-using OnlyWar.Models.Supply;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Supply;
 
-namespace OnlyWar.Helpers.Supply
+namespace OnlyWar.Campaign.Supply
 {
     public readonly struct PledgeDeliveryResult
     {

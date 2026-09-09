@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Helpers.Extensions;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Extensions;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Operations.Intelligence
 {
     /// <summary>
     /// Applies reports and awareness gains, including the one-pass Allied fan-out. The target

@@ -1,5 +1,5 @@
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Models.Planets;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

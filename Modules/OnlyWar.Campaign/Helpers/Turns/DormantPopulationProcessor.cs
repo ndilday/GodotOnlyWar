@@ -1,6 +1,6 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>
     /// Resolves dormant-population culling, consolidation, growth, and emergence in weekly order.

@@ -1,13 +1,13 @@
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-using OnlyWar.Models.Equippables;
-using static OnlyWar.Models.Equippables.EquipmentRulesCatalog;
-namespace OnlyWar.Helpers.Equipment
+using OnlyWar.Domain.Equippables;
+using static OnlyWar.Domain.Equippables.EquipmentRulesCatalog;
+namespace OnlyWar.Persistence.Equipment
 {
     public static class LegacyEquipmentCatalogBuilder
     {

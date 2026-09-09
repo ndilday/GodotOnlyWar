@@ -1,6 +1,6 @@
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 
-namespace OnlyWar.Helpers.Fortifications
+namespace OnlyWar.Domain.Fortifications
 {
     /// <summary>
     /// Player-facing names for the defensive works a <see cref="DefenseType"/> stands for.

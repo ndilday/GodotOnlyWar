@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Intelligence;
 
-namespace OnlyWar.Models.Planets
+namespace OnlyWar.Domain.Planets
 {
     public class PlanetFaction
     {
@@ -42,7 +42,7 @@ namespace OnlyWar.Models.Planets
         {
             if (region == null) throw new ArgumentNullException(nameof(region));
             if (!float.IsFinite(amount)) throw new ArgumentOutOfRangeException(nameof(amount));
-            SetRegionAwareness(region, Math.Max(0f, GetRegionAwareness(region) + amount));
+            SetRegionAwareness(region, System.Math.Max(0f, GetRegionAwareness(region) + amount));
         }
 
         public void SetRegionAwareness(Region region, float level)
@@ -112,7 +112,7 @@ namespace OnlyWar.Models.Planets
             int lastEvidenceWeek = previous?.LastEvidenceWeek ?? observation.EvidenceWeek;
             if (observation.EvidenceDelta > 0f)
             {
-                lastEvidenceWeek = Math.Max(lastEvidenceWeek, observation.EvidenceWeek);
+                lastEvidenceWeek = System.Math.Max(lastEvidenceWeek, observation.EvidenceWeek);
             }
 
             FactionIntelBelief current = new(
@@ -195,7 +195,7 @@ namespace OnlyWar.Models.Planets
         {
             if (!incoming.HasValue) return existing;
             if (!existing.HasValue || existingEvidence <= 0f) return incoming;
-            return (long)Math.Round(
+            return (long)System.Math.Round(
                 (existing.Value * existingEvidence + incoming.Value * incomingEvidence)
                     / (existingEvidence + incomingEvidence),
                 MidpointRounding.AwayFromZero);

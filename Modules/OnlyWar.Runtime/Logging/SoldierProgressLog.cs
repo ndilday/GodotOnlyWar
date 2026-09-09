@@ -1,10 +1,10 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Runtime.Logging
 {
     // Shared dev-facing log for soldier skill/attribute growth over a discrete activity
     // (a mission, a battle, or a week of training). Captures a snapshot of each soldier's raw

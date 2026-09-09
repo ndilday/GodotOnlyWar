@@ -1,8 +1,8 @@
 using Godot;
 using OnlyWar.Abstractions;
 using OnlyWar.Application;
-using OnlyWar.Helpers.Settings;
-using OnlyWar.Helpers.Storage;
+using OnlyWar.Campaign.Settings;
+using OnlyWar.Persistence.Storage;
 
 namespace OnlyWar.Host.Composition;
 

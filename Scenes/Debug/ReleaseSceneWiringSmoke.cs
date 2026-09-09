@@ -1,7 +1,7 @@
 using Godot;
-using OnlyWar.Helpers.Settings;
+using OnlyWar.Campaign.Settings;
 using OnlyWar.Host.Presentation.UI.SystemMenu;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using System;
 using System.Collections.Generic;
 using System.IO;

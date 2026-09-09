@@ -1,17 +1,15 @@
-using OnlyWar.Helpers.Readiness;
+using OnlyWar.Medical.Readiness;
 using Godot;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions;
-using OnlyWar.Helpers.Orders;
-using OnlyWar.Helpers.PlanetaryOperations;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Orders;
+using OnlyWar.Operations.Planetary;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Orders;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
 using OnlyWar.Application;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
@@ -841,9 +839,9 @@ public class PlanetaryOperationsServiceTests
             _fixture = fixture;
             _application = TestPersonnelComposition.CreateCampaign(new SeededRNG(31)).CreateApplication();
             GameRulesData rules = fixture.Rules
-                ?? OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(
+                ?? OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(
                     RulesDatabaseFixture.DatabasePath);
-            _application.Install(new OnlyWar.Helpers.Simulation.GameSession(
+            _application.Install(new OnlyWar.Application.Session.GameSession(
                 rules,
                 fixture.Sector, fixture.CurrentDate, new SeededRNG(32)));
         }

@@ -1,10 +1,10 @@
-using OnlyWar.Models;
-using OnlyWar.Models.Events;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Events;
 using System;
 using System.Data;
 using System.IO;
 
-namespace OnlyWar.Helpers.Database.GameState
+namespace OnlyWar.Persistence.Database.GameState
 {
     // The single-row GlobalData table holds chapter-wide scalars that aren't owned by any
     // other aggregate: the current date, the Requisition pool (PRD 4.23), the gene-seed

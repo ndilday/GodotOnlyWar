@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     // The kinds of events recorded in a soldier's structured history log. One value
     // exists per site that currently writes soldier history; the reserved values are

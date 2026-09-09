@@ -1,10 +1,10 @@
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Missions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
     internal class AmbushedMissionStep : IMissionStep
     {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace OnlyWar.Models
+namespace OnlyWar.Domain
 {
     public enum FactionStance
     {
@@ -33,8 +33,8 @@ namespace OnlyWar.Models
                     firstFactionId < 0 ? nameof(firstFactionId) : nameof(secondFactionId));
             }
 
-            LowerFactionId = Math.Min(firstFactionId, secondFactionId);
-            HigherFactionId = Math.Max(firstFactionId, secondFactionId);
+            LowerFactionId = System.Math.Min(firstFactionId, secondFactionId);
+            HigherFactionId = System.Math.Max(firstFactionId, secondFactionId);
         }
 
         public FactionPair(Faction first, Faction second)
@@ -68,7 +68,7 @@ namespace OnlyWar.Models
     /// </summary>
     public sealed class FactionRelationshipLedger
     {
-        public static FactionStance GetControlStance(Faction first, Faction second, OnlyWar.Models.Planets.Planet planet) =>
+        public static FactionStance GetControlStance(Faction first, Faction second, OnlyWar.Domain.Planets.Planet planet) =>
             planet?.RelationshipLedger?.GetStance(first, second)
                 ?? (first != null && second != null && first.Id == second.Id ? FactionStance.Allied : FactionStance.Hostile);
         private readonly Dictionary<FactionPair, FactionStance> _entries = new();

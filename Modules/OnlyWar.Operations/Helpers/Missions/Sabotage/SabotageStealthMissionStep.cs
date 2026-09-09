@@ -1,11 +1,11 @@
-using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models;
+using OnlyWar.Operations.Missions.Recon;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Sabotage
+namespace OnlyWar.Operations.Missions.Sabotage
 {
     public class SabotageStealthMissionStep : IMissionStep
     {

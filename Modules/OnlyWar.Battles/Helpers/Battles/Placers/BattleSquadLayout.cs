@@ -1,9 +1,9 @@
-﻿
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles.Placers
 {
     public class BattleSquadLayout
     {

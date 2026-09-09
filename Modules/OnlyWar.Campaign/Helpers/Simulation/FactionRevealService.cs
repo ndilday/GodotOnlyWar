@@ -1,8 +1,8 @@
 using System;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
 
-namespace OnlyWar.Helpers.Simulation;
+namespace OnlyWar.Campaign.Simulation;
 
 /// <summary>
 /// Applies the population-conserving transition from a hidden regional presence to a public one.

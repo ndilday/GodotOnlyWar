@@ -4,13 +4,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Turns;
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Campaign.Turns;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -56,7 +55,7 @@ public class ScenarioTraceDiagnostics
 
         foreach (int seed in seeds)
         {
-            GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+            GameRulesData data = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Sector sector = TestGeneration.GenerateSector(seed, data, _date, $"Pocket {seed}");
             Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
             Faction imp = data.DefaultFaction;
@@ -145,7 +144,7 @@ public class ScenarioTraceDiagnostics
 
     private void RunOneSeed(int seed, StringBuilder csv)
     {
-        GameRulesData data = OnlyWar.Helpers.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        GameRulesData data = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
 
         // Capture the generation-time trace (the pre/post-landing SimulatePlanetForward sims emit
         // Info/Debug), so we can read how long the swarm fed and how the cult war went.

@@ -1,4 +1,4 @@
-using OnlyWar.Models;
+using OnlyWar.Application;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -60,7 +60,7 @@ public readonly record struct SectorMapLabelPlacement(
 public readonly record struct SectorMapPlanetLabelPriority(
     int PlanetId,
     bool HasActiveWork,
-    RequestSeverity RequestSeverity,
+    SectorMapRequestSeverity RequestSeverity,
     bool IsGovernanceSeat,
     int Importance)
 {

@@ -1,4 +1,4 @@
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 using System.Linq;
 using Xunit;
 

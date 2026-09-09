@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Models;
-using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Geometry;
-using OnlyWar.Models.Planets;
+using OnlyWar.Generation.World;
+using OnlyWar.Domain;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Fleets;
+using OnlyWar.Domain.Geometry;
+using OnlyWar.Domain.Planets;
 
 namespace OnlyWar.Application;
 
@@ -174,7 +174,7 @@ internal sealed class SectorMapContext
                     controller != null,
                     controller == null ? 0 : ToArgb(controller.Color),
                     hasActiveRequest || hasActiveMission || hasActiveOrder,
-                    severity,
+                    ToView(severity),
                     governanceSeats.Contains(planet.Id),
                     planet.Importance);
             })
@@ -211,6 +211,14 @@ internal sealed class SectorMapContext
                 taskForce.Destination?.Position ?? taskForce.Position,
             _ => taskForce.Position
         };
+
+    private static SectorMapRequestSeverity ToView(RequestSeverity severity) => severity switch
+    {
+        RequestSeverity.Serious => SectorMapRequestSeverity.Serious,
+        RequestSeverity.Desperate => SectorMapRequestSeverity.Desperate,
+        RequestSeverity.Existential => SectorMapRequestSeverity.Existential,
+        _ => SectorMapRequestSeverity.Concerned
+    };
 
     private static int ToArgb(System.Drawing.Color color) => color.ToArgb();
 }

@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Models.Soldiers
+namespace OnlyWar.Domain.Soldiers
 {
     public class SkillTemplate : NormalizedValueTemplate
     {

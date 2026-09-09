@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models;
+using OnlyWar.Domain;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 

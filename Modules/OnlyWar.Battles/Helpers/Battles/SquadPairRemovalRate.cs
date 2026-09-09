@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Math;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// One hit location's range-INDEPENDENT contribution to take-out probability.

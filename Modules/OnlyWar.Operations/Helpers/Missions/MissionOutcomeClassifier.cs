@@ -1,67 +1,8 @@
-using OnlyWar.Models.Missions;
+using OnlyWar.Domain.Missions;
 using System.Collections.Generic;
 
-namespace OnlyWar.Helpers.Missions
+namespace OnlyWar.Operations.Missions
 {
-    // The strike force's terminal fate, distilled from MissionContext's structured signals. This is
-    // orthogonal to whether the mission's objective succeeded (see MissionOutcomeClassification's other
-    // members) - a force can, say, break contact cleanly having found no target.
-    public enum MissionForceDisposition
-    {
-        // Nothing notable happened to the force itself: an undetected recon, an overt diversion, or a
-        // mission that simply ran its course.
-        Nominal = 0,
-        // Detected, but slipped back out (evaded its interceptors / exfiltrated to base).
-        BrokeContact,
-        // Detected and could not get out; lost behind enemy lines (assumed dead / gone to ground).
-        LostContact,
-        // An engagement left the force combat-ineffective; it withdrew under fire with heavy losses.
-        WithdrewUnderFire,
-        // Could not reach the objective before acting (failed to infiltrate / too many casualties).
-        AbortedBeforeObjective
-    }
-
-    // The single, structured verdict on a non-battle mission. Built once, by MissionOutcomeClassifier,
-    // from the signals the mission steps set on MissionContext, and consumed by BOTH the career-log
-    // recorder (MissionOutcomeRecorder, third-person past tense) and the end-of-turn commander report
-    // (MissionReportSummaryBuilder, second-person "Your forces ..."). Keeping the classification here -
-    // rather than re-deriving it from Log text in each consumer - means the two renderings can never
-    // silently disagree, and a change to a step's log wording can't misclassify anything.
-    public sealed class MissionOutcomeClassification
-    {
-        public MissionType MissionType { get; init; }
-        public bool WasDetected { get; init; }
-        public bool ReturnedToBase { get; init; }
-        public bool RemainedInTargetRegion { get; init; }
-        public MissionForceDisposition Disposition { get; init; }
-        public bool NoViableTarget { get; init; }
-        // Ambush only: whether the attempt was detected before it could be sprung, and at which
-        // stage. NotSpoiled on every other mission type.
-        public AmbushSpoilStage AmbushSpoiled { get; init; }
-        public bool TargetLocated { get; init; }
-        public bool TargetEliminated { get; init; }
-        public int EnemiesKilled { get; init; }
-        public int EnemyKillCredits { get; init; }
-        // What the operation cost the Chapter. Incapacitated brothers are casualties, not kills
-        // (Design/Reference/CasualtyRealism.md §2.3): they came home alive and go into the
-        // wound-recovery pipeline, so the debrief must not bury them.
-        public int FriendlyDeaths { get; init; }
-        public int FriendlyIncapacitated { get; init; }
-        // Apothecary field care under this order (Design/Reference/CasualtyRealism.md §2.6).
-        // Zero/empty when no Apothecary was attached, which is the overwhelming majority of orders.
-        public IReadOnlyList<string> FieldCareApothecaries { get; init; } = [];
-        public int FieldCareTreatments { get; init; }
-        public int FieldCareTreatedBrothers { get; init; }
-        public float Impact { get; init; }
-        // Sabotage only: which works were the objective, the level of them the raid actually brought
-        // down (measured in aftermath, so it is 0 on a failed attempt or against a position that was
-        // already gone), and what was standing before it did. The report renders the last two as a
-        // change in the same fuzzy band the region screens show, never as raw numbers.
-        public DefenseType? SabotageTarget { get; init; }
-        public double SabotageDamage { get; init; }
-        public double SabotageLevelBefore { get; init; }
-    }
-
     public static class MissionOutcomeClassifier
     {
         public static MissionOutcomeClassification Classify(MissionContext context)

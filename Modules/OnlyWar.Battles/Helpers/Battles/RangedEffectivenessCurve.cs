@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Models.Equippables;
+using OnlyWar.Domain.Equippables;
 
-namespace OnlyWar.Helpers.Battles
+namespace OnlyWar.Battles
 {
     /// <summary>
     /// A representative target for the engagement-range model: the scalar profile every one of the

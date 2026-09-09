@@ -1,4 +1,4 @@
-namespace OnlyWar.Models.Geometry;
+namespace OnlyWar.Domain.Geometry;
 
 /// <summary>Signed integral cell/dimensions, independent of rendering coordinates.</summary>
 public readonly record struct GridCell(int X, int Y)

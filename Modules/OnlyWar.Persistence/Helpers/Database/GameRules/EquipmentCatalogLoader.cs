@@ -1,5 +1,5 @@
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.Soldiers;
 using System.Data;
 using System.Data.Common;
 using System;
@@ -7,8 +7,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-using OnlyWar.Models.Equippables;
-namespace OnlyWar.Helpers.Database.GameRules
+using OnlyWar.Domain.Equippables;
+namespace OnlyWar.Persistence.Database.GameRules
 {
     public static class EquipmentCatalogLoader
     {

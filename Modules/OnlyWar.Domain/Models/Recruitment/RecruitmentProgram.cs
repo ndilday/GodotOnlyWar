@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain.Orders;
 
-namespace OnlyWar.Models.Recruitment
+namespace OnlyWar.Domain.Recruitment
 {
     public sealed class RecruitmentAttributeFilters
     {
@@ -77,6 +77,6 @@ namespace OnlyWar.Models.Recruitment
         public List<RecruitmentProgramEvent> ProgramEvents { get; } = [];
 
         public double UnscreenedEligiblePopulation =>
-            UnscreenedCohorts.Sum(cohort => Math.Max(0, cohort.RemainingPopulation));
+            UnscreenedCohorts.Sum(cohort => System.Math.Max(0, cohort.RemainingPopulation));
     }
 }

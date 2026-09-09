@@ -1,10 +1,30 @@
-namespace OnlyWar.Application;
+namespace OnlyWar.Application.Abstractions;
 
 public enum RecoveryMovementChoice
 {
     None,
     DetachCasualty,
     MoveWholeSquad
+}
+
+/// <summary>Application-facing treatment choices; the medical module owns its implementation enum.</summary>
+public enum MedicalProcedureChoice
+{
+    Cybernetic,
+    VatGrown
+}
+
+public enum MedicalWoundLevel
+{
+    None,
+    Negligible,
+    Minor,
+    Moderate,
+    Major,
+    Critical,
+    Massive,
+    Mortal,
+    Unsurvivable
 }
 
 public enum CareDestinationState

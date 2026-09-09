@@ -1,12 +1,12 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Simulation;
-using OnlyWar.Models;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.FactionBehaviors;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Campaign.Simulation;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.FactionBehaviors;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Turns
+namespace OnlyWar.Campaign.Turns
 {
     /// <summary>Applies ordinary faction population growth, conversion, and garrison changes.</summary>
     internal sealed class PlanetDemographicsProcessor

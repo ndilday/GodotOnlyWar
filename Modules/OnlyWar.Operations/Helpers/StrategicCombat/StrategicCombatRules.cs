@@ -1,8 +1,8 @@
 using System;
-using OnlyWar.Models;
-using OnlyWar.Models.Orders;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Orders;
 
-namespace OnlyWar.Helpers.StrategicCombat
+namespace OnlyWar.Operations.StrategicCombat
 {
     public static class StrategicCombatRules
     {

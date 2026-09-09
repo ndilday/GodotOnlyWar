@@ -1,17 +1,17 @@
-using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Fortifications;
+using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Fortifications;
 using OnlyWar.Battles.Abstractions;
-using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.FactionBehaviors;
-using OnlyWar.Models;
+using OnlyWar.Domain.Missions;
+using OnlyWar.Domain.Planets;
+using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain;
 using System.Linq;
-using OnlyWar.Builders;
-using OnlyWar.Helpers.Turns;
+using OnlyWar.Runtime.Factories;
+using OnlyWar.Operations.Turns;
 
-namespace OnlyWar.Helpers.Missions.Assassinate
+namespace OnlyWar.Operations.Missions.Assassinate
 {
     public class PerformAssassinationMissionStep : IMissionStep
     {

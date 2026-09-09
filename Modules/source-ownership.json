@@ -1,4 +1,42 @@
 {
+  "NamespaceOwnership": {
+    "OnlyWar": "Compatibility only: Runtime name-generator facade",
+    "OnlyWar.Abstractions.*": "OnlyWar.Abstractions",
+    "OnlyWar.Application.Abstractions.*": "OnlyWar.Application.Abstractions",
+    "OnlyWar.Application.*": "OnlyWar.Application",
+    "OnlyWar.Battles.Abstractions.*": "OnlyWar.Battles.Abstractions",
+    "OnlyWar.Battles.*": "OnlyWar.Battles",
+    "OnlyWar.Campaign.*": "OnlyWar.Campaign",
+    "OnlyWar.Domain.*": "OnlyWar.Domain",
+    "OnlyWar.Generation.Abstractions.*": "OnlyWar.Generation.Abstractions",
+    "OnlyWar.Generation.*": "OnlyWar.Generation",
+    "OnlyWar.Medical.Abstractions.*": "OnlyWar.Medical.Abstractions",
+    "OnlyWar.Medical.*": "OnlyWar.Medical",
+    "OnlyWar.Operations.Abstractions.*": "OnlyWar.Operations.Abstractions",
+    "OnlyWar.Operations.*": "OnlyWar.Operations",
+    "OnlyWar.Persistence.Abstractions.*": "OnlyWar.Persistence.Abstractions",
+    "OnlyWar.Persistence.*": "OnlyWar.Persistence",
+    "OnlyWar.Runtime.Abstractions.*": "OnlyWar.Runtime.Abstractions",
+    "OnlyWar.Runtime.*": "OnlyWar.Runtime",
+    "OnlyWar.Host.*": "OnlyWarGodot/Host",
+    "OnlyWar.Scenes.*": "OnlyWarGodot/Scenes"
+  },
+  "DeprecatedNamespaces": [
+    "OnlyWar.Models",
+    "OnlyWar.Helpers",
+    "OnlyWar.Builders",
+    "OnlyWar.Contracts"
+  ],
+  "CompatibilitySources": [
+    "Modules/OnlyWar.Medical/Compatibility/LegacyMedicalProcedureRules.cs",
+    "Modules/OnlyWar.Operations/Compatibility/OperationsBoundaryTypeForwarders.cs",
+    "Modules/OnlyWar.Runtime/Compatibility/NameGeneratorFacade.cs"
+  ],
+  "CompatibilityNamespaceAllowlist": {
+    "Modules/OnlyWar.Medical/Compatibility/LegacyMedicalProcedureRules.cs": [
+      "OnlyWar.Helpers"
+    ]
+  },
   "Domain": [
     "Identity/CompatibilityPersistentIdAllocator.cs",
     "Models/Coordinate.cs",
@@ -73,7 +111,9 @@
     "Contracts/IEngagementElementFactory.cs",
     "Contracts/IOperationsPersonnelSurface.cs",
     "Contracts/IOrderCommitmentSurface.cs",
+    "Contracts/MissionDebriefContracts.cs",
     "Contracts/MissionCampaignInputs.cs",
+    "Contracts/MissionOutcomeContracts.cs",
     "Contracts/OrderCommandContext.cs",
     "Models/Missions/OperationalMissionElement.cs"
   ],
@@ -88,7 +128,7 @@
     "Readiness/SquadReadinessPolicy.cs",
     "Treatment/FieldCareConstants.cs",
     "Treatment/FieldCarePolicy.cs",
-    "Treatment/LegacyMedicalProcedureRules.cs",
+    "Compatibility/LegacyMedicalProcedureRules.cs",
     "Treatment/MedicalFacilityPolicy.cs",
     "Treatment/MedicalHealthPolicy.cs",
     "Treatment/MedicalProcedureRules.cs"
@@ -162,7 +202,7 @@
     "Models/Soldiers/Names/given_names.txt",
     "Models/Soldiers/Names/surnames.txt",
     "Naming/NameGenerator.cs",
-    "Naming/NameGeneratorFacade.cs",
+    "Compatibility/NameGeneratorFacade.cs",
     "RNG.cs",
     "SeededRNG.cs",
     "StaticRNG.cs",
@@ -197,6 +237,7 @@
     "Host/Presentation/UI/WoundPresentationPalette.cs"
   ],
   "Operations": [
+    "Compatibility/OperationsBoundaryTypeForwarders.cs",
     "Builders/MissionStepOrchestrator.cs",
     "Helpers/Extensions/RegionDetectionExtensions.cs",
     "Helpers/Extensions/RegionFactionDescriptionExtensions.cs",
@@ -370,6 +411,7 @@
     "Models/PresenceRequest.cs"
   ],
   "Application": [
+    "Contexts/BattleReplayRegistry.cs",
     "Contexts/OperationsReadContext.cs",
     "Contexts/OperationsCommandContext.cs",
     "Contexts/MedicalReadContext.cs",
@@ -387,6 +429,7 @@
     "Queries/SessionControlContracts.cs",
     "MainScreenApplication.cs",
     "Queries/MainScreenContracts.cs",
+    "Queries/BattleReplayModels.cs",
     "Queries/TurnReportModels.cs",
     "Queries/TurnReportProjector.cs",
     "Queries/LastTurnReportSnapshotBuilder.cs",
@@ -422,6 +465,8 @@
     "Queries/SectorMapContracts.cs",
     "Queries/DiplomacyScreenProjector.cs",
     "Queries/LoadoutScreenContracts.cs",
+    "Queries/MedicalProcedureChoiceMapping.cs",
+    "Queries/OperationsAggressionMapping.cs",
     "Queries/ElementLoadoutModels.cs",
     "Queries/RecruitmentScreenModels.cs",
     "Queries/ChapterScreenContracts.cs",
@@ -441,6 +486,6 @@
     "Helpers/SavedGameLoader.cs",
     "Helpers/Simulation/GameSession.cs",
     "Helpers/Storage/CampaignLoader.cs",
-    "Helpers/Storage/CurrentCampaignSaveWriter.cs",
+    "Helpers/Storage/CurrentCampaignSaveWriter.cs"
   ]
 }

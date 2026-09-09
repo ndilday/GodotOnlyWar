@@ -1,5 +1,5 @@
-﻿
-namespace OnlyWar.Models.Missions
+
+namespace OnlyWar.Domain.Missions
 {
     public enum MissionType
     {

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using OnlyWar.Helpers.Battles;
+using OnlyWar.Battles;
 
-namespace OnlyWar.Models.Battles;
+namespace OnlyWar.Battles.Models;
 
 /// <summary>
 /// Stable, destination-independent identity of a squad movement choice.  This is deliberately

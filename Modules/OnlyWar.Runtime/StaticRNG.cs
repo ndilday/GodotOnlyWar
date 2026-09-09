@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers
+namespace OnlyWar.Runtime.Random
 {
     /// <summary>
     /// <see cref="IRNG"/> adapter over the global static <see cref="RNG"/>. Production

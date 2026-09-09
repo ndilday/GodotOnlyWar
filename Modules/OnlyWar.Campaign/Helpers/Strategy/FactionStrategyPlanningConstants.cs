@@ -1,4 +1,4 @@
-namespace OnlyWar.Helpers.Strategy;
+namespace OnlyWar.Campaign.Strategy;
 
 /// <summary>
 /// Thresholds shared by the strategic reconnaissance and offensive-evaluation policies.

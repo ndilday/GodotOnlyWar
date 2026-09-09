@@ -1,10 +1,10 @@
-using OnlyWar.Models;
+using OnlyWar.Domain;
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Models.Squads;
+using OnlyWar.Domain.Squads;
 
-namespace OnlyWar.Helpers.Battles.Placers
+namespace OnlyWar.Battles.Placers
 {
     public class AnnihilationPlacer
     {

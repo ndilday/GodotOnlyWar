@@ -1,11 +1,11 @@
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Domain.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Collections.ObjectModel;
 
-namespace OnlyWar.Models.Events
+namespace OnlyWar.Domain.Events
 {
     public sealed record OpenNearDeathEpisode(
         int SoldierId,
@@ -134,7 +134,7 @@ namespace OnlyWar.Models.Events
             _orderedEvents.Add(@event);
             _byId.Add(@event.Id, @event);
             _byDedupeKey.Add(@event.DedupeKey, @event);
-            _nextEventId = Math.Max(_nextEventId, @event.Id + 1);
+            _nextEventId = System.Math.Max(_nextEventId, @event.Id + 1);
             if (!_byOccurredWeek.TryGetValue(@event.OccurredWeek, out List<long> weekIds))
             {
                 weekIds = new List<long>();
