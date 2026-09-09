@@ -5,6 +5,7 @@ using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Supply;
 using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Runtime.Naming;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,14 +31,16 @@ namespace OnlyWar.Campaign.Turns
             PlanetIntelligenceProcessor intelligenceProcessor = null,
             OrganicPopulationGrowthLedger growthLedger = null,
             ICollection<FortificationTransferReport> fortificationTransfers = null,
-            ICollection<GovernorRequestReport> governorRequestReports = null)
+            ICollection<GovernorRequestReport> governorRequestReports = null,
+            NameGenerator nameGenerator = null)
         {
             Initialize(
-                CampaignTurnContext.From(session),
+                CampaignTurnContext.From(session, nameGenerator),
                 intelligenceProcessor,
                 growthLedger,
                 fortificationTransfers,
-                governorRequestReports);
+                governorRequestReports,
+                nameGenerator);
         }
 
         internal PlanetTurnProcessor(
@@ -45,14 +48,16 @@ namespace OnlyWar.Campaign.Turns
             PlanetIntelligenceProcessor intelligenceProcessor = null,
             OrganicPopulationGrowthLedger growthLedger = null,
             ICollection<FortificationTransferReport> fortificationTransfers = null,
-            ICollection<GovernorRequestReport> governorRequestReports = null)
+            ICollection<GovernorRequestReport> governorRequestReports = null,
+            NameGenerator nameGenerator = null)
         {
             Initialize(
                 turn,
                 intelligenceProcessor,
                 growthLedger,
                 fortificationTransfers,
-                governorRequestReports);
+                governorRequestReports,
+                nameGenerator);
         }
 
         private void Initialize(
@@ -60,7 +65,8 @@ namespace OnlyWar.Campaign.Turns
             PlanetIntelligenceProcessor intelligenceProcessor,
             OrganicPopulationGrowthLedger growthLedger,
             ICollection<FortificationTransferReport> fortificationTransfers,
-            ICollection<GovernorRequestReport> governorRequestReports)
+            ICollection<GovernorRequestReport> governorRequestReports,
+            NameGenerator nameGenerator)
         {
             if (turn == null) throw new ArgumentNullException(nameof(turn));
             growthLedger ??= new OrganicPopulationGrowthLedger();
@@ -69,7 +75,8 @@ namespace OnlyWar.Campaign.Turns
             _demographicsProcessor = new PlanetDemographicsProcessor(turn, growthLedger);
             _regionControlProcessor = new RegionControlTurnProcessor(fortificationTransfers);
             _conversionProcessor = new ConversionTurnProcessor(turn);
-            _governorTurnProcessor = new GovernorTurnProcessor(turn, governorRequestReports);
+            _governorTurnProcessor = new GovernorTurnProcessor(
+                turn, governorRequestReports, nameGenerator);
             _civilUnrestTurnProcessor = new CivilUnrestTurnProcessor(turn);
         }
 

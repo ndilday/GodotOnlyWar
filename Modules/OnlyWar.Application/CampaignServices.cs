@@ -15,6 +15,7 @@ using OnlyWar.Medical.Abstractions;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Orders;
 using OnlyWar.Domain;
+using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Application;
 
@@ -31,10 +32,12 @@ public sealed class CampaignServices
     public OperationsServices Operations { get; }
     public BattleServices Battle { get; }
     public GenerationServices Generation { get; }
+    public NameGenerator NameGenerator { get; }
 
     public CampaignServices(IRNG random, GameStorage storage)
     {
         Random = random ?? throw new ArgumentNullException(nameof(random));
+        NameGenerator = new NameGenerator();
         Persistence = new PersistenceServices(storage);
         Readiness = new ReadinessServices(new MedicalReadinessDecisions());
 
@@ -43,7 +46,7 @@ public sealed class CampaignServices
             new OperationsPersonnelSurface(Readiness.Decisions, commitments),
             commitments);
         Battle = new BattleServices();
-        Generation = new GenerationServices(Readiness, Operations, Battle);
+        Generation = new GenerationServices(Readiness, Operations, Battle, NameGenerator);
     }
 }
 
@@ -125,16 +128,19 @@ public sealed class GenerationServices
     private readonly IReadinessDecisions _readiness;
     private readonly OperationsServices _operations;
     private readonly BattleServices _battle;
+    private readonly NameGenerator _nameGenerator;
 
     public GenerationServices(
         ReadinessServices readiness,
         OperationsServices operations,
-        BattleServices battle)
+        BattleServices battle,
+        NameGenerator nameGenerator = null)
     {
         _readiness = readiness?.Decisions
             ?? throw new ArgumentNullException(nameof(readiness));
         _operations = operations ?? throw new ArgumentNullException(nameof(operations));
         _battle = battle ?? throw new ArgumentNullException(nameof(battle));
+        _nameGenerator = nameGenerator ?? new NameGenerator();
     }
 
     public GenerationSupport CreateSupport(
@@ -150,5 +156,6 @@ public sealed class GenerationServices
             _readiness,
             _operations.Personnel,
             _operations.Commitments,
-            _battle);
+            _battle,
+            _nameGenerator);
 }

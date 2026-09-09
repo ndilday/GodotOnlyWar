@@ -10,6 +10,7 @@ using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Events;
+using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Generation.Scenarios
 {
@@ -31,6 +32,7 @@ namespace OnlyWar.Generation.Scenarios
         internal static CampaignScenario StampPromisedWorld(
             Sector sector, GameRulesData data, Date currentDate, GenerationSupport support,
             PlayerForce playerForce, List<Planet> planetList, List<Character> characterList,
+            NameGenerator nameGenerator,
             ScenarioFactionSelection invaderSelection = null)
         {
             ScenarioProfile profile = data.ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
@@ -86,6 +88,7 @@ namespace OnlyWar.Generation.Scenarios
             PlaceFleetInOrbit(sector, playerForce, promised, support);
             Character authority = ResolveAuthority(sector, planetList, characterList, data,
                                                    support.Identity,
+                                                   nameGenerator,
                                                    out GovernanceTier authorityTier);
             string briefingText = ComposeBriefing(sector, promised, authority, authorityTier,
                                                   playerForce, invader, currentDate, support);
@@ -587,6 +590,7 @@ namespace OnlyWar.Generation.Scenarios
         private static Character ResolveAuthority(Sector sector, List<Planet> planetList,
                                                   List<Character> characterList, GameRulesData data,
                                                   IPersistentIdAllocator identity,
+                                                  NameGenerator nameGenerator,
                                                   out GovernanceTier authorityTier)
         {
             Planet capital = sector.GetSectorCapital();
@@ -610,7 +614,7 @@ namespace OnlyWar.Generation.Scenarios
             // Title them as the highest authority, since no seated governor exists to rank.
             authorityTier = GovernanceTier.SectorCapital;
             Character authority = CharacterBuilder.GenerateCharacter(
-                identity.GetNextCharacterId(), data.DefaultFaction);
+                identity.GetNextCharacterId(), data.DefaultFaction, nameGenerator);
             sector.Characters.Add(authority);
             characterList.Add(authority);
             return authority;

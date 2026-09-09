@@ -1,19 +1,22 @@
 using OnlyWar.Domain;
 using OnlyWar.Domain.Soldiers;
+using OnlyWar.Runtime.Naming;
+using System;
 using System.Collections.Generic;
 
 namespace OnlyWar.Generation.World
 {
     public static class CharacterBuilder
     {
-        public static Character GenerateCharacter(int id, Faction faction)
+        public static Character GenerateCharacter(int id, Faction faction, NameGenerator nameGenerator)
         {
+            ArgumentNullException.ThrowIfNull(nameGenerator);
             return new Character()
             {
                 Id = id,
                 Loyalty = faction,
                 Age = RNG.GetIntBelowMax(30, 100),
-                Name = NameGenerator.GetFullName(),
+                Name = nameGenerator.GetFullName(),
                 Appreciation = (float)RNG.GetLinearDouble(),
                 Influence = (float)RNG.GetLinearDouble(),
                 Investigation = (float)RNG.GetLinearDouble(),

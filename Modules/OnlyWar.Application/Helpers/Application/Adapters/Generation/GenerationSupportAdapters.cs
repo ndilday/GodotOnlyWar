@@ -16,6 +16,7 @@ using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Soldiers.Ratings;
 using OnlyWar.Domain.Units;
+using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Application.Adapters.Generation
 {
@@ -39,7 +40,8 @@ namespace OnlyWar.Application.Adapters.Generation
             IReadinessDecisions readiness,
             IOperationsPersonnelSurface personnel,
             IOrderCommitmentSurface commitments,
-            BattleServices battle)
+            BattleServices battle,
+            NameGenerator nameGenerator = null)
         {
             if (rules == null) throw new ArgumentNullException(nameof(rules));
             if (currentDate == null) throw new ArgumentNullException(nameof(currentDate));
@@ -48,13 +50,14 @@ namespace OnlyWar.Application.Adapters.Generation
             if (personnel == null) throw new ArgumentNullException(nameof(personnel));
             if (commitments == null) throw new ArgumentNullException(nameof(commitments));
             if (battle == null) throw new ArgumentNullException(nameof(battle));
+            nameGenerator ??= new NameGenerator();
             return new GenerationSupport(
                 new CampaignGenerationSeedingAdapter(rules, currentDate, random, identity),
                 new CampaignGenerationNarrativeAdapter(),
                 new CampaignGenerationFleetAdapter(personnel, commitments),
                 new FoundingRoleAdvisorAdapter(),
                 new CandidateSessionWarmupSimulator(
-                    random, readiness, personnel, commitments, battle, identity),
+                    random, readiness, personnel, commitments, battle, identity, nameGenerator),
                 BuildTrainingService(rules, random),
                 identity);
         }
@@ -201,6 +204,7 @@ namespace OnlyWar.Application.Adapters.Generation
         private readonly IOrderCommitmentSurface _commitments;
         private readonly BattleServices _battle;
         private readonly IPersistentIdAllocator _identity;
+        private readonly NameGenerator _nameGenerator;
         private TurnController _controller;
 
         public CandidateSessionWarmupSimulator(
@@ -209,7 +213,8 @@ namespace OnlyWar.Application.Adapters.Generation
             IOperationsPersonnelSurface personnel,
             IOrderCommitmentSurface commitments,
             BattleServices battle,
-            IPersistentIdAllocator identity)
+            IPersistentIdAllocator identity,
+            NameGenerator nameGenerator = null)
         {
             _random = random ?? throw new ArgumentNullException(nameof(random));
             _readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
@@ -217,6 +222,7 @@ namespace OnlyWar.Application.Adapters.Generation
             _commitments = commitments ?? throw new ArgumentNullException(nameof(commitments));
             _battle = battle ?? throw new ArgumentNullException(nameof(battle));
             _identity = identity ?? throw new ArgumentNullException(nameof(identity));
+            _nameGenerator = nameGenerator ?? new NameGenerator();
         }
 
         // One controller drives every warm-up pass for a candidate, as it did when the generator
@@ -234,7 +240,8 @@ namespace OnlyWar.Application.Adapters.Generation
                 _personnel,
                 _commitments,
                 engagement,
-                engagement);
+                engagement,
+                nameGenerator: _nameGenerator);
         }
 
         public void SimulatePlanetForward(Sector sector, Planet planet, int turns)

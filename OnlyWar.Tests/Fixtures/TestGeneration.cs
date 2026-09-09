@@ -3,6 +3,7 @@ using OnlyWar.Abstractions;
 using OnlyWar.Generation.Abstractions;
 using OnlyWar.Domain;
 using OnlyWar.Application.Adapters.Generation;
+using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Tests.Fixtures;
 
@@ -15,10 +16,7 @@ internal static class TestGeneration
 {
     internal static GenerationSupport Support(GameRulesData data, Date date)
     {
-        TestCampaignComposition composition = TestPersonnelComposition.CreateCampaign();
-        IPersistentIdAllocator identity = new OnlyWar.Runtime.Allocators.PersistentIdAllocator();
-        return composition.Services.Generation.CreateSupport(
-            data, date, composition.Services.Random, identity);
+        return BuildSupport(data, date).Support;
     }
 
     internal static Sector GenerateSector(
@@ -26,9 +24,18 @@ internal static class TestGeneration
         GameRulesData data,
         Date currentDate,
         string chapterName = null,
-        ScenarioFactionSelection invaderSelection = null) =>
-        SectorBuilder.GenerateSector(
-            seed, data, currentDate, Support(data, currentDate), chapterName, invaderSelection);
+        ScenarioFactionSelection invaderSelection = null)
+    {
+        (GenerationSupport support, NameGenerator nameGenerator) = BuildSupport(data, currentDate);
+        return SectorBuilder.GenerateSector(
+            seed,
+            data,
+            currentDate,
+            support,
+            chapterName,
+            invaderSelection,
+            nameGenerator);
+    }
 
     internal static PlayerForce CreateChapter(
         GameRulesData data,
@@ -37,13 +44,29 @@ internal static class TestGeneration
         Date date,
         string chapterName = null,
         int foundingSoldierCount = 1000,
-        string chapterProfileKey = null) =>
-        NewChapterBuilder.CreateChapter(
+        string chapterProfileKey = null)
+    {
+        (GenerationSupport support, NameGenerator nameGenerator) = BuildSupport(data, date);
+        return NewChapterBuilder.CreateChapter(
             data,
-            Support(data, date) with { Training = trainingService },
+            support with { Training = trainingService },
             trainingStartDate,
             date,
             chapterName,
             foundingSoldierCount,
-            chapterProfileKey);
+            chapterProfileKey,
+            nameGenerator);
+    }
+
+    private static (GenerationSupport Support, NameGenerator NameGenerator) BuildSupport(
+        GameRulesData data,
+        Date date)
+    {
+        TestCampaignComposition composition = TestPersonnelComposition.CreateCampaign();
+        IPersistentIdAllocator identity = new OnlyWar.Runtime.Allocators.PersistentIdAllocator();
+        return (
+            composition.Services.Generation.CreateSupport(
+                data, date, composition.Services.Random, identity),
+            composition.Services.NameGenerator);
+    }
 }

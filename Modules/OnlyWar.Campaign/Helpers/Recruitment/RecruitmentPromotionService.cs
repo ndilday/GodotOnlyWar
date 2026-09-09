@@ -11,6 +11,7 @@ using OnlyWar.Domain.Recruitment;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Soldiers.Ratings;
 using OnlyWar.Domain.Squads;
+using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Campaign.Recruitment
 {
@@ -40,8 +41,11 @@ namespace OnlyWar.Campaign.Recruitment
         private readonly Date _currentDate;
         private readonly IRNG _random;
         private readonly IPersistentIdAllocator _identity;
+        private readonly NameGenerator _nameGenerator;
 
-        public RecruitmentPromotionService(ICampaignSimulationSession session)
+        public RecruitmentPromotionService(
+            ICampaignSimulationSession session,
+            NameGenerator nameGenerator = null)
         {
             ArgumentNullException.ThrowIfNull(session);
             _sector = session.Sector;
@@ -49,6 +53,7 @@ namespace OnlyWar.Campaign.Recruitment
             _currentDate = session.CurrentDate;
             _random = session.Random;
             _identity = session.Identity;
+            _nameGenerator = nameGenerator ?? new NameGenerator();
         }
 
         public RecruitmentPromotionService(
@@ -56,13 +61,15 @@ namespace OnlyWar.Campaign.Recruitment
             GameRulesData rules,
             Date currentDate,
             IRNG random,
-            IPersistentIdAllocator identity)
+            IPersistentIdAllocator identity,
+            NameGenerator nameGenerator = null)
         {
             _sector = sector ?? throw new ArgumentNullException(nameof(sector));
             _rules = rules ?? throw new ArgumentNullException(nameof(rules));
             _currentDate = currentDate ?? throw new ArgumentNullException(nameof(currentDate));
             _random = random ?? throw new ArgumentNullException(nameof(random));
             _identity = identity ?? throw new ArgumentNullException(nameof(identity));
+            _nameGenerator = nameGenerator ?? new NameGenerator();
         }
 
         public RecruitmentPromotionResult PromoteAspirantToNeophyte(
@@ -109,7 +116,7 @@ namespace OnlyWar.Campaign.Recruitment
                 }
             }
 
-            PlayerSoldier neophyte = new(generated, NameGenerator.GetFullName())
+            PlayerSoldier neophyte = new(generated, _nameGenerator.GetFullName())
             {
                 ProgenoidImplantDate = CopyDate(aspirant.PhaseStartedDate),
                 GeneticCompatibility = aspirant.GeneticCompatibility,

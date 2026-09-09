@@ -15,6 +15,7 @@ using OnlyWar.Domain.Events;
 using OnlyWar.Domain.Extensions;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Campaign
 {
@@ -49,9 +50,10 @@ namespace OnlyWar.Campaign
             IOrderCommitmentSurface commitments,
             IEngagementResolver engagements,
             IEngagementElementFactory engagementElements,
-            ISoldierTrainingService trainingService = null)
+            ISoldierTrainingService trainingService = null,
+            NameGenerator nameGenerator = null)
         {
-            _turn = CampaignTurnContext.From(session);
+            _turn = CampaignTurnContext.From(session, nameGenerator);
             _readiness = readiness ?? throw new System.ArgumentNullException(nameof(readiness));
             _personnel = personnel ?? throw new System.ArgumentNullException(nameof(personnel));
             _commitments = commitments ?? throw new System.ArgumentNullException(nameof(commitments));

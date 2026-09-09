@@ -9,6 +9,7 @@ using OnlyWar.Abstractions;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Fleets;
 using OnlyWar.Runtime.Factories;
+using OnlyWar.Runtime.Naming;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Soldiers.Ratings;
 using OnlyWar.Domain.Squads;
@@ -41,8 +42,10 @@ namespace OnlyWar.Generation.Chapter
                                                   Date date,
                                                   string chapterName = null,
                                                   int foundingSoldierCount = DEFAULT_FOUNDING_SOLDIER_COUNT,
-                                                  string chapterProfileKey = null)
+                                                  string chapterProfileKey = null,
+                                                  NameGenerator nameGenerator = null)
         {
+            nameGenerator ??= new NameGenerator();
             if (foundingSoldierCount <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(foundingSoldierCount),
@@ -61,7 +64,8 @@ namespace OnlyWar.Generation.Chapter
                 date,
                 trainingEndDate,
                 foundingSoldierCount,
-                support.Identity);
+                support.Identity,
+                nameGenerator);
 
             PlayerForce chapter = BuildChapterStructure(
                 data, support, doctrine, trainingEndDate, soldiers, chapterName);
@@ -119,7 +123,8 @@ namespace OnlyWar.Generation.Chapter
             Date date,
             Date trainingEndDate,
             int foundingSoldierCount,
-            IEntityIdAllocator entityIds)
+            IEntityIdAllocator entityIds,
+            NameGenerator nameGenerator)
         {
             SoldierTemplate soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
             Soldier[] generatedSoldiers = new SoldierFactory().GenerateNewSoldiers(
@@ -131,9 +136,9 @@ namespace OnlyWar.Generation.Chapter
 
             // A founding starts a fresh, shuffled draw from each name pool. With the
             // production 1,000-soldier chapter, neither component repeats.
-            NameGenerator.Reset();
+            nameGenerator.Reset();
             List<PlayerSoldier> soldiers = generatedSoldiers
-                .Select(s => new PlayerSoldier(s, NameGenerator.GetFullName()))
+                .Select(s => new PlayerSoldier(s, nameGenerator.GetFullName()))
                 .ToList();
 
             foreach (PlayerSoldier soldier in soldiers)

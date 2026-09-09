@@ -5,16 +5,19 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Abstractions;
+using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Generation.World
 {
     class PlanetBuilder
     {
         private readonly IPersistentIdAllocator _identity;
+        private readonly NameGenerator _nameGenerator;
 
-        public PlanetBuilder(IPersistentIdAllocator identity)
+        public PlanetBuilder(IPersistentIdAllocator identity, NameGenerator nameGenerator)
         {
             _identity = identity ?? throw new ArgumentNullException(nameof(identity));
+            _nameGenerator = nameGenerator ?? throw new ArgumentNullException(nameof(nameGenerator));
             _shuffledNameIndexes = [];
             RefillNameIndexPool();
         }
@@ -83,7 +86,7 @@ namespace OnlyWar.Generation.World
             if (controllingFaction.IsDefaultFaction)
             {
                 planetFaction.Leader = CharacterBuilder.GenerateCharacter(
-                    _identity.GetNextCharacterId(), leaderFaction);
+                    _identity.GetNextCharacterId(), leaderFaction, _nameGenerator);
                 if (!leaderFaction.IsDefaultFaction)
                 {
                     // if the planetary leader is a member of a GC,

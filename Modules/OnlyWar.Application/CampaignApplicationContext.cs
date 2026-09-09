@@ -90,7 +90,8 @@ public sealed class CampaignApplicationContext
             session.Rules,
             session.CurrentDate,
             session.Random,
-            session.Identity);
+            session.Identity,
+            Services.NameGenerator);
         Command = new CommandScreenContext(
             session.Sector, session.Rules, session.CurrentDate);
         Diplomacy = new DiplomacyScreenContext(session.Sector, session.Rules);
@@ -161,7 +162,8 @@ public sealed class CampaignApplicationContext
             Services.Operations.Personnel,
             Services.Operations.Commitments,
             engagement,
-            engagement).ProcessTurn(target.Sector);
+            engagement,
+            nameGenerator: Services.NameGenerator).ProcessTurn(target.Sector);
     }
 
     public void Save(string filePath, GameSession session = null)

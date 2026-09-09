@@ -8,6 +8,7 @@ using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Supply;
 using OnlyWar.Domain.Squads;
+using OnlyWar.Runtime.Naming;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,20 +24,24 @@ namespace OnlyWar.Campaign.Turns
     {
         private readonly CampaignTurnContext _turn;
         private readonly ICollection<GovernorRequestReport> _requestReports;
+        private readonly NameGenerator _nameGenerator;
 
         internal GovernorTurnProcessor(
             ICampaignSimulationSession session,
-            ICollection<GovernorRequestReport> requestReports = null)
-            : this(CampaignTurnContext.From(session), requestReports)
+            ICollection<GovernorRequestReport> requestReports = null,
+            NameGenerator nameGenerator = null)
+            : this(CampaignTurnContext.From(session), requestReports, nameGenerator)
         {
         }
 
         internal GovernorTurnProcessor(
             CampaignTurnContext turn,
-            ICollection<GovernorRequestReport> requestReports = null)
+            ICollection<GovernorRequestReport> requestReports = null,
+            NameGenerator nameGenerator = null)
         {
             _turn = turn ?? throw new ArgumentNullException(nameof(turn));
             _requestReports = requestReports;
+            _nameGenerator = nameGenerator ?? _turn.NameGenerator;
         }
 
         internal void ProcessGovernor(Planet planet, PlanetFaction planetFaction)
@@ -125,7 +130,7 @@ namespace OnlyWar.Campaign.Turns
             // Retain the former governor as a historical character. Resolved requests and
             // institutional pledge attribution can continue to reference them after succession.
             Character successor = CharacterBuilder.GenerateCharacter(
-                _turn.Identity.GetNextCharacterId(), planetFaction.Faction);
+                _turn.Identity.GetNextCharacterId(), planetFaction.Faction, _nameGenerator);
             characters.Add(successor);
             planetFaction.Leader = successor;
             return true;

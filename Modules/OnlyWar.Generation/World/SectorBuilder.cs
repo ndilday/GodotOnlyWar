@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Domain.Extensions;
 using OnlyWar.Domain.Events;
+using OnlyWar.Runtime.Naming;
 using OnlyWar.Runtime.WorldGeometry;
 
 namespace OnlyWar.Generation.World
@@ -22,16 +23,18 @@ namespace OnlyWar.Generation.World
         public static Sector GenerateSector(int seed, GameRulesData data, Date currentDate,
                                             GenerationSupport support,
                                             string chapterName = null,
-                                            ScenarioFactionSelection invaderSelection = null)
+                                            ScenarioFactionSelection invaderSelection = null,
+                                            NameGenerator nameGenerator = null)
         {
             if (support == null) throw new ArgumentNullException(nameof(support));
+            nameGenerator ??= new NameGenerator();
             List<Planet> planetList = [];
             List<Character> characterList = [];
             List<TaskForce> forceList = [];
 
             RNG.Reset(seed);
-            NameGenerator.Reset();
-            PlanetBuilder planetBuilder = new(support.Identity);
+            nameGenerator.Reset();
+            PlanetBuilder planetBuilder = new(support.Identity, nameGenerator);
 
             SectorGenerationProfile profile = data.SectorGenerationProfile;
             for (ushort j = 0; j < profile.SectorHeight; j++)
@@ -56,7 +59,8 @@ namespace OnlyWar.Generation.World
 
             Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(
-                data, support, trainingStartDate, currentDate, chapterName);
+                data, support, trainingStartDate, currentDate, chapterName,
+                nameGenerator: nameGenerator);
             playerForce.CampaignIdentity = CampaignIdentity.CreateNew(seed);
 
             // The scenario stamp resolves the sitting Sector Lord, so the sector and its derived
@@ -73,7 +77,7 @@ namespace OnlyWar.Generation.World
             // campaign (SB-09).
             sector.Scenario = ScenarioBuilder.StampPromisedWorld(
                 sector, data, currentDate, support, playerForce, planetList, characterList,
-                invaderSelection);
+                nameGenerator, invaderSelection);
             support.Narrative.ReconcileChronicle(playerForce);
             return sector;
         }

@@ -136,7 +136,8 @@ public sealed class CampaignApplication :
             date,
             Services.Generation.CreateSupport(rules, date, Services.Random, identity),
             chapterName,
-            invaderSelection);
+            invaderSelection,
+            nameGenerator: Services.NameGenerator);
         return new GameSession(rules, candidate, date, Services.Random, identity);
     }
 

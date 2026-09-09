@@ -2,13 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using OnlyWar.Abstractions;
 using OnlyWar.Domain;
+using OnlyWar.Runtime.Random;
 
 namespace OnlyWar.Runtime.Naming;
 
 /// <summary>
-/// Runtime-owned soldier naming.  The RNG is supplied by the caller, while the resource pools are
-/// owned by this assembly so generation does not depend on the Godot host or Engine.
+/// Runtime-owned soldier naming. Callers can supply an RNG explicitly; the instance convenience
+/// methods use its owned default adapter. The resource pools are owned by this assembly so
+/// generation does not depend on the Godot host or Engine.
 /// </summary>
 public sealed class NameGenerator
 {
@@ -19,11 +22,13 @@ public sealed class NameGenerator
     private readonly string[] _surnames;
     private readonly int[] _givenIndexes;
     private readonly int[] _surnameIndexes;
+    private readonly IRNG _defaultRandom;
     private int _remainingGiven;
     private int _remainingSurname;
 
-    public NameGenerator()
+    public NameGenerator(IRNG defaultRandom = null)
     {
+        _defaultRandom = defaultRandom ?? new StaticRNG();
         _givenNames = LoadPool(GivenNamesResource);
         _surnames = LoadPool(SurnamesResource);
         _givenIndexes = new int[_givenNames.Length];
@@ -32,6 +37,8 @@ public sealed class NameGenerator
 
     public int GivenNameCount => _givenNames.Length;
     public int SurnameCount => _surnames.Length;
+
+    public void Reset() => Reset(_defaultRandom);
 
     public void Reset(IRNG random)
     {
@@ -50,6 +57,8 @@ public sealed class NameGenerator
         return $"{_givenNames[_givenIndexes[--_remainingGiven]]} "
             + _surnames[_surnameIndexes[--_remainingSurname]];
     }
+
+    public string GetFullName() => GetFullName(_defaultRandom);
 
     private void RefillGiven(IRNG random)
     {
@@ -93,4 +102,3 @@ public sealed class NameGenerator
         return names.ToArray();
     }
 }
-
