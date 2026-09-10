@@ -175,7 +175,7 @@ namespace OnlyWar.Battles
             return response;
         }
 
-        internal (float MeleeNow, float Commitment) EvaluateContactTerms(
+        internal (float MeleeValue, float Commitment) EvaluateContactTerms(
             BattleSquad squad,
             EngagementOptionKind kind,
             BattleSquad primary,
@@ -194,9 +194,11 @@ namespace OnlyWar.Battles
                 MeleeStrikeEstimator.ChargeAssessment estimate =
                     _melee.EstimateChargeNet(soldier, primary, distance);
                 closing += estimate.ClosingCost;
-                // EstimateChargeNet discounts only the turns after the current one. The current
-                // turn's incoming fire is already represented by EvaluateIncomingNow; this
-                // commitment is only the remaining future exposure while contact is pending.
+                // EstimateChargeNet has already present-valued this: a soldier who is not in
+                // contact at turn start cannot strike this turn, so his payoff is discounted by the
+                // full turns-to-contact. The current turn's incoming fire is represented by
+                // EvaluateIncomingNow; this commitment is only the remaining exposure while contact
+                // is pending.
                 melee += estimate.MeleeBattleValue;
                 if (estimate.ReachesContactThisTurn)
                 {

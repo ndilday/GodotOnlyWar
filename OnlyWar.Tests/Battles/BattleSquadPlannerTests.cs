@@ -28,6 +28,16 @@ public class BattleSquadPlannerTests
         public BattleSquadPlanner Planner { get; init; }
         public List<IAction> ShootActions { get; init; }
         public List<IAction> MeleeActions { get; init; }
+        public List<IAction> MoveActions { get; init; }
+        public IReadOnlyCollection<BattleSquad> EnemySquads { get; init; }
+
+        /// <summary>
+        /// Plans this scenario's engaged squad through the production three-layer path. Every
+        /// in-melee assertion below must go through here rather than PlanSquadForTesting -- see
+        /// <see cref="EngagementPathDriver"/> for why.
+        /// </summary>
+        public void Plan() => EngagementPathDriver.PlanAndResolveClosingMoves(
+            Planner, ShooterSquad, EnemySquads, MoveActions);
     }
 
     private static BattleSquad CreateSquad(
@@ -310,7 +320,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_UsesBestShootableTargetForStandoffAgainstToughScreen()
+    public void PlanSquadForTesting_UsesBestShootableTargetForStandoffAgainstToughScreen()
     {
         BattleSquad shooters = CreateSquad("Sniper", 91_010);
         BattleSquad toughScreen = CreateSquad("Tough Screen", 91_011);
@@ -358,7 +368,7 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, toughScreen, softMass);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         Assert.Equal(SquadMovementTier.Stationary, shooters.MovementTier);
         IAction rangedAction = Assert.Single(shootActions);
@@ -492,7 +502,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_FlamerInRangeUsesTemplateAttackAtItsScoredPosture()
+    public void PlanSquadForTesting_FlamerInRangeUsesTemplateAttackAtItsScoredPosture()
     {
         BattleSquad shooters = CreateSquad("Stationary Flamer", 90_001);
         BattleSquad enemies = CreateSquad("Nearby Enemy", 90_002);
@@ -506,7 +516,7 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         // Phase 1's take-out-rate melee currency can make the scored posture Jog while the
         // template attack remains the best action. The behavior under test is that an in-range
@@ -572,7 +582,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_FlamerOutOfRangeSelectsRunWithoutFiring()
+    public void PlanSquadForTesting_FlamerOutOfRangeSelectsRunWithoutFiring()
     {
         BattleSquad shooters = CreateSquad("Running Flamer", 90_011);
         BattleSquad enemies = CreateSquad("Distant Enemy", 90_012);
@@ -586,12 +596,12 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, moveActions, [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         // DIAGNOSTIC (2026-08-10, Design/Active/EngagementHorizonModel.md §0/§4). This posture
         // failure is one of only two surviving pieces of evidence about the derived exchange
         // horizon, and it is only evidence if the derivation actually ran. A standalone planner
-        // builds its own BattlePlanningContext; if PrepareActions never calls
+        // builds its own BattlePlanningContext; if PlanSquadForTesting never calls
         // SetEngagementHorizon, ExpectedExchangeTurnsFor returns its dictionary-miss default of
         // MaximumExchangeTurns and this fixture has been measuring the 183-turn fallback -- the
         // same value whose over-calibration prompted the whole horizon investigation.
@@ -612,12 +622,12 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_HeavyWeaponInsidePreferredRangeHoldsInsteadOfWalking()
+    public void PlanSquadForTesting_HeavyWeaponInsidePreferredRangeHoldsInsteadOfWalking()
     {
         // A step-back applies half Bulk to every shot that turn. For a Bulk-8 heavy weapon
         // that guts the soldier's firepower, so he should plant and fire (Stationary) rather
         // than kite back the way a light-weapon squad would. Same geometry as
-        // PrepareActions_EnemyInsidePreferredRangeDoesNotAdvance, only the weapon is heavier.
+        // PlanSquadForTesting_EnemyInsidePreferredRangeDoesNotAdvance, only the weapon is heavier.
         //
         // RESTORED 2026-08-10. This expectation was inverted to Run during the potential work,
         // justified as contact geometry outweighing "one current heavy shot" over the remaining
@@ -655,14 +665,14 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, [], moveActions, [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         Assert.Equal(SquadMovementTier.Stationary, shooters.MovementTier);
         Assert.Empty(moveActions);
     }
 
     [Fact]
-    public void PrepareActions_EnemyInsidePreferredRangeDoesNotAdvance()
+    public void PlanSquadForTesting_EnemyInsidePreferredRangeDoesNotAdvance()
     {
         BattleSquad shooters = CreateSquad("Walking Rifle", 90_015);
         BattleSquad enemies = CreateSquad("Close Enemy", 90_016);
@@ -696,7 +706,7 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, [], moveActions, [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         // RESTORED 2026-08-10, with the original name. A rifle that reaches 100 yards, against a
         // lone enemy at 10, has nothing to gain by advancing: the shot is already available and
@@ -712,7 +722,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_ShooterAtAimCapFiresInsteadOfContinuingToAim()
+    public void PlanSquadForTesting_ShooterAtAimCapFiresInsteadOfContinuingToAim()
     {
         BattleSquad shooters = CreateSquad("Walking Aimed Rifle", 90_041);
         BattleSquad enemies = CreateSquad("Close Aim Target", 90_042);
@@ -729,7 +739,7 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
         Assert.Equal(target.Soldier.Id, shot.TargetId);
@@ -1041,7 +1051,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_ClosingSquadSelectsAForwardPosture()
+    public void PlanSquadForTesting_ClosingSquadSelectsAForwardPosture()
     {
         BattleSquad shooters = CreateSquad("Jogging Rifle", 90_017);
         BattleSquad enemies = CreateSquad("Far Enemy", 90_018);
@@ -1117,12 +1127,12 @@ public class BattleSquadPlannerTests
             enemies,
             valuableBehindEnemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         Assert.Contains(shooters.MovementTier, new[] { SquadMovementTier.Jog, SquadMovementTier.Run, SquadMovementTier.InMelee });
         Assert.True(shooter.CurrentSpeed > 0);
         IAction movement = Assert.Single(moveActions);
-        Assert.True(movement is MoveAction or SquadChargeIntentAction);
+        Assert.True(movement is MoveAction or SquadClosingMoveAction);
     }
 
     [Theory]
@@ -1151,7 +1161,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_EngagedSquadUsesInMeleeTierAndClosesSeparatedMembers()
+    public void EngagedSquadUsesInMeleeTierAndClosesSeparatedMembers()
     {
         BattleSquad attackers = CreateSquad("Engaging Squad", 90_021);
         BattleSquad enemies = CreateSquad("Melee Target", 90_022);
@@ -1164,15 +1174,18 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, [], moveActions, [], attackers, enemies);
 
-        planner.PrepareActions(attackers);
+        EngagementPathDriver.PlanAndResolveClosingMoves(planner, attackers, [enemies], moveActions);
 
         Assert.Equal(SquadMovementTier.InMelee, attackers.MovementTier);
-        Assert.Equal(attacker.GetMoveSpeed(), attacker.CurrentSpeed);
-        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+        // The charge resolves its own movement against the live grid rather than queueing a
+        // MoveAction for the movement phase, so the move is reported on the intent.
+        SquadClosingMoveAction intent =
+            Assert.Single(moveActions.OfType<SquadClosingMoveAction>());
+        Assert.IsType<MoveAction>(Assert.Single(intent.ResolvedMovementActions));
     }
 
     [Fact]
-    public void PrepareActions_AdjacentMeleeCombatantDiscardsCarriedMovement()
+    public void AdjacentMeleeCombatantDiscardsCarriedMovement()
     {
         BattleSquad attackers = CreateSquad("Engaged Attacker", 90_023);
         BattleSquad enemies = CreateSquad("Adjacent Target", 90_024);
@@ -1182,9 +1195,11 @@ public class BattleSquadPlannerTests
         Place(grid, attacker, true, 0, 0);
         Place(grid, enemies.Soldiers[0], false, 1, 0);
         attackers.IsInMelee = true;
-        BattleSquadPlanner planner = CreatePlanner(grid, attackers, enemies);
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, [], moveActions, [], attackers, enemies);
 
-        planner.PrepareActions(attackers);
+        EngagementPathDriver.PlanAndResolveClosingMoves(planner, attackers, [enemies], moveActions);
 
         Assert.Equal(SquadMovementTier.InMelee, attackers.MovementTier);
         Assert.Equal(0, attacker.CurrentSpeed);
@@ -1294,11 +1309,12 @@ public class BattleSquadPlannerTests
             .ToDictionary(soldier => soldier.Soldier.Id);
         List<IAction> shootActions = [];
         List<IAction> meleeActions = [];
+        List<IAction> moveActions = [];
         BattleSquadPlanner planner = new(
             grid,
             soldierMap,
             shootActions,
-            new List<IAction>(),
+            moveActions,
             meleeActions,
             null,
             CreateMeleeTemplateMap(soldierMap.Values),
@@ -1314,7 +1330,12 @@ public class BattleSquadPlannerTests
             ProjectedMeleeWeapon = projectedMeleeWeapon,
             Planner = planner,
             ShootActions = shootActions,
-            MeleeActions = meleeActions
+            MeleeActions = meleeActions,
+            MoveActions = moveActions,
+            // Each attacker is its own squad, deliberately: a soldier surrounded by three
+            // separate enemy squads is the ordinary case, and it is what exposes whether the
+            // planner reasons about the enemies in contact or only about the paired squad.
+            EnemySquads = squads.Skip(1).ToList()
         };
     }
 
@@ -1538,7 +1559,7 @@ public class BattleSquadPlannerTests
     public void EngagedShooter_ShootsAgainstOneAttacker_ButReadiesMeleeAgainstThree()
     {
         EngagedDecisionScenario singleAttacker = CreateEngagedDecisionScenario(1);
-        singleAttacker.Planner.PrepareActions(singleAttacker.ShooterSquad);
+        singleAttacker.Plan();
 
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(singleAttacker.ShootActions));
         Assert.True(shot.UseBulk);
@@ -1546,7 +1567,7 @@ public class BattleSquadPlannerTests
         Assert.Empty(singleAttacker.MeleeActions);
 
         EngagedDecisionScenario threeAttackers = CreateEngagedDecisionScenario(3);
-        threeAttackers.Planner.PrepareActions(threeAttackers.ShooterSquad);
+        threeAttackers.Plan();
 
         Assert.IsType<ReadyMeleeWeaponAction>(Assert.Single(threeAttackers.ShootActions));
         Assert.Empty(threeAttackers.MeleeActions);
@@ -1633,11 +1654,12 @@ public class BattleSquadPlannerTests
         };
         List<IAction> shootActions = [];
         List<IAction> meleeActions = [];
+        List<IAction> moveActions = [];
         BattleSquadPlanner planner = new(
             grid,
             soldierMap,
             shootActions,
-            new List<IAction>(),
+            moveActions,
             meleeActions,
             null,
             CreateMeleeTemplateMap(soldierMap.Values),
@@ -1653,7 +1675,9 @@ public class BattleSquadPlannerTests
             ProjectedMeleeWeapon = blade,
             Planner = planner,
             ShootActions = shootActions,
-            MeleeActions = meleeActions
+            MeleeActions = meleeActions,
+            MoveActions = moveActions,
+            EnemySquads = [attackerSquad]
         };
     }
 
@@ -1662,7 +1686,7 @@ public class BattleSquadPlannerTests
     {
         EngagedDecisionScenario scenario = CreateGunAndBladeScenario();
 
-        scenario.Planner.PrepareActions(scenario.ShooterSquad);
+        scenario.Plan();
 
         MeleeAttackAction strike = Assert.IsType<MeleeAttackAction>(
             Assert.Single(scenario.MeleeActions));
@@ -1679,9 +1703,18 @@ public class BattleSquadPlannerTests
         // The pistol cannot penetrate the attacker's plate, so the shot removes nothing from
         // the enemy while a stray can still wound the shooter himself: net value is negative
         // and only the blade should be used.
+        //
+        // THE CONTROL IS LOAD-BEARING. "Holds fire" is only a claim if the same fixture fires
+        // when the shot is worth taking. Without it this test passes against a planner that
+        // never considers the sidearm at all -- which is exactly what it did while it ran on
+        // PlanSquadForTesting's dead branch.
+        EngagedDecisionScenario control = CreateGunAndBladeScenario();
+        control.Plan();
+        Assert.IsType<ShootAction>(Assert.Single(control.ShootActions));
+
         EngagedDecisionScenario scenario = CreateGunAndBladeScenario(attackerArmor: byte.MaxValue);
 
-        scenario.Planner.PrepareActions(scenario.ShooterSquad);
+        scenario.Plan();
 
         Assert.IsType<MeleeAttackAction>(Assert.Single(scenario.MeleeActions));
         Assert.Empty(scenario.ShootActions);
@@ -1708,7 +1741,7 @@ public class BattleSquadPlannerTests
             shooters,
             enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         AreaAttackAction action = Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
         Assert.Equal(shooter.Soldier.Id, action.ShooterId);
@@ -1746,7 +1779,7 @@ public class BattleSquadPlannerTests
             sparseEnemies,
             denseEnemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         AreaAttackAction action = Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
         Assert.Equal(640, action.TargetId);
@@ -1780,7 +1813,7 @@ public class BattleSquadPlannerTests
             allies,
             enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         Assert.Empty(shootActions);
         Assert.IsType<MoveAction>(Assert.Single(moveActions));
@@ -1801,15 +1834,16 @@ public class BattleSquadPlannerTests
         shooter.IsInMelee = true;
         List<IAction> shootActions = [];
         List<IAction> meleeActions = [];
+        List<IAction> moveActions = [];
         BattleSquadPlanner planner = CreatePlanner(
             grid,
             shootActions,
-            new List<IAction>(),
+            moveActions,
             meleeActions,
             shooters,
             enemies);
 
-        planner.PrepareActions(shooters);
+        EngagementPathDriver.PlanAndResolveClosingMoves(planner, shooters, [enemies], moveActions);
 
         AreaAttackAction action = Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
         Assert.Equal(enemies.Soldiers[0].Soldier.Id, action.TargetId);
@@ -2001,7 +2035,7 @@ public class BattleSquadPlannerTests
             $"expected ambushers to spread aim; all pointed at {distinctSeededTargets} target(s)");
 
         // Turn one: the seeded ambushers open fire rather than spending the turn lining up.
-        planner.PrepareActions(ambushers);
+        planner.PlanSquadForTesting(ambushers);
         Assert.Empty(shootActions.OfType<AimAction>());
         List<ShootAction> shots = shootActions.OfType<ShootAction>().ToList();
         Assert.True(shots.Count >= 2, $"expected an opening volley, got {shots.Count} shots");

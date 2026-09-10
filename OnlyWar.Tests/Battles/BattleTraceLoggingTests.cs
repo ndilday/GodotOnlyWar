@@ -83,7 +83,7 @@ public class BattleTraceLoggingTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], log.Add, shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         Assert.Contains(shootActions, action => action is BlastAttackAction);
 

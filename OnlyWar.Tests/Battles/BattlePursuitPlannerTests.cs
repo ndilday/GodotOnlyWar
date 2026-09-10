@@ -87,7 +87,7 @@ public class BattlePursuitPlannerTests
     // and out of melee reach: the chase is unwinnable and only the guns are left.
     private static BattlePursuitPlanner.Input StalledChase(Aggression aggression) =>
         new(4, true, aggression, 12, 8, 8, 8, 1, 0, WithdrawerReturnsFire: true,
-            PursuerCanReachMeleeThisTurn: false);
+            PursuerCanReachContactThisTurn: false);
 
     [Theory]
     [InlineData(Aggression.Cautious)]
@@ -133,7 +133,7 @@ public class BattlePursuitPlannerTests
         // catch someone this turn, so its policy stands.
         var inContact = StalledChase(Aggression.Aggressive) with
         {
-            PursuerCanReachMeleeThisTurn = true
+            PursuerCanReachContactThisTurn = true
         };
 
         Assert.Equal(PursuitPosture.Press, BattlePursuitPlanner.Evaluate(inContact).Posture);

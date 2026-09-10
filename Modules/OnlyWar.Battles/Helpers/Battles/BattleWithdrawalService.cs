@@ -295,11 +295,11 @@ namespace OnlyWar.Battles
             // can close over time. A pursuer already in contact, or one Run-and-charge away, has a
             // catch available right now, so the "cannot close" override must not talk it out of
             // taking it. The reach test is net of the quarry's own withdrawal — see
-            // BattleContactRules.CanReachMeleeThisTurn for why measuring it against the pursuer's
+            // BattleContactRules.CanReachContactThisTurn for why measuring it against the pursuer's
             // raw move instead pinned this flag true for the whole of a stern chase.
-            bool pursuerCanReachMeleeThisTurn =
+            bool pursuerCanReachContactThisTurn =
                 GetActiveSquads(pursuingSide).Any(squad => squad.IsInMelee)
-                || BattleContactRules.CanReachMeleeThisTurn(
+                || BattleContactRules.CanReachContactThisTurn(
                     separation,
                     pursuitMetrics.FastestPursuitSquadSpeed,
                     withdrawalMetrics.SlowestMainBodySquadSpeed);
@@ -319,7 +319,7 @@ namespace OnlyWar.Battles
                 pressTurns,
                 projectedFollowShotTurns,
                 withdrawerReturnsFire,
-                pursuerCanReachMeleeThisTurn));
+                pursuerCanReachContactThisTurn));
             PursuitPosture? previous = _pursuitPostures.TryGetValue(
                 pursuingSide,
                 out PursuitPosture stored) ? stored : null;

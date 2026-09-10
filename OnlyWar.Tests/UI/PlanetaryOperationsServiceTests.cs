@@ -909,7 +909,7 @@ public class PlanetaryOperationsServiceTests
         {
             Faction = fixture.Sector.PlayerForce.Faction
         };
-        Squad squad = new(name, null, template);
+        Squad squad = new(name, null, template, fixture.Identity);
         if (withLeader && members > 0)
         {
             squad.AddSquadMember(TestModelFactory.CreateSoldier(

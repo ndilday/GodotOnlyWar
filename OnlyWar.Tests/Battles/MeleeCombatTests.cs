@@ -347,6 +347,9 @@ public class MeleeCombatTests
                 soldier.Strength = 1_000;
                 soldier.AddSkillPoints(TestSkills.Melee, 1_000_000);
             });
+        // Two adjacent defenders in SEPARATE squads, deliberately. A soldier commits his blows to
+        // the enemies he is actually in contact with, whatever squad they belong to; collapsing
+        // them into one squad would hide the cross-squad adjacency gap rather than test it.
         BattleSquad firstDefenderSquad = CreateBattleSquad("First Defender", 20, "First Defender");
         BattleSquad secondDefenderSquad = CreateBattleSquad("Second Defender", 30, "Second Defender");
 
@@ -366,6 +369,7 @@ public class MeleeCombatTests
         grid.PlaceSoldier(firstDefender, false, firstDefender.PositionList.ToList());
         grid.PlaceSoldier(secondDefender, false, secondDefender.PositionList.ToList());
 
+        List<IAction> moveActions = [];
         List<IAction> meleeActions = [];
         BattleSquadPlanner planner = new(
             grid,
@@ -376,19 +380,142 @@ public class MeleeCombatTests
                 [secondDefender.Soldier.Id] = secondDefender
             },
             new List<IAction>(),
-            new List<IAction>(),
+            moveActions,
             meleeActions,
             null,
             CreateMeleeTemplateMap(attacker, firstDefender, secondDefender),
             new SeededRNG(12345));
 
         attackerSquad.IsInMelee = true;
-        planner.PrepareActions(attackerSquad);
+        EngagementPathDriver.PlanAndResolveClosingMoves(
+            planner, attackerSquad, [firstDefenderSquad, secondDefenderSquad], moveActions);
 
         MeleeAttackAction action = Assert.Single(meleeActions.OfType<MeleeAttackAction>());
         Assert.Equal(3, action.StrikePlans.Count);
         Assert.Equal(2, action.StrikePlans.Count(strike => strike.TargetId == firstDefender.Soldier.Id));
         Assert.Equal(1, action.StrikePlans.Count(strike => strike.TargetId == secondDefender.Soldier.Id));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ChargeMarkedOnArrival_IsSpentByTheFollowingTurnsStrike(bool arrivedLastTurn)
+    {
+        // A charge is split across the turn boundary: the closing pass marks the arriving soldier
+        // and the next turn's attack phase spends the mark (TDD §6.6).
+        // BOTH CASES MATTER. Without the false case this passes against a planner that marks every
+        // strike as a charge, which is the same defect in the opposite direction — a soldier who
+        // has stood in contact since before last turn is fighting set, not charging.
+        ChargeFixture fixture = CreateAdjacentPairFixture();
+        fixture.Attacker.ChargedIntoContactLastTurn = arrivedLastTurn;
+
+        EngagementPathDriver.Plan(
+            fixture.Planner, fixture.AttackerSquad, [fixture.DefenderSquad]);
+
+        MeleeAttackAction action = Assert.Single(fixture.MeleeActions.OfType<MeleeAttackAction>());
+        Assert.Equal(arrivedLastTurn, action.IsCharge);
+        Assert.Equal(arrivedLastTurn, action.UsesMovementAttackPenalty);
+    }
+
+    [Fact]
+    public void ClosingSquadWhoseTargetsAreAllGone_ResolvesWithoutMovingOrStriking()
+    {
+        // The closing pass runs after the attack phase, so its target squad can have been wiped out
+        // by fire in the same turn. It must resolve to nothing rather than throwing or charging an
+        // empty square.
+        ChargeFixture fixture = CreateAdjacentPairFixture(separation: 6);
+        fixture.AttackerSquad.IsInMelee = true;
+
+        EngagementPathDriver.Plan(
+            fixture.Planner, fixture.AttackerSquad, [fixture.DefenderSquad]);
+        SquadClosingMoveAction closing =
+            Assert.Single(fixture.MoveActions.OfType<SquadClosingMoveAction>());
+
+        fixture.Grid.RemoveSoldier(fixture.Defender.Soldier.Id);
+        fixture.Defender.TopLeft = null;
+
+        closing.Execute(null);
+
+        Assert.Empty(closing.ResolvedMovementActions);
+        Assert.Empty(fixture.MeleeActions.OfType<MeleeAttackAction>());
+        Assert.False(fixture.Attacker.ChargedIntoContactLastTurn);
+    }
+
+    private sealed class ChargeFixture
+    {
+        public BattleSquad AttackerSquad { get; init; }
+        public BattleSquad DefenderSquad { get; init; }
+        public BattleSoldier Attacker { get; init; }
+        public BattleSoldier Defender { get; init; }
+        public BattleGridManager Grid { get; init; }
+        public BattleSquadPlanner Planner { get; init; }
+        public List<IAction> MeleeActions { get; init; }
+        public List<IAction> MoveActions { get; init; }
+    }
+
+    private static ChargeFixture CreateAdjacentPairFixture(int separation = 1)
+    {
+        MeleeWeaponTemplate claw = CreateMeleeWeapon(811, "Charge Claw", AttackSkill).Template;
+        MeleeWeaponTemplate guard = CreateMeleeWeapon(812, "Set Guard", PrimaryParrySkill).Template;
+        Species attackerSpecies = CreateSpecies(811, "Charging Species", claw);
+        Species defenderSpecies = CreateSpecies(812, "Braced Species", guard);
+        SoldierTemplate attackerTemplate = new(
+            811, attackerSpecies, "Charging Fighter", 1, 1, false, 0, []);
+        SoldierTemplate defenderTemplate = new(
+            812, defenderSpecies, "Braced Fighter", 1, 1, false, 0, []);
+        Soldier attackerModel = TestModelFactory.CreateSoldier(
+            attackerTemplate, "Charger", skills: new Skill(AttackSkill, 8));
+        Soldier defenderModel = TestModelFactory.CreateSoldier(
+            defenderTemplate, "Braced", skills: new Skill(PrimaryParrySkill, 8));
+        attackerModel.Id = 811;
+        defenderModel.Id = 812;
+        BattleSquad attackerSquad = new(
+            true, TestModelFactory.CreateSquad("Chargers", attackerModel));
+        BattleSquad defenderSquad = new(
+            false, TestModelFactory.CreateSquad("Braced", defenderModel));
+        BattleSoldier attacker = attackerSquad.Soldiers.Single();
+        BattleSoldier defender = defenderSquad.Soldiers.Single();
+        foreach (BattleSoldier soldier in new[] { attacker, defender })
+        {
+            soldier.RangedWeapons.Clear();
+            soldier.ClearReadiedRangedWeapons();
+            soldier.MeleeWeapons.Clear();
+            soldier.ClearReadiedMeleeWeapons();
+        }
+        attacker.TopLeft = (0, 0);
+        defender.TopLeft = (separation, 0);
+
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());
+        grid.PlaceSoldier(defender, false, defender.PositionList.ToList());
+        List<IAction> meleeActions = [];
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = new(
+            grid,
+            new Dictionary<int, BattleSoldier>
+            {
+                [attacker.Soldier.Id] = attacker,
+                [defender.Soldier.Id] = defender
+            },
+            new List<IAction>(),
+            moveActions,
+            meleeActions,
+            null,
+            CreateMeleeTemplateMap(attacker, defender),
+            new SeededRNG(12345));
+        attackerSquad.IsInMelee = separation <= 1;
+
+        return new ChargeFixture
+        {
+            AttackerSquad = attackerSquad,
+            DefenderSquad = defenderSquad,
+            Attacker = attacker,
+            Defender = defender,
+            Grid = grid,
+            Planner = planner,
+            MeleeActions = meleeActions,
+            MoveActions = moveActions
+        };
     }
 
     [Fact]
@@ -440,6 +567,7 @@ public class MeleeCombatTests
         BattleGridManager grid = new();
         grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());
         grid.PlaceSoldier(defender, false, defender.PositionList.ToList());
+        List<IAction> moveActions = [];
         List<IAction> meleeActions = [];
         BattleSquadPlanner planner = new(
             grid,
@@ -449,14 +577,15 @@ public class MeleeCombatTests
                 [defender.Soldier.Id] = defender
             },
             new List<IAction>(),
-            new List<IAction>(),
+            moveActions,
             meleeActions,
             null,
             CreateMeleeTemplateMap(attacker, defender),
             new SeededRNG(12345));
 
         attackerSquad.IsInMelee = true;
-        planner.PrepareActions(attackerSquad);
+        EngagementPathDriver.PlanAndResolveClosingMoves(
+            planner, attackerSquad, [defenderSquad], moveActions);
 
         MeleeAttackAction action = Assert.Single(meleeActions.OfType<MeleeAttackAction>());
         PlannedMeleeStrike strike = Assert.Single(action.StrikePlans);

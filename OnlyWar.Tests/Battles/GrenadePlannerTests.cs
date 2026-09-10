@@ -33,7 +33,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         TemplateFiringLineEvaluation blastThrow =
             planner.SelectBestBlastThrow(shooter);
@@ -69,7 +69,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         BlastAttackAction blast = Assert.IsType<BlastAttackAction>(Assert.Single(shootActions));
         Assert.Equal(shooter.Soldier.Id, blast.ShooterId);
@@ -132,7 +132,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, allies, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         Assert.Null(planner.SelectBestBlastThrow(shooter));
         Assert.DoesNotContain(shootActions, action => action is BlastAttackAction);
@@ -158,10 +158,12 @@ public class GrenadePlannerTests
         shooter.IsInMelee = true;
         List<IAction> shootActions = [];
         List<IAction> meleeActions = [];
+        List<IAction> moveActions = [];
         BattleSquadPlanner planner = CreatePlanner(
-            grid, shootActions, [], meleeActions, shooters, adjacentEnemies, cluster);
+            grid, shootActions, moveActions, meleeActions, shooters, adjacentEnemies, cluster);
 
-        planner.PrepareActions(shooters);
+        EngagementPathDriver.PlanAndResolveClosingMoves(
+            planner, shooters, [adjacentEnemies, cluster], moveActions);
 
         Assert.DoesNotContain(shootActions, action => action is BlastAttackAction);
         Assert.DoesNotContain(meleeActions, action => action is BlastAttackAction);
@@ -292,7 +294,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, moveActions, [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         ReloadRangedWeaponAction reload = shootActions
             .OfType<ReloadRangedWeaponAction>()
@@ -321,7 +323,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, moveActions, [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         ReloadRangedWeaponAction reload = shootActions
             .OfType<ReloadRangedWeaponAction>()
@@ -346,7 +348,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, enemies);
 
-        planner.PrepareActions(shooters);
+        planner.PlanSquadForTesting(shooters);
 
         // Cone and blast both promise the same single kill here; the sidearm rule
         // requires the grenade to strictly beat the conventional option, so ties

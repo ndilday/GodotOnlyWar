@@ -25,14 +25,25 @@ public static class BattleContactRules
     public const float PursuitSpeedAdvantageTolerance = 0.1f;
 
     /// <summary>
-    /// Extra reach beyond a pursuer's move allowance that still lets it reach melee this turn,
-    /// matching the Run-to-melee term in the resolver's one-turn attack reach.
+    /// Extra reach beyond a pursuer's move allowance that still lets it reach contact this turn,
+    /// matching the Run-to-contact term in the resolver's one-turn reach.
+    ///
+    /// <para>This is a PLANNING reach, not the engaged-soldier test. Whether a soldier may actually
+    /// strike is grid adjacency plus a combat-effective enemy — see
+    /// MeleeActionBuilder.HasCombatEffectiveAdjacentEnemy. Gating a strike on this constant instead
+    /// let a soldier standing 1.0 from a downed man trip the melee builder's invariant.</para>
     /// </summary>
     public const float MeleeContactAllowance = 1.0f;
 
     /// <summary>
-    /// Whether a pursuer can put someone in melee THIS turn, measured against the gap it can
-    /// actually take out of the separation rather than the raw distance it can travel.
+    /// Whether a pursuer can reach contact THIS turn, measured against the gap it can actually take
+    /// out of the separation rather than the raw distance it can travel.
+    ///
+    /// <para>Reaching contact is no longer the same event as landing a blow. Attacks resolve from
+    /// turn-start geometry, so a pursuer that closes this turn strikes at the top of the next one
+    /// (PRD §4.14, TDD §6.6). Both escape hatches below want the former — is this pursuit still
+    /// going anywhere — so the test and its call sites are unchanged; only the name moved, from the
+    /// older CanReachMeleeThisTurn.</para>
     ///
     /// The quarry moves in the same turn, so the distance that matters is the NET closing rate.
     /// Comparing separation to the pursuer's move alone made a stern chase at matched speed read
@@ -44,7 +55,7 @@ public static class BattleContactRules
     /// to the resolver's turn cap. Observed 2026-08-04 (Xibarrus Theta): 6.001 vs 6.001,
     /// separation pinned at 6, ~997 turns with nothing landed.
     /// </summary>
-    public static bool CanReachMeleeThisTurn(
+    public static bool CanReachContactThisTurn(
         float separation,
         float pursuerSpeed,
         float quarrySpeed) =>
@@ -107,7 +118,7 @@ public static class BattleContactRules
         else if (!input.PursuersAttackedRecently
                  && !input.PursuersHaveReasonableShot
                  && !PursuerCanClose(input)
-                 && !CanReachMeleeThisTurn(
+                 && !CanReachContactThisTurn(
                      input.MinimumCurrentSeparation,
                      input.FastestPursuerSpeed,
                      input.SlowestWithdrawalSpeed))

@@ -40,6 +40,12 @@ public static class BattleValueCalculator
     /// waste less. Factor = MeleeClosingFactor * min(1, MoveSpeed / reference speed).
     /// Burrowers pay no closing tax at all: BurrowPlacer erupts them adjacent to an
     /// enemy squad at battle start and they attack the turn they surface.
+    ///
+    /// <para>OPEN TUNING ITEM, deliberately left alone — tracked in PRD §5.7. Reaching contact no
+    /// longer buys a blow in the same turn (PRD §4.14), so every closer waits one more turn to land
+    /// anything and 0.75 is optimistic. This is a flat multiplier rather than a turn count, so
+    /// nothing breaks automatically and no corrected value follows from the rules change. Burrowers
+    /// are unaffected: they start adjacent, so they strike on turn one either way.</para>
     /// </summary>
     public const float MeleeClosingReferenceSpeed = 8.0f;
     public const float MeleeClosingFactor = 0.75f;

@@ -9,13 +9,19 @@ namespace OnlyWar.Battles
 {
     /// <summary>
     /// Emits the melee half of a turn: strikes for soldiers already in contact, the point-blank
-    /// shoot-instead-of-stab decision, charge movement, and the squad-level charge resolution that
-    /// runs against the live post-movement grid.
+    /// shoot-instead-of-stab decision, and the squad-level closing move that runs against the live
+    /// post-movement grid.
+    ///
+    /// <para>Strikes and closing moves are built in DIFFERENT phases and must not be confused.
+    /// <see cref="AddMeleeActionsToBag"/> runs at planning time against turn-start geometry;
+    /// <see cref="ResolveSquadClosingMove"/> runs after the attack phase and builds movement only.
+    /// A closing soldier who reaches contact is marked, and strikes on the next turn as a charge.
+    /// See TDD §6.6.</para>
     ///
     /// <para>Holds an <see cref="ActionSink"/> as well as a <see cref="SquadPlanningServices"/>,
     /// and unlike every scorer in this stack it MUTATES: it reserves grid squares, sets soldier
     /// speed and facing, and draws from the seeded RNG for the fractional attack. Order matters --
-    /// <see cref="ResolveSquadChargeIntent"/> executes each move as it goes so later chargers see
+    /// <see cref="ResolveSquadClosingMove"/> executes each move as it goes so later chargers see
     /// squares already taken -- so this is safe only on the resolver's serial action-building
     /// phase, never inside its parallel posture scan.</para>
     ///
@@ -63,6 +69,16 @@ namespace OnlyWar.Battles
 
         private bool IsPlaced(BattleSoldier soldier) => _services.IsPlaced(soldier);
 
+        /// <summary>
+        /// Exactly the precondition <see cref="AddMeleeActionsToBag"/> asserts. Call this before
+        /// routing a soldier there; the bag throws rather than returning empty, deliberately, so
+        /// every caller must agree with it about what counts as an enemy in contact.
+        /// </summary>
+        internal bool HasCombatEffectiveAdjacentEnemy(BattleSoldier soldier) =>
+            _grid.GetAdjacentEnemies(soldier.Soldier.Id)
+                .Any(enemyId => _soldierMap.TryGetValue(enemyId, out BattleSoldier enemy)
+                    && enemy.IsCombatEffective);
+
         internal void AddMeleeActionsToBag(BattleSoldier soldier)
         {
             soldier.TargetId = null;
@@ -89,11 +105,15 @@ namespace OnlyWar.Battles
                 soldier,
                 projectedPrimary,
                 projectedSecondary);
+            // A soldier who closed into contact on last turn's closing pass is finishing that
+            // charge now: nothing happened between his arrival and this swing, so he swings
+            // off-balance and without his parry (PRD §4.14).
+            bool isCharge = soldier.ChargedIntoContactLastTurn;
             List<PlannedMeleeStrike> projectedStrikePlans = _melee.BuildStrikePlan(
                 soldier,
                 adjacentEnemies,
                 plannedMeleeWeapons,
-                didMove: false);
+                didMove: isCharge);
 
             if (TryAddGunAndBladeActions(soldier, projectedStrikePlans))
             {
@@ -164,10 +184,11 @@ namespace OnlyWar.Battles
                 _actions.Melee.Add(new MeleeAttackAction(
                     soldier,
                     projectedStrikePlans,
-                    didMove: false,
+                    didMove: isCharge,
                     log: _log,
                     random: _random,
-                    meleeWeaponTemplates: _meleeWeaponTemplates));
+                    meleeWeaponTemplates: _meleeWeaponTemplates,
+                    isCharge: isCharge));
             }
         }
 
@@ -198,13 +219,15 @@ namespace OnlyWar.Battles
                 return false;
             }
 
+            bool isCharge = soldier.ChargedIntoContactLastTurn;
             _actions.Melee.Add(new MeleeAttackAction(
                 soldier,
                 strikePlans,
-                didMove: false,
+                didMove: isCharge,
                 log: _log,
                 random: _random,
-                meleeWeaponTemplates: _meleeWeaponTemplates));
+                meleeWeaponTemplates: _meleeWeaponTemplates,
+                isCharge: isCharge));
 
             BattleSoldier strikeTarget = _soldierMap[strikePlans[0].TargetId];
             float range = _grid.GetDistanceBetweenSoldiers(
@@ -274,79 +297,7 @@ namespace OnlyWar.Battles
             return best;
         }
 
-        internal void AddChargeActionsToBag(BattleSoldier soldier)
-        {
-            soldier.TargetId = null;
-            if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
-            {
-                // determine what sort of manuver to make
-                AddMeleeActionsToBag(soldier);
-            }
-            else
-            {
-                // get stuck in
-                // move adjacent to nearest enemy
-                // TODO: handle when someone else in the same squad wants to use the same spot
-                // TODO: probably by letting the one with the lower id have it, and the higher id has to
-                float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-                float moveSpeed = SoldierMovementPlanner.GetMovementBudget(
-                    soldier, SquadMovementTier.InMelee);
-                ValueTuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
-                if (distance > moveSpeed + 1)
-                {
-                    ValueTuple<int, int> moveVector = new ValueTuple<int, int>(enemyPosition.Item1 - soldier.TopLeft.Value.Item1, enemyPosition.Item2 - soldier.TopLeft.Value.Item2);
-                    // we can't make it to an enemy in one move
-                    // soldier can't get there in one move, advance as far as possible
-                    _movement.AddMoveAction(soldier, moveSpeed, moveVector, SquadMovementTier.InMelee);
-                    _addRunUtility(soldier);
-                }
-                else
-                {
-                    ValueTuple<int, int> newPos = _grid.GetClosestOpenAdjacency(soldier.TopLeft.Value, enemyPosition);
-                    BattleSquad oppSquad = _soldierMap[closestEnemyId].BattleSquad;
-                    if (newPos == soldier.TopLeft.Value)
-                    {
-                        // find the next closest
-                        // okay, this is one of those times where I made something because it made me feel smart,
-                        // but it's probably unreadable so I should change it later
-                        // basically, foreach soldier in the squad of the closest enemy, except the closest enemy (who we already checked)
-                        // get their locations, and then sort it according to distance square
-                        // PROTIP: SQRT is a relatively expensive operation, so sort by distance squares when it's about comparative, not absolute, distance
-                        var map = oppSquad.AbleSoldiers
-                            .Where(s => s.Soldier.Id != closestEnemyId)
-                            .Select(s => new ValueTuple<int, ValueTuple<int, int>>(s.Soldier.Id, _grid.GetSoldierPosition(s.Soldier.Id)[0]))
-                            .Select(t => new ValueTuple<int, ValueTuple<int, int>, ValueTuple<int, int>>(t.Item1, t.Item2, new ValueTuple<int, int>(t.Item2.Item1 - soldier.TopLeft.Value.Item1, t.Item2.Item2 - soldier.TopLeft.Value.Item2)))
-                            .Select(u => new ValueTuple<int, ValueTuple<int, int>, int>(u.Item1, u.Item2, (u.Item3.Item1 * u.Item3.Item1 + u.Item3.Item2 * u.Item3.Item2)))
-                            .OrderBy(u => u.Item3);
-                        foreach (ValueTuple<int, ValueTuple<int, int>, int> soldierData in map)
-                        {
-                            newPos = _grid.GetClosestOpenAdjacency(soldier.TopLeft.Value, soldierData.Item2);
-                            if (newPos != soldier.TopLeft.Value)
-                            {
-                                AddChargeActionsHelper(soldier, soldierData.Item1, soldier.TopLeft.Value, (float)Math.Sqrt(soldierData.Item3), oppSquad, newPos);
-                                break;
-                            }
-                        }
-                        if (newPos == soldier.TopLeft.Value)
-                        {
-                            // we weren't able to find an enemy to get near, guess we try to find someone to shoot, instead?
-                            //Debug.Log("ISoldier in squad engaged in melee couldn't find anyone to attack");
-                            ValueTuple<int, int> line = new ValueTuple<int, int>((short)(enemyPosition.Item1 - soldier.TopLeft.Value.Item1),
-                                                                               (short)(enemyPosition.Item2 - soldier.TopLeft.Value.Item2));
-                            // soldier can't get there in one move, advance as far as possible
-                            _movement.AddMoveAction(soldier, moveSpeed, line, SquadMovementTier.InMelee);
-                            _addRunUtility(soldier);
-                        }
-                    }
-                    else
-                    {
-                        AddChargeActionsHelper(soldier, closestEnemyId, soldier.TopLeft.Value, distance, oppSquad, newPos);
-                    }
-                }
-            }
-        }
-
-        internal IReadOnlyList<IAction> ResolveSquadChargeIntent(
+        internal IReadOnlyList<IAction> ResolveSquadClosingMove(
             BattleSquad chargingSquad,
             BattleSquad targetSquad,
             BattleState state)
@@ -385,17 +336,12 @@ namespace OnlyWar.Battles
                     .ToList();
                 if (targets.Count == 0) break;
 
-                List<BattleSoldier> adjacent = targets
-                    .Where(target => _grid.GetDistanceBetweenSoldiers(
-                        charger.Soldier.Id, target.Soldier.Id)
-                        <= BattleContactRules.MeleeContactAllowance)
-                    .ToList();
-                if (adjacent.Count > 0)
+                // Already in contact at turn start: he fought in this turn's attack phase and has
+                // nowhere to go. Gate on the same predicate the attack phase used, so the two
+                // agree about who counted as engaged.
+                if (HasCombatEffectiveAdjacentEnemy(charger))
                 {
                     PrepareChargerForMelee(charger);
-                    MeleeAttackAction attack = CreateMeleeAttackAction(
-                        charger, adjacent, didMove: false);
-                    if (attack != null) _actions.Melee.Add(attack);
                     continue;
                 }
 
@@ -455,17 +401,13 @@ namespace OnlyWar.Battles
                 move.Execute(state);
                 if (move.Succeeded) resolvedMovement.Add(move);
 
-                if (move.Succeeded
-                    && pursuedTarget.IsCombatEffective
-                    && IsPlaced(pursuedTarget)
-                    && _grid.GetDistanceBetweenSoldiers(
-                        charger.Soldier.Id, pursuedTarget.Soldier.Id)
-                        <= BattleContactRules.MeleeContactAllowance)
+                // Reaching contact does NOT produce an attack here. This pass runs after the attack
+                // phase, so the blow belongs to the next turn; mark the charge instead and let the
+                // attack phase spend it. See BattleSoldier.ChargedIntoContactLastTurn.
+                if (move.Succeeded && HasCombatEffectiveAdjacentEnemy(charger))
                 {
                     PrepareChargerForMelee(charger);
-                    MeleeAttackAction attack = CreateMeleeAttackAction(
-                        charger, [pursuedTarget], didMove: true, isCharge: true);
-                    if (attack != null) _actions.Melee.Add(attack);
+                    charger.ChargedIntoContactLastTurn = true;
                 }
             }
             return resolvedMovement;
@@ -485,52 +427,6 @@ namespace OnlyWar.Battles
             soldier.CurrentSpeed = 0;
             soldier.LeftoverMovement = 0;
             soldier.IsRunning = false;
-        }
-
-        private void AddChargeActionsHelper(BattleSoldier soldier, int closestEnemyId, ValueTuple<int, int> currentPosition, float distance, BattleSquad oppSquad, ValueTuple<int, int> newPos)
-        {
-            ValueTuple<int, int> move = new ValueTuple<int, int>(newPos.Item1 - currentPosition.Item1, newPos.Item2 - currentPosition.Item2);
-            float moveSpeed = SoldierMovementPlanner.GetMovementBudget(
-                soldier, SquadMovementTier.InMelee);
-            if (distance > moveSpeed + 1)
-            {
-                // we can't make it to an enemy in one move
-                // soldier can't get there in one move, advance as far as possible
-
-                _movement.AddMoveAction(soldier, moveSpeed, move, SquadMovementTier.InMelee);
-                _addRunUtility(soldier);
-            }
-            else
-            {
-                //Debug.Log(soldier.Soldier.Name + " charging " + moveSpeed.ToString("F0"));
-                ushort orientation = _movement.CalculateOrientationFromVector(
-                    move, soldier, SquadMovementTier.InMelee);
-                _movement.CommitChargeDestination(
-                    soldier,
-                    currentPosition,
-                    newPos,
-                    orientation,
-                    moveSpeed);
-                MeleeWeapon meleeWeaponToReady =
-                    MeleeStrikeEstimator.GetFirstUsableMeleeWeapon(soldier);
-                if (soldier.EquippedMeleeWeapons.Count == 0 && meleeWeaponToReady != null)
-                {
-                    _actions.Shoot.Add(new ReadyMeleeWeaponAction(soldier, meleeWeaponToReady));
-                }
-                else
-                {
-                    BattleSoldier target = oppSquad.AbleSoldiers.Single(s => s.Soldier.Id == closestEnemyId);
-                    MeleeAttackAction action = CreateMeleeAttackAction(
-                        soldier,
-                        [target],
-                        didMove: true,
-                        isCharge: true);
-                    if (action != null)
-                    {
-                        _actions.Melee.Add(action);
-                    }
-                }
-            }
         }
 
         private MeleeAttackAction CreateMeleeAttackAction(

@@ -31,7 +31,7 @@ public static class BattlePursuitPlanner
         float ProjectedPressInterceptTurns,
         float? ProjectedFollowPositiveShotTurns,
         bool WithdrawerReturnsFire,
-        bool PursuerCanReachMeleeThisTurn = false);
+        bool PursuerCanReachContactThisTurn = false);
 
     public sealed record Result(PursuitPosture Posture, string Reason, BattleDecisionTrace Trace);
 
@@ -66,7 +66,7 @@ public static class BattlePursuitPlanner
         // speeds, so it keeps whatever posture its policy chose. The tolerance is shared with
         // BattleContactRules so the posture and the contact break agree on "cannot close".
         if (posture != PursuitPosture.BreakOff
-            && !input.PursuerCanReachMeleeThisTurn
+            && !input.PursuerCanReachContactThisTurn
             && input.FastestPursuitSpeed
                 <= input.SlowestWithdrawalSpeed + BattleContactRules.PursuitSpeedAdvantageTolerance)
         {
@@ -99,7 +99,7 @@ public static class BattlePursuitPlanner
             BattleDecisionTrace.Field("slowest_withdrawal_speed", input.SlowestWithdrawalSpeed),
             BattleDecisionTrace.Field("aggression", input.Aggression),
             BattleDecisionTrace.Field("withdrawer_returns_fire", input.WithdrawerReturnsFire),
-            BattleDecisionTrace.Field("melee_reach_this_turn", input.PursuerCanReachMeleeThisTurn),
+            BattleDecisionTrace.Field("melee_reach_this_turn", input.PursuerCanReachContactThisTurn),
             BattleDecisionTrace.Field("press_intercept_turns", input.ProjectedPressInterceptTurns),
             BattleDecisionTrace.Field("follow_shot_turns", input.ProjectedFollowPositiveShotTurns),
             BattleDecisionTrace.Field("decision", posture),

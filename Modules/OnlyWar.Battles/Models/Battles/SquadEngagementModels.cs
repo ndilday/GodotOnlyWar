@@ -164,7 +164,10 @@ public sealed record EngagementOptionEvaluation(
     // Change in the pursuit fire-window component of the screen potential.
     float FireWindowValue,
     float IncomingNow,
-    float MeleeNow,
+    // Present-valued melee payoff for a contact-seeking option. NOT a current-turn term despite
+    // sitting beside IncomingNow: only a soldier already in contact at turn start strikes this
+    // turn, and arriving in contact pays off one turn later. See MeleeStrikeEstimator's two clocks.
+    float MeleeValue,
     IReadOnlyList<float> FutureExchange,
     // Negative root-state offset from the net-rate component of Φ. Kept separate from
     // FutureExchange so the state transition remains visible in diagnostics.

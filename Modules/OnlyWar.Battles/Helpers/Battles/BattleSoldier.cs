@@ -82,6 +82,21 @@ namespace OnlyWar.Battles
         public float CurrentSpeed { get; set; }
         public float LeftoverMovement { get; set; }
 
+        /// <summary>
+        /// This soldier entered contact on the closing pass of the PREVIOUS turn, so the strike he
+        /// makes in this turn's attack phase is the culmination of that charge and carries the
+        /// moved-attack penalty and the parry forfeit (PRD §4.14).
+        /// <para>
+        /// Attacks resolve from turn-start geometry and movement resolves after them, so no soldier
+        /// ever attacks after moving inside one turn. A charge is therefore split across the turn
+        /// boundary rather than fused into one action — but nothing happens in between, because the
+        /// closing pass is the last thing in the turn and the attack phase is the first thing in the
+        /// next. This flag is what carries the charge across that seam. Set it in the closing pass;
+        /// the attack phase consumes it and <see cref="BattleTurnResolver"/> clears it.
+        /// </para>
+        /// </summary>
+        public bool ChargedIntoContactLastTurn { get; set; }
+
         public float TurnsRunning { get; set; }
         public ushort TurnsShooting { get; set; }
         public ushort TurnsSwinging { get; set; } 

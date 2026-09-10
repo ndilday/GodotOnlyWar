@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using OnlyWar.Abstractions;
 using OnlyWar.Domain;
 using OnlyWar.Battles;
 using OnlyWar.Domain.Extensions;
@@ -11,6 +12,7 @@ using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Units;
+using OnlyWar.Runtime.Allocators;
 
 namespace OnlyWar.Tests.Fixtures;
 
@@ -24,6 +26,13 @@ internal sealed class SectorSimulationFixture
 {
     private const int RegionCount = 16;
     private int _nextFactionId = 100;
+
+    /// <summary>
+    /// Session-owned identity state for entities that tests add to this fixture after the base
+    /// sector is built. Detached test objects still need stable identities when they participate
+    /// in order, projection, or battle assertions.
+    /// </summary>
+    public IPersistentIdAllocator Identity { get; } = new PersistentIdAllocator();
 
     public Faction Default { get; private set; }
     public PlanetFaction DefaultPlanetFaction { get; private set; }

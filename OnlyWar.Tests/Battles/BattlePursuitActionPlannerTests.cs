@@ -188,22 +188,25 @@ public class BattlePursuitActionPlannerTests
 
         PlanPursuit(fixture, pursuer, [withdrawing], EngagementOptionKind.CloseToContact);
 
-        // Which attack it makes is the engaged-soldier decision's business — a rifleman standing
-        // on his quarry may well shoot point blank rather than club him. What matters is that
-        // reaching the enemy produces an attack at all instead of another stride.
-        SquadChargeIntentAction charge = Assert.IsType<SquadChargeIntentAction>(
-            Assert.Single(fixture.MoveActions));
-        charge.Execute(null);
-
+        // Contact already existed at turn start, so the attack is built during planning — not by
+        // the closing pass, which by then has nowhere to send him. Which attack he makes is the
+        // engaged-soldier decision's business: a rifleman standing on his quarry may well shoot
+        // point blank rather than club him.
         Assert.NotEmpty(fixture.MeleeActions.Concat(fixture.ShootActions));
-        Assert.Empty(charge.ResolvedMovementActions);
+
+        SquadClosingMoveAction closing = Assert.IsType<SquadClosingMoveAction>(
+            Assert.Single(fixture.MoveActions));
+        closing.Execute(null);
+        Assert.Empty(closing.ResolvedMovementActions);
     }
 
     [Fact]
-    public void CloseToContact_ChargesWhenTheWithdrawerIsWithinOneMove()
+    public void CloseToContact_ReachesContactAndMarksTheChargeForNextTurn()
     {
-        // Just out of contact but inside a Run: the pursuer closes and gets stuck in the same
-        // turn rather than stopping politely one pace short.
+        // Just out of contact but inside a Run. The pursuer must actually ARRIVE — the old failure
+        // was a bare stride that stopped one pace short and repeated forever. He does not swing
+        // this turn: attacks resolve from turn-start geometry, and at turn start he was four yards
+        // out. The blow lands next turn, as a charge.
         BattleSquad pursuer = CreateSquad("Pursuer", 72_061);
         BattleSquad withdrawing = CreateSquad("Withdrawer", 72_062);
         Fixture fixture = CreateFixture(
@@ -212,14 +215,22 @@ public class BattlePursuitActionPlannerTests
 
         PlanPursuit(fixture, pursuer, [withdrawing], EngagementOptionKind.CloseToContact);
 
-        // It closes and gets stuck in on the same turn: a move plus an attack, not a bare stride
-        // that stops one pace short and repeats forever.
-        SquadChargeIntentAction charge = Assert.IsType<SquadChargeIntentAction>(
+        SquadClosingMoveAction closing = Assert.IsType<SquadClosingMoveAction>(
             Assert.Single(fixture.MoveActions));
-        charge.Execute(null);
+        closing.Execute(null);
 
-        Assert.NotEmpty(charge.ResolvedMovementActions);
-        Assert.NotEmpty(fixture.MeleeActions.Concat(fixture.ShootActions));
+        Assert.NotEmpty(closing.ResolvedMovementActions);
+        Assert.Empty(fixture.MeleeActions);
+        // Readying a weapon while closing is legal and expected; landing a blow is not.
+        Assert.DoesNotContain(fixture.ShootActions, action => action is ShootAction);
+
+        BattleSoldier arriving = pursuer.Soldiers[0];
+        Assert.True(
+            fixture.Grid.GetDistanceBetweenSoldiers(
+                arriving.Soldier.Id, withdrawing.Soldiers[0].Soldier.Id) <= 1.0001f,
+            "expected the pursuer to reach contact rather than stop one pace short");
+        Assert.True(arriving.ChargedIntoContactLastTurn,
+            "reaching contact must mark the charge so next turn's strike carries its penalties");
     }
 
     [Fact]
@@ -247,7 +258,7 @@ public class BattlePursuitActionPlannerTests
             });
 
         Assert.Equal(EngagementOptionKind.CloseToContact, decision.Chosen.Kind);
-        SquadChargeIntentAction charge = Assert.IsType<SquadChargeIntentAction>(
+        SquadClosingMoveAction charge = Assert.IsType<SquadClosingMoveAction>(
             Assert.Single(fixture.MoveActions));
 
         fixture.Grid.MoveSoldier(withdrawing.Soldiers[0], (10, 0), 0);

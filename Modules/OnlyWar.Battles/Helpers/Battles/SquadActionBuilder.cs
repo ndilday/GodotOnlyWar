@@ -132,6 +132,17 @@ namespace OnlyWar.Battles
                 foreach (BattleSoldier soldier in squad.AbleSoldiers
                     .OrderBy(member => member.Soldier.Id))
                 {
+                    if (_meleeBuilder.HasCombatEffectiveAdjacentEnemy(soldier))
+                    {
+                        // In contact at turn start, so he fights now, from the geometry every
+                        // squad planned against. The engaged-soldier decision owns the whole
+                        // choice: point-blank fire against a strike, gun-and-blade, which weapon
+                        // to ready, and how to spread blows over every enemy on him.
+                        _meleeBuilder.AddMeleeActionsToBag(soldier);
+                        continue;
+                    }
+                    // Separated, so he closes on the deferred pass. Ready the weapon now: it
+                    // wants to be in hand when he arrives, and he has no attack to trade away.
                     MeleeWeapon meleeWeaponToReady =
                         MeleeStrikeEstimator.GetFirstUsableMeleeWeapon(soldier);
                     if (soldier.EquippedMeleeWeapons.Count == 0 && meleeWeaponToReady != null)
@@ -141,10 +152,10 @@ namespace OnlyWar.Battles
                             meleeWeaponToReady));
                     }
                 }
-                _actions.Move.Add(new SquadChargeIntentAction(
+                _actions.Move.Add(new SquadClosingMoveAction(
                     squad,
                     primary,
-                    state => _meleeBuilder.ResolveSquadChargeIntent(squad, primary, state)));
+                    state => _meleeBuilder.ResolveSquadClosingMove(squad, primary, state)));
                 return;
             }
             if (kind == EngagementOptionKind.Hold)
@@ -154,25 +165,6 @@ namespace OnlyWar.Battles
             else
             {
                 PrepareDirectedMovingActions(squad, decision, primary);
-            }
-        }
-
-        internal void PrepareMeleeActions(BattleSquad squad)
-        {
-            squad.MovementTier = SquadMovementTier.InMelee;
-            ApplyDeclaredMovementState(squad);
-            // it doesn't really matter what the soldiers want to do, it's time to flee or fight
-            // TODO: evaluate running vs fighting
-            foreach (BattleSoldier soldier in squad.AbleSoldiers)
-            {
-                if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
-                {
-                    _meleeBuilder.AddMeleeActionsToBag(soldier);
-                }
-                else
-                {
-                    _meleeBuilder.AddChargeActionsToBag(soldier);
-                }
             }
         }
 
@@ -191,7 +183,7 @@ namespace OnlyWar.Battles
                 // Running is not free: he turns his back, so he defends with foot speed alone
                 // (BattleSoldier.IsRunning). Withdrawal is an ordered movement, not a rout, so
                 // unlike PrepareRoutingActions he is allowed the choice rather than pinned.
-                if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id)
+                if (_meleeBuilder.HasCombatEffectiveAdjacentEnemy(soldier)
                     && _melee.DecideMeleeDisengagement(soldier).Choice
                         == MeleeDisengagementChoice.StandAndFight)
                 {
@@ -217,7 +209,7 @@ namespace OnlyWar.Battles
             ValueTuple<int, int>? routLine = CalculateSquadRoutLine(squad);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
-                if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
+                if (_meleeBuilder.HasCombatEffectiveAdjacentEnemy(soldier))
                 {
                     // Pinned in melee — he fights because he cannot flee, not because he wants to.
                     _meleeBuilder.AddMeleeActionsToBag(soldier);

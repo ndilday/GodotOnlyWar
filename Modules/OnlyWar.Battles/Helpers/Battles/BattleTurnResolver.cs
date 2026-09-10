@@ -315,9 +315,22 @@ namespace OnlyWar.Battles
             List<IAction> executedActions = new List<IAction>();
             List<BattleEvent> events = _turnEvents;
             HashSet<int> defendingSoldierIds = [];
+            // ATTACKS FIRST, MOVEMENT LAST (TDD §6.6). Every attack is
+            // planned and resolved against the same turn-start grid, so melee adjacency and ranged
+            // geometry are the same kind of fact and nothing needs re-planning mid-turn. Movement
+            // then runs its two passes; the closing pass builds no attacks, it only marks the
+            // soldiers who reached contact so next turn's strike counts as a charge.
+            //
+            // Shooting stays a separate sub-phase ahead of striking rather than merging into one
+            // simultaneous exchange. That preserves the existing rule that a soldier dropped by
+            // fire never swings, and it keeps seeded RNG consumption stable.
             HandleShooting(shootSegmentActions, executedActions);
-            HandleMoving(moveSegmentActions, executedActions);
             HandleMelee(meleeSegmentActions, executedActions, defendingSoldierIds);
+            // The charge has now been spent by the strike above. Clear before the closing pass so
+            // it can mark this turn's arrivals afresh; a charger who is still in contact next turn
+            // is fighting a standing melee, not charging again.
+            ClearSpentCharges();
+            HandleMoving(moveSegmentActions, executedActions);
             foreach (int soldierId in defendingSoldierIds)
             {
                 if (_currentState.Soldiers.TryGetValue(soldierId, out BattleSoldier soldier))
@@ -682,6 +695,14 @@ namespace OnlyWar.Battles
             }
         }
 
+        private void ClearSpentCharges()
+        {
+            foreach (BattleSoldier soldier in _currentState.Soldiers.Values)
+            {
+                soldier.ChargedIntoContactLastTurn = false;
+            }
+        }
+
         private void HandleShooting(List<IAction> shootActions, List<IAction> executedActions)
         {
             // ConcurrentBag enumerated the actions in LIFO order in this single-threaded path.
@@ -720,7 +741,7 @@ namespace OnlyWar.Battles
             for (int actionIndex = moveActions.Count - 1; actionIndex >= 0; actionIndex--)
             {
                 IAction action = moveActions[actionIndex];
-                if (action is SquadChargeIntentAction) continue;
+                if (action is SquadClosingMoveAction) continue;
                 action.Execute(_currentState);
                 // Planning uses a frozen layout, so an earlier move can occupy this action's
                 // destination before execution. Bank its budget, but don't report it as movement.
@@ -730,12 +751,12 @@ namespace OnlyWar.Battles
                 }
             }
 
-            // Charge destinations are deliberately absent from the frozen planning layout. Once
+            // Closing destinations are deliberately absent from the frozen planning layout. Once
             // every ordinary move has resolved, discard those now-stale reservations and let each
-            // charging squad coordinate against the target squad's actual positions.
+            // closing squad coordinate against the target squad's actual positions.
             _grid.ClearReservations();
-            foreach (SquadChargeIntentAction charge in moveActions
-                .OfType<SquadChargeIntentAction>()
+            foreach (SquadClosingMoveAction charge in moveActions
+                .OfType<SquadClosingMoveAction>()
                 .OrderBy(action => action.ActorId))
             {
                 charge.Execute(_currentState);

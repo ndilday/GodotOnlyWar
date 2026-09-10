@@ -213,22 +213,31 @@ namespace OnlyWar.Battles
             int turnsToContact = moveSpeed <= 0
                 ? int.MaxValue
                 : (int)Math.Ceiling(Math.Max(0f, distance - 1f) / moveSpeed);
-            // Quote future melee in the same present-value currency as ranged targeting. Contact
-            // reached during this turn is part of this turn's exchange, so only turns AFTER the
-            // current one discount the payoff. The current-turn incoming term is scored separately
-            // by EngagementExchangeModel.EvaluateIncomingNow.
-            int futureTurnsBeforeContact = turnsToContact == int.MaxValue
+            // Quote future melee in the same present-value currency as ranged targeting.
+            //
+            // TWO DIFFERENT CLOCKS, and they were the same number until the turn structure changed
+            // (TDD §6.6). Attacks resolve from turn-start geometry and
+            // movement resolves after them, so ARRIVING in contact this turn does not buy a blow
+            // this turn -- the strike lands at the top of the next turn, as a charge. The payoff is
+            // therefore turnsToContact whole turns away, with no current-turn credit, and only a
+            // soldier ALREADY in contact at turn start (turnsToContact == 0) strikes undiscounted.
+            //
+            // The crossing itself is unchanged: it still takes turnsToContact turns, of which the
+            // current one is already priced by EngagementExchangeModel.EvaluateIncomingNow, so the
+            // run-in exposure keeps the old minus-one.
+            int futureTurnsBeforeStrike = turnsToContact;
+            int futureTurnsCrossing = turnsToContact == int.MaxValue
                 ? int.MaxValue
                 : Math.Max(0, turnsToContact - 1);
-            float chargeArrivalDiscount = futureTurnsBeforeContact == int.MaxValue
+            float chargeArrivalDiscount = futureTurnsBeforeStrike == int.MaxValue
                 ? 0f
-                : 1f / (1f + futureTurnsBeforeContact);
+                : 1f / (1f + futureTurnsBeforeStrike);
             meleeBattleValue *= chargeArrivalDiscount;
-            bool reachesThisTurn = turnsToContact <= 1;
+            bool reachesContactThisTurn = turnsToContact <= 1;
             // Incoming fire for the current turn is already part of the posture's immediate
             // exchange. Do not charge that same shooting window again as run-in exposure.
-            float closingCost = EstimateClosingCost(soldier, distance, futureTurnsBeforeContact);
-            return new ChargeAssessment(meleeBattleValue, closingCost, reachesThisTurn);
+            float closingCost = EstimateClosingCost(soldier, distance, futureTurnsCrossing);
+            return new ChargeAssessment(meleeBattleValue, closingCost, reachesContactThisTurn);
         }
 
         // Expected friendly battle value lost while this soldier crosses to melee AFTER the

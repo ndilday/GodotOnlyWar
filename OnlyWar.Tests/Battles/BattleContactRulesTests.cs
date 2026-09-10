@@ -70,7 +70,7 @@ public class BattleContactRulesTests
     // against the raw move reported "contact is one move away" on every one of ~997 turns. Net of
     // the quarry's withdrawal the pursuer gains 0.001 a turn and can reach nothing.
     [InlineData(6.001f, 6.001f, 6f, false)]
-    public void CanReachMeleeThisTurn_MeasuresNetClosingNotRawMove(
+    public void CanReachContactThisTurn_MeasuresNetClosingNotRawMove(
         float pursuerSpeed,
         float quarrySpeed,
         float separation,
@@ -78,7 +78,7 @@ public class BattleContactRulesTests
     {
         Assert.Equal(
             expected,
-            BattleContactRules.CanReachMeleeThisTurn(separation, pursuerSpeed, quarrySpeed));
+            BattleContactRules.CanReachContactThisTurn(separation, pursuerSpeed, quarrySpeed));
     }
 
     [Fact]

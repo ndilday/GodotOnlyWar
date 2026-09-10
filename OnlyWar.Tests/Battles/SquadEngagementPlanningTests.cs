@@ -1131,17 +1131,23 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void MeleeChargePayoff_IsFullWhenContactOccursThisTurn()
+    public void MeleeChargePayoff_IsFullOnlyForContactAlreadyHeldAtTurnStart()
     {
-        // Contact reached during this turn belongs to this turn's exchange. Only turns after the
-        // current one defer the payoff.
-        float atContact = ReferenceChargeMeleeNow(separation: 1);
-        float oneTurnAway = ReferenceChargeMeleeNow(separation: 5);
-        float twoTurnsAway = ReferenceChargeMeleeNow(separation: 13);
+        // Attacks resolve from turn-start geometry, so ARRIVING in contact buys no blow this turn:
+        // the strike lands at the top of the next turn (TDD §6.6). The
+        // payoff is therefore discounted by the whole turns-to-contact, and only a soldier already
+        // in contact when the turn opens is undiscounted. MoveSpeed is 8 in this fixture, so the
+        // three separations are 0, 1 and 2 turns from contact.
+        //
+        // REPLACED MeleeChargePayoff_IsFullWhenContactOccursThisTurn, which asserted the opposite
+        // and was the load-bearing statement of the old fused move-and-strike charge.
+        float atContact = ReferenceChargeMeleeValue(separation: 1);
+        float oneTurnAway = ReferenceChargeMeleeValue(separation: 5);
+        float twoTurnsAway = ReferenceChargeMeleeValue(separation: 13);
 
         Assert.True(atContact > 0, $"expected charge value at contact, got {atContact:0.#####}");
-        Assert.Equal(atContact, oneTurnAway, 4);
-        Assert.Equal(atContact * 0.5f, twoTurnsAway, 4);
+        Assert.Equal(atContact * 0.5f, oneTurnAway, 4);
+        Assert.Equal(atContact / 3f, twoTurnsAway, 4);
     }
 
     [Fact]
@@ -1291,7 +1297,7 @@ public class SquadEngagementPlanningTests
 
         EngagementOptionEvaluation charge = decision.Candidates.Single(
             candidate => candidate.Kind == EngagementOptionKind.CloseToContact);
-        Assert.True(charge.MeleeNow > 0, $"long charge melee term was {charge.MeleeNow}");
+        Assert.True(charge.MeleeValue > 0, $"long charge melee term was {charge.MeleeValue}");
     }
 
     [Fact]
@@ -1746,7 +1752,7 @@ public class SquadEngagementPlanningTests
             .ImmediateEnemyRemoval;
     }
 
-    private static float ReferenceChargeMeleeNow(int separation)
+    private static float ReferenceChargeMeleeValue(int separation)
     {
         BattleSquad chargers = Squad("Chargers", 81_130, 20, 0.9f);
         BattleSquad enemy = Squad("Charge Target", 81_131, 20, 0.9f);
@@ -1768,7 +1774,7 @@ public class SquadEngagementPlanningTests
             [chargers], [enemy]);
         return decision.Candidates
             .Single(candidate => candidate.Kind == EngagementOptionKind.CloseToContact)
-            .MeleeNow;
+            .MeleeValue;
     }
 
     private static (float Incoming, float Commitment) ReferenceChargeTerms(int separation)

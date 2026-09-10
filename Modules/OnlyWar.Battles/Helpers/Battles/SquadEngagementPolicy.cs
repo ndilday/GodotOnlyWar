@@ -830,7 +830,7 @@ namespace OnlyWar.Battles
             IReadOnlyCollection<BattleSquad> enemies) =>
             _exchange.EvaluateIncomingNow(squad, feasibleSpeed, profiles, frames, enemies);
 
-        private (float MeleeNow, float Commitment) EvaluateContactTerms(
+        private (float MeleeValue, float Commitment) EvaluateContactTerms(
             BattleSquad squad,
             EngagementOptionKind kind,
             BattleSquad primary,
@@ -900,7 +900,7 @@ namespace OnlyWar.Battles
                     BattleDecisionTrace.Field("readiness", candidate.ReadinessValue),
                     BattleDecisionTrace.Field("fire_window", candidate.FireWindowValue),
                     BattleDecisionTrace.Field("incoming", candidate.IncomingNow),
-                    BattleDecisionTrace.Field("melee", candidate.MeleeNow),
+                    BattleDecisionTrace.Field("melee", candidate.MeleeValue),
                     BattleDecisionTrace.Field("future", string.Join(',', candidate.FutureExchange.Select(value => value.ToString("0.###", CultureInfo.InvariantCulture)))),
                     BattleDecisionTrace.Field("arrival_value", candidate.ArrivalTimeValue),
                     BattleDecisionTrace.Field("role_term", candidate.RoleTerm),

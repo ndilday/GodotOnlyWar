@@ -66,12 +66,25 @@ narrow:
 - `RangedCombatFollowUps.md` — **backlog** for friendly line-of-fire tracing, krak grenades,
   launcher expansion, and template/terrain interaction gated on Battle Visuals Phase 3. Closed
   scatter-pricing and delivery-confidence items remain recorded there only as short decisions.
-- TDD §8.16 — calibration/measurement debt that is not a new player-facing rules plan: real
-  transition telescoping and a few named scoring seams.
+- Calibration/measurement debt that is not a new player-facing rules plan — real transition
+  telescoping and a few named scoring seams. **The former pointer to "TDD §8.16" was stale:** no such
+  section exists (§8 stops at 8.4) and §8 explicitly disclaims being a backlog. Residual calibration
+  items belong in PRD §5.7 with the other tracked residuals.
 
 The former engagement-scoring trackers and large-scale NPC-combat record were distilled into
 `Reference/BattleLogic.md` and removed. Their phase history, test counts, and open-work lists do not
 belong in a reference appendix.
+
+`MeleeTurnStructure.md` was created, implemented, and **deleted on 2026-09-10** — one session, so it
+never accumulated the phase history the promotion rule exists to evict. Attacks now resolve from
+turn-start geometry ahead of movement, the closing pass builds movement only, and a charge is carried
+across the turn boundary by `BattleSoldier.ChargedIntoContactLastTurn`. The rule is in PRD §4.14 and
+the architecture in TDD §6.6. It was **not** promoted to `Reference/`: the only content the rule says
+to retain was its four rejected turn orders, and four bullets fold into TDD §6.6 without making it
+unreadable — so under the citation test a `Reference/` file holding them would have earned no place.
+Its one residual, recalibrating `MeleeClosingFactor` now that closing costs an extra turn, moved to
+PRD §5.7 before the file was deleted. Everything else in it was scoping, corrections to that scoping,
+and test counts, which the rule names explicitly as delete-on-promotion.
 
 `ConsumptionFeedingAsMission.md` also moved to `Reference/` on 2026-08-07, implemented: biomass feeding
 and swarm spreading are now planner-allocated taskings competing on the same per-region force budget

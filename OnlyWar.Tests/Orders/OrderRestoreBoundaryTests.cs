@@ -245,7 +245,7 @@ public class OrderRestoreBoundaryTests
             [], TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)], kind)
         { Faction = fixture.Sector.PlayerForce.Faction };
-        Squad home = new("Specialists", null, template);
+        Squad home = new("Specialists", null, template, fixture.Identity);
         PlayerSoldier character = new(TestModelFactory.CreateSoldier(), "Specialist");
         home.AddSquadMember(character);
         home.CurrentRegion = fixture.Planet.Regions[0];
@@ -258,7 +258,7 @@ public class OrderRestoreBoundaryTests
             new List<SquadWeaponOption>(), TestModelFactory.TestArmor,
             TestModelFactory.SquadTemplate.Elements.ToList(), SquadTypes.None)
         { Faction = fixture.Sector.PlayerForce.Faction };
-        Squad squad = new(name, null, template);
+        Squad squad = new(name, null, template, fixture.Identity);
         for (int index = 0; index < 5; index++)
             squad.AddSquadMember(TestModelFactory.CreateSoldier(
                 template: leader && index == 0 ? TestModelFactory.SergeantTemplate : null));

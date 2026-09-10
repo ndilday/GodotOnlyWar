@@ -219,46 +219,58 @@ namespace OnlyWar.Battles
             }
         }
 
-        public void PrepareActions(BattleSquad squad, IReadOnlyCollection<BattleSquad> friendlySquads = null)
+        /// <summary>
+        /// Test-only entry point. Plans one squad end to end by discovering both sides from the
+        /// grid, then running the same Layer 2/2.5/3 sequence the coordinator runs.
+        /// <para>
+        /// It is NOT the production path, and the differences matter when reading a failure.
+        /// BattleActionPlanningCoordinator supplies EngagementRoleConstraints (so Screen, Pursuit,
+        /// Follow, Press and Standoff roles are unreachable here), calls InitializeEngagementHorizon
+        /// before any squad chooses (without it every squad reads the MaximumExchangeTurns fallback
+        /// -- see EngagementHorizonInitialized), shares one BattlePlanningContext across both sides,
+        /// and crosses two serial barriers so that every squad decides before any squad declares or
+        /// builds. This method interleaves choose/declare/build per squad, so a later squad sees an
+        /// earlier squad's declared movement state and cell reservations.
+        /// </para>
+        /// <para>
+        /// It no longer has an in-melee branch of its own. One used to call a builder production
+        /// never reached, so tests asserting point-blank fire and gun-and-blade passed against code
+        /// the game did not run. Every path now goes through the same Layer 2/2.5/3 sequence.
+        /// </para>
+        /// </summary>
+        public void PlanSquadForTesting(BattleSquad squad, IReadOnlyCollection<BattleSquad> friendlySquads = null)
         {
             BattleSoldier probe = squad.AbleSoldiers.FirstOrDefault();
             if (probe == null) return;
             _grid.GetNearestEnemy(probe.Soldier.Id, out int anyEnemyId);
             if (anyEnemyId == -1) return;
 
-            if (squad.IsInMelee)
-            {
-                _actionBuilder.PrepareMeleeActions(squad);
-            }
-            else
-            {
-                List<BattleSquad> all = _soldierMap.Values
-                    .Select(soldier => soldier.BattleSquad)
-                    .Where(candidate => candidate != null)
-                    .DistinctBy(candidate => candidate.Id)
-                    .ToList();
-                bool side = _grid.GetSoldierSide(probe.Soldier.Id);
-                List<BattleSquad> friendly = (friendlySquads ?? all
-                        .Where(candidate => candidate.AbleSoldiers.Any(member =>
-                            IsPlaced(member) && _grid.GetSoldierSide(member.Soldier.Id) == side)))
-                    .OrderBy(candidate => candidate.Id)
-                    .ToList();
-                List<BattleSquad> enemy = all
+            List<BattleSquad> all = _soldierMap.Values
+                .Select(soldier => soldier.BattleSquad)
+                .Where(candidate => candidate != null)
+                .DistinctBy(candidate => candidate.Id)
+                .ToList();
+            bool side = _grid.GetSoldierSide(probe.Soldier.Id);
+            List<BattleSquad> friendly = (friendlySquads ?? all
                     .Where(candidate => candidate.AbleSoldiers.Any(member =>
-                        IsPlaced(member) && _grid.GetSoldierSide(member.Soldier.Id) != side))
-                    .OrderBy(candidate => candidate.Id)
-                    .ToList();
-                BattleEngagementFrameBuilder.PairedFrame paired =
-                    BattleEngagementFrameBuilder.Build(friendly, enemy);
-                SquadEngagementDecision decision = ChooseEngagementOption(
-                    squad,
-                    paired.Frames[squad.Id],
-                    paired.Profiles,
-                    friendly,
-                    enemy);
-                DeclareEngagementDecision(decision);
-                BuildEngagementActions(decision);
-            }
+                        IsPlaced(member) && _grid.GetSoldierSide(member.Soldier.Id) == side)))
+                .OrderBy(candidate => candidate.Id)
+                .ToList();
+            List<BattleSquad> enemy = all
+                .Where(candidate => candidate.AbleSoldiers.Any(member =>
+                    IsPlaced(member) && _grid.GetSoldierSide(member.Soldier.Id) != side))
+                .OrderBy(candidate => candidate.Id)
+                .ToList();
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build(friendly, enemy);
+            SquadEngagementDecision decision = ChooseEngagementOption(
+                squad,
+                paired.Frames[squad.Id],
+                paired.Profiles,
+                friendly,
+                enemy);
+            DeclareEngagementDecision(decision);
+            BuildEngagementActions(decision);
         }
 
         // Retained as a shared planning horizon for BattleEscapeRules' retargeting policy. The
