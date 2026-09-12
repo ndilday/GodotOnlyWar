@@ -17,6 +17,9 @@ public partial class SquadRowView : PanelContainer
     private TextureRect _icon;
     private bool _selected;
     private bool _hovered;
+    private bool _borderless;
+    private bool _strengthVisible = true;
+    private bool _redundantStatusTokensHidden;
     private int _indent;
 
     public event EventHandler<string> RowSelected;
@@ -48,10 +51,11 @@ public partial class SquadRowView : PanelContainer
             "font_color",
             model.Enabled ? OnlyWarStyle.BodyText : OnlyWarStyle.MutedText);
         _strengthLabel.Text = StrengthText(model);
+        _strengthLabel.Visible = _strengthVisible;
         _strengthLabel.AddThemeColorOverride(
             "font_color",
             model.Enabled ? OnlyWarStyle.BodyText : OnlyWarStyle.MutedText);
-        _secondaryLabel.Text = SecondaryText(model);
+        _secondaryLabel.Text = SecondaryText(model, _redundantStatusTokensHidden);
         _secondaryLabel.AddThemeColorOverride("font_color", SecondaryColor(model));
         ApplyVisualState();
     }
@@ -66,6 +70,42 @@ public partial class SquadRowView : PanelContainer
     {
         _hovered = hovered;
         ApplyVisualState();
+    }
+
+    /// <summary>
+    /// Hides this row's panel frame while preserving its content margins. This is used when a
+    /// squad row is embedded inside another list row that already owns the visual frame.
+    /// </summary>
+    public void SetBorderless(bool borderless = true)
+    {
+        _borderless = borderless;
+        ApplyVisualState();
+    }
+
+    /// <summary>
+    /// Hides the row's strength readout when the host provides a dedicated strength column.
+    /// </summary>
+    public void SetStrengthVisible(bool visible)
+    {
+        _strengthVisible = visible;
+        if (_strengthLabel != null && IsInstanceValid(_strengthLabel))
+        {
+            _strengthLabel.Visible = visible;
+        }
+    }
+
+    /// <summary>
+    /// Hides vacancy/leader tokens that are already represented by the host's group headings.
+    /// Other readiness blockers remain visible and the complete readiness facts remain in the
+    /// row tooltip.
+    /// </summary>
+    public void SetRedundantStatusTokensHidden(bool hidden = true)
+    {
+        _redundantStatusTokensHidden = hidden;
+        if (_model != null && _secondaryLabel != null && IsInstanceValid(_secondaryLabel))
+        {
+            _secondaryLabel.Text = SecondaryText(_model, hidden);
+        }
     }
 
     public override void _Ready()
@@ -196,6 +236,15 @@ public partial class SquadRowView : PanelContainer
             style.BgColor = OnlyWarStyle.WithAlpha(style.BgColor, 0.48f);
             style.BorderColor = OnlyWarStyle.WithAlpha(style.BorderColor, 0.42f);
         }
+        if (_borderless)
+        {
+            style.BgColor = Colors.Transparent;
+            style.BorderColor = Colors.Transparent;
+            style.BorderWidthLeft = 0;
+            style.BorderWidthTop = 0;
+            style.BorderWidthRight = 0;
+            style.BorderWidthBottom = 0;
+        }
         AddThemeStyleboxOverride("panel", style);
     }
 
@@ -219,7 +268,9 @@ public partial class SquadRowView : PanelContainer
         return model.StrengthLabel;
     }
 
-    private static string SecondaryText(SquadRowViewModel model)
+    private static string SecondaryText(
+        SquadRowViewModel model,
+        bool redundantStatusTokensHidden = false)
     {
         List<string> tokens = [];
         if (!string.IsNullOrWhiteSpace(model.Type))
@@ -230,12 +281,14 @@ public partial class SquadRowView : PanelContainer
         {
             tokens.Add(model.Location);
         }
-        if (!string.IsNullOrWhiteSpace(model.PrimaryStateLabel))
+        if (!string.IsNullOrWhiteSpace(model.PrimaryStateLabel)
+            && (!redundantStatusTokensHidden || !IsRedundantStatus(model.Readiness.PrimaryBlocker)))
         {
             tokens.Add(model.PrimaryStateLabel);
         }
         if (!string.IsNullOrWhiteSpace(model.LeaderLabel)
-            && model.PrimaryStateLabel != model.LeaderLabel)
+            && model.PrimaryStateLabel != model.LeaderLabel
+            && (!redundantStatusTokensHidden || model.LeaderStatus != SquadLeaderStatus.Vacant))
         {
             tokens.Add(model.LeaderLabel);
         }
@@ -255,6 +308,10 @@ public partial class SquadRowView : PanelContainer
         }
         return string.Join(" · ", tokens);
     }
+
+    private static bool IsRedundantStatus(SquadReadinessBlocker blocker) =>
+        blocker == SquadReadinessBlocker.Leaderless
+        || blocker == SquadReadinessBlocker.BelowMinimumDutyReadyStrength;
 
     private static Color SecondaryColor(SquadRowViewModel model)
     {

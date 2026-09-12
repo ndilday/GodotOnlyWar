@@ -59,9 +59,13 @@ namespace OnlyWar.Campaign
             if (option == null) throw new ArgumentNullException(nameof(option));
             if (IsStaged(soldier.Id)) throw new InvalidOperationException("This soldier already has a staged change.");
 
+            option = _transferService.ResolveLeaderVacancyOption(
+                option,
+                RootUnit(soldier.AssignedSquad.ParentUnit));
+
             MusterMutationKind kind = option.IsNewSquad
                 ? MusterMutationKind.PromotionAndCreateFormation
-                : option.SoldierTemplate.Rank > soldier.Template.Rank
+                : IsPromotion(soldier, option)
                     ? MusterMutationKind.PromotionAndAssignment
                     : option.SoldierTemplate != soldier.Template
                         ? MusterMutationKind.TransferAndRoleChange
@@ -102,6 +106,7 @@ namespace OnlyWar.Campaign
             if (force?.Army == null) return new(false, ["Chapter roster is unavailable."]);
             force.Army.PopulateSquadMap();
             context ??= _transferService.CreateContext(force.Army.OrderOfBattle);
+            Dictionary<(Unit Unit, SquadTemplate Template), int> reservedFormations = [];
             foreach (MusterStagedAction action in _actions)
             {
                 if (!force.Army.PlayerSoldierMap.TryGetValue(action.SoldierId, out PlayerSoldier soldier)
@@ -110,7 +115,9 @@ namespace OnlyWar.Campaign
                     blockers.Add($"Soldier {action.SoldierId}'s posting changed while the plan was open.");
                     continue;
                 }
-                SoldierTransferOption option = ToOption(action);
+                SoldierTransferOption option = _transferService.ResolveLeaderVacancyOption(
+                    ToOption(action),
+                    RootUnit(soldier.AssignedSquad.ParentUnit));
                 bool stillOffered = action.ProvisionalFormationId.HasValue
                     && action.Kind != MusterMutationKind.PromotionAndCreateFormation
                     ? IsProvisionalDestinationStillOffered(action, soldier)
@@ -120,6 +127,24 @@ namespace OnlyWar.Campaign
                 {
                     blockers.Add($"{soldier.Name} is no longer eligible for {action.TargetDisplay}.");
                     continue;
+                }
+                if (action.Kind == MusterMutationKind.PromotionAndCreateFormation)
+                {
+                    (Unit Unit, SquadTemplate Template) key =
+                        (action.ProvisionalUnit, action.ProvisionalSquadTemplate);
+                    int capacity = SoldierTransferService.GetSquadCapacity(key.Unit, key.Template);
+                    int existing = key.Unit?.Squads.Count(
+                        squad => squad.SquadTemplate == key.Template) ?? 0;
+                    int reserved = reservedFormations.GetValueOrDefault(key);
+                    if (capacity <= 0 || existing + reserved >= capacity)
+                    {
+                        blockers.Add(
+                            $"{key.Unit?.Name ?? "Target unit"} cannot hold another "
+                            + $"{key.Template?.Name ?? "formation"}; its cap is {capacity}.");
+                        continue;
+                    }
+
+                    reservedFormations[key] = reserved + 1;
                 }
                 if (_transferService.WouldExceedShipCapacity(soldier, option, force.Army.SquadMap))
                 {
@@ -150,7 +175,9 @@ namespace OnlyWar.Campaign
                 if (action.Kind == MusterMutationKind.PromotionAndCreateFormation)
                 {
                     HashSet<Squad> before = action.ProvisionalUnit.Squads.ToHashSet();
-                    option = ToOption(action);
+                    option = _transferService.ResolveLeaderVacancyOption(
+                        ToOption(action),
+                        RootUnit(soldier.AssignedSquad.ParentUnit));
                     if (!_transferService.ApplyTransfer(
                             soldier, option, force.Army.SquadMap, date, identity))
                     {
@@ -183,7 +210,9 @@ namespace OnlyWar.Campaign
                 }
                 else
                 {
-                    option = ToOption(action);
+                    option = _transferService.ResolveLeaderVacancyOption(
+                        ToOption(action),
+                        RootUnit(soldier.AssignedSquad.ParentUnit));
                 }
 
                 if (!_transferService.ApplyTransfer(
@@ -231,6 +260,31 @@ namespace OnlyWar.Campaign
             ProvisionalFormationId: action.Kind == MusterMutationKind.PromotionAndCreateFormation
                 ? null
                 : action.ProvisionalFormationId);
+
+        public static bool IsPromotion(
+            PlayerSoldier soldier,
+            SoldierTransferOption option)
+        {
+            if (soldier?.Template == null || option?.SoldierTemplate == null)
+            {
+                return false;
+            }
+
+            return option.IsNewSquad
+                || SoldierTransferService.IsPromotionTarget(
+                    option.SoldierTemplate,
+                    soldier.Template);
+        }
+
+        private static Unit RootUnit(Unit unit)
+        {
+            Unit root = unit;
+            while (root?.ParentUnit != null)
+            {
+                root = root.ParentUnit;
+            }
+            return root;
+        }
 
         private static bool SameDestination(SoldierTransferOption left, SoldierTransferOption right) =>
             left.IsNewSquad == right.IsNewSquad

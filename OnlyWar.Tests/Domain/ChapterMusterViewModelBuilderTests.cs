@@ -3,6 +3,7 @@ using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Soldiers.Ratings;
 using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Units;
+using OnlyWar.Runtime.Allocators;
 using OnlyWar.Tests.Fixtures;
 using System;
 using System.Collections.Generic;
@@ -145,7 +146,7 @@ public sealed class ChapterMusterViewModelBuilderTests
             null);
         MusterPlanService plan = new();
         SoldierTransferContext context = SoldierTransferContext.Build(company);
-        foreach (PlayerSoldier soldier in candidates.Take(5))
+        foreach (PlayerSoldier soldier in candidates.Take(4))
         {
             SoldierTransferOption option = Assert.Single(
                 new SoldierTransferService().GetTransferOptions(context, soldier),
@@ -155,12 +156,12 @@ public sealed class ChapterMusterViewModelBuilderTests
 
         IReadOnlyList<FormationVacancyViewModel> rows =
             new ChapterMusterViewModelBuilder().BuildFormations(
-                force, candidates[5], plan, context);
+                force, candidates[4], plan, context);
         IReadOnlyList<FormationVacancyViewModel> staged = rows
             .Where(row => row.IsPlanProjection)
             .ToList();
 
-        Assert.Equal(5, staged.Count);
+        Assert.Equal(4, staged.Count);
         Assert.All(staged, row =>
         {
             Assert.Equal(FormationVacancyGroup.Understrength, row.Group);
@@ -169,11 +170,11 @@ public sealed class ChapterMusterViewModelBuilderTests
             Assert.True(row.Option.IsProvisionalSquad);
             Assert.NotNull(row.SelectionKey);
         });
-        Assert.Equal(5, staged.Select(row => row.FormationOrdinal).Distinct().Count());
-        Assert.Equal(5, staged.Select(row => row.SelectionKey).Distinct().Count());
+        Assert.Equal(4, staged.Select(row => row.FormationOrdinal).Distinct().Count());
+        Assert.Equal(4, staged.Select(row => row.SelectionKey).Distinct().Count());
 
         FormationVacancyViewModel provisionalDestination = staged.First();
-        plan.Stage(candidates[5], provisionalDestination.Option);
+        plan.Stage(candidates[4], provisionalDestination.Option);
         Assert.True(plan.Validate(force, context).IsValid);
         Assert.Contains(
             new ChapterMusterViewModelBuilder().BuildFormations(force, candidates[5], plan, context),
@@ -182,6 +183,99 @@ public sealed class ChapterMusterViewModelBuilderTests
         MusterCommitResult commit = plan.Commit(force, new Date(41, 999, 1));
         Assert.True(commit.Succeeded);
         Assert.Contains(company.Squads, squad => squad.Members.Count == 2);
+    }
+
+    [Fact]
+    public void BuildFormations_ReservesCompanyFormationCapacityAcrossStagedCreations()
+    {
+        SquadTemplate headquartersTemplate = CreateSquadTemplate(
+            "Company HQ",
+            SquadTypes.HQ,
+            (TestModelFactory.CaptainTemplate, 1, 1));
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Tactical Squad",
+            SquadTypes.None,
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        PersistentIdAllocator identity = new(
+            nextUnitId: 10,
+            nextSquadId: 100);
+        Unit company = new(
+            "3rd Company",
+            new UnitTemplate(
+                3,
+                "Company Template",
+                false,
+                headquartersTemplate,
+                [new SquadTemplateSlot(lineTemplate, 0, 2)]),
+            identity);
+        PlayerSoldier captain = new(
+            TestModelFactory.CreateSoldier(TestModelFactory.CaptainTemplate, "Captain Aurelius"),
+            "Captain Aurelius");
+        company.HQSquad.AddSquadMember(captain);
+
+        Unit chapter = new(
+            "Test Chapter",
+            new UnitTemplate(1, "Chapter Template", true, (SquadTemplate)null, []),
+            identity);
+        Unit reserve = new(
+            "Reserve",
+            new UnitTemplate(4, "Reserve Template", false, (SquadTemplate)null, []),
+            identity);
+        chapter.ChildUnits.Add(company);
+        chapter.ChildUnits.Add(reserve);
+        company.ParentUnit = chapter;
+        reserve.ParentUnit = chapter;
+
+        Squad reserveSquad = new("Reserve Squad", reserve, lineTemplate, identity);
+        reserve.AddSquad(reserveSquad);
+        List<PlayerSoldier> candidates = [];
+        for (int index = 0; index < 3; index++)
+        {
+            PlayerSoldier candidate = new(
+                TestModelFactory.CreateSoldier(
+                    TestModelFactory.MarineTemplate, $"Brother {index + 1}"),
+                $"Brother {index + 1}");
+            reserveSquad.AddSquadMember(candidate);
+            candidates.Add(candidate);
+        }
+
+        PlayerForce force = new(
+            null,
+            new Army("Test Army", null, "Test Chapter", chapter, [captain, .. candidates]),
+            null);
+        MusterPlanService plan = new();
+        SoldierTransferContext context = SoldierTransferContext.Build(chapter);
+        ChapterMusterViewModelBuilder builder = new();
+
+        SoldierTransferOption firstOption = Assert.Single(
+            builder.BuildFormations(force, candidates[0], plan, context),
+            row => row.Group == FormationVacancyGroup.AvailableNewFormations
+                && row.Option?.TargetUnit == company).Option;
+        plan.Stage(candidates[0], firstOption);
+
+        SoldierTransferOption secondOption = Assert.Single(
+            builder.BuildFormations(force, candidates[1], plan, context),
+            row => row.Group == FormationVacancyGroup.AvailableNewFormations
+                && row.Option?.TargetUnit == company).Option;
+        plan.Stage(candidates[1], secondOption);
+
+        IReadOnlyList<FormationVacancyViewModel> afterCap = builder.BuildFormations(
+            force, candidates[2], plan, context);
+        Assert.DoesNotContain(afterCap, row =>
+            row.Group == FormationVacancyGroup.AvailableNewFormations
+            && row.Option?.TargetUnit == company);
+        Assert.True(plan.Validate(force, context).IsValid);
+
+        // A stale row from before the second reservation must not bypass the cap at commit.
+        plan.Stage(candidates[2], firstOption);
+        MusterPlanValidation validation = plan.Validate(force, context);
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Blockers, blocker => blocker.Contains("cap is 2"));
+
+        MusterCommitResult commit = plan.Commit(force, new Date(41, 999, 1));
+        Assert.False(commit.Succeeded);
+        Assert.DoesNotContain(company.Squads, squad => squad.SquadTemplate == lineTemplate);
     }
 
     [Fact]

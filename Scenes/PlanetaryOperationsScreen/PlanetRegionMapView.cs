@@ -56,7 +56,7 @@ public partial class RegionMapCardView : Button
             OffsetBottom = -2,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-            Modulate = new Color(1f, 1f, 1f, 0.42f)
+            Modulate = new Color(1f, 1f, 1f, 0.66f)
         };
         AddChild(_backgroundTexture);
         ColorRect backgroundShade = new()

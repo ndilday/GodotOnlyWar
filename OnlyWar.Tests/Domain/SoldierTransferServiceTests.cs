@@ -368,6 +368,7 @@ public class SoldierTransferServiceTests
         Assert.Contains(soldier, target.Members);
         Assert.Equal(target, soldier.AssignedSquad);
         Assert.Equal(TestModelFactory.SergeantTemplate, soldier.Template);
+        Assert.Same(soldier, target.SquadLeader);
         Assert.Collection(
             soldier.SoldierEvents,
             soldierEvent =>
@@ -380,6 +381,74 @@ public class SoldierTransferServiceTests
                 Assert.Equal(SoldierEventType.Transfer, soldierEvent.Type);
                 Assert.Equal("transferred to Test Sergeant, Target Squad, Chapter", soldierEvent.Detail);
             });
+    }
+
+    [Fact]
+    public void ApplyTransfer_PromotesNonLeaderOptionWhenTargetNeedsLeader()
+    {
+        SquadTemplate template = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", template);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        Squad target = AddSquad(chapter, "Leaderless Squad", template);
+        SoldierTransferOption staleOption = new(
+            target.Id,
+            TestModelFactory.MarineTemplate,
+            "Test Marine, Leaderless Squad, Chapter");
+
+        bool didTransfer = _service.ApplyTransfer(
+            soldier,
+            staleOption,
+            chapter.GetAllSquads().ToDictionary(squad => squad.Id),
+            _date);
+
+        Assert.True(didTransfer);
+        Assert.Equal(TestModelFactory.SergeantTemplate, soldier.Template);
+        Assert.Same(soldier, target.SquadLeader);
+        Assert.Contains(
+            soldier.SoldierEvents,
+            soldierEvent => soldierEvent.Type == SoldierEventType.Promotion
+                && soldierEvent.Detail == "promoted to Test Sergeant");
+    }
+
+    [Fact]
+    public void MusterPlan_StagesAndCommitsNonLeaderAsLeaderForLeaderlessTarget()
+    {
+        SoldierTemplate ancient = CreateTemplate(50, "Test Ancient", 2, isSquadLeader: false);
+        SquadTemplate template = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", template);
+        PlayerSoldier soldier = AddPlayerSoldier(source, ancient, "Brother Marius");
+        Squad target = AddSquad(chapter, "Leaderless Squad", template);
+        PlayerForce force = new(
+            null,
+            new Army("Test Army", null, "Test Chapter", chapter, [soldier]),
+            null);
+        SoldierTransferOption staleOption = new(
+            target.Id,
+            TestModelFactory.MarineTemplate,
+            "Test Marine, Leaderless Squad, Chapter");
+        MusterPlanService plan = new();
+
+        Assert.True(_service.HasLegalTransferOption(
+            _service.CreateContext(chapter), soldier, promotionOnly: true));
+        MusterStagedAction action = plan.Stage(soldier, staleOption);
+
+        Assert.Equal(TestModelFactory.SergeantTemplate, action.TargetTemplate);
+        Assert.Equal(MusterMutationKind.PromotionAndAssignment, action.Kind);
+        Assert.Contains("Test Sergeant, Leaderless Squad", action.TargetDisplay);
+
+        MusterCommitResult result = plan.Commit(force, _date);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(TestModelFactory.SergeantTemplate, soldier.Template);
+        Assert.Same(soldier, target.SquadLeader);
     }
 
     [Fact]
@@ -598,6 +667,33 @@ public class SoldierTransferServiceTests
         List<SoldierTransferOption> options = _service.GetTransferOptions(company, soldier);
 
         Assert.DoesNotContain(options, option => option.IsNewSquad);
+    }
+
+    [Fact]
+    public void ApplyTransfer_RejectsNewSquadWhenAtCap()
+    {
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit company = CreateUnitWithSlots("Company", new SquadTemplateSlot(lineTemplate, 0, 1));
+        AddSquad(company, "Existing Squad", lineTemplate);
+
+        Unit reserve = CreateUnit("Reserve");
+        Squad source = AddSquad(reserve, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        SoldierTransferOption option = new(
+            0,
+            TestModelFactory.SergeantTemplate,
+            "Test Sergeant, New Line Squad, Company",
+            IsNewSquad: true,
+            TargetUnit: company,
+            TargetSquadTemplate: lineTemplate);
+        Dictionary<int, Squad> squadMap = [];
+
+        Assert.False(_service.ApplyTransfer(soldier, option, squadMap, _date));
+        Assert.Equal(source, soldier.AssignedSquad);
+        Assert.Single(company.Squads, squad => squad.SquadTemplate == lineTemplate);
     }
 
     [Fact]

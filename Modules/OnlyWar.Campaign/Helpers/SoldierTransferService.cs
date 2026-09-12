@@ -237,9 +237,7 @@ namespace OnlyWar.Campaign
                     {
                         continue;
                     }
-                    int existing = unitContext.Squads.Count(
-                        squadContext => squadContext.Squad.SquadTemplate == slot.Template);
-                    if (existing < slot.MaxCount
+                    if (HasSquadCapacity(unitContext.Unit, slot.Template)
                         && HasOpeningInEmptySquad(slot.Template, soldier, promotionOnly))
                     {
                         return true;
@@ -390,6 +388,70 @@ namespace OnlyWar.Campaign
             return $"{option.DisplayName} ({SquadLocationFormatter.Format(targetSquad)})";
         }
 
+        /// <summary>
+        /// A leaderless destination has one meaningful opening: its command seat. Keep that
+        /// rule true at the mutation boundary as well as in the option query, because staged
+        /// UI data can outlive the snapshot that produced it. A stale or hand-built rank-and-file
+        /// option must not leave a squad leaderless after the transfer is committed.
+        /// </summary>
+        internal SoldierTransferOption ResolveLeaderVacancyOption(
+            SoldierTransferOption option,
+            Unit orderOfBattle)
+        {
+            Squad targetSquad = option?.IsNewSquad == true || orderOfBattle == null
+                ? null
+                : (orderOfBattle.GetAllSquads() ?? Enumerable.Empty<Squad>())
+                    .FirstOrDefault(squad => squad.Id == option.SquadId);
+            return ResolveLeaderVacancyOption(option, targetSquad);
+        }
+
+        private static SoldierTransferOption ResolveLeaderVacancyOption(
+            SoldierTransferOption option,
+            Squad targetSquad)
+        {
+            if (option == null
+                || option.IsCurrentAssignment
+                || option.IsProvisionalSquad
+                || option.SoldierTemplate?.IsSquadLeader == true)
+            {
+                return option;
+            }
+
+            bool needsLeader = option.IsNewSquad || targetSquad?.SquadLeader == null;
+            if (!needsLeader)
+            {
+                return option;
+            }
+
+            SquadTemplate targetTemplate = option.IsNewSquad
+                ? option.TargetSquadTemplate
+                : targetSquad?.SquadTemplate;
+            SoldierTemplate leaderTemplate = targetTemplate?.Elements?
+                .FirstOrDefault(element => element.SoldierTemplate?.IsSquadLeader == true)
+                ?.SoldierTemplate;
+            if (leaderTemplate == null)
+            {
+                return option;
+            }
+
+            return option with
+            {
+                SoldierTemplate = leaderTemplate,
+                DisplayName = ReplaceDisplayRole(option.DisplayName, leaderTemplate.Name)
+            };
+        }
+
+        private static string ReplaceDisplayRole(string displayName, string roleName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                return roleName;
+            }
+
+            int separator = displayName.IndexOf(',', StringComparison.Ordinal);
+            return separator < 0 ? roleName : roleName + displayName[separator..];
+        }
+
         public bool ApplyTransfer(
             PlayerSoldier soldier,
             SoldierTransferOption option,
@@ -401,6 +463,25 @@ namespace OnlyWar.Campaign
             {
                 return false;
             }
+            if (soldier.AssignedSquad == null)
+            {
+                throw new InvalidOperationException("Cannot transfer a soldier with no assigned squad.");
+            }
+
+            Squad targetSquad = null;
+            if (!option.IsNewSquad)
+            {
+                if (squadMap == null || !squadMap.TryGetValue(option.SquadId, out targetSquad))
+                {
+                    throw new InvalidOperationException($"Could not find transfer target squad {option.SquadId}.");
+                }
+                option = ResolveLeaderVacancyOption(option, targetSquad);
+            }
+            else
+            {
+                option = ResolveLeaderVacancyOption(option, targetSquad);
+            }
+
             // Compatibility-bearing Scouts are campaign-recruited neophytes. A role
             // change is resolved only by the Black Carapace procedure, which performs
             // the reserved transfer on success. Founding Scouts have no score and keep
@@ -422,10 +503,6 @@ namespace OnlyWar.Campaign
             {
                 return false;
             }
-            if (soldier.AssignedSquad == null)
-            {
-                throw new InvalidOperationException("Cannot transfer a soldier with no assigned squad.");
-            }
             if (!_eligibilityService.IsEligible(soldier, option.SoldierTemplate))
             {
                 return false;
@@ -441,6 +518,10 @@ namespace OnlyWar.Campaign
                 {
                     return false;
                 }
+                if (!HasSquadCapacity(option.TargetUnit, option.TargetSquadTemplate))
+                {
+                    return false;
+                }
                 identity ??= CreateScopedIdentity(option.TargetUnit);
                 newSquad = new Squad(
                     option.TargetSquadTemplate.Name,
@@ -453,9 +534,9 @@ namespace OnlyWar.Campaign
                     writableSquadMap[newSquad.Id] = newSquad;
                 }
             }
-            else if (!squadMap.TryGetValue(option.SquadId, out newSquad))
+            else
             {
-                throw new InvalidOperationException($"Could not find transfer target squad {option.SquadId}.");
+                newSquad = targetSquad;
             }
             if (soldier.AssignedSquad == newSquad && soldier.Template == option.SoldierTemplate)
             {
@@ -604,9 +685,7 @@ namespace OnlyWar.Campaign
                 }
                 foreach (SquadTemplateSlot slot in unitContext.Slots)
                 {
-                    int existing = unitContext.Squads.Count(
-                        squadContext => squadContext.Squad.SquadTemplate == slot.Template);
-                    if (existing >= slot.MaxCount)
+                    if (!HasSquadCapacity(unitContext.Unit, slot.Template))
                     {
                         continue;
                     }
@@ -649,6 +728,16 @@ namespace OnlyWar.Campaign
         private static bool CanCreateSquadInUnit(Unit unit) =>
             unit?.HQSquad == null || unit.HQSquad.SquadLeader != null;
 
+        internal static int GetSquadCapacity(Unit unit, SquadTemplate squadTemplate) =>
+            unit?.UnitTemplate?.GetChildSquadSlots()
+                ?.FirstOrDefault(slot => slot.Template == squadTemplate)?.MaxCount ?? 0;
+
+        private static bool HasSquadCapacity(Unit unit, SquadTemplate squadTemplate) =>
+            CanCreateSquadInUnit(unit)
+            && squadTemplate != null
+            && unit.Squads.Count(squad => squad.SquadTemplate == squadTemplate)
+                < GetSquadCapacity(unit, squadTemplate);
+
         private static IPersistentIdAllocator CreateScopedIdentity(Unit targetUnit)
         {
             Unit root = targetUnit;
@@ -686,7 +775,17 @@ namespace OnlyWar.Campaign
 
         // A soldier may fill a slot at their current rank (a lateral transfer) or any
         // rank above it (a promotion of any number of levels). Slots below the soldier's
-        // current rank are not offered, since transfers never demote.
+        // current rank are not offered, since transfers never demote. Taking command of a
+        // leaderless squad is also a promotion for muster purposes, even when the source and
+        // leader templates share the same formal rank.
+        internal static bool IsPromotionTarget(
+            SoldierTemplate slot,
+            SoldierTemplate soldier) =>
+            slot != null
+            && soldier != null
+            && (slot.Rank > soldier.Rank
+                || (!soldier.IsSquadLeader && slot.IsSquadLeader));
+
         private static bool IsRankEligible(SoldierTemplate slot, SoldierTemplate soldier)
         {
             return slot.Rank >= soldier.Rank;
@@ -796,7 +895,8 @@ namespace OnlyWar.Campaign
         {
             // An empty squad has no leader, so only leader-eligible slots are open.
             return element.SoldierTemplate.IsSquadLeader
-                && (!promotionOnly || element.SoldierTemplate.Rank > soldier.Template.Rank)
+                && (!promotionOnly
+                    || IsPromotionTarget(element.SoldierTemplate, soldier.Template))
                 && IsRankEligible(element.SoldierTemplate, soldier.Template)
                 && IsSpecialistEligible(element.SoldierTemplate, soldier.Template)
                 && _eligibilityService.IsEligible(soldier, element.SoldierTemplate)
@@ -874,7 +974,8 @@ namespace OnlyWar.Campaign
             {
                 return false;
             }
-            if (promotionOnly && element.SoldierTemplate.Rank <= soldier.Template.Rank)
+            if (promotionOnly
+                && !IsPromotionTarget(element.SoldierTemplate, soldier.Template))
             {
                 return false;
             }

@@ -7,6 +7,10 @@ using System.Linq;
 public partial class ChapterMusterScreenController : MainScreenController
 {
     private const int CandidatePageSize = 50;
+    private const float FormationColumnRatio = 2.8f;
+    private const float TypeColumnRatio = 1.0f;
+    private const float RosterColumnRatio = 0.6f;
+    private const float LocationColumnRatio = 1.3f;
 
     // Set MUSTER_PERF_LOG=1 to print open cost to the Godot log: how many times a single open
     // rebuilds the lists, and the node count the screen leaves behind. Container sorting is
@@ -264,7 +268,13 @@ public partial class ChapterMusterScreenController : MainScreenController
     {
         VBoxContainer stack = PanelStack("FORMATIONS & VACANCIES", out PanelContainer panel);
         HBoxContainer columns = new();
-        foreach ((string text, float ratio) in new[] { ("FORMATION", 2.4f), ("TYPE", 1f), ("ROSTER", 1f), ("LOCATION", 1.3f) })
+        foreach ((string text, float ratio) in new[]
+        {
+            ("FORMATION", FormationColumnRatio),
+            ("TYPE", TypeColumnRatio),
+            ("ROSTER", RosterColumnRatio),
+            ("LOCATION", LocationColumnRatio)
+        })
         {
             Label label = new() { Text = text, SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 SizeFlagsStretchRatio = ratio };
@@ -761,6 +771,9 @@ public partial class ChapterMusterScreenController : MainScreenController
         {
             SquadRowView commonRow = new();
             commonRow.Configure(formation.CommonRow);
+            commonRow.SetBorderless();
+            commonRow.SetStrengthVisible(false);
+            commonRow.SetRedundantStatusTokensHidden();
             commonRow.SetSelected(selected);
             // The surrounding button owns formation selection; the common row supplies only
             // the shared facts and must not intercept that button's input.
@@ -796,11 +809,11 @@ public partial class ChapterMusterScreenController : MainScreenController
         content.AddChild(formationCell);
 
         AddFormationDivider(content);
-        content.AddChild(CreateFormationValue(formation.TypeLabel, 1.0f));
+        content.AddChild(CreateFormationValue(formation.TypeLabel, TypeColumnRatio));
         AddFormationDivider(content);
-        content.AddChild(CreateFormationValue(formation.RosterText, 1.0f));
+        content.AddChild(CreateFormationValue(formation.RosterText, RosterColumnRatio));
         AddFormationDivider(content);
-        content.AddChild(CreateFormationValue(formation.Location, 1.3f));
+        content.AddChild(CreateFormationValue(formation.Location, LocationColumnRatio));
 
         button.Pressed += () =>
         {

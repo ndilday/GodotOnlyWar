@@ -188,6 +188,11 @@ namespace OnlyWar.Application
             {
                 if (option.IsNewSquad)
                 {
+                    if (!HasUnreservedFormationCapacity(
+                            option.TargetUnit, option.TargetSquadTemplate, stagedActions))
+                    {
+                        continue;
+                    }
                     bool alreadyStaged = plan?.Actions.Any(action =>
                         action.SoldierId == candidate.Id
                         && action.Kind == MusterMutationKind.PromotionAndCreateFormation
@@ -312,6 +317,27 @@ namespace OnlyWar.Application
 
         private static int Capacity(SquadTemplate template) =>
             template?.Elements?.Sum(element => element.MaximumNumber) ?? 0;
+
+        private static bool HasUnreservedFormationCapacity(
+            Unit unit,
+            SquadTemplate squadTemplate,
+            IReadOnlyList<MusterStagedAction> stagedActions)
+        {
+            int capacity = unit?.UnitTemplate?.GetChildSquadSlots()
+                ?.FirstOrDefault(slot => slot.Template == squadTemplate)?.MaxCount ?? 0;
+            if (capacity <= 0)
+            {
+                return false;
+            }
+
+            int existing = unit.Squads.Count(squad => squad.SquadTemplate == squadTemplate);
+            int reserved = stagedActions.Count(action =>
+                action.Kind == MusterMutationKind.PromotionAndCreateFormation
+                && action.ProvisionalUnit == unit
+                && action.ProvisionalSquadTemplate == squadTemplate);
+            return existing + reserved < capacity;
+        }
+
         private static int GetUnitOrder(Unit unit) => unit?.ParentUnit?.ChildUnits?.IndexOf(unit) ?? int.MaxValue;
         private static string IconKey(Squad squad) => IconKey(squad?.SquadTemplate);
         private static string IconKey(SquadTemplate template)

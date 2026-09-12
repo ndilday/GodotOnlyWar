@@ -353,7 +353,7 @@ internal sealed class MusterScreenContext
     private static string MutationButtonText(PlayerSoldier soldier, SoldierTransferOption option)
     {
         if (option.IsNewSquad) return "STAGE PROMOTION & CREATE FORMATION";
-        if (option.SoldierTemplate.Rank > soldier.Template.Rank)
+        if (MusterPlanService.IsPromotion(soldier, option))
         {
             return "STAGE PROMOTION & ASSIGNMENT";
         }
@@ -365,7 +365,7 @@ internal sealed class MusterScreenContext
     private static string MutationDescription(PlayerSoldier soldier, SoldierTransferOption option)
     {
         if (option.IsNewSquad) return "promotion and new formation";
-        if (option.SoldierTemplate.Rank > soldier.Template.Rank)
+        if (MusterPlanService.IsPromotion(soldier, option))
         {
             return "promotion and assignment";
         }
