@@ -20,6 +20,13 @@ public static class FactionThreatAssessment
     // is currently visible. The threat-derived requirement remains intentionally unbounded.
     public const double MinimumDefensiveReserveFraction = 0.20;
 
+    // Share of a believed adjacent enemy that a defender sizes its reserve against. An attacker
+    // keeps a reserve of its own and never throws its whole regional strength at one border, so
+    // matching a neighbour one-for-one over-garrisons - and it is the attacker's own thresholds that
+    // say so: FactionOffensiveEvaluator wants 1.5x the (cautiously inflated) defender before it will
+    // commit at all.
+    public const double ExpectedAttackerCommitFraction = 0.50;
+
     public static bool HasPublicEnemyOnPlanet(Faction faction, Planet planet)
     {
         if (planet?.RelationshipLedger != null)
@@ -121,14 +128,46 @@ public static class FactionThreatAssessment
             FactionIntelligenceService.ObservePublicActivity(region.Planet, 0);
         }
 
-        long highestThreat = 0;
+        // An enemy sharing this region is the most urgent threat there is, and needs no sight
+        // scaling: a force standing on your ground is not something you can fail to notice. This
+        // used to be omitted entirely - the scan below looks only at neighbours - so a region with a
+        // horde living in it reserved nothing but the minimum floor, fielded no defence the
+        // generator could build, and was overrun every week without ever losing a soldier.
+        long localThreat;
+        if (region.Planet.RelationshipLedger != null)
+        {
+            localThreat = GetBelievedTargets(defenderFaction, region.Planet, IntelLevel.Suspected)
+                .Where(target => target.Region == region
+                    && target.CurrentPresence?.IsPublic == true)
+                .Sum(target => target.Belief?.EstimatedMilitaryStrength ?? 0);
+        }
+        else
+        {
+            localThreat = region.RegionFactionMap.Values
+                .Where(rf => !ReferenceEquals(rf, defender)
+                    && FactionRelationshipService.AreHostile(
+                        defenderFaction, rf.PlanetFaction.Faction, region.Planet))
+                .Sum(CalculateDefenderBattleValue);
+        }
+
+        // The requirement is a share of EVERY believed neighbour, not all of the largest one. A
+        // region with three enemies on its borders is in more danger than one facing a single enemy
+        // of the same size, and the old "strongest single threat" rule could not say so - it read
+        // both as identical. The share is what keeps the sum honest: no attacker empties its own
+        // regions to press one border.
+        long adjacentThreatTotal = 0;
         foreach (Region adjacentRegion in region.GetAdjacentRegions())
         {
-            // A blind defender under-reserves because it cannot see what is massing next door. Awareness
-            // is opened either by deliberate recon or by the reactive attack path.
+            // Walking the ground sharpens the estimate, but it is no longer what decides whether a
+            // neighbour counts at all. That gate used to be `if (sight <= 0f) continue;`, and it put
+            // garrisoning on a different footing from attacking: the offensive planner targets from
+            // BELIEFS, which ObservePublicActivity refreshes to Confirmed for free every turn, while
+            // the reserve read REGION AWARENESS, which only recon, listening posts and combat
+            // produce and which decays 25% a turn. A faction could therefore know an enemy was next
+            // door well enough to assault it and still reserve nothing against it. A neighbour the
+            // defender can name is a neighbour it can garrison against.
             float sight = Math.Min(1.0f,
                 adjacentRegion.GetFactionRegionAwareness(defenderFaction.Id) / GarrisonFullSightIntel);
-            if (sight <= 0f) continue;
 
             long adjacentThreat;
             if (region.Planet.RelationshipLedger != null)
@@ -136,26 +175,49 @@ public static class FactionThreatAssessment
                 adjacentThreat = GetBelievedTargets(defenderFaction, region.Planet, IntelLevel.Suspected)
                     .Where(target => target.Region == adjacentRegion
                         && target.CurrentPresence?.IsPublic == true)
-                    .Sum(target => (long)((target.Belief?.EstimatedMilitaryStrength ?? 0) * sight));
+                    .Sum(target => (long)((target.Belief?.EstimatedMilitaryStrength ?? 0)
+                        * Math.Max(sight, BeliefConfidence(target.Belief))));
             }
             else
             {
-                // Detached domain fixtures have no observation boundary; retain direct combat values so
-                // this helper remains useful in isolation.
+                // Detached domain fixtures have no belief store to read a confidence from, so sight
+                // remains their only stand-in for what the defender knows. The alignment above
+                // applies to the ledger path, which is what a real campaign runs.
                 adjacentThreat = adjacentRegion.RegionFactionMap.Values
                     .Where(rf => FactionRelationshipService.AreHostile(
                         defenderFaction, rf.PlanetFaction.Faction, region.Planet))
                     .Sum(rf => (long)(CalculateDefenderBattleValue(rf) * sight));
             }
 
-            if (adjacentThreat > highestThreat) highestThreat = adjacentThreat;
+            adjacentThreatTotal += adjacentThreat;
         }
 
-        // This is a want, derived from the strongest visible adjacent threat, and is intentionally
-        // unbounded. The planner clamps the assigned reserve to deployed strength.
+        // An enemy already standing in this region is not "may attack" - it is here, and committed
+        // in full - so it is added at its whole believed strength rather than discounted.
+        long required = localThreat
+            + (long)(adjacentThreatTotal * ExpectedAttackerCommitFraction);
+
+        // This is a want and is intentionally unbounded. The planner clamps the assigned reserve to
+        // the troops the region actually has, so a region facing much more than it can match simply
+        // commits everything to holding and does nothing else.
         long floor = (long)(defender.GetDeployedStrength() * MinimumDefensiveReserveFraction);
-        return Math.Max(highestThreat, floor);
+        return Math.Max(required, floor);
     }
+
+    /// <summary>
+    /// How much of a believed enemy strength a defender is willing to reserve against, from the
+    /// belief's own evidence.
+    /// </summary>
+    /// <remarks>
+    /// Anchored on <see cref="FactionIntelligenceRules.ConfirmedThreshold"/> because Confirmed is
+    /// exactly the level the offensive planner demands before it will target a region
+    /// (IntelligenceTargetService.GetTargets). So anything good enough to attack is good enough to
+    /// garrison against in full, and weaker beliefs count in proportion to what is actually known.
+    /// </remarks>
+    public static float BeliefConfidence(FactionIntelBelief belief) =>
+        belief == null
+            ? 0f
+            : Math.Min(1f, belief.Evidence / FactionIntelligenceRules.ConfirmedThreshold);
 
     /// <summary>
     /// Strategy's estimate of a defender's battle value, distinct from resolver-side fieldable value.

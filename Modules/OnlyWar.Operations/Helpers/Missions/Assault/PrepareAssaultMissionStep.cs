@@ -115,22 +115,59 @@ namespace OnlyWar.Operations.Missions.Assault
             if (context.OpposingSquads.Count == 0)
             {
                 RegionFaction target = context.Order.Mission.RegionFaction;
+                // Nobody fielded a defence, so the assault becomes a rampage rather than a battle.
+                // Its capacity is spent down a ladder - broken formations, then troops who never
+                // mustered, then the population - so that a region which cannot field a squad is
+                // overrun and bled instead of standing untouched forever. Entrenchment shelters all
+                // three, the same way it damps battle casualties in MissionAftermathProcessor:
+                // prepared ground protects you even when you do not sortie.
+                double entrenchment = RegionDefenses.GetShared(target, DefenseType.Entrenchment);
+                double remainingCapacity = SaturatingScale(
+                    context.CurrentMissionBattleValue,
+                    StrategicCombatRules.UndefendedAssaultDestructionMultiplier
+                        / (1.0 + entrenchment / 5.0));
+
                 long remainingDisorganized = Math.Max(
                     0L,
                     target.DisorganizedMilitaryStrength
                     - context.DisorganizedDefenderBattleValueDestroyed);
-                long destructionCapacity = SaturatingScale(
-                    context.CurrentMissionBattleValue,
-                    StrategicCombatRules.UndefendedAssaultDestructionMultiplier);
-                long destroyed = Math.Min(remainingDisorganized, destructionCapacity);
-                context.RecordDisorganizedDefenderLosses(destroyed);
+                long disorganizedDestroyed = (long)Math.Min(remainingDisorganized, remainingCapacity);
+                context.RecordDisorganizedDefenderLosses(disorganizedDestroyed);
+                remainingCapacity -= disorganizedDestroyed;
+
+                long remainingOrganized = Math.Max(
+                    0L,
+                    target.OrganizedMilitaryStrength - context.DefenderBattleValueDestroyed);
+                long organizedDestroyed = (long)Math.Min(
+                    remainingOrganized,
+                    remainingCapacity * StrategicCombatRules.OrganizedResistanceFactor);
+                context.RecordDefenderLosses(organizedDestroyed);
+                remainingCapacity -= organizedDestroyed / StrategicCombatRules.OrganizedResistanceFactor;
+
+                // Only the part of the population that is not itself the army can be lost as
+                // civilians; for a PopulationIsMilitary horde that remainder is zero.
+                long remainingCivilians = Math.Max(
+                    0L,
+                    target.Population - target.MilitaryStrength - context.CivilianPopulationDestroyed);
+                long civiliansKilled = (long)Math.Min(
+                    Math.Min(
+                        remainingCivilians,
+                        Math.Max(0.0, remainingCapacity) * StrategicCombatRules.CiviliansPerBattleValue),
+                    remainingCivilians * StrategicCombatRules.MaximumDailyCivilianLossFraction);
+                context.RecordCivilianLosses(civiliansKilled);
+
                 context.AddLog(
                     $"Day {context.DaysElapsed}: {attacker}'s assault on {defender} forces in "
-                    + $"{region} is unopposed; {destroyed:N0} disorganized BV destroyed.");
+                    + $"{region} is unopposed; {disorganizedDestroyed:N0} disorganized and "
+                    + $"{organizedDestroyed:N0} organized BV destroyed, {civiliansKilled:N0} "
+                    + "civilians killed in the overrun.");
                 context.Impact += 5;
 
-                long stillRemaining = remainingDisorganized - destroyed;
-                return stillRemaining > 0 && !context.OperatingDaysSpent
+                bool anythingLeftToDestroy =
+                    remainingDisorganized - disorganizedDestroyed > 0
+                    || remainingOrganized - organizedDestroyed > 0
+                    || remainingCivilians - civiliansKilled > 0;
+                return anythingLeftToDestroy && !context.OperatingDaysSpent
                     ? MissionStepResult.Continue(new PrepareAssaultMissionStep())
                     : MissionStepResult.Complete;
             }

@@ -127,7 +127,9 @@ public class ScenarioTurnTests
             .SquadTemplate.IsAdministrative);
         // The current Sector Lord's opinion rises (resolved at resolution time).
         float opinionReward = _data.ScenarioProfiles
-            .GetRequired(ScenarioKeys.PromisedWorld).SectorLordOpinionReward;
+            .GetRequiredForScenario(
+                ScenarioKeys.PromisedWorld, _data.SectorFactions.Invader.Id)
+            .SectorLordOpinionReward;
         Assert.Equal(opinionBefore + opinionReward,
                      sector.GetSectorLord().OpinionOfPlayerForce, precision: 4);
     }
@@ -177,9 +179,9 @@ public class ScenarioTurnTests
         Assert.False(hiddenCult.IsPublic);
     }
 
-    // §6.2 lapse — a hidden Imperial remnant does not keep the promise alive. The stamp leaves a
-    // displaced, non-public civilian remnant in every overrun region (ImperialRemnantFraction), so
-    // a rule reading raw presence could never see the world as lost.
+    // §6.2 lapse — a hidden Imperial remnant does not keep the promise alive. A surviving civilian
+    // population may remain after the PDF is broken, so a rule reading raw presence could never see
+    // the world as lost.
     [Fact]
     public void ProcessScenario_Lapse_HiddenImperialRemnantDoesNotBlockLapse()
     {
@@ -256,7 +258,9 @@ public class ScenarioTurnTests
         Assert.False(promised.PlanetFactionMap.ContainsKey(player.Id));
         // The current Sector Lord's opinion falls.
         float opinionPenalty = _data.ScenarioProfiles
-            .GetRequired(ScenarioKeys.PromisedWorld).SectorLordOpinionPenalty;
+            .GetRequiredForScenario(
+                ScenarioKeys.PromisedWorld, _data.SectorFactions.Invader.Id)
+            .SectorLordOpinionPenalty;
         Assert.Equal(opinionBefore - opinionPenalty,
                      sector.GetSectorLord().OpinionOfPlayerForce, precision: 4);
     }

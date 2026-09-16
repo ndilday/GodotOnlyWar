@@ -24,10 +24,9 @@ internal sealed class FactionOffensiveEvaluator
     internal const double EntrenchmentRiskFactor = 0.5;
     // Force-ratio edge the attacker insists on over its estimated defender before committing.
     internal const double OffensiveForceRatioThreshold = 1.5;
-    // 1-sigma error on the attacker's estimate at zero intelligence.
-    internal const double BaseDefenderIntelNoise = 0.5;
-    // Caution under uncertainty: the planning estimate is one sigma above the expected value.
-    internal const double DefenderEstimateCautionZ = 1.0;
+    // Share of a believed population an attacker assumes is under arms on ground it has not
+    // scouted. A PDF actually fields about 3%, so this errs against the attacker by design.
+    internal const double PessimisticMobilizationFraction = 0.05;
     internal const double RaidForceRatioThreshold = 0.25;
     internal const double RaidCommitFraction = 0.35;
     internal const long MinimumRaidBattleValue = 100;
@@ -208,11 +207,56 @@ internal sealed class FactionOffensiveEvaluator
         return reward * availableAttackingForce / defenderForce;
     }
 
-    internal static long CautiousDefenderEstimate(long trueBattleValue, float intelLevel)
+    /// <summary>
+    /// What an attacker should PLAN against: a pessimistic prior on ground it has not scouted,
+    /// giving way to the observed estimate as reconnaissance earns the right to it.
+    /// </summary>
+    /// <remarks>
+    /// Unscouted ground used to look empty, so attacking was always the cheapest option available
+    /// and reconnaissance had to compete with targets that appeared free. Assuming the worst inverts
+    /// that: a faction must scout a region to discover it is weak enough to attack, which is what
+    /// makes reconnaissance worth doing at all. The asymmetry is deliberate - an attacker who
+    /// guesses low dies, a defender who guesses high only wastes troops.
+    ///
+    /// Confidence comes from REGION AWARENESS rather than belief evidence, and that matters:
+    /// ObservePublicActivity refreshes every public belief to Confirmed for free each turn, so an
+    /// evidence-based confidence would be total everywhere and the prior would never apply.
+    /// Awareness is bought only by scouting, which is precisely the thing being rewarded.
+    ///
+    /// There is no uncertainty hedge here any more. The belief is already an upper bound - awareness
+    /// decides how many significant figures it carries and FactionIntelligenceRules.CoarsenEstimate
+    /// rounds up - so multiplying it again was caution counted twice, on a curve unrelated to the
+    /// measurement it claimed to be correcting. It also quietly turned the 1.5:1 doctrine in
+    /// OffensiveForceRatioThreshold into 1.875:1. What this returns is now what the attacker
+    /// genuinely expects to face, so a doctrine multiplier applied to it means what it says.
+    ///
+    /// This is applied ONLY here, on the attacker's side. The defensive reserve reads the raw belief
+    /// (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue), and inflating that would
+    /// make every region garrison against phantoms on all its borders and leave nothing spare for
+    /// anything - the paralysis this whole area was fixed to escape, arrived at from the far side.
+    /// </remarks>
+    internal static long CautiousDefenderEstimate(
+        long believedMilitaryStrength,
+        long believedPopulation,
+        Faction targetFaction,
+        float regionAwareness)
     {
-        double sigma = BaseDefenderIntelNoise / (1.0 + intelLevel);
-        double multiplier = 1.0 + DefenderEstimateCautionZ * sigma;
-        return (long)Math.Round(trueBattleValue * multiplier);
+        // What the region could field if it turned out to be as dangerous as it might be. For a
+        // horde whose numbers ARE its army, that is everyone; for a civilian-based faction it is a
+        // mobilized fraction, set above the ~3% a PDF actually fields so that guessing costs the
+        // attacker caution rather than its force.
+        double pessimisticPrior = targetFaction?.HasBehavior(FactionBehavior.PopulationIsMilitary) == true
+            ? believedPopulation
+            : believedPopulation * PessimisticMobilizationFraction;
+
+        double confidence = Math.Clamp(
+            regionAwareness / FactionStrategyPlanningConstants.ReconIntelThreshold, 0.0, 1.0);
+        double blended = pessimisticPrior
+            + (believedMilitaryStrength - pessimisticPrior) * confidence;
+
+        // Both ends of that blend sit at or above the truth - the prior by construction, the belief
+        // because it was rounded up - so anything between them does too.
+        return (long)Math.Round(Math.Max(0.0, blended));
     }
 
     internal void LogPotentialOffensives(
@@ -237,12 +281,16 @@ internal sealed class FactionOffensiveEvaluator
     private static bool IsLocalOffensive(Faction faction, PotentialOffensive offensive) =>
         offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id);
 
+    // Scouting a region is worth what it would unlock, scaled by how much is still unknown about
+    // it. It is deliberately NOT divided by the force available to stage it: that made a candidate
+    // look better the less able the faction was to act on it, so the planner consistently ranked
+    // the offensives it could not afford above the ones it could.
     private static double ReconUtility(Faction faction, PotentialOffensive offensive)
     {
         double intelGap = Math.Max(0.25,
             FactionStrategyPlanningConstants.ReconIntelThreshold
             - offensive.TargetRegion.GetFactionRegionAwareness(faction.Id));
-        return offensive.Reward * intelGap / Math.Max(offensive.AvailableAttackingForce, 1);
+        return offensive.Reward * intelGap;
     }
 
     private bool IsWinnableForFaction(Faction faction, PotentialOffensive offensive)
@@ -291,10 +339,20 @@ internal sealed class FactionOffensiveEvaluator
             targetFaction.PlanetFaction.Faction);
         long estimatedDefenderBattleValue = belief?.EstimatedMilitaryStrength
             ?? defenderBattleValue;
-        // Regional awareness remains the planner's recon/readiness signal. The strength estimate
-        // itself comes from the stored target belief; it is never rounded from live target truth here.
-        float intel = belief?.Evidence
-            ?? targetFaction.Region.GetFactionRegionAwareness(attackingFaction.Id);
+        // The believed headcount is what the pessimistic prior is anchored on: a population is
+        // visible from outside in a way a garrison is not.
+        long estimatedPopulation = belief?.EstimatedPopulation ?? targetFaction.Population;
+        // Regional awareness is the planner's recon signal, and it is what the prior gives way to.
+        // Belief evidence is deliberately NOT used: public activity refreshes it for free.
+        float intel = targetFaction.Region.GetFactionRegionAwareness(attackingFaction.Id);
+        // Ground the attacker is already standing on needs no scouting - it can see whoever shares
+        // the region with it. This mirrors IsLocalOffensive, which likewise treats a local target as
+        // well known; without it a faction would refuse to engage an enemy in its own streets
+        // because it assumed the neighbours might be armed.
+        if (targetFaction.Region.RegionFactionMap.ContainsKey(attackingFaction.Id))
+        {
+            intel = Math.Max(intel, FactionStrategyPlanningConstants.ReconIntelThreshold);
+        }
 
         potentialOffensives.Add(new PotentialOffensive
         {
@@ -304,7 +362,11 @@ internal sealed class FactionOffensiveEvaluator
             AvailableAttackingForce = availableForce,
             Reward = CalculateOffensiveReward(targetFaction, attackingFaction, availableForce, defenderBattleValue),
             DefenderBattleValue = defenderBattleValue,
-            EstimatedDefenderBattleValue = CautiousDefenderEstimate(estimatedDefenderBattleValue, intel)
+            EstimatedDefenderBattleValue = CautiousDefenderEstimate(
+                estimatedDefenderBattleValue,
+                estimatedPopulation,
+                targetFaction.PlanetFaction.Faction,
+                intel)
         });
     }
 

@@ -128,8 +128,12 @@ namespace OnlyWar.Medical.Readiness
         {
             SquadStrengthSnapshot strength = SquadStrengthSnapshotBuilder.Build(
                 squad, program, doctrine);
-            bool requiresLeader = squad?.SquadTemplate?.Elements?.Any(
-                element => element.SoldierTemplate?.IsSquadLeader == true) == true;
+            // MembersOnly formations are personnel pools. Their members can be attached as
+            // individual characters, so a leader slot in the pool's template is not a
+            // manoeuvre-squad leadership requirement.
+            bool requiresLeader = squad?.PermitsIndividualDeployment != true
+                && squad?.SquadTemplate?.Elements?.Any(
+                    element => element.SoldierTemplate?.IsSquadLeader == true) == true;
             ISoldier leader = squad?.SquadLeader;
             SquadLeaderStatus leaderStatus = !requiresLeader
                 ? SquadLeaderStatus.NotRequired

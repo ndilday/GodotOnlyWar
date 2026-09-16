@@ -49,11 +49,13 @@ public class FactionRosterTemplateTests
 
         SquadTemplate kommandos = mobFaction.SquadTemplates.Values.Single(template => template.Name == "Kommandos");
         Assert.Equal(SquadTypes.Scout, kommandos.SquadType);
-        Assert.Equal(4, kommandos.Elements.Where(element => !element.SoldierTemplate.IsSquadLeader)
+        // Nine kommandos plus the Nob: a scout squad musters at ten even when a budget forces it
+        // understrength, so a reconnaissance sweep never takes a squad-size penalty.
+        Assert.Equal(9, kommandos.Elements.Where(element => !element.SoldierTemplate.IsSquadLeader)
             .Sum(element => element.MinimumNumber));
         Assert.Equal(14, kommandos.Elements.Where(element => !element.SoldierTemplate.IsSquadLeader)
             .Sum(element => element.MaximumNumber));
-        AssertElement(kommandos, "Kommando", 4, 14, "Slugga + Choppa + Frag Grenade");
+        AssertElement(kommandos, "Kommando", 9, 14, "Slugga + Choppa + Frag Grenade");
         AssertElement(kommandos, "Kommando Nob", 1, 1, "Slugga + Choppa + Frag Grenade");
         Assert.DoesNotContain(
             kommandos.Elements,
@@ -93,6 +95,14 @@ public class FactionRosterTemplateTests
             {
                 AssertSkillPoints(role, "stealth", 1);
             }
+        }
+
+        foreach (SoldierTemplate nob in mobFaction.SoldierTemplates.Values
+            .Where(template => template.Name.Contains("Nob", StringComparison.OrdinalIgnoreCase)))
+        {
+            AssertSkillPoints(nob, "tactics", 4);
+            Assert.Equal(10f, nob.Species.Intelligence.BaseValue);
+            Assert.Equal(1f, nob.Species.Intelligence.StandardDeviation);
         }
 
         SoldierTemplate gretchin = mobFaction.SoldierTemplates.Values.Single(template => template.Name == "Gretchin");
@@ -158,8 +168,11 @@ public class FactionRosterTemplateTests
             int actual = generated.Loadout.Count(loadout =>
                 boyz.GetMenu("Heavy Weapon").Any(option => option.Id == loadout.Id));
 
-            Assert.Equal(10, generated.Members.Count);
-            Assert.Equal(1, expected);
+            // A boyz mob musters full: 29 boyz plus the Nob. The heavy-weapon allowance is one slot
+            // per ten models, so a thirty-strong mob earns three - which is also the authored
+            // maximum, so a full mob is exactly the size that saturates its own allowance.
+            Assert.Equal(30, generated.Members.Count);
+            Assert.Equal(3, expected);
             Assert.Equal(expected, actual);
         }
     }
@@ -174,7 +187,8 @@ public class FactionRosterTemplateTests
 
         Squad generated = SquadFactory.GenerateSquad(template, new Fixtures.FixedRNG());
 
-        Assert.Equal(5, generated.Members.Count);
+        // Fourteen kommandos plus the Nob: a kommando squad musters full like every other ork mob.
+        Assert.Equal(15, generated.Members.Count);
         Assert.All(generated.Members, member =>
             Assert.True(member.Template.Name is "Kommando" or "Kommando Nob"));
         Assert.Equal(2, generated.Loadout.Count);
@@ -240,7 +254,10 @@ public class FactionRosterTemplateTests
         Assert.Equal("Ork Boy", element.SoldierTemplate.Species.Name);
         Assert.Equal(minimum, element.MinimumNumber);
         Assert.Equal(maximum, element.MaximumNumber);
-        Assert.True(element.RollsStrength);
+        // Ork mobs muster at full strength. The range describes what may be fielded when a budget
+        // cannot buy a whole squad, not a size rolled for its own sake; the Insurrectionist Mob is
+        // the one formation in the game that still rolls.
+        Assert.False(element.RollsStrength);
         Assert.Equal(weaponSetName, squad.DefaultWeapons.Name);
         Assert.Equal(weaponSetName, element.DefaultWeapons.Name);
         Assert.Equal(weaponSetName.Split(" + ")[0], squad.DefaultWeapons.PrimaryRangedWeapon.Name);

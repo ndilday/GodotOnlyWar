@@ -36,7 +36,7 @@ namespace OnlyWar.Domain
         public IReadOnlyList<SkillRoleAssignment> SkillRoleAssignments { get; set; }
         public IReadOnlyList<FactionRoleAssignment> FactionRoleAssignments { get; set; }
         public IReadOnlyList<ScenarioProfile> ScenarioProfiles { get; set; }
-        public IReadOnlyList<ScenarioFactionOption> ScenarioFactionOptions { get; set; }
+        public IReadOnlyList<ScenarioInfiltratorOverride> ScenarioInfiltratorOverrides { get; set; }
         public IReadOnlyList<FactionPlanetPresenceRule> FactionPlanetPresenceRules { get; set; }
         public IReadOnlyList<ChapterGenerationProfileData> ChapterGenerationProfiles { get; set; }
         public IReadOnlyList<SectorGenerationProfile> SectorGenerationProfiles { get; set; }

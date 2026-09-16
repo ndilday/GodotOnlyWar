@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OnlyWar.Generation.World;
+using OnlyWar.Generation.Scenarios;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Extensions;
 using OnlyWar.Campaign.Simulation;
@@ -30,6 +31,68 @@ public class ScenarioBuilderTests
     }
 
     private Faction Tyranids => _data.Factions.Single(f => f.Name == "Tyranids");
+
+    [Fact]
+    public void StampInvaderPresence_PreservesImperialPopulationAndDefenses()
+    {
+        ScenarioProfile profile = _data.ScenarioProfiles.GetRequiredForScenario(
+            ScenarioKeys.PromisedWorld, _data.SectorFactions.Invader.Id);
+        Faction invaderFaction = _data.SectorFactions.Invader;
+        Planet planet = CreateStampTestPlanet();
+        Dictionary<int, (long Population, long Garrison)> imperialBefore = planet.Regions
+            .ToDictionary(
+                region => region.Id,
+                region =>
+                {
+                    RegionFaction imperial = region.RegionFactionMap[_data.DefaultFaction.Id];
+                    return (imperial.Population, imperial.Garrison);
+                });
+
+        RNG.Reset(12345);
+        ScenarioBuilder.StampInvaderPresence(planet, _data, invaderFaction, profile);
+
+        List<Region> invadedRegions = planet.Regions
+            .Where(region => region.RegionFactionMap.ContainsKey(invaderFaction.Id))
+            .ToList();
+        Assert.InRange(
+            invadedRegions.Count,
+            profile.MinInvaderRegions,
+            profile.MaxInvaderRegions);
+        Assert.All(invadedRegions, region =>
+        {
+            RegionFaction imperial = region.RegionFactionMap[_data.DefaultFaction.Id];
+            RegionFaction invader = region.RegionFactionMap[invaderFaction.Id];
+
+            Assert.True(imperial.IsPublic);
+            Assert.Equal(imperialBefore[region.Id].Population, imperial.Population);
+            Assert.Equal(imperialBefore[region.Id].Garrison, imperial.Garrison);
+            Assert.True(invader.IsPublic);
+            Assert.True(invader.MilitaryStrength > 0);
+            Assert.Null(region.ControllingFaction);
+        });
+    }
+
+    [Fact]
+    public void StampInvaderPresence_GivesTheDefenceForceAwarenessOfItsOwnWorld()
+    {
+        ScenarioProfile profile = _data.ScenarioProfiles.GetRequiredForScenario(
+            ScenarioKeys.PromisedWorld, _data.SectorFactions.Invader.Id);
+        Planet planet = CreateStampTestPlanet();
+
+        RNG.Reset(12345);
+        ScenarioBuilder.StampInvaderPresence(
+            planet, _data, _data.SectorFactions.Invader, profile);
+
+        // A garrison that has held the world for generations is not seeing it for the first time.
+        // At zero awareness it reads every invader at the top of its decade, reserves against that,
+        // pins every region, and is then left with nothing spare to scout with - the one thing that
+        // would correct the estimate.
+        PlanetFaction defender = planet.PlanetFactionMap[_data.DefaultFaction.Id];
+        Assert.All(planet.Regions, region =>
+            Assert.True(
+                defender.GetRegionAwareness(region) >= 1f,
+                $"{region.Name} left unknown to its own defenders"));
+    }
 
     private static List<Region> TyranidRegions(Planet promised, Faction tyranids)
     {
@@ -85,7 +148,8 @@ public class ScenarioBuilderTests
             .Select(r => r.RegionFactionMap[tyranids.Id])
             .ToList();
         Assert.NotEmpty(tyranidFactions);
-        ScenarioProfile profile = _data.ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
+        ScenarioProfile profile = _data.ScenarioProfiles.GetRequiredForScenario(
+            ScenarioKeys.PromisedWorld, _data.SectorFactions.Invader.Id);
         Assert.True(tyranidFactions.Count >= profile.MinInvaderRegions,
             $"expected at least {profile.MinInvaderRegions} invader regions, got {tyranidFactions.Count}");
         Assert.True(tyranidFactions.Count < promised.Regions.Length,
@@ -189,9 +253,15 @@ public class ScenarioBuilderTests
 
     [Trait("Category", "Slow")]
     [Fact]
-    public void GenerateSector_WithExplicitInvaderFactionUsesScenarioProfileOption()
+    public void GenerateSector_WithExplicitInvaderFactionUsesScenarioProfile()
     {
         Faction orks = _data.Factions.Single(faction => faction.Name == "Orks");
+        ScenarioProfile orkProfile = _data.ScenarioProfiles.GetRequiredForScenario(
+            ScenarioKeys.PromisedWorld, orks.Id);
+
+        // The absence of an override is intentional: Ork Promised-World generation keeps the
+        // ordinary infiltrator result instead of applying scenario-owned infiltrator tuning.
+        Assert.Null(orkProfile.InfiltratorOverride);
 
         Sector sector = TestGeneration.GenerateSector(
             1,
@@ -238,6 +308,45 @@ public class ScenarioBuilderTests
             .OrderBy(item => item.Item1.Item1)
             .ThenBy(item => item.Item1.Item2)
             .ToList();
+    }
+
+    private Planet CreateStampTestPlanet()
+    {
+        PlanetTemplate template = _data.PlanetTemplateMap.Values.First();
+        Planet planet = new(
+            9001,
+            "Stamp Test World",
+            new Coordinate(1, 1),
+            1,
+            template,
+            1,
+            0);
+        PlanetFaction imperialPlanetFaction = new(_data.DefaultFaction) { IsPublic = true };
+        planet.PlanetFactionMap[_data.DefaultFaction.Id] = imperialPlanetFaction;
+
+        for (int i = 0; i < planet.Regions.Length; i++)
+        {
+            Region region = new(
+                i,
+                planet,
+                0,
+                $"Region {i}",
+                RegionExtensions.GetCoordinatesFromRegionNumber(i),
+                0,
+                carryingCapacity: 100_000,
+                maximumCarryingCapacity: 100_000);
+            RegionFaction imperial = new(imperialPlanetFaction, region)
+            {
+                Population = 20_000,
+                Garrison = 600,
+                IsPublic = true,
+                Organization = 100
+            };
+            region.RegionFactionMap[_data.DefaultFaction.Id] = imperial;
+            planet.Regions[i] = region;
+        }
+
+        return planet;
     }
 
     // Regression: the opening now runs a scoped pre-/post-landing simulation during generation,

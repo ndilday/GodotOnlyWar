@@ -30,78 +30,82 @@ namespace OnlyWar.Persistence.Database.GameRules
 
         public IReadOnlyList<ScenarioProfile> GetScenarioProfiles(IDbConnection connection)
         {
-            return GetScenarioProfiles(connection, GetScenarioFactionOptions(connection));
+            return GetScenarioProfiles(connection, GetScenarioInfiltratorOverrides(connection));
         }
 
         public IReadOnlyList<ScenarioProfile> GetScenarioProfiles(
             IDbConnection connection,
-            IReadOnlyList<ScenarioFactionOption> options)
+            IReadOnlyList<ScenarioInfiltratorOverride> infiltratorOverrides)
         {
-            Dictionary<string, List<ScenarioFactionOption>> optionsByScenario = (options ?? [])
-                .GroupBy(option => option.ScenarioKey, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, ScenarioInfiltratorOverride> overridesByProfile =
+                (infiltratorOverrides ?? [])
+                    .Where(infiltratorOverride => infiltratorOverride != null)
+                    .ToDictionary(
+                        infiltratorOverride => infiltratorOverride.ProfileKey,
+                        infiltratorOverride => infiltratorOverride,
+                        StringComparer.OrdinalIgnoreCase);
 
             List<ScenarioProfile> profiles = [];
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = @"
-                SELECT ScenarioKey, MaxPromisedWorldPopulation, MinInvaderRegions,
+                SELECT ProfileKey, ScenarioKey, PrimaryFactionId, PrimarySelectionWeight,
+                       MaxPromisedWorldPopulation, MinInvaderRegions,
                        MaxInvaderRegions, InvaderGarrisonStrengthMultiple,
-                       ImperialRemnantFraction, PreLandingTurns,
-                       InitialInfiltratorPopulationShareMin,
-                       InitialInfiltratorPopulationShareMax,
-                       InitialInfiltratorGarrisonPerPopulation,
-                       PromisedWorldInfiltratorStrengthFraction,
-                       PromisedWorldInfiltratorStartingIntel, PostLandingTurnsMean,
-                       SectorLordOpinionReward, SectorLordOpinionPenalty
+                       PostLandingTurnsMean, SectorLordOpinionReward,
+                       SectorLordOpinionPenalty
                 FROM ScenarioProfile
-                ORDER BY ScenarioKey";
+                ORDER BY ScenarioKey, PrimaryFactionId, ProfileKey";
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
                 string key = reader.IsDBNull(0) ? null : reader.GetString(0);
                 profiles.Add(new ScenarioProfile(
                     key,
-                    reader.GetInt64(1),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
                     reader.GetInt32(2),
-                    reader.GetInt32(3),
-                    Convert.ToSingle(reader.GetValue(4)),
-                    Convert.ToSingle(reader.GetValue(5)),
+                    Convert.ToDouble(reader.GetValue(3)),
+                    reader.GetInt64(4),
+                    reader.GetInt32(5),
                     reader.GetInt32(6),
                     Convert.ToSingle(reader.GetValue(7)),
-                    Convert.ToSingle(reader.GetValue(8)),
+                    Convert.ToDouble(reader.GetValue(8)),
                     Convert.ToSingle(reader.GetValue(9)),
                     Convert.ToSingle(reader.GetValue(10)),
-                    Convert.ToSingle(reader.GetValue(11)),
-                    Convert.ToDouble(reader.GetValue(12)),
-                    Convert.ToSingle(reader.GetValue(13)),
-                    Convert.ToSingle(reader.GetValue(14)),
-                    key != null && optionsByScenario.TryGetValue(key, out List<ScenarioFactionOption> scenarioOptions)
-                        ? scenarioOptions
-                        : []));
+                    key != null && overridesByProfile.TryGetValue(
+                        key,
+                        out ScenarioInfiltratorOverride infiltratorOverride)
+                        ? infiltratorOverride
+                        : null));
             }
 
             return profiles;
         }
 
-        public IReadOnlyList<ScenarioFactionOption> GetScenarioFactionOptions(IDbConnection connection)
+        public IReadOnlyList<ScenarioInfiltratorOverride> GetScenarioInfiltratorOverrides(
+            IDbConnection connection)
         {
-            List<ScenarioFactionOption> options = [];
+            List<ScenarioInfiltratorOverride> overrides = [];
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = @"
-                SELECT ScenarioKey, SlotKey, FactionId, SelectionWeight, IsRequired
-                FROM ScenarioFactionOption
-                ORDER BY ScenarioKey, SlotKey, FactionId";
+                SELECT ProfileKey, FactionId, PreLandingTurns,
+                       InitialPopulationShareMin, InitialPopulationShareMax,
+                       InitialGarrisonPerPopulation, StrengthFraction, StartingIntel
+                FROM ScenarioInfiltratorOverride
+                ORDER BY ProfileKey";
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
-                options.Add(new ScenarioFactionOption(
+                overrides.Add(new ScenarioInfiltratorOverride(
                     reader.IsDBNull(0) ? null : reader.GetString(0),
-                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.GetInt32(1),
                     reader.GetInt32(2),
-                    Convert.ToDouble(reader.GetValue(3)),
-                    Convert.ToBoolean(reader.GetValue(4))));
+                    Convert.ToSingle(reader.GetValue(3)),
+                    Convert.ToSingle(reader.GetValue(4)),
+                    Convert.ToSingle(reader.GetValue(5)),
+                    Convert.ToSingle(reader.GetValue(6)),
+                    Convert.ToSingle(reader.GetValue(7))));
             }
-            return options;
+            return overrides;
         }
 
         public IReadOnlyList<FactionPlanetPresenceRule> GetFactionPlanetPresenceRules(

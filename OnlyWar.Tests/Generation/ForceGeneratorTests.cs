@@ -310,11 +310,86 @@ public class ForceGeneratorTests
         {
             Faction = faction,
             Tier = 3,
+            TargetBattleValue = 6,
             Profile = ForceCompositionProfile.ScoutPatrol
         });
 
         Assert.Equal(3, generated.Count);
         Assert.All(generated, squad => Assert.Equal("Scout", squad.SquadTemplate.Name));
+    }
+
+    [Fact]
+    public void ScoutPatrol_WithoutATierIsBoundedByItsBudget()
+    {
+        // A patrol screen supplies no Tier. It used to loop on Tier alone, so it generated nothing
+        // at all and every patrol order in the game was silently dropped.
+        SquadTemplate scout = CreateTemplate(1, "Scout", SquadTypes.Scout, 10, 100, minSoldiers: 4);
+        Faction faction = CreateFaction(scout);
+
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 250,
+            Profile = ForceCompositionProfile.ScoutPatrol
+        });
+
+        Assert.Equal(2, generated.Count);
+        Assert.All(generated, squad => Assert.Equal(10, squad.Members.Count));
+    }
+
+    [Fact]
+    public void ScoutPatrol_SendsAnUnderstrengthPartyRatherThanNothing()
+    {
+        // Below the price of a full squad, an undersized scouting party beats no party at all.
+        SquadTemplate scout = CreateTemplate(1, "Scout", SquadTypes.Scout, 10, 100, minSoldiers: 4);
+        Faction faction = CreateFaction(scout);
+
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            Tier = 1,
+            TargetBattleValue = 70,
+            Profile = ForceCompositionProfile.ScoutPatrol
+        });
+
+        Squad party = Assert.Single(generated);
+        Assert.Equal(7, party.Members.Count);
+    }
+
+    [Fact]
+    public void ScoutPatrol_DoesNotAddARemnantBehindAFullSquad()
+    {
+        // The fallback fires only when the force would otherwise be empty. A full squad plus an
+        // understrength remnant is not what a probe or a screen wants, so the leftover is left.
+        SquadTemplate scout = CreateTemplate(1, "Scout", SquadTypes.Scout, 10, 100, minSoldiers: 4);
+        Faction faction = CreateFaction(scout);
+
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 150,
+            Profile = ForceCompositionProfile.ScoutPatrol
+        });
+
+        Squad party = Assert.Single(generated);
+        Assert.Equal(10, party.Members.Count);
+    }
+
+    [Fact]
+    public void ScoutPatrol_FieldsNothingBelowTheMinimumSquad()
+    {
+        SquadTemplate scout = CreateTemplate(1, "Scout", SquadTypes.Scout, 10, 100, minSoldiers: 4);
+        Faction faction = CreateFaction(scout);
+
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            Tier = 1,
+            TargetBattleValue = 39,
+            Profile = ForceCompositionProfile.ScoutPatrol
+        });
+
+        Assert.Empty(generated);
     }
 
     [Fact]
@@ -370,17 +445,33 @@ public class ForceGeneratorTests
     }
 
     [Fact]
-    public void MinimumForceRequest_IsTheCheapestFullNonHqSquad()
+    public void MinimumForceRequest_IsTheCheapestUnderstrengthNonHqSquad()
     {
-        SquadTemplate hq = CreateTemplate(1, "HQ", SquadTypes.HQ, 1, 2);
-        SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 5, 10);
-        SquadTemplate heavy = CreateTemplate(3, "Heavy", SquadTypes.None, 1, 25);
-        SquadTemplate valueless = CreateTemplate(4, "Valueless", SquadTypes.None, 1, 0);
+        // Line is five troopers at 2 BV each, fieldable down to two of them.
+        SquadTemplate hq = CreateTemplate(1, "HQ", SquadTypes.HQ, 1, 2, minSoldiers: 1);
+        SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 5, 10, minSoldiers: 2);
+        SquadTemplate heavy = CreateTemplate(3, "Heavy", SquadTypes.None, 1, 25, minSoldiers: 1);
+        SquadTemplate valueless = CreateTemplate(4, "Valueless", SquadTypes.None, 1, 0, minSoldiers: 1);
         Faction faction = CreateFaction(hq, line, heavy, valueless);
 
-        // HQ squads and zero-value templates are not counted: the floor is the cheapest full
-        // squad the generic generator could actually field.
-        Assert.Equal(10, faction.MinimumForceRequest);
+        // HQ squads and zero-value templates are not counted. The floor is what the generator
+        // must be given to produce anything at all - the cheapest squad at MINIMUM strength, not
+        // the cheapest one at full strength, which would be Line's 10.
+        Assert.Equal(4, faction.MinimumForceRequest);
+    }
+
+    [Fact]
+    public void MinimumForceRequest_IsNotRaisedByWideningATemplatesMaximum()
+    {
+        // The regression this guards: pricing the floor off the FULL squad meant that allowing a
+        // template to field more soldiers raised the budget a faction needed before it could issue
+        // any order at all, so making squads more flexible made the faction less able to act.
+        SquadTemplate narrow = CreateTemplate(1, "Narrow", SquadTypes.None, 10, 50, minSoldiers: 5);
+        SquadTemplate wide = CreateTemplate(2, "Wide", SquadTypes.None, 20, 100, minSoldiers: 5);
+
+        Assert.Equal(
+            CreateFaction(narrow).MinimumForceRequest,
+            CreateFaction(wide).MinimumForceRequest);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using OnlyWar.Campaign.Turns;
 using OnlyWar.Domain.Planets;
+using OnlyWar.Operations.Missions.Recon;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -8,25 +9,37 @@ namespace OnlyWar.Tests.Turns;
 public class TurnIntelligenceLedgerTests
 {
     [Fact]
-    public void ReconEvidence_UsesSixPointSoftCap()
+    public void ReconAdjustment_NetsThePoolsBeforeApplyingTheCurve()
     {
-        Assert.Equal(0f, TurnIntelligenceLedger.DiminishEvidence(0f));
-        Assert.Equal(6f * (1f - (float)System.Math.Exp(-1f)),
-            TurnIntelligenceLedger.DiminishEvidence(6f), precision: 5);
-        Assert.True(TurnIntelligenceLedger.DiminishEvidence(100f) < 6f);
+        // Ten good and nine bad is a net of one, not a large positive minus a large negative.
+        // Diminishing each pool on its own used to make a mixed week read far worse than it was.
+        Assert.Equal(
+            ReconIntelligenceRules.AwarenessDelta(1f),
+            TurnIntelligenceLedger.CalculateReconAdjustment(10f, 9f),
+            precision: 5);
     }
 
     [Fact]
-    public void ReconEvidence_DiminishesPositiveAndNegativePoolsSeparately()
+    public void ReconAdjustment_DiminishesWithTheSizeOfTheResult()
     {
-        float actual = TurnIntelligenceLedger.CalculateReconAdjustment(10f, 9f);
-        float netFirst = TurnIntelligenceLedger.DiminishEvidence(1f);
+        float small = TurnIntelligenceLedger.CalculateReconAdjustment(4f, 0f);
+        float large = TurnIntelligenceLedger.CalculateReconAdjustment(16f, 0f);
 
+        // Four times the margin is worth twice the awareness, before the cap.
+        Assert.True(large > small);
+        Assert.True(large < small * 4f);
+    }
+
+    [Fact]
+    public void ReconAdjustment_BoundsABadWeekAtOnePoint()
+    {
+        // A sweep can bring back wrong intelligence, but it cannot unlearn the ground.
         Assert.Equal(
-            TurnIntelligenceLedger.DiminishEvidence(10f) - TurnIntelligenceLedger.DiminishEvidence(9f),
-            actual,
-            precision: 5);
-        Assert.True(actual < netFirst);
+            ReconIntelligenceRules.MinimumAwarenessDelta,
+            TurnIntelligenceLedger.CalculateReconAdjustment(0f, 50f));
+        Assert.Equal(
+            ReconIntelligenceRules.MaximumAwarenessDelta,
+            TurnIntelligenceLedger.CalculateReconAdjustment(50f, 0f));
     }
 
     [Fact]
@@ -62,7 +75,7 @@ public class TurnIntelligenceLedgerTests
         ledger.Apply(fixture.Planet);
 
         Assert.Equal(
-            TurnIntelligenceLedger.DiminishEvidence(10f),
+            ReconIntelligenceRules.AwarenessDelta(10f),
             observer.GetRegionAwareness(region),
             precision: 5);
     }
@@ -81,7 +94,7 @@ public class TurnIntelligenceLedgerTests
         ledger.RecordReconEvidence(playerObserver, region, 5f);
         ledger.Apply(fixture.Planet);
 
-        float expected = TurnIntelligenceLedger.DiminishEvidence(10f);
+        float expected = ReconIntelligenceRules.AwarenessDelta(10f);
         Assert.Equal(expected, defaultObserver.GetRegionAwareness(region), precision: 5);
         Assert.Equal(expected, playerObserver.GetRegionAwareness(region), precision: 5);
     }

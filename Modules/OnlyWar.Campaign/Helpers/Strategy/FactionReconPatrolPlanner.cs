@@ -104,25 +104,42 @@ internal sealed class FactionReconPatrolPlanner
         List<Order> allOrders,
         IRNG random)
     {
-        long requestedBattleValue = Math.Min(target.AvailableAttackingForce, StrategicCombatRules.NpcReconBattleValueCap);
-        if (requestedBattleValue <= 0 || target.AvailableAttackingForce < faction.MinimumForceRequest) return false;
-
-        // The recon budget, like any order budget, can be no smaller than the faction's smallest
-        // full squad, or the force generator may be unable to produce anything for it.
-        requestedBattleValue = Math.Max(requestedBattleValue, faction.MinimumForceRequest);
+        // A reconnaissance sweep is a scout's job, so it fields ONE scout squad. This used to ask for
+        // an AssaultForce, which let the generator spend the budget on whatever was affordable -
+        // including formations with no squad leader at all (the mob roster's Flash Gitz and Lootas
+        // are a single Ork Boy element). PerformReconMissionStep resolves its observation through
+        // LeaderMissionTest, which then fell back to the best Tactics present: an untrained Ork Boy
+        // at attribute-minus-four, or 4.0 against a difficulty of 9.5. Those squads returned about
+        // -7.7 a week each and swamped the one competent squad in the same tasking, so a faction's
+        // awareness of its neighbours could never leave zero no matter how long it scouted.
+        long cheapestScoutBattleValue = CheapestScoutSquadBattleValue(faction);
+        if (cheapestScoutBattleValue <= 0 || target.AvailableAttackingForce <= 0)
+        {
+            GameLog.Debug(() =>
+                $"AI recon {faction.Name}: target={DescribeOffensive(target)}, "
+                + $"available={target.AvailableAttackingForce}, cheapestScout={cheapestScoutBattleValue}; "
+                + "no order created");
+            return false;
+        }
 
         var request = new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = requestedBattleValue,
-            Profile = ForceCompositionProfile.AssaultForce
+            // Tier caps the probe at one squad, so this budget is a ceiling rather than a target:
+            // it buys one full scout squad when the region can afford one, and falls back to a
+            // single understrength party when it cannot. Passing the cheapest full squad's price
+            // instead would deny a thin region any reconnaissance at all - a PDF infantry squad is
+            // 100 at full strength and 25 at its minimum, so a region holding 91 scouted nothing.
+            TargetBattleValue = target.AvailableAttackingForce,
+            Tier = 1,
+            Profile = ForceCompositionProfile.ScoutPatrol
         };
         List<Squad> scouts = ForceGenerator.GenerateForce(request, random, _identity);
         if (scouts.Count == 0)
         {
             GameLog.Debug(() =>
-                $"AI recon {faction.Name}: target={DescribeOffensive(target)}, requestedBV={request.TargetBattleValue}, "
-                + "generated=0; no order created");
+                $"AI recon {faction.Name}: target={DescribeOffensive(target)}, "
+                + $"cheapestScout={cheapestScoutBattleValue}, generated=0; no order created");
             return false;
         }
 
@@ -158,9 +175,34 @@ internal sealed class FactionReconPatrolPlanner
         allOrders.Add(order);
         GameLog.Debug(() =>
             $"AI recon {faction.Name}: target={DescribeOffensive(target)}, staging={stagingRegion.Name}, "
-            + $"requestedBV={request.TargetBattleValue}, generatedSquads={scouts.Count}, "
-            + $"generatedSoldiers={scouts.Sum(s => s.Members.Count)}, generatedBV={SquadBattleValue(scouts)}");
+            + $"cheapestScout={cheapestScoutBattleValue}, generatedSquads={scouts.Count}, "
+            + $"generatedSoldiers={scouts.Sum(s => s.Members.Count)}, generatedBV={SquadBattleValue(scouts)}, "
+            + $"observer={DescribeObserver(scouts)}");
         return true;
+    }
+
+    /// <summary>
+    /// What a single scout squad costs this faction, or zero when it has no scout formation.
+    /// </summary>
+    /// <remarks>
+    /// ScoutPatrol builds full squads, so the template's own battle value is the price. Gating on
+    /// this rather than on Faction.MinimumForceRequest matters: the latter is the cheapest squad of
+    /// ANY kind, which for the mob roster is a 30-point Nobz remnant, while its only scout formation
+    /// costs a good deal more.
+    /// </remarks>
+    internal static long CheapestScoutSquadBattleValue(Faction faction) =>
+        faction?.SquadTemplates?.Values
+            .Where(st => st.IsPresentOperationalForce
+                && (st.SquadType & SquadTypes.Scout) != 0
+                && st.BattleValue > 0)
+            .Select(st => (long)st.BattleValue)
+            .DefaultIfEmpty(0L)
+            .Min() ?? 0L;
+
+    private static string DescribeObserver(IEnumerable<Squad> scouts)
+    {
+        Squad squad = scouts.FirstOrDefault();
+        return squad?.SquadLeader?.Template?.Name ?? "no squad leader";
     }
 
     /// <summary>How boldly this faction scouts a region based on its own existing awareness.</summary>

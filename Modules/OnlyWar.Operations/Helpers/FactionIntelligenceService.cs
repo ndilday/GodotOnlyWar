@@ -193,15 +193,7 @@ namespace OnlyWar.Operations.Intelligence
             return recipients;
         }
 
-        private static long? EstimatePublicActivity(long value, float awareness)
-        {
-            if (value < 0) return null;
-            if (awareness >= FactionIntelligenceRules.LocatedThreshold) return value;
-            long divisor = (long)Math.Pow(
-                10,
-                Math.Max(0, 3 - (int)Math.Floor(Math.Max(0f, awareness))));
-            if (divisor <= 1) return value;
-            return value <= 0 ? 0 : Math.Max(1, value / divisor * divisor);
-        }
+        private static long? EstimatePublicActivity(long value, float awareness) =>
+            FactionIntelligenceRules.CoarsenEstimate(value, awareness);
     }
 }

@@ -180,7 +180,7 @@ namespace OnlyWar.Battles.Actions
             float damage = weapon.Template.DamageMultiplier
                 * (3.5f + ((float)_random.NextRandomZValue() * 1.75f))
                 * falloff * falloff;
-            float effectiveArmor = target.Armor.Template.ArmorProvided
+            float effectiveArmor = (target.Armor?.Template.ArmorProvided ?? 0)
                 * weapon.Template.ArmorMultiplier;
             float penetratingDamage = damage - effectiveArmor;
             if (penetratingDamage <= 0)

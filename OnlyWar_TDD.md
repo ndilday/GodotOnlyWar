@@ -1901,12 +1901,15 @@ cards, dossiers, tooltips, mission availability, and command attention use the s
 gate and never reveal hidden ground truth.
 
 **Promised World.** `NewGameSettings` carries a setup-time `ScenarioFactionSelection` resolved from
-the rules database's `ScenarioFactionOption` rows, with a deterministic Random choice, and persists
-the resolved result in `CampaignScenario.InvaderFactionId`. The Ork opening reuses the existing
-Promised-World objective, victory/lapse, and Home World reward loop, preserves a naturally rolled
-Genestealer Cult, records the canonical destroyed-fleet/no-reinforcement briefing, and incorporates
-local feral Orks into one opening Waaagh!. No live enemy fleet is required; feral survivors remain
-indelible after victory.
+the rules database's `ScenarioProfile` rows, with a deterministic Random choice, and persists the
+resolved result in `CampaignScenario.InvaderFactionId`. A profile may carry one optional
+`ScenarioInfiltratorOverride`; its presence makes the scenario own infiltrator setup, while a
+profile without one keeps normal infiltrator generation. The Tyranid profile uses that override for
+the Genestealer Cult; the Ork profile has no override and preserves its naturally rolled infiltrator.
+The Ork opening reuses the existing Promised-World objective, victory/lapse, and Home World reward
+loop, records the canonical destroyed-fleet/no-reinforcement briefing, and incorporates local feral
+Orks into one opening Waaagh!. No live enemy fleet is required; feral survivors remain indelible after
+victory.
 
 **Persistence.** Current save format 19 stores regional Ork links, latent sources, persistent Waaagh
 identities, scenario selection, transit state, and Chapter operational doctrine. The loader validates

@@ -346,25 +346,11 @@ public partial class HierarchyTreeView : ScrollContainer
         text.AddThemeColorOverride("font_color", primaryColor);
         content.AddChild(text);
 
-        Label badge = null;
-        if (!string.IsNullOrWhiteSpace(entry.Badge))
+        if (entry.BadgeLines.Count > 0)
         {
-            badge = new Label
-            {
-                Text = entry.Badge,
-                SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
-                SizeFlagsVertical = SizeFlags.ShrinkCenter,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center,
-                // Metadata stays a single natural-width line. With wrapping enabled, ShrinkEnd
-                // can collapse the label to one character and make every badge render vertically.
-                AutowrapMode = TextServer.AutowrapMode.Off,
-                ClipText = false,
-                TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming,
-                MouseFilter = MouseFilterEnum.Ignore
-            };
-            badge.AddThemeColorOverride(
-                "font_color", OnlyWarStyle.Resolve(entry.BadgeAccent, primaryColor));
+            Control badge = entry.BadgeLines.Count == 1
+                ? CreateBadgeLabel(entry.BadgeLines[0], entry, primaryColor, compact: false)
+                : CreateStackedBadge(entry, primaryColor);
             content.AddChild(badge);
         }
 
@@ -379,6 +365,52 @@ public partial class HierarchyTreeView : ScrollContainer
 
         RefreshRowStyle(row);
         return row;
+    }
+
+    private static VBoxContainer CreateStackedBadge(
+        HierarchyTreeItem entry, Color primaryColor)
+    {
+        VBoxContainer stack = new()
+        {
+            SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            Alignment = BoxContainer.AlignmentMode.Center,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        stack.AddThemeConstantOverride("separation", 0);
+        foreach (string line in entry.BadgeLines)
+        {
+            Label label = CreateBadgeLabel(line, entry, primaryColor, compact: true);
+            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            stack.AddChild(label);
+        }
+        return stack;
+    }
+
+    private static Label CreateBadgeLabel(
+        string text, HierarchyTreeItem entry, Color primaryColor, bool compact)
+    {
+        Label label = new()
+        {
+            Text = text,
+            SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = false,
+            TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        if (compact)
+        {
+            // Two-line group metadata is intentionally subordinate to the company name while
+            // remaining legible at the compact force-tree scale.
+            label.AddThemeFontSizeOverride("font_size", 11);
+        }
+        label.AddThemeColorOverride(
+            "font_color", OnlyWarStyle.Resolve(entry.BadgeAccent, primaryColor));
+        return label;
     }
 
     private RowState CreateSquadRow(HierarchyTreeItem entry, RowState parent, int depth)

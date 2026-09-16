@@ -69,8 +69,10 @@ acknowledgement flag, so loading a campaign does not replay it accidentally.
 
 ## Balance anchors
 
-Scenario balance tuning lives in the rules database's `ScenarioProfile`; planet-type eligibility
-lives in the `PlanetTemplateEligibility` catalog, not in this document. The intended balance shape is:
+Scenario balance tuning lives in the rules database's `ScenarioProfile`; profile-specific infiltrator
+tuning, when the scenario owns that setup, lives in its optional `ScenarioInfiltratorOverride` row.
+Planet-type eligibility lives in the `PlanetTemplateEligibility` catalog, not in this document. The
+intended balance shape is:
 
 - the invasion must already be in motion when the player arrives;
 - the world remains plausibly winnable if the player commits promptly;

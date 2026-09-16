@@ -7,6 +7,7 @@ using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Orders;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Squads;
+using OnlyWar.Operations.Missions.Recon;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,15 +23,18 @@ namespace OnlyWar.Operations.Turns
         private readonly Action<PlanetFaction, Region, float> _recordIntelGain;
         private readonly Action<IntelObservation> _recordTargetObservation;
         private readonly Action<RegionFaction, long, Faction> _recordScenarioPdfLost;
+        private readonly Action<RegionFaction, long, Faction> _recordScenarioCivilianKills;
 
         public MissionAftermathProcessor(
             Action<PlanetFaction, Region, float> recordIntelGain,
             Action<RegionFaction, long, Faction> recordScenarioPdfLost,
-            Action<IntelObservation> recordTargetObservation = null)
+            Action<IntelObservation> recordTargetObservation = null,
+            Action<RegionFaction, long, Faction> recordScenarioCivilianKills = null)
         {
             _recordIntelGain = recordIntelGain;
             _recordScenarioPdfLost = recordScenarioPdfLost;
             _recordTargetObservation = recordTargetObservation;
+            _recordScenarioCivilianKills = recordScenarioCivilianKills;
         }
 
         public void ApplyMissionResults(IEnumerable<MissionContext> missionContexts)
@@ -121,6 +125,22 @@ namespace OnlyWar.Operations.Turns
                     regionFaction,
                     Math.Max(0, defenderStrengthBefore - defenderStrengthAfter),
                     attackingFaction);
+
+                // Non-combatants lost in an unopposed overrun (PrepareAssaultMissionStep's rampage
+                // ladder). Applied here rather than in the step so the whole mission's damage lands
+                // in one place, and clamped because the population may have moved since.
+                if (context.CivilianPopulationDestroyed > 0)
+                {
+                    long civiliansKilled = Math.Min(
+                        context.CivilianPopulationDestroyed,
+                        regionFaction.Population);
+                    if (civiliansKilled > 0)
+                    {
+                        regionFaction.Population -= civiliansKilled;
+                        _recordScenarioCivilianKills?.Invoke(
+                            regionFaction, civiliansKilled, attackingFaction);
+                    }
+                }
                 GameLog.Debug(() =>
                     $"Mission attrition {context.Order.Mission.MissionType} -> "
                     + $"{MissionTurnProcessor.DescribeRegionFaction(regionFaction)}: "
@@ -243,11 +263,18 @@ namespace OnlyWar.Operations.Turns
             {
                 if (recordIntelGain != null)
                 {
+                    // The ledger pools this week's margins across every squad, order and ally that
+                    // scouted the region, then applies ReconIntelligenceRules.AwarenessDelta once.
+                    // The raw signed margin is what it wants here.
                     recordIntelGain(reconningPlanetFaction, target.Region, impact);
                 }
                 else
                 {
-                    reconningPlanetFaction.AddRegionAwareness(target.Region, impact);
+                    // No ledger (detached fixtures): this mission is the whole pool, so apply the
+                    // same curve here rather than letting a raw weekly total reach awareness.
+                    reconningPlanetFaction.AddRegionAwareness(
+                        target.Region,
+                        ReconIntelligenceRules.AwarenessDelta(impact));
                 }
 
                 if (recordTargetObservation != null

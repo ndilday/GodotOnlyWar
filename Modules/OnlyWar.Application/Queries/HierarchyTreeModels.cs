@@ -7,7 +7,8 @@ namespace OnlyWar.Application
     /// Presentation data for a row in a reusable hierarchy tree. The model deliberately contains
     /// no domain types: screens decide what a key means and the tree only owns rendering and state.
     /// Badges carry a <see cref="UiAccent"/> classification rather than a colour, so a query can
-    /// build a whole tree without referencing the host palette.
+    /// build a whole tree without referencing the host palette. Rows may provide multiple badge
+    /// lines when compact stacked metadata is more legible than one long summary.
     /// </summary>
     public sealed class HierarchyTreeItem
     {
@@ -16,6 +17,7 @@ namespace OnlyWar.Application
         public IReadOnlyList<HierarchyTreeItem> Children { get; }
         public string IconKey { get; }
         public string Badge { get; }
+        public IReadOnlyList<string> BadgeLines { get; }
         public string Tooltip { get; }
         public bool Selectable { get; }
         public bool IsSelected { get; }
@@ -38,13 +40,18 @@ namespace OnlyWar.Application
             int iconMaxWidth = 0,
             int rowHeight = 0,
             bool collapsedByDefault = false,
-            SquadRowViewModel squadRow = null)
+            SquadRowViewModel squadRow = null,
+            IReadOnlyList<string> badgeLines = null)
         {
             Key = key ?? throw new ArgumentNullException(nameof(key));
             Text = text ?? "";
             Children = children ?? Array.Empty<HierarchyTreeItem>();
             IconKey = iconKey;
-            Badge = badge;
+            Badge = badge ?? (badgeLines != null && badgeLines.Count > 0
+                ? badgeLines[0] : null);
+            BadgeLines = badgeLines ?? (string.IsNullOrWhiteSpace(Badge)
+                ? Array.Empty<string>()
+                : new[] { Badge });
             Tooltip = tooltip;
             Selectable = selectable;
             IsSelected = isSelected;

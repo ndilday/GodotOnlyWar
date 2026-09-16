@@ -184,7 +184,7 @@ public partial class NewGameSetupController : Control
         if (_invaderFactions.Count > 0)
         {
             _invaderSelection.AddItem("Random", RandomSelectionId);
-            _invaderSelection.Selected = 0;
+            _invaderSelection.Selected = _invaderFactions.Count;
             _invaderSelection.Disabled = false;
         }
         else

@@ -84,6 +84,15 @@ namespace OnlyWar.Domain.Squads
                 Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.ExpectedNumber) ?? 0f,
                 MidpointRounding.AwayFromZero)
             : 0;
+        // The battle value of the SMALLEST squad this template can field: every element at its
+        // MinimumNumber. This is the price force generation actually has to meet, because
+        // SquadFactory.GenerateSquadWithinBudget fills each element to its minimum first and gives
+        // up only when that will not fit. It diverges from BattleValue, which prices the expected
+        // (for a fixed element, the maximum) squad, as soon as an element allows a range — a
+        // ten-to-twenty-man infantry squad is priced at twenty but can be fielded at ten.
+        public int MinimumBattleValue => IsPresentOperationalForce
+            ? Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MinimumNumber) ?? 0
+            : 0;
         // Derived, not stored (OnlyWar_TDD.md §6.6): true iff any element's
         // species carries SpeciesAbilities.Synapse. Adding a new synapse creature to the DB
         // works automatically.

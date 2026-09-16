@@ -51,7 +51,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             "RatingAwardTier",
             "FactionRoleAssignment",
             "ScenarioProfile",
-            "ScenarioFactionOption",
+            "ScenarioInfiltratorOverride",
             "FactionPlanetPresenceRule",
             "ChapterGenerationProfile",
             "SectorGenerationProfile",

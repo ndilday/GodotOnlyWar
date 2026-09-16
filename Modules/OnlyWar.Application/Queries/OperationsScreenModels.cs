@@ -38,8 +38,8 @@ public sealed record MapRegionCard(
     UiAccent ControlBorderAccent,
     int? ControlBorderFactionArgb,
     int PlayerSquads,
-    int PlayerEffectiveStrength,
-    int PlayerFullStrength,
+    int PlayerAssignableSoldiers,
+    int PlayerTotalSoldiers,
     int ActiveOrders,
     int UnassignedSquads,
     int MissionOpportunities,
@@ -58,10 +58,7 @@ public sealed record MapRegionCard(
     int? NorthRegionId = null,
     int? SouthRegionId = null,
     int? WestRegionId = null,
-    int? EastRegionId = null)
-{
-    public int PlayerDutyReadyStrength => PlayerEffectiveStrength;
-}
+    int? EastRegionId = null);
 
 public sealed record PlanetMapProjection(
     IReadOnlyList<IReadOnlyList<MapRegionCard>> Rows,
@@ -87,6 +84,7 @@ public sealed record MissionOptionView(
 public sealed record ActiveOrderView(
     int OrderId,
     string Label,
+    string FactionName,
     int SquadCount,
     int CharacterCount,
     OperationsAggression Aggression,

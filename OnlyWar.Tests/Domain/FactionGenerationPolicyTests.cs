@@ -8,30 +8,35 @@ public class FactionGenerationPolicyTests
     [Fact]
     public void ScenarioProfileCatalog_ResolvesKeysWithoutCaseSensitivity()
     {
-        ScenarioProfile profile = new(
+        ScenarioInfiltratorOverride infiltratorOverride = new(
             "promised_world",
-            50_000_000,
-            2,
-            3,
-            1,
-            0.1f,
+            42,
             2,
             0,
             0.05f,
             1f / 33f,
             0.05f,
+            3);
+        ScenarioProfile profile = new(
+            "promised_world",
+            ScenarioKeys.PromisedWorld,
+            42,
+            1,
+            50_000_000,
+            2,
             3,
+            1,
             4,
             0.5f,
             0.5f,
-            [new ScenarioFactionOption(
-                "promised_world", ScenarioFactionSlotKeys.Invader, 42, 1, true)]);
+            infiltratorOverride);
 
         ScenarioProfileCatalog catalog = new([profile]);
 
         Assert.Same(profile, catalog.GetRequired("PROMISED_WORLD"));
         Assert.Same(profile, catalog.GetRequired("promised_world"));
-        Assert.Single(profile.GetFactionOptions(ScenarioFactionSlotKeys.Invader));
+        Assert.Same(profile, catalog.GetRequiredForScenario(ScenarioKeys.PromisedWorld, 42));
+        Assert.Same(infiltratorOverride, profile.InfiltratorOverride);
     }
 
     [Fact]

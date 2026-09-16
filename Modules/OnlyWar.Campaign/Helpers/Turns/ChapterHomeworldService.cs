@@ -12,12 +12,12 @@ namespace OnlyWar.Campaign.Turns
     public static class ChapterHomeworldService
     {
         // Reward path (Design/Reference/OpeningScenario.md): install the player as the planet-wide
-        // controlling faction, inheriting the displaced Imperial population/garrison region by
+        // controlling faction, inheriting the surviving Imperial population/garrison region by
         // region. Invoked by TurnController when the opening scenario is won.
         //
         // The Imperial (default) faction is resolved from the planet's faction map rather than via
         // GetControllingFaction: on a freshly-liberated world a cleared former-Tyranid region can
-        // momentarily have no public faction (the displaced civilian remnant is non-public), which
+        // momentarily have no public faction (a surviving civilian remnant may be non-public), which
         // would make GetControllingFaction's per-region resolution throw. Each region inherits the
         // Imperial garrison/population if that faction is present there, otherwise it is granted to
         // the player at zero strength.

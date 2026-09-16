@@ -134,6 +134,20 @@ namespace OnlyWar.Operations.Missions
             }
         }
 
+        // Non-combatants killed in the chaos of an unopposed overrun. Held here rather than applied
+        // in the step for the same reason as the two pools above: the region is not reduced until
+        // MissionAftermathProcessor runs at the end of the turn, so each day of the rampage needs to
+        // know what the days before it already took.
+        public long CivilianPopulationDestroyed { get; private set; }
+
+        public void RecordCivilianLosses(long populationDestroyed)
+        {
+            if (populationDestroyed > 0)
+            {
+                CivilianPopulationDestroyed += populationDestroyed;
+            }
+        }
+
         // True once losses across the whole mission cross the order's aggression tolerance. This is what
         // stops an assault from seeking another engagement: a squad losing one member per battle never
         // trips the in-battle rule but declines the fifth fight, while a squad mauled in its first battle

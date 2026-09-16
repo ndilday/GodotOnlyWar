@@ -65,12 +65,10 @@ public partial class StartMenu : Control
             // Load once when the setup screen opens so its choices come from the same immutable
             // rules snapshot that will generate the campaign.
 			_newGameRulesData = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath);
-            ScenarioProfile profile = _newGameRulesData.ScenarioProfiles.GetRequired(
-                ScenarioKeys.PromisedWorld);
-            IReadOnlyList<NewGameFactionOption> invaderFactions = profile
-                .GetFactionOptions(ScenarioFactionSlotKeys.Invader)
-                .Select(option => _newGameRulesData.Factions.Single(
-                    faction => faction.Id == option.FactionId))
+            IReadOnlyList<NewGameFactionOption> invaderFactions = _newGameRulesData.ScenarioProfiles
+                .GetForScenario(ScenarioKeys.PromisedWorld)
+                .Select(profile => _newGameRulesData.Factions.Single(
+                    faction => faction.Id == profile.PrimaryFactionId))
                 .Select(faction => new NewGameFactionOption(faction.Id, faction.Name))
                 .ToList();
 

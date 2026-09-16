@@ -102,11 +102,11 @@ namespace OnlyWar.Persistence.Database.GameRules
                 _chapterGenerationPolicyDataAccess.GetProfiles(dbCon);
             var factionRoleAssignments =
                 _factionGenerationPolicyDataAccess.GetFactionRoleAssignments(dbCon);
-            var scenarioFactionOptions =
-                _factionGenerationPolicyDataAccess.GetScenarioFactionOptions(dbCon);
+            var scenarioInfiltratorOverrides =
+                _factionGenerationPolicyDataAccess.GetScenarioInfiltratorOverrides(dbCon);
             var scenarioProfiles =
                 _factionGenerationPolicyDataAccess.GetScenarioProfiles(
-                    dbCon, scenarioFactionOptions);
+                    dbCon, scenarioInfiltratorOverrides);
             var factionPlanetPresenceRules =
                 _factionGenerationPolicyDataAccess.GetFactionPlanetPresenceRules(dbCon);
             var sectorGenerationProfiles =
@@ -158,7 +158,7 @@ namespace OnlyWar.Persistence.Database.GameRules
                 SkillRoleAssignments = skillRoleAssignments,
                 FactionRoleAssignments = factionRoleAssignments,
                 ScenarioProfiles = scenarioProfiles,
-                ScenarioFactionOptions = scenarioFactionOptions,
+                ScenarioInfiltratorOverrides = scenarioInfiltratorOverrides,
                 FactionPlanetPresenceRules = factionPlanetPresenceRules,
                 ChapterGenerationProfiles = chapterGenerationProfiles,
                 SectorGenerationProfiles = sectorGenerationProfiles,

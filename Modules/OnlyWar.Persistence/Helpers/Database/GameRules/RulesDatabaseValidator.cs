@@ -44,7 +44,6 @@ namespace OnlyWar.Persistence.Database.GameRules
             RequireNotEmpty(rules.RatingAwardTiers, "RatingAwardTier", errors);
             RequireNotEmpty(rules.FactionRoleAssignments, "FactionRoleAssignment", errors);
             RequireNotEmpty(rules.ScenarioProfiles, "ScenarioProfile", errors);
-            RequireNotEmpty(rules.ScenarioFactionOptions, "ScenarioFactionOption", errors);
             RequireNotEmpty(rules.FactionPlanetPresenceRules, "FactionPlanetPresenceRule", errors);
             RequireNotEmpty(rules.ChapterGenerationProfiles, "ChapterGenerationProfile", errors);
             RequireNotEmpty(rules.SectorGenerationProfiles, "SectorGenerationProfile", errors);
@@ -349,9 +348,12 @@ namespace OnlyWar.Persistence.Database.GameRules
             referencedFactionIds.UnionWith((rules.FactionRoleAssignments ?? [])
                 .Where(assignment => assignment != null)
                 .Select(assignment => assignment.FactionId));
-            referencedFactionIds.UnionWith((rules.ScenarioFactionOptions ?? [])
-                .Where(option => option != null)
-                .Select(option => option.FactionId));
+            referencedFactionIds.UnionWith((rules.ScenarioInfiltratorOverrides ?? [])
+                .Where(infiltratorOverride => infiltratorOverride != null)
+                .Select(infiltratorOverride => infiltratorOverride.FactionId));
+            referencedFactionIds.UnionWith((rules.ScenarioProfiles ?? [])
+                .Where(profile => profile != null)
+                .Select(profile => profile.PrimaryFactionId));
             referencedFactionIds.UnionWith((rules.FactionPlanetPresenceRules ?? [])
                 .Where(rule => rule != null)
                 .Select(rule => rule.FactionId));

@@ -190,8 +190,8 @@ the opening scenario than either scenario tunable.
 
 ## Related work in flight
 
-- **Already applied this session:** `ScenarioProfile.PromisedWorldInfiltratorStrengthFraction` is
-  authored as `0.05` in the shipped `ScenarioProfile` rules row. Motivation: the
+- **Already applied this session:** `ScenarioInfiltratorOverride.StrengthFraction` is authored as
+  `0.05` in the shipped Tyranid `ScenarioInfiltratorOverride` row. Motivation: the
   seed-1 "invaded but not conquered" invariant was failing. **Not yet verified** — the test had not
   been re-run after the edit.
 - **Failing test this is aimed at:**

@@ -91,8 +91,9 @@ public static class ReadinessDecisionExtensions
         return new SquadReadinessFacts(
             Establishment: squad.SquadTemplate?.Elements?.Sum(element => element.MaximumNumber) ?? 0,
             IsAdministrative: squad.PermitsIndividualDeployment,
-            RequiresLeader: squad.SquadTemplate?.Elements?.Any(
-                element => element.SoldierTemplate?.IsSquadLeader == true) == true,
+            RequiresLeader: !squad.PermitsIndividualDeployment
+                && squad.SquadTemplate?.Elements?.Any(
+                    element => element.SoldierTemplate?.IsSquadLeader == true) == true,
             Members: members,
             Commitment: GetCommitment(squad, travelPhase),
             Action: context?.Action ?? SquadDeploymentAction.None,

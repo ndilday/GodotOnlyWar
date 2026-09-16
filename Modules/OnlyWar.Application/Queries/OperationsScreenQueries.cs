@@ -15,6 +15,7 @@ using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Personnel;
+using OnlyWar.Operations.Readiness;
 using OnlyWar.Domain.Supply;
 using System;
 using System.Collections.Generic;
@@ -413,6 +414,8 @@ internal sealed class OperationsScreenProjector
 
     private int CurrentWeek => _read.CurrentWeek;
     private Faction PlayerFaction => _read.PlayerFaction;
+    private IPersonnelAvailabilityQueries Personnel => _read.Personnel;
+    private IReadinessDecisions Readiness => _read.Readiness;
     private ForceTreeInputs TreeInputs => _read.TreeInputs;
 
     // ---------------------------------------------------------------- header and map
@@ -516,15 +519,18 @@ internal sealed class OperationsScreenProjector
             PlanetMapOverlay.AntiAir => DefenseOverlay(factionPresence, DefenseType.AntiAir),
             _ => string.Empty
         };
-        List<Squad> playerSquads = region.RegionFactionMap.Values
+        List<Squad> playerLandedSquads = region.RegionFactionMap.Values
             .Where(presence => presence?.PlanetFaction?.Faction?.IsPlayerFaction == true)
             .SelectMany(presence => presence.LandedSquads ?? [])
-            .Where(squad => squad?.IsPresentOperationalForce == true)
+            .Where(squad => squad != null)
             .DistinctBy(squad => squad.Id)
             .OrderBy(squad => squad.Id)
             .ToList();
-        int playerEffectiveStrength = playerSquads.Sum(squad => Strength(squad).DutyReady);
-        int playerFullStrength = playerSquads.Sum(squad => Strength(squad).Full);
+        List<Squad> playerSquads = playerLandedSquads
+            .Where(squad => squad?.IsPresentOperationalForce == true)
+            .ToList();
+        (int playerAssignableSoldiers, int playerTotalSoldiers) = CountPlayerPersonnel(
+            region, playerLandedSquads);
         List<(RegionFaction Presence, IntelEstimatePresentation Estimate)> hostileEstimates =
             region.RegionFactionMap.Values
                 .Where(presence => presence.IsPublic
@@ -548,8 +554,8 @@ internal sealed class OperationsScreenProjector
             borderAccent,
             borderFactionArgb,
             playerSquads.Count,
-            playerEffectiveStrength,
-            playerFullStrength,
+            playerAssignableSoldiers,
+            playerTotalSoldiers,
             CountActivePlayerOrders(region),
             CountUnassignedPlayerSquads(region),
             CountUnassignedSpecialMissions(region),
@@ -562,13 +568,93 @@ internal sealed class OperationsScreenProjector
                     ? $"\n{factionActivity}" : string.Empty),
             IntelEstimatePresentationBuilder.Marks(weakest),
             RegionTerrainPresentation.GetVariantIndex(region),
-            playerSquads.Count > 0,
+            playerTotalSoldiers > 0,
             FactionActivityPresentation.Build(region),
             FactionActivityPresentation.GetIconKey(region),
             Neighbour(region, Direction.North),
             Neighbour(region, Direction.South),
             Neighbour(region, Direction.West),
             Neighbour(region, Direction.East));
+    }
+
+    /// <summary>
+    /// Counts the personnel physically in a region and the subset that can be assigned to a new
+    /// operation from there. Whole formations use the same structural/readiness gate as order
+    /// creation; MembersOnly formations contribute their individually available characters.
+    /// </summary>
+    private (int Assignable, int Total) CountPlayerPersonnel(
+        Region region,
+        IEnumerable<Squad> landedPlayerSquads)
+    {
+        Dictionary<int, (ISoldier Soldier, Squad HomeSquad)> personnel = [];
+        foreach (Squad squad in landedPlayerSquads ?? Enumerable.Empty<Squad>())
+        {
+            foreach (ISoldier soldier in squad?.Members ?? [])
+            {
+                if (soldier != null && IsInRegion(soldier, region))
+                {
+                    personnel.TryAdd(soldier.Id, (soldier, squad));
+                }
+            }
+        }
+
+        // A seated administrative formation is deliberately removed from LandedSquads. Its
+        // members still count through their effective campaign location.
+        foreach (PlayerSoldier character in _read.PlayerSoldiers)
+        {
+            if (character?.AssignedSquad?.Faction != PlayerFaction
+                || !IsInRegion(character, region))
+            {
+                continue;
+            }
+            personnel.TryAdd(character.Id, (character, character.AssignedSquad));
+        }
+
+        int assignable = personnel.Values.Count(item =>
+            IsAssignable(item.Soldier, item.HomeSquad, region));
+        return (assignable, personnel.Count);
+    }
+
+    private bool IsAssignable(ISoldier soldier, Squad homeSquad, Region region)
+    {
+        if (soldier == null || homeSquad == null) return false;
+
+        if (homeSquad.PermitsIndividualDeployment)
+        {
+            return soldier is PlayerSoldier character
+                && Personnel.EvaluateOrderAssignment(
+                    PersonnelAvailabilityProjection.ForOrderAssignment(
+                        character,
+                        order: null,
+                        explicitOrigin: region,
+                        doctrine: TreeInputs.Doctrine,
+                        program: TreeInputs.Program)).IsAllowed;
+        }
+
+        if (!SpecialistAvailability.IsMissionSquadFormation(homeSquad)
+            || !Readiness.CanBeginNewDeployment(
+                homeSquad, TreeInputs.Program, TreeInputs.Doctrine))
+        {
+            return false;
+        }
+
+        // A posted member is no longer part of the manoeuvre formation, even if his posting is
+        // physically in the same region.
+        if (soldier is PlayerSoldier posted && posted.IndividualPosting != null)
+        {
+            return false;
+        }
+
+        return Readiness.EvaluateSoldier(
+            soldier, TreeInputs.Doctrine, TreeInputs.Program).IsDutyReady;
+    }
+
+    private static bool IsInRegion(ISoldier soldier, Region region)
+    {
+        CampaignLocation location = soldier is PlayerSoldier character
+            ? CampaignLocationService.ForSoldier(character)
+            : CampaignLocationService.ForSquad(soldier?.AssignedSquad);
+        return location?.Region == region;
     }
 
     private enum Direction { North, South, West, East }
@@ -639,6 +725,7 @@ internal sealed class OperationsScreenProjector
             active.Select(order => new ActiveOrderView(
                 order.Id,
                 MissionAvailability.GetOrderLabel(order.Mission),
+                order.Mission.TargetFaction?.Name ?? "Unknown faction",
                 order.AssignedSquads.Count,
                 order.AssignedCharacters.Count,
                 OperationsAggressionMapping.ToView(order.LevelOfAggression),

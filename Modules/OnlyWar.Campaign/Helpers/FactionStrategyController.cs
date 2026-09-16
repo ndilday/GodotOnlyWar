@@ -270,8 +270,13 @@ public class FactionStrategyController
                 _ => false
             };
 
-            if (!issued) break;
+            // A candidate that cannot be afforded is not a reason to stop planning the whole planet.
+            // This used to break, so one target whose staging regions held less than
+            // MinimumForceRequest cancelled every other option a faction had - and because recon was
+            // scored per point of available force, that unaffordable candidate was usually the one
+            // ranked first. Mark it planned so the next pass moves on to the rest.
             plannedTargets.Add(FactionOffensiveEvaluator.MissionTargetKey(candidate.Offensive));
+            if (!issued) continue;
         }
     }
 

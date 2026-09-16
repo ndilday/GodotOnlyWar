@@ -23,7 +23,8 @@ namespace OnlyWar.Campaign
             EquipmentKitTemplate authoredRoleKit,
             EquipmentKitTemplate elementFallbackKit,
             EquipmentKitTemplate squadFallbackKit,
-            EquipmentValidationContext validationContext = null)
+            EquipmentValidationContext validationContext = null,
+            EquipmentTemplate inheritedArmor = null)
         {
             if (!IsPersonallyEquipped(element))
             {
@@ -70,6 +71,18 @@ namespace OnlyWar.Campaign
                 source = EquipmentLoadoutSource.ElementFallback;
             }
 
+            // The shipped role/fallback kits are weapon compositions bridged from the legacy
+            // WeaponSet rows, so their null armor means "use the formation's standard armor".
+            // Stored doctrine entries are complete compositions: null there is an explicit
+            // no-armor choice and must not be silently replaced.
+            if (loadout != null
+                && loadout.Armor == null
+                && UsesInheritedArmor(source)
+                && inheritedArmor?.ArmorProfile != null)
+            {
+                loadout = new EquipmentLoadout(inheritedArmor, loadout.Items);
+            }
+
             EquipmentValidationResult validation = loadout == null
                 ? new EquipmentValidationResult([new("loadout.missing", "No equipment default is authored for this role.")])
                 : EquipmentLoadoutValidator.Validate(loadout, validationContext);
@@ -80,6 +93,11 @@ namespace OnlyWar.Campaign
                 activePersonal,
                 validation.Issues);
         }
+
+        private static bool UsesInheritedArmor(EquipmentLoadoutSource source) =>
+            source is EquipmentLoadoutSource.AuthoredRole
+                or EquipmentLoadoutSource.ElementFallback
+                or EquipmentLoadoutSource.SquadFallback;
 
         public static void SetPersonalLoadout(
             EquipmentLoadoutDoctrine doctrine,

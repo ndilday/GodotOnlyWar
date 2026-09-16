@@ -162,11 +162,18 @@ public sealed class FactionStrategyCharacterizationTests
     [Fact]
     public void ExplicitStrategyDependencies_UseTheSuppliedRandomForReconGeneration()
     {
+        // The faction needs a scout formation: a recon tasking fields one scout squad and nothing
+        // else, so a roster of line squads alone scouts nothing.
         SquadTemplate lineSquad = CreateLineSquadTemplate();
+        SquadTemplate scoutSquad = CreateScoutSquadTemplate();
         Faction attacker = CreateFaction(
             2,
             "Test Cult",
-            squadTemplates: new Dictionary<int, SquadTemplate> { [lineSquad.Id] = lineSquad });
+            squadTemplates: new Dictionary<int, SquadTemplate>
+            {
+                [lineSquad.Id] = lineSquad,
+                [scoutSquad.Id] = scoutSquad
+            });
         Faction defender = CreateFaction(3, "Defender", isDefault: true);
         Planet planet = CreatePlanet(1, "Recon Dependency");
         Region staging = planet.Regions[0];
@@ -291,6 +298,41 @@ public sealed class FactionStrategyCharacterizationTests
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(trooper, 5, 5)],
             SquadTypes.None);
+    }
+
+    private static SquadTemplate CreateScoutSquadTemplate()
+    {
+        SoldierTemplate scout = new(
+            51,
+            TestModelFactory.HumanSpecies,
+            "Strategy Scout",
+            1,
+            1,
+            false,
+            0,
+            [],
+            null,
+            2);
+        SoldierTemplate scoutLeader = new(
+            52,
+            TestModelFactory.HumanSpecies,
+            "Strategy Scout Leader",
+            2,
+            1,
+            true,
+            0,
+            [],
+            null,
+            3);
+        return new SquadTemplate(
+            51,
+            "Strategy Scouts",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [new SquadTemplateElement(scout, 4, 4),
+             new SquadTemplateElement(scoutLeader, 1, 1)],
+            SquadTypes.Scout);
     }
 
     private static Squad AddLandedSquad(RegionFaction regionFaction, MissionType missionType)

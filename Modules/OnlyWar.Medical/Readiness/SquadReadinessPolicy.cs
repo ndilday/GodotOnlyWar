@@ -53,7 +53,11 @@ public static class SquadReadinessPolicy
             Math.Max(0, full - rostered),
             reasons);
 
-        bool requiresLeader = facts?.RequiresLeader == true;
+        // Administrative/character pools do not manoeuvre as formations. A leader element in
+        // their template must not turn an individually posted character into a squad-level
+        // leader blocker or presentation state.
+        bool requiresLeader = facts?.IsAdministrative != true
+            && facts?.RequiresLeader == true;
         bool hasLeader = members.Any(member => member.IsLeader);
         SquadMemberReadinessFacts leader = hasLeader
             ? members.First(member => member.IsLeader)

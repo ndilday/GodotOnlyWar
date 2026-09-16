@@ -6,6 +6,7 @@ using OnlyWar.Domain;
 using OnlyWar.Domain.Extensions;
 using OnlyWar.Domain.Missions;
 using OnlyWar.Operations.Missions.Raid;
+using OnlyWar.Operations.Missions.Recon;
 using OnlyWar.Campaign.Strategy;
 using OnlyWar.Operations.StrategicCombat;
 using OnlyWar.Campaign.Turns;
@@ -224,22 +225,51 @@ public class FactionStrategyControllerTests
     // ----- Q2: reward/risk offensive targeting (PRD §4.24) -----
 
     [Fact]
-    public void CautiousDefenderEstimate_BlindAttackerAssumesAStrongerDefender()
+    public void CautiousDefenderEstimate_UnscoutedGroundIsJudgedByItsPopulation()
     {
-        // With no intel (sigma 0.5) the AI plans against ~1 sigma above the truth, not the truth
-        // itself — it hedges against what it cannot see rather than betting on a lucky-low draw.
-        Assert.Equal(1500L, FactionOffensiveEvaluator.CautiousDefenderEstimate(1000, intelLevel: 0f));
+        // The attacker has not walked this ground, so it ignores what it thinks the garrison is and
+        // assumes 5% of the population is under arms. Unscouted ground must never look cheap, or
+        // reconnaissance has nothing to earn.
+        Assert.Equal(
+            5_000L,
+            FactionOffensiveEvaluator.CautiousDefenderEstimate(
+                believedMilitaryStrength: 1_000,
+                believedPopulation: 100_000,
+                targetFaction: CreateDefaultFaction(),
+                regionAwareness: 0f));
     }
 
     [Fact]
-    public void CautiousDefenderEstimate_BetterIntelConvergesTowardTheTruth()
+    public void CautiousDefenderEstimate_AHordeIsJudgedByItsWholePopulation()
     {
-        long blindGuess = FactionOffensiveEvaluator.CautiousDefenderEstimate(1000, intelLevel: 0f);   // sigma 0.5 -> 1500
-        long scoutedGuess = FactionOffensiveEvaluator.CautiousDefenderEstimate(1000, intelLevel: 4f); // sigma 0.1 -> 1100
+        // A faction whose numbers ARE its army has no civilians to hide behind.
+        Assert.Equal(
+            100_000L,
+            FactionOffensiveEvaluator.CautiousDefenderEstimate(
+                believedMilitaryStrength: 1_000,
+                believedPopulation: 100_000,
+                targetFaction: CreateNonPlayerFaction(),
+                regionAwareness: 0f));
+    }
 
-        Assert.Equal(1500L, blindGuess);
-        Assert.Equal(1100L, scoutedGuess);
-        Assert.True(scoutedGuess < blindGuess);
+    [Fact]
+    public void CautiousDefenderEstimate_ScoutingConvergesOnWhatIsBelieved()
+    {
+        long blindGuess = FactionOffensiveEvaluator.CautiousDefenderEstimate(
+            1_000, 100_000, CreateDefaultFaction(), regionAwareness: 0f);
+        long halfScoutedGuess = FactionOffensiveEvaluator.CautiousDefenderEstimate(
+            1_000, 100_000, CreateDefaultFaction(), regionAwareness: 0.5f);
+        // One point of awareness is the same threshold that unlocks an assault, so the same scouting
+        // that lets the AI act also earns it what it believes, with nothing added on top. The belief
+        // is already an upper bound; how vague an upper bound is decided by the coarsening, not here.
+        long scoutedGuess = FactionOffensiveEvaluator.CautiousDefenderEstimate(
+            1_000, 100_000, CreateDefaultFaction(), regionAwareness: 1f);
+
+        Assert.Equal(5_000L, blindGuess);
+        Assert.Equal(3_000L, halfScoutedGuess);
+        Assert.Equal(1_000L, scoutedGuess);
+        Assert.True(scoutedGuess < halfScoutedGuess);
+        Assert.True(halfScoutedGuess < blindGuess);
     }
 
     [Fact]
@@ -291,7 +321,7 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void GenerateFactionOrders_LargeUnknownTargetReconUsesCappedTacticalForce()
+    public void GenerateFactionOrders_LargeUnknownTargetReconSendsOneScoutSquad()
     {
         RNG.Reset(1234);
         // Deliberately a private copy of TestModelFactory's squad template rather than the shared
@@ -309,7 +339,8 @@ public class FactionStrategyControllerTests
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
              new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
-            SquadTypes.None);
+            // Scout-flagged, because a recon tasking now fields a scout squad and nothing else.
+            SquadTypes.Scout);
         Faction attacker = BuildFaction(
             20,
             "Swarm",
@@ -328,10 +359,13 @@ public class FactionStrategyControllerTests
 
         List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
+        // One scout squad is the probe. The old rule sized the sweep by battle value and let the
+        // generator buy any templates that fit, which is how leaderless formations ended up on
+        // reconnaissance; the squad count is now what bounds it.
         Order reconOrder = Assert.Single(orders, o => o.Mission.MissionType == MissionType.Recon);
-        long generatedBattleValue = reconOrder.AssignedSquads
-            .Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
-        Assert.InRange(generatedBattleValue, 1, StrategicCombatRules.NpcReconBattleValueCap);
+        Squad scouts = Assert.Single(reconOrder.AssignedSquads);
+        Assert.Equal(swarmSquad.Id, scouts.SquadTemplate.Id);
+        Assert.NotNull(scouts.SquadLeader);
     }
 
     [Fact]
@@ -520,8 +554,10 @@ public class FactionStrategyControllerTests
 
         new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
-        // Needy is topped up to exactly its required garrison (5,000) and the rear paid for it.
-        Assert.Equal(5_000, needy.RegionFactionMap[attacker.Id].MilitaryStrength);
+        // Needy is topped up to exactly its required garrison and the rear paid for it. The
+        // requirement is ExpectedAttackerCommitFraction of the 5,000-strong enemy front next door,
+        // because an attacker does not throw its whole regional strength at one border.
+        Assert.Equal(2_500, needy.RegionFactionMap[attacker.Id].MilitaryStrength);
         Assert.True(rear.RegionFactionMap[attacker.Id].MilitaryStrength < 10_000);
     }
 
@@ -633,7 +669,11 @@ public class FactionStrategyControllerTests
 
         MissionAftermathProcessor.ResolveReconResult(scout, target, 1.5f);
 
-        Assert.Equal(1.5f, target.PlanetFaction.GetRegionAwareness(target.Region));
+        // A week's pooled margin reaches awareness through the diminishing curve, not raw.
+        Assert.Equal(
+            ReconIntelligenceRules.AwarenessDelta(1.5f),
+            target.PlanetFaction.GetRegionAwareness(target.Region),
+            precision: 5);
         Assert.Equal(0f, target.Region.GetPlayerVisibleIntel());
     }
 
@@ -646,7 +686,10 @@ public class FactionStrategyControllerTests
         MissionAftermathProcessor.ResolveReconResult(player, target, 2f);
 
         Assert.True(target.Region.Planet.PlanetFactionMap.ContainsKey(player.Id));
-        Assert.Equal(2f, target.Region.GetPlayerVisibleIntel());
+        Assert.Equal(
+            ReconIntelligenceRules.AwarenessDelta(2f),
+            target.Region.GetPlayerVisibleIntel(),
+            precision: 5);
     }
 
     [Fact]
@@ -727,18 +770,23 @@ public class FactionStrategyControllerTests
         // costs 2 build points = 200 troops) builds the fraction it can afford instead of
         // staying blind.
         //
-        // 150 garrison at full organization is 150 deployable. The region can see nothing next door
-        // (no intel is set on the enemy region, so CalculateRequiredDefensiveBattleValue's threat term
-        // contributes nothing), so its reserve falls to the MinimumDefensiveReserveFraction floor of
-        // 20% = 30. That leaves 120 spare, which buys 1.2 build points = 0.6 of a level. Before the
-        // floor existed the region reserved nothing at all and spent all 150 on 0.75 of a level.
+        // 620 garrison at full organization is 620 deployable. The enemy next door is believed at
+        // 1,000, and a defender sizes its reserve against ExpectedAttackerCommitFraction of that, so
+        // it holds back 500 - well above the MinimumDefensiveReserveFraction floor of 20% = 124.
+        // That leaves 120 spare, which buys 1.2 build points = 0.6 of a level.
+        //
+        // The region no longer needs to be blind to have anything left over. It used to: the reserve
+        // was gated on RegionAwareness, so a region with no intel rows reserved only the floor even
+        // though it held Confirmed beliefs about the enemy on its border. A region that genuinely
+        // cannot match its neighbour - 150 against 1,000 - now commits everything to holding and
+        // builds nothing, which is the intended behaviour rather than a case worth testing here.
         Faction pdf = CreateDefaultFaction();
         Faction enemy = CreateNonPlayerFaction();
 
         Planet planet = CreatePlanet();
         Region pdfRegion = planet.Regions[0];
         Region enemyRegion = pdfRegion.GetAdjacentRegions().First();
-        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 150);
+        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 620);
         AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 

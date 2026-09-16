@@ -573,7 +573,7 @@ public partial class PlanetaryOperationsScreenView : Control
     {
         Button button = new()
         {
-            Text = $"{order.Label.ToUpperInvariant()} · "
+            Text = $"{BuildActiveOrderLabel(order)} · "
                 + $"{order.SquadCount} SQUADS · {order.CharacterCount} CHARACTERS · "
                 + $"{order.Aggression.ToString().ToUpperInvariant()}",
             Alignment = HorizontalAlignment.Left,
@@ -589,6 +589,14 @@ public partial class PlanetaryOperationsScreenView : Control
         OnlyWarStyle.ApplyListRow(button, selected);
         IconAtlas.Apply(button, order.IconKey, 112);
         _rightContent.AddChild(button);
+    }
+
+    private static string BuildActiveOrderLabel(ActiveOrderView order)
+    {
+        string label = (order.Label ?? "ORDER").ToUpperInvariant();
+        string faction = (order.FactionName ?? "UNKNOWN FACTION").ToUpperInvariant();
+        return label.Contains(faction, StringComparison.OrdinalIgnoreCase)
+            ? label : $"{label} · {faction}";
     }
 
     private Button MissionButton(MissionOptionView mission, string selectedKey)

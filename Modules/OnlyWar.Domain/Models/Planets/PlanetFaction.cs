@@ -172,17 +172,35 @@ namespace OnlyWar.Domain.Planets
                     continue;
                 }
 
+                // Re-coarsen what is believed against the awareness this observer has NOW. Region
+                // awareness decays every turn, so a region nobody is watching any more slides back
+                // toward "somewhere under a thousand" on its own - which is how staleness is
+                // modelled. There is no separate staleness term and no uncertainty hedge: the
+                // estimate is an upper bound (FactionIntelligenceRules.CoarsenEstimate rounds up)
+                // and it simply gets looser the longer nobody looks.
+                //
+                // Precision lost this way is not recovered by awareness rising again - a rounded
+                // figure cannot be un-rounded - but that is right. You do not remember a number more
+                // precisely by walking back toward the ground; you go and count again, and the fresh
+                // observation blends in at its own precision.
+                float awareness = GetRegionAwareness(entry.Value.Region);
                 FactionIntelBelief current = new FactionIntelBelief(
                     entry.Value.Region,
                     entry.Value.TargetFaction,
                     evidence,
-                    entry.Value.EstimatedPopulation,
-                    entry.Value.EstimatedMilitaryStrength,
+                    Coarsen(entry.Value.EstimatedPopulation, awareness),
+                    Coarsen(entry.Value.EstimatedMilitaryStrength, awareness),
                     entry.Value.LastEvidenceWeek);
                 _targetIntel[entry.Key] = current;
                 RaiseIntelChanged(decay, entry.Value, current, entry.Value.Level);
             }
         }
+
+        // "Not measured" and "measured as none" are different things, so a null estimate stays null.
+        private static long? Coarsen(long? estimate, float awareness) =>
+            estimate.HasValue
+                ? FactionIntelligenceRules.CoarsenEstimate(estimate.Value, awareness)
+                : null;
 
         public bool HasIntelligenceFootprint =>
             RegionAwareness.Count > 0 || _targetIntel.Count > 0;

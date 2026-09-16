@@ -10,6 +10,7 @@ using OnlyWar.Domain.Orders;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Soldiers;
+using OnlyWar.Domain.Units;
 using OnlyWar.Application;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
@@ -328,8 +329,10 @@ public class PlanetaryOperationsServiceTests
             estimatedMilitaryStrength: 5_000,
             evidenceWeek: 0);
 
-        Squad unassigned = AddPlayerSquad(fixture, region, "Unassigned Squad");
-        Squad assigned = AddPlayerSquad(fixture, region, "Assigned Squad");
+        Squad unassigned = AddPlayerSquad(
+            fixture, region, "Unassigned Squad", members: 5, withLeader: true);
+        Squad assigned = AddPlayerSquad(
+            fixture, region, "Assigned Squad", members: 5, withLeader: true);
         Mission assignedMission = new(42, MissionType.Ambush, enemy, 1);
         Mission openMission = new(43, MissionType.Sabotage, enemy, 1);
         region.SpecialMissions.Add(assignedMission);
@@ -344,8 +347,8 @@ public class PlanetaryOperationsServiceTests
         Assert.Equal(1, card.UnassignedSquads);
         Assert.Equal(1, card.MissionOpportunities);
         Assert.Equal(2, card.PlayerSquads);
-        Assert.Equal(2, card.PlayerEffectiveStrength);
-        Assert.Equal(10, card.PlayerFullStrength);
+        Assert.Equal(5, card.PlayerAssignableSoldiers);
+        Assert.Equal(10, card.PlayerTotalSoldiers);
         Assert.Equal(1, card.ActiveOrders);
         RegionEnemyForceEstimate estimate = Assert.Single(card.PublicEnemyForces);
         Assert.Equal("Genestealer Cult", estimate.FactionName);
@@ -354,13 +357,44 @@ public class PlanetaryOperationsServiceTests
             "Region 0\n"
             + "Control: Contested\n"
             + "Surface Squads: 2\n"
-            + "Duty-Ready Strength: 2/10\n"
+            + "Assignable Soldiers: 5/10\n"
             + "Active Orders: 1\n"
             + "Unassigned Squads: 1\n"
             + "Mission Opportunities: 1\n"
             + "Genestealer Cult: Thousands",
             RegionMapCardView.BuildTooltip(card));
         Assert.Null(unassigned.CurrentOrders);
+    }
+
+    [Fact]
+    public void MapBuilder_CountsAssignableCharactersAgainstAllPresentPlayerSoldiers()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        AddPlayerSquad(fixture, region, "Line Squad", members: 5, withLeader: true);
+        Squad administrative = CreatePlayerSquad(
+            fixture, "Apothecarion", members: 0, squadTypes: SquadTypes.Administrative);
+        PlayerSoldier available = new(TestModelFactory.CreateSoldier(), "Available Medicus");
+        PlayerSoldier unavailable = new(TestModelFactory.CreateSoldier(), "Wounded Medicus");
+        unavailable.Body.HitLocations.First().Wounds.AddWound(WoundLevel.Major);
+        administrative.AddSquadMember(available);
+        administrative.AddSquadMember(unavailable);
+        fixture.Sector.PlayerForce.Army.PlayerSoldierMap[available.Id] = available;
+        fixture.Sector.PlayerForce.Army.PlayerSoldierMap[unavailable.Id] = unavailable;
+
+        AdministrativeStationResult station = new AdministrativeStationService(
+            TestPersonnelComposition.CreatePersonnel(),
+            new OrderCommitmentSurface()).SeatFormation(
+            administrative, CampaignLocation.Landed(region));
+        Assert.True(station.Succeeded);
+
+        MapRegionCard card = Projections(fixture).QueryMap(PlanetMapOverlay.Control, fixture.Default.Id)
+            .Rows.SelectMany(row => row)
+            .Single(item => item.RegionId == region.Id);
+
+        Assert.Equal(6, card.PlayerAssignableSoldiers);
+        Assert.Equal(7, card.PlayerTotalSoldiers);
+        Assert.Contains("Assignable Soldiers: 6/7", RegionMapCardView.BuildTooltip(card));
     }
 
     [Fact]
@@ -596,9 +630,12 @@ public class PlanetaryOperationsServiceTests
 
         RegionalOperationsView view = Projections(fixture).QueryOrders(region.Id);
 
+        ActiveOrderView activeOrder = Assert.Single(view.ActiveOrders);
+        Assert.Equal(fixture.DefaultRegionFaction(0).PlanetFaction.Faction.Name,
+            activeOrder.FactionName);
         Assert.Equal(
             view.OrdinaryMissions.Single(option => option.Key == available.IdentityKey).Tooltip,
-            Assert.Single(view.ActiveOrders).Tooltip);
+            activeOrder.Tooltip);
     }
 
     [Fact]
@@ -684,6 +721,79 @@ public class PlanetaryOperationsServiceTests
     }
 
     [Fact]
+    public void ForceTree_GroupSummaryUsesSquadStatusRows()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Squad eligible = CreatePlayerSquad(fixture, "Eligible", 2);
+        Squad excluded = CreatePlayerSquad(fixture, "Unavailable", 1);
+        List<ForceTreeSquad> roster =
+        [
+            new(eligible, "Bastion"),
+            new(excluded, "Bastion", Exclusion: SquadEligibilityExclusion.Leaderless)
+        ];
+
+        HierarchyTreeItem group = Assert.Single(PlanetaryForceTreeBuilder.Build(
+            roster, ForceTreeGrouping.Company, "", new HashSet<int> { eligible.Id }));
+
+        Assert.Equal(44, group.RowHeight);
+        Assert.Equal(2, group.BadgeLines.Count);
+        Assert.Equal("1 squad deployed", group.BadgeLines[0]);
+        Assert.Equal("0 available, 1 undeployable", group.BadgeLines[1]);
+        Assert.True(group.IsSelected);
+    }
+
+    [Fact]
+    public void ForceTree_GroupSummaryUsesSquadStatusesAndIgnoresHeadquarters()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Squad eligible = CreatePlayerSquad(fixture, "Eligible", 5, withLeader: true);
+        Squad understrength = CreatePlayerSquad(fixture, "Understrength", 2, withLeader: true);
+        Squad headquarters = CreatePlayerSquad(
+            fixture, "Company HQ", 3, squadTypes: SquadTypes.HQ, withLeader: true);
+        List<ForceTreeSquad> roster =
+        [
+            new(eligible, "Bastion"),
+            new(understrength, "Bastion",
+                Exclusion: SquadEligibilityExclusion.BelowMinimumDutyReadyStrength),
+            new(headquarters, "Bastion")
+        ];
+
+        HierarchyTreeItem group = Assert.Single(PlanetaryForceTreeBuilder.Build(
+            roster, ForceTreeGrouping.Company, "", new HashSet<int> { eligible.Id }));
+
+        Assert.Equal("1 squad deployed", group.BadgeLines[0]);
+        Assert.Equal("0 available, 1 undeployable", group.BadgeLines[1]);
+    }
+
+    [Fact]
+    public void ForceTree_GroupSummaryCountsSquadsCommittedToAnyOrderAsDeployed()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Squad deployed = CreatePlayerSquad(fixture, "Deployed", 5, withLeader: true);
+        _ = new Order(
+            [deployed], true, false, Aggression.Normal,
+            new Mission(MissionType.Patrol, fixture.DefaultRegionFaction(0), 0));
+        Squad available = CreatePlayerSquad(fixture, "Available", 5, withLeader: true);
+        Squad undeployable = CreatePlayerSquad(fixture, "Understrength", 2, withLeader: true);
+        Squad headquarters = CreatePlayerSquad(
+            fixture, "Company HQ", 3, squadTypes: SquadTypes.HQ, withLeader: true);
+        List<ForceTreeSquad> roster =
+        [
+            new(deployed, "Bastion", Exclusion: SquadEligibilityExclusion.AssignedElsewhere),
+            new(available, "Bastion"),
+            new(undeployable, "Bastion",
+                Exclusion: SquadEligibilityExclusion.BelowMinimumDutyReadyStrength),
+            new(headquarters, "Bastion")
+        ];
+
+        HierarchyTreeItem group = Assert.Single(PlanetaryForceTreeBuilder.Build(
+            roster, ForceTreeGrouping.Company, "", new HashSet<int>()));
+
+        Assert.Equal("1 squad deployed", group.BadgeLines[0]);
+        Assert.Equal("1 available, 1 undeployable", group.BadgeLines[1]);
+    }
+
+    [Fact]
     public void OrdersTree_OmitsHqAdministrativeAndPersonnelPoolFormations()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
@@ -708,7 +818,7 @@ public class PlanetaryOperationsServiceTests
     }
 
     [Fact]
-    public void ForceTree_CompanyRowStaysNeutralWhenAllSquadsAreSelected()
+    public void ForceTree_CompanyRowHighlightsWhenAllSquadsAreSelected()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Squad first = CreatePlayerSquad(fixture, "First", 1);
@@ -725,8 +835,48 @@ public class PlanetaryOperationsServiceTests
 
         HierarchyTreeItem complete = Assert.Single(PlanetaryForceTreeBuilder.Build(
             roster, ForceTreeGrouping.Company, "", new HashSet<int> { first.Id, second.Id }));
-        Assert.False(complete.IsSelected);
+        Assert.True(complete.IsSelected);
         Assert.All(complete.Children, item => Assert.True(item.IsSelected));
+    }
+
+    [Fact]
+    public void CharacterTree_PreservesChapterDepthFirstSquadOrder()
+    {
+        Unit chapter = CreateCharacterTreeUnit(1, "Chapter");
+        Squad chapterSquad = new(101, "Chapter Command", chapter, TestModelFactory.SquadTemplate);
+        chapter.AddSquad(chapterSquad);
+
+        List<SpecialistOption> options =
+        [
+            CharacterOption(chapterSquad, "Chapter Specialist")
+        ];
+        string[] companyNames =
+        [
+            "1st Company", "2nd Company", "3rd Company", "4th Company", "5th Company",
+            "6th Company", "7th Company", "8th Company", "9th Company", "10th Company"
+        ];
+        for (int index = 0; index < companyNames.Length; index++)
+        {
+            Unit company = CreateCharacterTreeUnit(index + 2, companyNames[index]);
+            chapter.ChildUnits.Add(company);
+            company.ParentUnit = chapter;
+            Squad headquarters = new(
+                201 + index, $"{companyNames[index]} HQ", company, TestModelFactory.SquadTemplate);
+            company.AddSquad(headquarters);
+            options.Add(CharacterOption(headquarters, $"{companyNames[index]} Specialist"));
+        }
+
+        HierarchyTreeItem root = Assert.Single(
+            PlanetaryForceTreeBuilder.BuildCharacterGroup(options));
+
+        Assert.True(root.CollapsedByDefault);
+        Assert.Equal(
+            [
+                "CHAPTER COMMAND", "1ST COMPANY HQ", "2ND COMPANY HQ", "3RD COMPANY HQ",
+                "4TH COMPANY HQ", "5TH COMPANY HQ", "6TH COMPANY HQ", "7TH COMPANY HQ",
+                "8TH COMPANY HQ", "9TH COMPANY HQ", "10TH COMPANY HQ"
+            ],
+            root.Children.Select(item => item.Text));
     }
 
     [Fact]
@@ -922,6 +1072,19 @@ public class PlanetaryOperationsServiceTests
                 name: $"{name} Marine {index + 1}"));
         }
         return squad;
+    }
+
+    private static Unit CreateCharacterTreeUnit(int id, string name)
+    {
+        UnitTemplate template = new(id, $"{name} Template", false, new List<SquadTemplate>(), []);
+        return new Unit(id, name, template, []);
+    }
+
+    private static SpecialistOption CharacterOption(Squad homeSquad, string name)
+    {
+        PlayerSoldier character = new(TestModelFactory.CreateSoldier(name: name), name);
+        homeSquad.AddSquadMember(character);
+        return new SpecialistOption(character, homeSquad, "None");
     }
 
     private static PlanetFaction EnsurePlayerPlanetPresence(

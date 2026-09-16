@@ -50,17 +50,27 @@ namespace OnlyWar.Domain
         public List<Unit> Units { get; set; }
 
         private long? _minimumForceRequest;
-        // The battle value of the smallest full non-HQ squad this faction can field — the floor
-        // for any force-generation budget. A request below this can be ungeneratable (the force
-        // generator returns no squads when even a minimum partial squad exceeds the budget), so
-        // order budgets sized off a near-dead defender must be clamped up to it or the target is
-        // never attacked. Squad templates are fixed at load, so this is computed once.
+        // The smallest force-generation budget that can produce anything for this faction: the
+        // cheapest non-HQ squad it can field, with every element at its MINIMUM strength. A request
+        // below this is ungeneratable — SquadFactory.GenerateSquadWithinBudget fills each element to
+        // its minimum and returns nothing when even that will not fit — so order budgets sized off a
+        // near-dead defender must be clamped up to it, or the target is never attacked.
+        //
+        // This prices the minimum squad, not SquadTemplate.BattleValue, which prices the expected
+        // (for a fixed element, the maximum) one. The two are identical for a fixed-size template
+        // and diverge as soon as an element allows a range: a PDF infantry squad of one sergeant
+        // plus four-to-nineteen troopers is worth 100 at full strength but can be fielded for 25.
+        // Using the larger figure made this floor refuse orders the generator could have filled,
+        // and it grew whenever a template's maximum was widened - so making squads more flexible
+        // made the faction less able to act.
+        //
+        // Squad templates are fixed at load, so this is computed once.
         public long MinimumForceRequest =>
             _minimumForceRequest ??= SquadTemplates?.Values
                 .Where(st => st.IsPresentOperationalForce
-                    && st.BattleValue > 0
+                    && st.MinimumBattleValue > 0
                     && (st.SquadType & SquadTypes.HQ) == 0)
-                .Select(st => (long)st.BattleValue)
+                .Select(st => (long)st.MinimumBattleValue)
                 .DefaultIfEmpty(0)
                 .Min() ?? 0;
 

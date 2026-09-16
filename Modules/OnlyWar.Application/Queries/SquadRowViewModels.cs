@@ -357,8 +357,11 @@ namespace OnlyWar.Application
                 secondary.Add("READY");
             }
 
+            string leaderAvailabilityLabel = readiness.LeaderStatus == SquadLeaderStatus.Unavailable
+                ? LeaderAvailabilityLabel(squad, program, doctrine)
+                : string.Empty;
             string tooltip = BuildTooltip(squad, strength, readiness, location,
-                LeaderAvailabilityLabel(squad, program, doctrine));
+                leaderAvailabilityLabel);
             bool actionRequiresReadiness = context.Action != SquadRowAction.None
                 && context.Action != SquadRowAction.Inspect;
             bool enabled = context.IsEnabled
@@ -488,15 +491,17 @@ namespace OnlyWar.Application
                 $"Strength: {strength.DutyReady}/{strength.Full} duty-ready",
                 $"Combat-effective: {strength.Effective}/{strength.Full}",
                 $"Rostered: {strength.Rostered} · Present: {strength.Present}",
-                $"Vacancies: {strength.Vacancies}",
-                 $"Leader: {readiness.LeaderStatus switch
-                 {
-                     SquadLeaderStatus.Unavailable => leaderAvailabilityLabel,
-                     _ => SquadReadinessPresentation.LeaderLabel(readiness.LeaderStatus)
-                 }}",
-                $"Commitment: {SquadReadinessPresentation.CommitmentLabel(readiness.Commitment)}",
-                $"Location: {location}"
+                $"Vacancies: {strength.Vacancies}"
             ];
+            if (readiness.LeaderStatus != SquadLeaderStatus.NotRequired)
+            {
+                string leaderLabel = readiness.LeaderStatus == SquadLeaderStatus.Unavailable
+                    ? leaderAvailabilityLabel
+                    : SquadReadinessPresentation.LeaderLabel(readiness.LeaderStatus);
+                lines.Add($"Leader: {leaderLabel}");
+            }
+            lines.Add($"Commitment: {SquadReadinessPresentation.CommitmentLabel(readiness.Commitment)}");
+            lines.Add($"Location: {location}");
             if (strength.Unavailable > 0)
             {
                 lines.Add($"Unavailable: {strength.Unavailable}");

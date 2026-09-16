@@ -35,12 +35,13 @@ namespace OnlyWar.Generation.Scenarios
             NameGenerator nameGenerator,
             ScenarioFactionSelection invaderSelection = null)
         {
-            ScenarioProfile profile = data.ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
             invaderSelection ??= ScenarioFactionSelection.Default;
-            Faction invader = SelectInvaderFaction(profile, data, invaderSelection);
-            Faction infiltrator = FactionCapabilities.GeneratesInvasions(invader)
+            ScenarioProfile profile = SelectPromisedWorldProfile(
+                data, invaderSelection, out Faction invader);
+            ScenarioInfiltratorOverride infiltratorOverride = profile.InfiltratorOverride;
+            Faction infiltrator = infiltratorOverride == null
                 ? null
-                : SelectScenarioFaction(profile, ScenarioFactionSlotKeys.Infiltrator, data);
+                : data.Factions.First(faction => faction.Id == infiltratorOverride.FactionId);
 
             // The opening plays out as a timed sequence during generation rather than being stamped
             // as a static board (Design/Reference/OpeningScenario.md): the
@@ -53,10 +54,10 @@ namespace OnlyWar.Generation.Scenarios
             // chosen because its infiltrator is deep and ready), then have it rise in open revolt.
             if (infiltrator != null)
             {
-                EnsureInfiltrator(promised, infiltrator, profile);
-                StrengthenPromisedWorldInfiltrator(promised, infiltrator, profile);
+                EnsureInfiltrator(promised, infiltrator, infiltratorOverride);
+                StrengthenPromisedWorldInfiltrator(promised, infiltrator, infiltratorOverride);
                 RevealInfiltrator(promised, infiltrator, support);
-                SeedPromisedWorldInfiltratorIntel(promised, infiltrator, profile);
+                SeedPromisedWorldInfiltratorIntel(promised, infiltrator, infiltratorOverride);
             }
 
             // Both planet-scoped sims run through the warm-up port (no player upkeep, no other
@@ -70,7 +71,8 @@ namespace OnlyWar.Generation.Scenarios
             // defenders the invader will land into.
             if (infiltrator != null)
             {
-                warmup.SimulatePlanetForward(sector, promised, profile.PreLandingTurns);
+                warmup.SimulatePlanetForward(
+                    sector, promised, infiltratorOverride.PreLandingTurns);
             }
 
             // The authored beachhead makes planetfall onto the now-weakened board.
@@ -123,37 +125,68 @@ namespace OnlyWar.Generation.Scenarios
                 invaderFactionId: invader.Id);
         }
 
-        private static Faction SelectInvaderFaction(
-            ScenarioProfile profile,
+        private static ScenarioProfile SelectPromisedWorldProfile(
             GameRulesData data,
-            ScenarioFactionSelection selection)
+            ScenarioFactionSelection selection,
+            out Faction primaryFaction)
         {
-            IReadOnlyList<ScenarioFactionOption> options = profile.GetFactionOptions(
-                ScenarioFactionSlotKeys.Invader);
-            if (options.Count == 0)
+            IReadOnlyList<ScenarioProfile> profiles = data.ScenarioProfiles.GetForScenario(
+                ScenarioKeys.PromisedWorld);
+            if (profiles.Count == 0)
             {
                 throw new InvalidOperationException(
-                    $"Scenario profile '{profile.Key}' has no eligible invader.");
+                    $"Scenario '{ScenarioKeys.PromisedWorld}' has no eligible profiles.");
             }
 
+            ScenarioProfile selected;
             if (selection.FactionId.HasValue)
             {
-                ScenarioFactionOption selected = options.FirstOrDefault(option =>
-                    option.FactionId == selection.FactionId.Value);
+                selected = profiles.FirstOrDefault(profile =>
+                    profile.PrimaryFactionId == selection.FactionId.Value);
                 if (selected == null)
                 {
                     throw new InvalidOperationException(
                         $"Faction id {selection.FactionId.Value} is not eligible for the "
-                        + $"'{profile.Key}' invader slot.");
+                        + $"'{ScenarioKeys.PromisedWorld}' primary faction.");
                 }
-                return ResolveScenarioFaction(selected, data);
+            }
+            else if (selection.IsRandom)
+            {
+                selected = SelectWeightedScenarioProfile(profiles);
+            }
+            else
+            {
+                // The sector role remains the stable default primary faction. The fallback keeps
+                // hand-built/test rules usable when they omit that role's profile.
+                selected = profiles.FirstOrDefault(profile =>
+                    profile.PrimaryFactionId == data.SectorFactions.Invader.Id)
+                    ?? profiles[0];
             }
 
-            // The first stable option is the default. Random is the only path that consumes a
-            // weighted selection roll.
-            return selection.IsRandom
-                ? SelectScenarioFaction(profile, ScenarioFactionSlotKeys.Invader, data, options)
-                : ResolveScenarioFaction(options[0], data);
+            primaryFaction = data.Factions.First(faction => faction.Id == selected.PrimaryFactionId);
+            return selected;
+        }
+
+        private static ScenarioProfile SelectWeightedScenarioProfile(
+            IReadOnlyList<ScenarioProfile> profiles)
+        {
+            if (profiles.Count == 1)
+            {
+                return profiles[0];
+            }
+
+            double totalWeight = profiles.Sum(profile => profile.PrimarySelectionWeight);
+            double roll = RNG.GetLinearDouble() * totalWeight;
+            foreach (ScenarioProfile profile in profiles)
+            {
+                if (roll < profile.PrimarySelectionWeight)
+                {
+                    return profile;
+                }
+                roll -= profile.PrimarySelectionWeight;
+            }
+
+            return profiles[^1];
         }
 
         // Weeks the stranded invader force feeds after planetfall before the player arrives:
@@ -166,53 +199,15 @@ namespace OnlyWar.Generation.Scenarios
             return Math.Max(0, (int)Math.Round(turns));
         }
 
-        private static Faction SelectScenarioFaction(
-            ScenarioProfile profile,
-            string slotKey,
-            GameRulesData data,
-            IReadOnlyList<ScenarioFactionOption> candidateOptions = null)
-        {
-            IReadOnlyList<ScenarioFactionOption> options = candidateOptions
-                ?? profile.GetFactionOptions(slotKey);
-            if (options.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    $"Scenario profile '{profile.Key}' has no faction for slot '{slotKey}'.");
-            }
-
-            ScenarioFactionOption selected = options[0];
-            if (options.Count > 1)
-            {
-                double totalWeight = options.Sum(option => option.SelectionWeight);
-                double roll = RNG.GetLinearDouble() * totalWeight;
-                foreach (ScenarioFactionOption option in options)
-                {
-                    if (roll < option.SelectionWeight)
-                    {
-                        selected = option;
-                        break;
-                    }
-                    roll -= option.SelectionWeight;
-                }
-            }
-
-            return ResolveScenarioFaction(selected, data);
-        }
-
-        private static Faction ResolveScenarioFaction(
-            ScenarioFactionOption option,
-            GameRulesData data) =>
-            data.Factions.First(faction => faction.Id == option.FactionId);
-
         // Pulls the promised world's infiltrator up to landing-site strength: in each region the
-        // infiltrator takes the profile's strength fraction of the combined
+        // infiltrator takes the override's strength fraction of the combined
         // population and garrison, carving the increase out of the Imperial owner — the deep
         // infiltration that hollowed out this world's PDF and drew the swarm (§4.24). Only ever adds
         // to the infiltrator (a region where a random roll already seeded a larger presence is left alone).
         private static void StrengthenPromisedWorldInfiltrator(
             Planet promised,
             Faction infiltrator,
-            ScenarioProfile profile)
+            ScenarioInfiltratorOverride infiltratorOverride)
         {
             Faction imperialFaction = promised.Regions
                 .SelectMany(region => region.RegionFactionMap.Values)
@@ -220,7 +215,7 @@ namespace OnlyWar.Generation.Scenarios
                 .FirstOrDefault(faction => faction.IsDefaultFaction);
             if (imperialFaction == null) return;
 
-            float share = profile.PromisedWorldInfiltratorStrengthFraction;
+            float share = infiltratorOverride.StrengthFraction;
             foreach (Region region in promised.Regions)
             {
                 if (!region.RegionFactionMap.TryGetValue(infiltrator.Id, out RegionFaction infiltratorPresence)
@@ -295,7 +290,7 @@ namespace OnlyWar.Generation.Scenarios
         private static void SeedPromisedWorldInfiltratorIntel(
             Planet promised,
             Faction infiltrator,
-            ScenarioProfile profile)
+            ScenarioInfiltratorOverride infiltratorOverride)
         {
             if (!promised.PlanetFactionMap.TryGetValue(infiltrator.Id, out PlanetFaction infiltratorPlanetFaction))
             {
@@ -313,7 +308,7 @@ namespace OnlyWar.Generation.Scenarios
             {
                 infiltratorPlanetFaction.AddRegionAwareness(
                     region,
-                    profile.PromisedWorldInfiltratorStartingIntel);
+                    infiltratorOverride.StartingIntel);
 
                 foreach (RegionFaction target in region.RegionFactionMap.Values
                     .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id != infiltrator.Id
@@ -397,7 +392,7 @@ namespace OnlyWar.Generation.Scenarios
         private static void EnsureInfiltrator(
             Planet promised,
             Faction infiltrator,
-            ScenarioProfile profile)
+            ScenarioInfiltratorOverride infiltratorOverride)
         {
             if (promised.PlanetFactionMap.ContainsKey(infiltrator.Id))
             {
@@ -412,17 +407,17 @@ namespace OnlyWar.Generation.Scenarios
                     promised.Template.Id,
                     FactionPresenceMode.Hidden,
                     1.0,
-                    profile.InitialInfiltratorPopulationShareMin,
-                    profile.InitialInfiltratorPopulationShareMax,
-                    profile.InitialInfiltratorGarrisonPerPopulation));
+                    infiltratorOverride.InitialPopulationShareMin,
+                    infiltratorOverride.InitialPopulationShareMax,
+                    infiltratorOverride.InitialGarrisonPerPopulation));
         }
 
         // §3.2 — confine the selected invader to a contiguous cluster of N regions, leaving the rest of
         // the world default-Imperial. Each stamped region gets a public invader RegionFaction
-        // with tuned strength and a sub-1 growth throttle; the local Imperial garrison is broken
-        // and its civilians reduced to a hidden, displaced remnant so the region resolves to
-        // single invader control.
-        private static void StampInvaderPresence(
+        // with tuned strength. The existing Imperial presence is deliberately left intact and
+        // public: planetfall creates a contested region immediately, and ordinary combat/turn
+        // processing decides whether the defenders later hold, break, or go to ground.
+        internal static void StampInvaderPresence(
             Planet promised,
             GameRulesData data,
             Faction invaderFaction,
@@ -437,9 +432,39 @@ namespace OnlyWar.Generation.Scenarios
             // The Navy already identified the incursion; the world is known to be invaded.
             invaderPlanetFaction.IsPublic = true;
 
+            GrantHomeGroundAwareness(promised, data);
+
             int regionCount = RNG.GetIntBelowMax(
                 profile.MinInvaderRegions, profile.MaxInvaderRegions + 1);
             int startIndex = RNG.GetIntBelowMax(0, promised.Regions.Length);
+
+            // Land where there is room to land. The cluster used to start at the drawn index
+            // regardless, and each region's allocation was then clamped to its own spare capacity —
+            // so on a world whose regions sit near capacity the invader simply evaporated. On seed 1
+            // that meant a designed force of 3,856 (twice the planetary PDF, per
+            // InvaderGarrisonStrengthMultiple) arriving as 593: one real beachhead of 560, a token
+            // 33, and a third region stamped with nothing at all, which the first turn then deleted
+            // as an empty presence. The scan starts from the drawn index so equally roomy worlds
+            // still vary.
+            int bestStart = startIndex;
+            long bestHeadroom = -1L;
+            for (int offset = 0; offset < promised.Regions.Length; offset++)
+            {
+                int candidateStart = (startIndex + offset) % promised.Regions.Length;
+                long headroom = 0L;
+                for (int i = 0; i < regionCount; i++)
+                {
+                    Region candidate = promised.Regions[
+                        (candidateStart + i) % promised.Regions.Length];
+                    headroom += Math.Max(0L, candidate.CarryingCapacity - candidate.Population);
+                }
+                if (headroom > bestHeadroom)
+                {
+                    bestHeadroom = headroom;
+                    bestStart = candidateStart;
+                }
+            }
+            startIndex = bestStart;
 
             // Size the invader relative to the world's own host garrison (measured before the stamp), so the
             // fight scales across the wide promised-world population band rather than being fixed by
@@ -449,58 +474,130 @@ namespace OnlyWar.Generation.Scenarios
             long invaderPopulation = ScaledInvaderStrength(
                 promised, data, profile, regionCount);
 
-            for (int i = 0; i < regionCount; i++)
+            // The authored planetary force. Every point of it is landed: what a region cannot absorb
+            // is carried to the next, and whatever is still unplaced after all of them is shared out
+            // among the beachheads even though that puts them over capacity. An army arriving from
+            // orbit does not size itself to the farmland it lands on; over-capacity regions are
+            // resolved afterwards by the ordinary consumption and starvation rules.
+            long carriedShortfall = 0L;
+
+            // Roomiest first, so the carry-forward lands as much as possible inside capacity before
+            // anything has to overflow.
+            List<RegionFaction> beachheads = Enumerable.Range(0, regionCount)
+                .Select(i => promised.Regions[(startIndex + i) % promised.Regions.Length])
+                .OrderByDescending(region => Math.Max(0L, region.CarryingCapacity - region.Population))
+                .ThenBy(region => region.Id)
+                .Select(region => EnsureInvaderPresence(region, invaderPlanetFaction, invaderFaction))
+                .ToList();
+
+            foreach (RegionFaction invader in beachheads)
             {
-                Region region = promised.Regions[(startIndex + i) % promised.Regions.Length];
+                // Each beachhead still wants its authored share; only what a region cannot absorb
+                // moves on. Taking headroom greedily instead would let the roomiest region swallow
+                // the whole force and leave its neighbours empty, which is the failure the old
+                // clamp produced from the other direction.
+                long wanted = invaderPopulation + carriedShortfall;
 
-                if (region.RegionFactionMap.TryGetValue(data.DefaultFaction.Id, out RegionFaction imperial))
-                {
-                    imperial.Garrison = 0;
-                    imperial.Population = (long)(imperial.Population * profile.ImperialRemnantFraction);
-                    // Displaced remnant: hidden, so the region reads as invader-controlled rather
-                    // than as two-public-faction (which has no single controlling faction).
-                    imperial.IsPublic = false;
-                }
-
-                // The world-average-scaled invader population can exceed a specific region's
-                // carrying capacity (regions vary in size); clamp it so the stamped invader plus every
-                // population already in the region (the displaced Imperial remnant and the hidden
-                // infiltrator seeded by EnsureInfiltrator) never overpopulate it — a generation
-                // invariant (no region starts above capacity). The invader faction is not
-                // added yet, so region.Population is the current headcount to leave room for. Garrison
-                // is not population, so it is left unclamped.
-                long existingPopulation = region.Population;
-                long regionInvaderPopulation = Math.Max(0L,
-                    Math.Min(invaderPopulation, region.CarryingCapacity - existingPopulation));
-
-                RegionFaction invader = region.RegionFactionMap
-                    .GetValueOrDefault(invaderFaction.Id);
-                if (invader == null)
-                {
-                    invader = new RegionFaction(invaderPlanetFaction, region)
-                    {
-                        IsPublic = true,
-                        Entrenchment = 0,
-                        ListeningPost = 0,
-                        AntiAir = 0
-                        // No GrowthMultiplier throttle: the invader's simulation behavior governs
-                        // its population change. Winnability comes from the finite, stranded
-                        // biomass budget, not a growth throttle.
-                    };
-                    region.RegionFactionMap[invaderFaction.Id] = invader;
-                }
-
-                // An explicit invasion opening must incorporate a naturally seeded dormant presence on
-                // the promised world instead of replacing that indelible object. The existing
-                // population is already included in regionInvaderPopulation's capacity check;
-                // add only the authored beachhead allocation on top of it.
-                invader.IsPublic = true;
-                invader.Organization = 100;
-                invader.AddMilitaryStrength(regionInvaderPopulation);
-                invader.DormantConsolidation = FactionCapabilities.GeneratesInvasions(invaderFaction)
-                    ? 1.0
-                    : invader.DormantConsolidation;
+                // The invader faction's own presence is already counted in Region.Population when it
+                // was seeded dormant, so headroom is measured against the region as it stands.
+                long headroom = Math.Max(0L,
+                    invader.Region.CarryingCapacity - invader.Region.Population);
+                long placed = Math.Min(wanted, headroom);
+                if (placed > 0) invader.AddMilitaryStrength(placed);
+                carriedShortfall = wanted - placed;
             }
+
+            // No room left anywhere: the rest comes down on the beachheads regardless. This is what
+            // guarantees the authored planetary total actually lands, and it is why a beachhead is
+            // never stamped empty even when its ground was already full.
+            if (carriedShortfall > 0 && beachheads.Count > 0)
+            {
+                long share = carriedShortfall / beachheads.Count;
+                long remainder = carriedShortfall - share * beachheads.Count;
+                for (int i = 0; i < beachheads.Count; i++)
+                {
+                    long overflow = share + (i < remainder ? 1 : 0);
+                    if (overflow > 0) beachheads[i].AddMilitaryStrength(overflow);
+                }
+            }
+        }
+
+        // What a world's own defence force knows about its own ground when the invasion begins. One
+        // point of awareness is one significant figure of precision
+        // (FactionIntelligenceRules.CoarsenEstimate), which is the difference between reading an
+        // ork warband of 1,285 as "under two thousand" and reading it as "under ten thousand".
+        private const float HomeGroundAwareness = 1.0f;
+
+        /// <summary>
+        /// Gives the world's own defence force a working knowledge of every region on it.
+        /// </summary>
+        /// <remarks>
+        /// Awareness of zero means "has never looked at this ground", which is the wrong starting
+        /// point for a garrison that has held the planet for generations. Left at zero, the PDF
+        /// reads every invader at the top of its decade, sizes its reserve against that, commits
+        /// every region to holding, and is then left with no spare force to scout with - and
+        /// scouting is the only thing that would correct the estimate. It plans itself into
+        /// paralysis on turn one and cannot plan its way out.
+        ///
+        /// This is a floor, not an assignment: a region already better known keeps what it has. It
+        /// also decays like any other awareness, so it is a starting position rather than a
+        /// permanent grant - the PDF still has to look after itself.
+        /// </remarks>
+        private static void GrantHomeGroundAwareness(Planet promised, GameRulesData data)
+        {
+            if (data?.DefaultFaction == null) return;
+            if (!promised.PlanetFactionMap.TryGetValue(
+                    data.DefaultFaction.Id,
+                    out PlanetFaction defender))
+            {
+                return;
+            }
+
+            foreach (Region region in promised.Regions.Where(region => region != null))
+            {
+                if (defender.GetRegionAwareness(region) < HomeGroundAwareness)
+                {
+                    defender.SetRegionAwareness(region, HomeGroundAwareness);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The invader's public presence in one stamped region, created if this is planetfall and
+        /// reused when a dormant presence was already seeded there.
+        /// </summary>
+        /// <remarks>
+        /// An explicit invasion opening incorporates a naturally seeded dormant presence rather than
+        /// replacing that indelible object, so the beachhead allocation is added on top of whatever
+        /// is already there.
+        /// </remarks>
+        private static RegionFaction EnsureInvaderPresence(
+            Region region,
+            PlanetFaction invaderPlanetFaction,
+            Faction invaderFaction)
+        {
+            RegionFaction invader = region.RegionFactionMap.GetValueOrDefault(invaderFaction.Id);
+            if (invader == null)
+            {
+                invader = new RegionFaction(invaderPlanetFaction, region)
+                {
+                    IsPublic = true,
+                    Entrenchment = 0,
+                    ListeningPost = 0,
+                    AntiAir = 0
+                    // No GrowthMultiplier throttle: the invader's simulation behavior governs
+                    // its population change. Winnability comes from the finite, stranded
+                    // biomass budget, not a growth throttle.
+                };
+                region.RegionFactionMap[invaderFaction.Id] = invader;
+            }
+
+            invader.IsPublic = true;
+            invader.Organization = 100;
+            invader.DormantConsolidation = FactionCapabilities.GeneratesInvasions(invaderFaction)
+                ? 1.0
+                : invader.DormantConsolidation;
+            return invader;
         }
 
         // Invader per-region starting population: the planet's whole pre-stamp Imperial garrison

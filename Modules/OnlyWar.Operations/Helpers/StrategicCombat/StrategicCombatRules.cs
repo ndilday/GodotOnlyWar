@@ -21,17 +21,29 @@ namespace OnlyWar.Operations.StrategicCombat
         // tactical/strategic handoff decisions remain comparable.
         public const long MassCombatBattleValueFloor = 1500;
 
-        // A recon probe should stay within the existing small-detachment budget. Each faction's
-        // own MinimumForceRequest can still floor this up to a full squad when its data requires it.
-        public const long NpcReconBattleValueCap = 200;
-
         // One point of reorganization effort reforms this much disorganized military BV. Anchored
         // to a ten-trooper PDF squad so the rate is expressed in the same currency as force pools.
         public const long ReorganizationBattleValuePerEffort = 10 * PdfTrooperBattleValue;
 
         // Each undefended day of an assault destroys this multiple of the surviving assaulting
-        // force's BV from the defender's disorganized pool.
+        // force's BV. An unopposed assault is a rampage: the capacity below is spent on the
+        // defender's broken formations first, then on troops that exist but never mustered, then on
+        // the people living there.
         public const double UndefendedAssaultDestructionMultiplier = 1.0;
+
+        // Troops who never formed up are still armed and in cover, so they cost twice what a broken
+        // formation does: one point of capacity destroys this much organized BV.
+        public const double OrganizedResistanceFactor = 0.5;
+
+        // Capacity the fighting did not absorb falls on the population. This is not massacre as
+        // policy - it is the chaos of an overrun - so every attacker inflicts it. Anchored on the
+        // Imperium, where a PDF trooper is 5 BV for one man, so a point of capacity is about a
+        // person. A faction whose numbers ARE its army has no civilians and so loses none.
+        public const double CiviliansPerBattleValue = 1.0;
+
+        // Ceiling on how much of a region's remaining civilian population one day of rampage can
+        // kill. Without it a large enough horde empties a hive world in a single week.
+        public const double MaximumDailyCivilianLossFraction = 0.05;
 
         public const double CombatSigma = 0.12;
         public const double BaseIntensity = 0.08;

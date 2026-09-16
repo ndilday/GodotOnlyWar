@@ -44,7 +44,12 @@ internal sealed class FactionOffensiveOrderBuilder
         List<Order> allOrders,
         IRNG random)
     {
-        long intendedBattleValue = (long)(chosenOffensive.DefenderBattleValue * 2);
+        // Sized off what the attacker BELIEVES it faces, not the truth. The two used to disagree:
+        // the force was sized from the real defender while the decision to attack at all was taken
+        // from the estimate, so a faction committed as though it knew the ground exactly and chose
+        // as though it did not. Now a blind attack is overwhelming, because the attacker fears the
+        // worst, and a scouted one is efficient.
+        long intendedBattleValue = (long)(chosenOffensive.EstimatedDefenderBattleValue * 2);
         List<RegionFaction> emergingSources = chosenOffensive.AttackingRegions
             .Select(region => region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction rf) ? rf : null)
             .Where(rf => rf?.HasEmergenceAdvantage == true)

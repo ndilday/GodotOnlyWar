@@ -376,6 +376,12 @@ namespace OnlyWar.Persistence.Database.GameState
             {
                 try
                 {
+                    // Materialize the persisted squad graph once. NPC tactical orders may reference
+                    // generated squads that are intentionally absent from the persistent unit graph;
+                    // player-order validation below needs the exact set of squad IDs written here.
+                    List<Squad> savedSquads = squads?.Where(squad => squad != null).ToList() ?? [];
+                    HashSet<int> savedSquadIds = savedSquads.Select(squad => squad.Id).ToHashSet();
+
                     // Saving is passive: reconciliation and narration happen at
                     // load/new-game/turn boundaries before this transaction begins.
                     foreach(Character character in characters)
@@ -424,7 +430,7 @@ namespace OnlyWar.Persistence.Database.GameState
                         }
                     }
 
-                    foreach(Squad squad in squads)
+                    foreach(Squad squad in savedSquads)
                     {
                         _unitDataAccess.SaveSquad(transaction, squad);
                         foreach (ISoldier soldier in squad.Members)
@@ -457,13 +463,19 @@ namespace OnlyWar.Persistence.Database.GameState
                         .ToHashSet();
                     // Orders are reachable through either participant collection. Character-only
                     // orders must be persisted even when no squad points back to them.
-                    var orders = squads.Select(s => s.CurrentOrders)
+                    var orders = savedSquads.Select(s => s.CurrentOrders)
                                        .Concat(playerSoldiers.Select(s => s.CurrentOrder))
                                        .Concat(additionalOrders ?? Enumerable.Empty<Order>())
                                        .Where(o => o != null && o.Mission != null)
+                                       // NPC tactical orders are rebuilt during turn planning.
+                                       // They can contain generated squads that are deliberately
+                                       // not part of the persisted roster, even when a persistent
+                                       // strategic command squad is attached to the order.
+                                       .Where(IsPersistedOrder)
                                        .Distinct();
                     foreach(Order order in orders)
                     {
+                        ValidatePersistedOrderSquads(order, savedSquadIds);
                         // an order's mission may not be a region special mission (e.g. a
                         // player Recon/Advance/Fortify order); persist it so the order can be
                         // restored on load
@@ -502,6 +514,24 @@ namespace OnlyWar.Persistence.Database.GameState
                 }
                 transaction.Commit();
                 dbCon.Close();
+            }
+        }
+
+        private static bool IsPersistedOrder(Order order) =>
+            order?.OwnerFaction?.IsPlayerFaction == true;
+
+        private static void ValidatePersistedOrderSquads(
+            Order order,
+            IReadOnlySet<int> savedSquadIds)
+        {
+            foreach (Squad squad in order.AssignedSquads ?? [])
+            {
+                if (squad == null || !savedSquadIds.Contains(squad.Id))
+                {
+                    throw new InvalidDataException(
+                        $"Player order {order.Id} references squad "
+                        + $"{squad?.Id.ToString() ?? "<null>"} that is not part of the saved unit graph.");
+                }
             }
         }
 

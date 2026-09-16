@@ -120,7 +120,8 @@ namespace OnlyWar.Campaign
             _missionAftermathProcessor = new MissionAftermathProcessor(
                 _planetIntelligenceProcessor.RecordReconEvidence,
                 ScenarioMetricsCollector.RecordScenarioPdfLost,
-                _planetIntelligenceProcessor.RecordTargetObservation);
+                _planetIntelligenceProcessor.RecordTargetObservation,
+                ScenarioMetricsCollector.RecordScenarioCivilianKills);
             _planetForwardSimulator = new PlanetForwardSimulator(
                 _turn,
                 _orderPlanner,

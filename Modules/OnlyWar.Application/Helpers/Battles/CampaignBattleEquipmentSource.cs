@@ -37,6 +37,18 @@ public sealed class CampaignBattleEquipmentSource : IBattleEquipmentSource
                 SoldierTemplateId = soldier.Template.Id, PersonalEquipmentRole = element.PersonalEquipmentRole,
                 Strength = soldier.Strength, BaseCapacity = soldier.Template.Species?.BaseCapacity ?? 16f,
                 HandGroups = Math.Max(1, functioningHands)
-            });
+            }, ResolveElementArmor(squad, soldier));
+    }
+
+    private EquipmentTemplate ResolveElementArmor(Squad squad, ISoldier soldier)
+    {
+        ArmorTemplate armor = squad?.SquadTemplate?.Elements
+            .FirstOrDefault(candidate => candidate.SoldierTemplate == soldier?.Template)
+            ?.DefaultArmor
+            ?? squad?.SquadTemplate?.Armor;
+        return armor == null
+            ? null
+            : _catalog?.EquipmentTemplates.GetValueOrDefault(
+                EquipmentRulesCatalog.GetArmorEquipmentId(armor.Id));
     }
 }

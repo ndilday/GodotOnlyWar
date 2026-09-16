@@ -220,7 +220,7 @@ namespace OnlyWar.Battles.Actions
             if (!hitLocation.IsSevered)
             {
                 float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, Range) * (3.5f + ((float)_random.NextRandomZValue() * 1.75f));
-                float effectiveArmor = target.Armor.Template.ArmorProvided * weapon.Template.ArmorMultiplier;
+                float effectiveArmor = (target.Armor?.Template.ArmorProvided ?? 0) * weapon.Template.ArmorMultiplier;
                 float penDamage = damage - effectiveArmor;
                 if (penDamage > 0)
                 {

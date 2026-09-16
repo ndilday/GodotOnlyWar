@@ -111,6 +111,24 @@ public class BlastAttackActionTests
     }
 
     [Fact]
+    public void Execute_TreatsMissingArmorAsUnarmored()
+    {
+        TestBattle battle = CreateBattle(
+            TestModelFactory.FragGrenadeTemplate,
+            [CreateSoldier(1, "Thrower")],
+            [CreateSoldier(2, "Unarmored")]);
+        battle.SetArmor(1, byte.MaxValue);
+        battle.State.GetSoldier(2).Armor = null;
+        battle.Place(1, true, 0, 0);
+        battle.Place(2, false, 10, 0);
+
+        BlastAttackAction action = battle.ExecuteBlast(
+            1, 2, Range, CreateRng(battle, marginZ: 0.5f));
+
+        Assert.Contains(action.WoundResolutions, wound => wound.Suffererer.Soldier.Id == 2);
+    }
+
+    [Fact]
     public void Execute_AutoHitsHighEvasionGiantsCaughtInTheBlast()
     {
         Soldier elusive = CreateSoldier(2, "Elusive Giant", CreateElusiveTemplate());

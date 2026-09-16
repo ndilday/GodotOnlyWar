@@ -111,7 +111,7 @@ namespace OnlyWar.Domain
                 gameBlob.FactionBehaviorRulesProfiles);
             FactionBehaviorRules = FactionBehaviorRulesProfiles.Values.First();
             StrategicCommandUnitTemplate = EnsureStrategicCommandUnitTemplate();
-            ValidateFactionGenerationPolicies(gameBlob.ScenarioFactionOptions);
+            ValidateFactionGenerationPolicies(gameBlob.ScenarioInfiltratorOverrides);
             ValidateRatingDefinitions();
             ValidateSoldierTemplateRequirements();
         }
@@ -278,37 +278,54 @@ namespace OnlyWar.Domain
         }
 
         private void ValidateFactionGenerationPolicies(
-            IReadOnlyList<ScenarioFactionOption> scenarioOptions)
+            IReadOnlyList<ScenarioInfiltratorOverride> infiltratorOverrides)
         {
             ValidateSectorFactionRoles();
             ValidateScenarioProfiles();
-            ValidateScenarioFactionOptions(scenarioOptions);
+            ValidateScenarioInfiltratorOverrides(infiltratorOverrides);
             ValidateFactionPlanetPresenceRules();
         }
 
         private void ValidateScenarioProfiles()
         {
+            if (ScenarioProfiles.GetForScenario(ScenarioKeys.PromisedWorld).Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scenario '{ScenarioKeys.PromisedWorld}' has no profiles in the rules database.");
+            }
+
             foreach (ScenarioProfile profile in ScenarioProfiles.Profiles.Values)
             {
-                if (profile.MaxPromisedWorldPopulation <= 0
+                if (string.IsNullOrWhiteSpace(profile.ScenarioKey)
+                    || profile.PrimaryFactionId <= 0
+                    || !IsPositiveFinite(profile.PrimarySelectionWeight)
+                    || profile.MaxPromisedWorldPopulation <= 0
                     || profile.MinInvaderRegions <= 0
                     || profile.MaxInvaderRegions < profile.MinInvaderRegions
-                    || profile.PreLandingTurns < 0
                     || !IsNonNegativeFinite(profile.InvaderGarrisonStrengthMultiple)
-                    || !IsUnitInterval(profile.ImperialRemnantFraction)
-                    || !IsUnitInterval(profile.InitialInfiltratorPopulationShareMin)
-                    || !IsUnitInterval(profile.InitialInfiltratorPopulationShareMax)
-                    || profile.InitialInfiltratorPopulationShareMin
-                        > profile.InitialInfiltratorPopulationShareMax
-                    || !IsNonNegativeFinite(profile.InitialInfiltratorGarrisonPerPopulation)
-                    || !IsUnitInterval(profile.PromisedWorldInfiltratorStrengthFraction)
-                    || !IsNonNegativeFinite(profile.PromisedWorldInfiltratorStartingIntel)
                     || !IsNonNegativeFinite(profile.PostLandingTurnsMean)
                     || !IsNonNegativeFinite(profile.SectorLordOpinionReward)
                     || !IsNonNegativeFinite(profile.SectorLordOpinionPenalty))
                 {
                     throw new InvalidOperationException(
                         $"Scenario profile '{profile.Key}' has invalid balance or timing values.");
+                }
+
+                Faction primaryFaction = _factions.FirstOrDefault(
+                    faction => faction.Id == profile.PrimaryFactionId);
+                if (primaryFaction == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Scenario profile '{profile.Key}' references missing primary faction "
+                        + $"id {profile.PrimaryFactionId}.");
+                }
+                if (!primaryFaction.HasBehavior(FactionBehavior.InvadesOnVictory)
+                    || primaryFaction.IsPlayerFaction
+                    || primaryFaction.IsDefaultFaction)
+                {
+                    throw new InvalidOperationException(
+                        $"Scenario profile '{profile.Key}' primary faction '{primaryFaction.Name}' "
+                        + "must be a non-hostile-role faction with InvadesOnVictory behavior.");
                 }
             }
         }
@@ -343,86 +360,69 @@ namespace OnlyWar.Domain
             }
         }
 
-        private void ValidateScenarioFactionOptions(
-            IReadOnlyList<ScenarioFactionOption> rawOptions)
+        private void ValidateScenarioInfiltratorOverrides(
+            IReadOnlyList<ScenarioInfiltratorOverride> rawOverrides)
         {
             HashSet<string> profileKeys = ScenarioProfiles.Profiles.Keys
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            HashSet<(string ScenarioKey, string SlotKey, int FactionId)> seen = [];
+            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-            foreach (ScenarioFactionOption option in rawOptions ?? [])
+            foreach (ScenarioInfiltratorOverride infiltratorOverride in rawOverrides ?? [])
             {
-                if (option == null)
-                {
-                    throw new InvalidOperationException("A scenario faction option is null.");
-                }
-                if (string.IsNullOrWhiteSpace(option.ScenarioKey)
-                    || !profileKeys.Contains(option.ScenarioKey))
+                if (infiltratorOverride == null)
                 {
                     throw new InvalidOperationException(
-                        $"Scenario faction option references unknown scenario "
-                        + $"'{option.ScenarioKey}'.");
+                        "A scenario infiltrator override is null.");
                 }
-                ScenarioProfile optionProfile = ScenarioProfiles.GetRequired(option.ScenarioKey);
-                if (!ScenarioFactionSlotKeys.TryParse(option.SlotKey, out string slotKey))
+                if (string.IsNullOrWhiteSpace(infiltratorOverride.ProfileKey)
+                    || !profileKeys.Contains(infiltratorOverride.ProfileKey))
                 {
                     throw new InvalidOperationException(
-                        $"Unknown scenario faction slot '{option.SlotKey}'.");
+                        $"Scenario infiltrator override references unknown profile "
+                        + $"'{infiltratorOverride.ProfileKey}'.");
                 }
-                if (!seen.Add((optionProfile.Key, slotKey, option.FactionId)))
+                ScenarioProfile profile = ScenarioProfiles.GetRequired(
+                    infiltratorOverride.ProfileKey);
+                if (!seen.Add(profile.Key))
                 {
                     throw new InvalidOperationException(
-                        $"Scenario faction option '{option.ScenarioKey}/{option.SlotKey}' "
-                        + $"assigns faction id {option.FactionId} more than once.");
+                        $"Scenario profile '{profile.Key}' has more than one infiltrator override.");
                 }
-                if (!_factions.Any(faction => faction.Id == option.FactionId))
+                if (profile.InfiltratorOverride == null
+                    || profile.InfiltratorOverride != infiltratorOverride)
                 {
                     throw new InvalidOperationException(
-                        $"Scenario faction option '{option.ScenarioKey}/{option.SlotKey}' "
-                        + $"references missing faction id {option.FactionId}.");
+                        $"Scenario infiltrator override for profile '{profile.Key}' "
+                        + "does not match the profile's hydrated override.");
                 }
-                if (double.IsNaN(option.SelectionWeight)
-                    || double.IsInfinity(option.SelectionWeight)
-                    || option.SelectionWeight <= 0)
+                if (!_factions.Any(faction => faction.Id == infiltratorOverride.FactionId))
                 {
                     throw new InvalidOperationException(
-                        $"Scenario faction option '{option.ScenarioKey}/{option.SlotKey}' "
-                        + "must have a positive selection weight.");
+                        $"Scenario infiltrator override '{profile.Key}' references missing faction id "
+                        + $"{infiltratorOverride.FactionId}.");
+                }
+                if (infiltratorOverride.PreLandingTurns < 0
+                    || !IsUnitInterval(infiltratorOverride.InitialPopulationShareMin)
+                    || !IsUnitInterval(infiltratorOverride.InitialPopulationShareMax)
+                    || infiltratorOverride.InitialPopulationShareMin
+                        > infiltratorOverride.InitialPopulationShareMax
+                    || !IsNonNegativeFinite(infiltratorOverride.InitialGarrisonPerPopulation)
+                    || !IsUnitInterval(infiltratorOverride.StrengthFraction)
+                    || !IsNonNegativeFinite(infiltratorOverride.StartingIntel))
+                {
+                    throw new InvalidOperationException(
+                        $"Scenario infiltrator override '{profile.Key}' has invalid "
+                        + "infiltrator balance or timing values.");
                 }
 
-                Faction faction = _factions.Single(candidate => candidate.Id == option.FactionId);
-                if (slotKey.Equals(ScenarioFactionSlotKeys.Infiltrator, StringComparison.OrdinalIgnoreCase)
-                    && !faction.HasBehavior(FactionBehavior.CanInfiltrate))
+                Faction faction = _factions.Single(
+                    candidate => candidate.Id == infiltratorOverride.FactionId);
+                if (!faction.HasBehavior(FactionBehavior.CanInfiltrate))
                 {
                     throw new InvalidOperationException(
-                        $"Faction '{faction.Name}' assigned to scenario infiltrator slot "
+                        $"Faction '{faction.Name}' assigned to scenario infiltrator override "
                         + "must have CanInfiltrate behavior.");
                 }
-                if (slotKey.Equals(ScenarioFactionSlotKeys.Invader, StringComparison.OrdinalIgnoreCase)
-                    && (!faction.HasBehavior(FactionBehavior.InvadesOnVictory)
-                        || faction.IsPlayerFaction
-                        || faction.IsDefaultFaction))
-                {
-                    throw new InvalidOperationException(
-                        $"Faction '{faction.Name}' assigned to scenario invader slot "
-                        + "must be a non-hostile-role faction with InvadesOnVictory behavior.");
-                }
-            }
-
-            ScenarioProfile promisedWorld = ScenarioProfiles.GetRequired(ScenarioKeys.PromisedWorld);
-            ValidateRequiredScenarioSlot(promisedWorld, ScenarioFactionSlotKeys.Infiltrator);
-            ValidateRequiredScenarioSlot(promisedWorld, ScenarioFactionSlotKeys.Invader);
-        }
-
-        private static void ValidateRequiredScenarioSlot(
-            ScenarioProfile profile,
-            string slotKey)
-        {
-            IReadOnlyList<ScenarioFactionOption> options = profile.GetFactionOptions(slotKey);
-            if (options.Count == 0 || !options.Any(option => option.IsRequired))
-            {
-                throw new InvalidOperationException(
-                    $"Scenario profile '{profile.Key}' requires a faction option for slot '{slotKey}'.");
             }
         }
 
@@ -530,6 +530,9 @@ namespace OnlyWar.Domain
 
         private static bool IsNonNegativeFinite(double value) =>
             !double.IsNaN(value) && !double.IsInfinity(value) && value >= 0;
+
+        private static bool IsPositiveFinite(double value) =>
+            !double.IsNaN(value) && !double.IsInfinity(value) && value > 0;
 
         // Test hook: shrinks the generated sector so tests that need a real
         // SectorBuilder.GenerateSector run (e.g. save/load round trips) don't pay for the

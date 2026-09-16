@@ -47,45 +47,26 @@ namespace OnlyWar.Domain
         public const string PromisedWorld = "promised_world";
     }
 
-    public static class ScenarioFactionSlotKeys
-    {
-        public const string Infiltrator = "infiltrator";
-        public const string Invader = "invader";
-
-        public static bool TryParse(string value, out string slotKey)
-        {
-            string candidate = value?.Trim();
-            if (string.Equals(candidate, Infiltrator, StringComparison.OrdinalIgnoreCase))
-            {
-                slotKey = Infiltrator;
-                return true;
-            }
-            if (string.Equals(candidate, Invader, StringComparison.OrdinalIgnoreCase))
-            {
-                slotKey = Invader;
-                return true;
-            }
-            slotKey = candidate;
-            return false;
-        }
-    }
-
     /// <summary>
-    /// A candidate faction for a scenario slot. Multiple candidates are selected by weight at
-    /// generation time; a single candidate keeps the generation stream unchanged.
+    /// Optional profile-local override for the opening infiltrator. The presence of this record
+    /// is the trigger for scenario-owned infiltrator setup; a profile without one keeps the
+    /// normal infiltrator generation path.
     /// </summary>
-    public sealed record ScenarioFactionOption(
-        string ScenarioKey,
-        string SlotKey,
+    public sealed record ScenarioInfiltratorOverride(
+        string ProfileKey,
         int FactionId,
-        double SelectionWeight,
-        bool IsRequired);
+        int PreLandingTurns,
+        float InitialPopulationShareMin,
+        float InitialPopulationShareMax,
+        float InitialGarrisonPerPopulation,
+        float StrengthFraction,
+        float StartingIntel);
 
     /// <summary>
     /// The player's opening-scenario choice. A null faction id with IsRandom false means the
-    /// scenario's first stable option; IsRandom true requests weighted
-    /// selection from the scenario's eligible options. The resolved faction id is what belongs in
-    /// persistent campaign state, not this setup-time choice.
+    /// scenario's stable default profile; IsRandom true requests weighted selection from the
+    /// scenario's eligible profiles. The resolved faction id is what belongs in persistent
+    /// campaign state, not this setup-time choice.
     /// </summary>
     public sealed record ScenarioFactionSelection
     {
@@ -107,71 +88,50 @@ namespace OnlyWar.Domain
 
     /// <summary>
     /// Balance and participant inputs for one implemented opening scenario. The scenario algorithm
-    /// remains code-owned; these values and its faction candidates are mod-owned data.
+    /// remains code-owned; these values and its optional infiltrator override are mod-owned data.
     /// </summary>
     public sealed class ScenarioProfile
     {
-        private readonly IReadOnlyList<ScenarioFactionOption> _factionOptions;
-
         public string Key { get; }
+        public string ScenarioKey { get; }
+        public int PrimaryFactionId { get; }
+        public double PrimarySelectionWeight { get; }
         public long MaxPromisedWorldPopulation { get; }
         public int MinInvaderRegions { get; }
         public int MaxInvaderRegions { get; }
         public float InvaderGarrisonStrengthMultiple { get; }
-        public float ImperialRemnantFraction { get; }
-        public int PreLandingTurns { get; }
-        public float InitialInfiltratorPopulationShareMin { get; }
-        public float InitialInfiltratorPopulationShareMax { get; }
-        public float InitialInfiltratorGarrisonPerPopulation { get; }
-        public float PromisedWorldInfiltratorStrengthFraction { get; }
-        public float PromisedWorldInfiltratorStartingIntel { get; }
         public double PostLandingTurnsMean { get; }
         public float SectorLordOpinionReward { get; }
         public float SectorLordOpinionPenalty { get; }
+        public ScenarioInfiltratorOverride InfiltratorOverride { get; }
 
         public ScenarioProfile(
             string key,
+            string scenarioKey,
+            int primaryFactionId,
+            double primarySelectionWeight,
             long maxPromisedWorldPopulation,
             int minInvaderRegions,
             int maxInvaderRegions,
             float invaderGarrisonStrengthMultiple,
-            float imperialRemnantFraction,
-            int preLandingTurns,
-            float initialInfiltratorPopulationShareMin,
-            float initialInfiltratorPopulationShareMax,
-            float initialInfiltratorGarrisonPerPopulation,
-            float promisedWorldInfiltratorStrengthFraction,
-            float promisedWorldInfiltratorStartingIntel,
             double postLandingTurnsMean,
             float sectorLordOpinionReward,
             float sectorLordOpinionPenalty,
-            IEnumerable<ScenarioFactionOption> factionOptions)
+            ScenarioInfiltratorOverride infiltratorOverride = null)
         {
             Key = key;
+            ScenarioKey = scenarioKey;
+            PrimaryFactionId = primaryFactionId;
+            PrimarySelectionWeight = primarySelectionWeight;
             MaxPromisedWorldPopulation = maxPromisedWorldPopulation;
             MinInvaderRegions = minInvaderRegions;
             MaxInvaderRegions = maxInvaderRegions;
             InvaderGarrisonStrengthMultiple = invaderGarrisonStrengthMultiple;
-            ImperialRemnantFraction = imperialRemnantFraction;
-            PreLandingTurns = preLandingTurns;
-            InitialInfiltratorPopulationShareMin = initialInfiltratorPopulationShareMin;
-            InitialInfiltratorPopulationShareMax = initialInfiltratorPopulationShareMax;
-            InitialInfiltratorGarrisonPerPopulation = initialInfiltratorGarrisonPerPopulation;
-            PromisedWorldInfiltratorStrengthFraction = promisedWorldInfiltratorStrengthFraction;
-            PromisedWorldInfiltratorStartingIntel = promisedWorldInfiltratorStartingIntel;
             PostLandingTurnsMean = postLandingTurnsMean;
             SectorLordOpinionReward = sectorLordOpinionReward;
             SectorLordOpinionPenalty = sectorLordOpinionPenalty;
-            _factionOptions = (factionOptions ?? []).ToList();
+            InfiltratorOverride = infiltratorOverride;
         }
-
-        public IReadOnlyList<ScenarioFactionOption> FactionOptions => _factionOptions;
-
-        public IReadOnlyList<ScenarioFactionOption> GetFactionOptions(string slotKey) =>
-            _factionOptions
-                .Where(option => string.Equals(option.SlotKey, slotKey, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(option => option.FactionId)
-                .ToList();
     }
 
     public sealed class ScenarioProfileCatalog
@@ -181,6 +141,7 @@ namespace OnlyWar.Domain
         public ScenarioProfileCatalog(IEnumerable<ScenarioProfile> profiles)
         {
             Dictionary<string, ScenarioProfile> map = new(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> primaryAssignments = new(StringComparer.OrdinalIgnoreCase);
             foreach (ScenarioProfile profile in profiles ?? [])
             {
                 if (profile == null || string.IsNullOrWhiteSpace(profile.Key))
@@ -192,11 +153,27 @@ namespace OnlyWar.Domain
                     throw new InvalidOperationException(
                         $"Scenario profile '{profile.Key}' is defined more than once.");
                 }
+                string primaryAssignmentKey = string.Join(
+                    "\u001f", profile.ScenarioKey, profile.PrimaryFactionId);
+                if (!primaryAssignments.Add(primaryAssignmentKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Scenario '{profile.ScenarioKey}' defines more than one profile for "
+                        + $"primary faction {profile.PrimaryFactionId}.");
+                }
             }
             _profiles = map;
         }
 
         public IReadOnlyDictionary<string, ScenarioProfile> Profiles => _profiles;
+
+        public IReadOnlyList<ScenarioProfile> GetForScenario(string scenarioKey) =>
+            _profiles.Values
+                .Where(profile => string.Equals(
+                    profile.ScenarioKey, scenarioKey, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(profile => profile.PrimaryFactionId)
+                .ThenBy(profile => profile.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
         public ScenarioProfile GetRequired(string key)
         {
@@ -204,6 +181,19 @@ namespace OnlyWar.Domain
             {
                 throw new InvalidOperationException(
                     $"Required scenario profile '{key}' was not found in the rules database.");
+            }
+            return profile;
+        }
+
+        public ScenarioProfile GetRequiredForScenario(string scenarioKey, int primaryFactionId)
+        {
+            ScenarioProfile profile = GetForScenario(scenarioKey)
+                .SingleOrDefault(candidate => candidate.PrimaryFactionId == primaryFactionId);
+            if (profile == null)
+            {
+                throw new InvalidOperationException(
+                    $"Required scenario profile for '{scenarioKey}' and primary faction "
+                    + $"{primaryFactionId} was not found in the rules database.");
             }
             return profile;
         }

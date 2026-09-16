@@ -456,11 +456,41 @@ namespace OnlyWar.Runtime.Factories
             // the scout, exposed a placement crash in AmbushPlacer for large forces, and slowed the sim.
             if (!scoutTemplates.Any()) return opposingForces;
 
-            for(int i = request.Tier; i > 0; i--)
+            // Tier, when supplied, caps how many squads this force fields - a recon probe asks for
+            // one. A patrol screen supplies no Tier and is bounded by its battle-value budget alone.
+            //
+            // This used to loop on Tier ALONE and ignore TargetBattleValue entirely, which had two
+            // consequences. A patrol screen passes no Tier, so the loop ran zero times and every
+            // patrol order in the game was silently dropped - nothing has ever screened its own
+            // ground, and DetectedMissionStep intercepts with patrol and recon squads, so nothing
+            // has ever intercepted an intruder either. And a probe was generated at full strength
+            // whatever it could afford.
+            int maximumSquads = request.Tier > 0 ? request.Tier : int.MaxValue;
+            long remainingValue = request.TargetBattleValue;
+
+            while (opposingForces.Count < maximumSquads)
             {
-                SquadTemplate template = scoutTemplates[
-                    random.GetIntBelowMax(0, scoutTemplates.Count)];
-                opposingForces.Add(SquadFactory.GenerateSquad(template, random, entityIds));
+                List<SquadTemplate> affordable = scoutTemplates
+                    .Where(t => t.BattleValue > 0 && t.BattleValue <= remainingValue)
+                    .ToList();
+                if (affordable.Count == 0) break;
+
+                SquadTemplate template = affordable[random.GetIntBelowMax(0, affordable.Count)];
+                Squad squad = SquadFactory.GenerateSquad(template, random, entityIds);
+                opposingForces.Add(squad);
+                remainingValue -= Math.Max(1, SquadBattleValue(squad));
+            }
+
+            // Nothing was affordable at full strength. Between an undersized scouting party and no
+            // scouting party at all, send the undersized one - it takes the size penalty on its
+            // observation check, which is the honest cost of scouting on the cheap. This fires only
+            // when the force would otherwise be empty: a full squad plus an understrength remnant is
+            // not what a probe or a screen wants.
+            if (opposingForces.Count == 0)
+            {
+                Squad understrength = GeneratePartialRemainderSquad(
+                    scoutTemplates, request.TargetBattleValue, random, entityIds);
+                if (understrength != null) opposingForces.Add(understrength);
             }
             return opposingForces;
         }

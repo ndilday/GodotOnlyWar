@@ -1,7 +1,9 @@
 using OnlyWar.Medical.Readiness;
+using OnlyWar.Domain;
 using OnlyWar.Domain.Equippables;
 using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Soldiers;
+using OnlyWar.Operations.Readiness;
 using OnlyWar.Tests.Fixtures;
 using System.Collections.Generic;
 using System.Linq;
@@ -99,6 +101,50 @@ public class SquadRowViewModelTests
         Assert.Equal(SquadLeaderStatus.Ready, ready.LeaderStatus);
         Assert.Equal(SquadLeaderStatus.Unavailable, leaderOut.LeaderStatus);
         Assert.True(leaderOut.CanBeginDeployment);
+    }
+
+    [Fact]
+    public void CharacterPool_DoesNotProjectFormationLeaderReadiness()
+    {
+        SquadTemplate template = new(
+            902,
+            "Company HQ",
+            TestModelFactory.DefaultWeapons,
+            new List<SquadWeaponOption>(),
+            TestModelFactory.TestArmor,
+            [
+                new SquadTemplateElement(TestModelFactory.CaptainTemplate, 0, 1),
+                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)
+            ],
+            SquadTypes.HQ | SquadTypes.Administrative,
+            FormationMobilityPolicy.MembersOnly);
+        Squad squad = new("Second Company HQ", null, template);
+        PlayerSoldier captain = new(
+            TestModelFactory.CreateSoldier(TestModelFactory.CaptainTemplate, "Captain"),
+            "Captain");
+        captain.Body.HitLocations.First(location => location.Template.IsVital && !location.Template.IsMotive)
+            .Wounds = new Wounds(
+                captain.Body.HitLocations.First(location => location.Template.IsVital && !location.Template.IsMotive)
+                    .Template.CrippleWound,
+                0);
+        squad.AddSquadMember(captain);
+
+        SquadRowViewModel row = new SquadRowViewModelBuilder().Build(
+            squad,
+            new SquadRowContext(SquadRowContextKind.Chapter, SquadRowAction.Inspect),
+            doctrine: new ChapterOperationalDoctrine(WoundLevel.Major, true, 5));
+
+        Assert.Equal(SquadReadinessState.NotApplicable, row.Readiness.StructuralState);
+        Assert.Equal(SquadLeaderStatus.NotRequired, row.LeaderStatus);
+        Assert.Equal(SquadCommitmentKind.Administrative, row.Commitment);
+        Assert.DoesNotContain("LEADER OUT", row.Tooltip);
+        Assert.DoesNotContain("Leader:", row.Tooltip);
+
+        SquadReadinessSnapshot boundary = new MedicalReadinessDecisions().EvaluateSquad(
+            squad,
+            new SquadRowContext(SquadRowContextKind.Chapter, SquadRowAction.Inspect),
+            doctrine: new ChapterOperationalDoctrine(WoundLevel.Major, true, 5));
+        Assert.Equal(SquadLeaderStatus.NotRequired, boundary.LeaderStatus);
     }
 
     [Fact]

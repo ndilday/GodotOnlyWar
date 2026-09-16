@@ -48,7 +48,13 @@ namespace OnlyWar.Application
                 .Where(option => option?.Soldier != null)
                 .GroupBy(option => option.Soldier.Id)
                 .Select(group => group.First())
-                .OrderBy(option => option.HomeSquad?.Name)
+                // SpecialistAvailability returns alphabetical rows, but this tree follows the
+                // Chapter's order of battle: direct Chapter squads first, then each child Unit in
+                // order (for example, 1st through 10th Company HQ).
+                .OrderBy(option => ForceOrdering.UnitOrderKey(option.HomeSquad?.ParentUnit))
+                .ThenBy(option => ForceOrdering.SquadTypeOrder(option.HomeSquad))
+                .ThenBy(option => option.HomeSquad?.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(option => option.HomeSquad?.Id ?? int.MaxValue)
                 .ThenBy(option => option.Soldier.Name)
                 .ToList();
             if (characters.Count == 0) return [];
@@ -57,8 +63,8 @@ namespace OnlyWar.Application
             int available = characters.Count(option => option.IsAvailable);
             List<HierarchyTreeItem> children = characters
                 .GroupBy(option => option.HomeSquad?.Id ?? -1)
-                .OrderBy(group => group.First().HomeSquad?.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(group => group.Key)
+                // GroupBy preserves the first-seen order established above, keeping the group
+                // rows in the same depth-first sequence as their source character rows.
                 .Select(group => BuildCharacterSquadGroup(group.ToList(), selected))
                 .ToList();
             return [new HierarchyTreeItem(
@@ -70,7 +76,8 @@ namespace OnlyWar.Application
                 tooltip: "Select individual administrative characters as order or movement participants.",
                 selectable: available > 0,
                 badgeAccent: UiAccent.Muted,
-                rowHeight: 32)];
+                rowHeight: 32,
+                collapsedByDefault: true)];
         }
 
         public static IReadOnlyList<PlayerSoldier> ResolveCharacterSelection(
@@ -220,11 +227,23 @@ namespace OnlyWar.Application
             bool collapsed,
             ForceTreeInputs inputs)
         {
-            int dutyReady = items.Sum(item => Strength(item.Squad, inputs).DutyReady);
-            int selected = items.Count(item => selectedIds.Contains(item.Squad.Id) || item.Assigned);
-            string badge = selected == 0 ? $"{items.Count} sq · {dutyReady} duty-ready"
-                : selected == items.Count ? $"ALL · {dutyReady} duty-ready"
-                : $"{selected}/{items.Count} selected · {dutyReady} duty-ready";
+            // HQs, administrative formations, and personnel pools are not mission-squad rows.
+            // Keep them out of the company summary so they neither inflate the squad denominator
+            // nor appear as unavailable mission capacity.
+            List<ForceTreeSquad> summaryItems = items
+                .Where(item => SpecialistAvailability.IsMissionSquadFormation(item.Squad))
+                .ToList();
+            int selected = summaryItems.Count(item => selectedIds.Contains(item.Squad.Id) || item.Assigned);
+            int deployable = summaryItems.Count(item => item.Exclusion == SquadEligibilityExclusion.None
+                || item.Assigned);
+            int deployed = summaryItems.Count(item => IsDeployed(item, selectedIds));
+            int available = summaryItems.Count(item => !IsDeployed(item, selectedIds)
+                && item.Exclusion == SquadEligibilityExclusion.None);
+            int undeployable = summaryItems.Count(item => !IsDeployed(item, selectedIds)
+                && item.Exclusion != SquadEligibilityExclusion.None);
+            string deployedText = $"{deployed} squad{(deployed == 1 ? "" : "s")} deployed";
+            string status = $"{available} available, {undeployable} undeployable";
+            bool allSelected = deployable > 0 && selected == deployable;
             string token = grouping == ForceTreeGrouping.Ship
                 ? $"ship={items.First().Ship?.Id ?? -1}"
                 : $"company={items.First().Squad.ParentUnit?.Id ?? -1}";
@@ -233,17 +252,23 @@ namespace OnlyWar.Application
                 name.ToUpperInvariant(),
                 items.Select(item => BuildSquad(item, selectedIds, inputs)).ToList(),
                 grouping == ForceTreeGrouping.Ship ? "ship" : null,
-                badge,
+                deployedText,
                 $"Select every eligible squad in {name}.",
                 items.Any(item => item.Selectable),
-                // The group row is an action (select or clear all), not an independent selection.
-                // Keep its visual state neutral so a stale parent outline cannot imply that the
-                // company itself is selected after individual squad choices change.
-                isSelected: false,
+                // The group row is an action (select or clear all), but its highlight mirrors the
+                // actionable child rows when the complete group is selected so that collapsed
+                // groups retain a clear visual indication of their selection.
+                isSelected: allSelected,
                 UiAccent.Muted,
-                rowHeight: 32,
-                collapsedByDefault: collapsed);
+                rowHeight: 44,
+                collapsedByDefault: collapsed,
+                badgeLines: [deployedText, status]);
         }
+
+        private static bool IsDeployed(ForceTreeSquad item, IReadOnlySet<int> selectedIds) =>
+            item.Assigned
+            || selectedIds.Contains(item.Squad.Id)
+            || item.Squad.CurrentOrders != null;
 
         private static HierarchyTreeItem BuildSquad(
             ForceTreeSquad item,

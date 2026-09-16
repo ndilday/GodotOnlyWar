@@ -195,15 +195,17 @@ public partial class RegionMapCardView : Button
         {
             AddFactionBadge("map_player", "Chapter forces present", badgeKeys);
         }
-        _strengthLabel.Text = model.PlayerSquads == 0
+        string squadPrefix = model.PlayerSquads > 0
+            ? $"{model.PlayerSquads} SQ · " : string.Empty;
+        _strengthLabel.Text = model.PlayerTotalSoldiers == 0
             ? "—"
-            : $"{model.PlayerSquads} SQ · {model.PlayerEffectiveStrength}/{model.PlayerFullStrength}";
-        _strengthLabel.HorizontalAlignment = model.PlayerSquads == 0 && model.ActiveOrders == 0
+            : $"{squadPrefix}{model.PlayerAssignableSoldiers}/{model.PlayerTotalSoldiers}";
+        _strengthLabel.HorizontalAlignment = model.PlayerTotalSoldiers == 0 && model.ActiveOrders == 0
             ? HorizontalAlignment.Center
             : HorizontalAlignment.Left;
         _ordersLabel.Text = model.ActiveOrders > 0
             ? $"▶ {model.ActiveOrders}"
-            : model.PlayerSquads > 0 ? "—" : string.Empty;
+            : model.PlayerTotalSoldiers > 0 ? "—" : string.Empty;
         AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
         AddThemeColorOverride("font_hover_color", OnlyWarStyle.Gold);
 
@@ -390,7 +392,7 @@ public partial class RegionMapCardView : Button
             model.Name,
             $"Control: {ControlLabel(model)}",
             $"Surface Squads: {model.PlayerSquads}",
-            $"Duty-Ready Strength: {model.PlayerEffectiveStrength}/{model.PlayerFullStrength}",
+            $"Assignable Soldiers: {model.PlayerAssignableSoldiers}/{model.PlayerTotalSoldiers}",
             $"Active Orders: {model.ActiveOrders}",
             $"Unassigned Squads: {model.UnassignedSquads}",
             $"Mission Opportunities: {model.MissionOpportunities}"

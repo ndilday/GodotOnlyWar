@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Domain;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Planets;
+using OnlyWar.Operations.Missions.Recon;
 
 namespace OnlyWar.Campaign.Turns
 {
@@ -13,8 +14,6 @@ namespace OnlyWar.Campaign.Turns
     /// </summary>
     internal sealed class TurnIntelligenceLedger
     {
-        internal const float ReconEvidenceSoftCap = 6f;
-
         private readonly Dictionary<PlanetFaction, Dictionary<Region, float>> _gains = new();
         private readonly Dictionary<PlanetFaction, Dictionary<Region, ReconEvidence>> _reconEvidence = new();
         private readonly List<IntelObservation> _observations = new();
@@ -212,12 +211,20 @@ namespace OnlyWar.Campaign.Turns
             _observations.RemoveAll(observation => ReferenceEquals(observation.Region.Planet, planet));
         }
 
+        /// <summary>
+        /// Turns a turn's pooled reconnaissance margins into one region-awareness delta.
+        /// </summary>
+        /// <remarks>
+        /// The two pools are netted before the curve is applied, rather than diminished separately
+        /// and subtracted. Separate diminishing let a force that scouted badly on four days and well
+        /// on three lose far more than its net result, because each pool saturated on its own; and
+        /// it left the downside bounded only by the 6.0 soft cap, so one poor week erased everything
+        /// a faction knew about the region (RegionAwareness floors at zero, so that loss was
+        /// permanent). Netting first, then applying the square-root curve, keeps the diminishing
+        /// returns while making the result depend on how the week actually went.
+        /// </remarks>
         internal static float CalculateReconAdjustment(float positiveEvidence, float negativeEvidence) =>
-            DiminishEvidence(Math.Max(0f, positiveEvidence))
-            - DiminishEvidence(Math.Max(0f, negativeEvidence));
-
-        internal static float DiminishEvidence(float evidence) =>
-            ReconEvidenceSoftCap
-            * (1f - (float)Math.Exp(-Math.Max(0f, evidence) / ReconEvidenceSoftCap));
+            ReconIntelligenceRules.AwarenessDelta(
+                Math.Max(0f, positiveEvidence) - Math.Max(0f, negativeEvidence));
     }
 }

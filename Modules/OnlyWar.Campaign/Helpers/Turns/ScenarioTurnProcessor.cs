@@ -48,19 +48,22 @@ namespace OnlyWar.Campaign.Turns
 
             Planet promised = sector.GetPlanet(scenario.PromisedPlanetId);
             Faction player = sector.PlayerForce.Faction;
-            ScenarioProfile profile = _turn.Rules.ScenarioProfiles.GetRequired(
-                ScenarioKeys.PromisedWorld);
+            int primaryFactionId = scenario.InvaderFactionId != 0
+                ? scenario.InvaderFactionId
+                : _turn.Rules.SectorFactions.Invader.Id;
+            ScenarioProfile profile = _turn.Rules.ScenarioProfiles.GetRequiredForScenario(
+                ScenarioKeys.PromisedWorld, primaryFactionId);
 
             // Both outcomes are measured by who holds ground OPENLY, not by headcount. An earlier
             // rule required every non-Imperial faction on the world to reach zero population and
             // garrison, which no campaign could ever reach: the stamp seeds the scenario infiltrator in
-            // all sixteen regions using the scenario profile's infiltrator strength share, an infiltrator driven
+            // all sixteen regions using the scenario infiltrator override's strength share, an infiltrator driven
             // below the suppression threshold goes to ground with its population intact and can no
             // longer be targeted at all, and organic growth replaces it between turns. The mirror
-            // defect sat on the lapse side: the displaced Imperial remnant left by the stamp
-            // (ImperialRemnantFraction) is hidden but alive, so "no Imperial presence" never held
-            // either. Reading public control instead makes both ends reachable and matches how the
-            // rest of the simulation decides who owns a region.
+            // Lapse is likewise based on public Imperial ground, so a civilian remnant that has gone
+            // to ground no longer prevents the objective from resolving. Reading public control
+            // instead makes both ends reachable and matches how the rest of the simulation decides
+            // who owns a region.
             bool loyalistsHoldGround = HasPublicPresence(promised, FactionRelationshipService.IsImperial);
             if (!loyalistsHoldGround)
             {
