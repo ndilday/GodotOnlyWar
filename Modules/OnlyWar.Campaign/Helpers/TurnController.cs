@@ -65,7 +65,8 @@ namespace OnlyWar.Campaign
                 new FactionStrategyController(
                     _turn.Random,
                     _turn.Rules.FactionBehaviorRules,
-                    _turn.Identity));
+                    _turn.Identity,
+                    _turn.Rules.FactionDoctrines));
             _chapterUpkeepProcessor = new ChapterUpkeepProcessor(_turn, trainingService);
             _fleetTurnProcessor = new FleetTurnProcessor(_chapterUpkeepProcessor);
             _lastResult = new TurnResolutionResult();

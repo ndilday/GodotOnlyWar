@@ -3,6 +3,8 @@ using System.Drawing;
 using System.Linq;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Operations.Missions;
 using OnlyWar.Campaign.Strategy;
 using OnlyWar.Domain.Fleets;
 using OnlyWar.Domain.Orders;
@@ -33,8 +35,7 @@ public class PatrolAndReconPlanningTests
         Planet planet = CreatePlanet();
         RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 10_000);
 
-        double fraction = new FactionReconPatrolPlanner()
-            .CalculatePatrolFraction(faction, planet, State(rf));
+        double fraction = FactionReconPatrolPlanner.CalculatePatrolFraction(faction, planet, State(rf));
 
         Assert.Equal(FactionReconPatrolPlanner.PolicingPatrolFraction, fraction);
         Assert.True(fraction > 0.0, "a quiet world must not be free to cross");
@@ -61,66 +62,58 @@ public class PatrolAndReconPlanningTests
         RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 10_000);
         rf.ListeningPost = FactionReconPatrolPlanner.WorthScreeningWorksLevel;
 
-        double fraction = new FactionReconPatrolPlanner()
-            .CalculatePatrolFraction(faction, planet, State(rf));
+        double fraction = FactionReconPatrolPlanner.CalculatePatrolFraction(faction, planet, State(rf));
 
         Assert.Equal(FactionReconPatrolPlanner.PatrolForceFraction, fraction);
     }
 
-    // ----- Q5: recon aggression as a decision -----
 
-    // Unfamiliar ground: go quietly, accept learning less, bring the scouts home. This is the case the
-    // old flat default got right by accident.
+    // ----- Recon aggression is doctrine, not awareness -----
+    //
+    // Four tests were removed here on 2026-09-17 with FactionReconPatrolPlanner.ChooseReconAggression,
+    // which returned Cautious on unknown ground and grew bolder as a region became familiar. Their own
+    // comments had noticed half the problem - "defaulting to Cautious had the AI permanently penalise
+    // the intelligence check whose output is what its own garrison sizing depends on" - and resolved it
+    // the wrong way round.
+    //
+    // Aggression is a difficulty delta on BOTH axes: MissionAggressionModifiers.EffectDifficulty is the
+    // exact inverse of ExposureDifficulty, so caution is paid for in intelligence. The old ladder spent
+    // most on caution exactly where information was scarcest, and it made the choice identically for
+    // every faction - a WAAAGH crept about like a cult. Measured on Grist Nine, the Cautious step alone
+    // cost roughly 40% of the weekly observation margin.
+    //
+    // What replaces it is a per-faction ReconAggression in the FactionDoctrine table, so the trade is
+    // stated once per faction instead of derived from how much it already knows.
+
     [Fact]
-    public void ReconAggression_UnknownRegion_IsCautious()
+    public void ReconAggression_DefaultsToNormalWhenNoDoctrineIsAuthored()
     {
-        (Faction faction, Region region) = ReconTarget(intel: 0f);
+        Assert.Equal(Aggression.Normal, ForceDoctrineWeights.Balanced.ReconAggression);
+    }
 
-        Assert.Equal(
+    // The property the deleted ladder was really protecting, restated where it now lives: a faction
+    // that accepts exposure learns more. Whatever the authored values become, a bolder doctrine must
+    // never buy LESS intelligence than a timid one.
+    [Fact]
+    public void ReconAggression_BolderDoctrineNeverLearnsLess()
+    {
+        Aggression[] ascending =
+        [
+            Aggression.Avoid,
             Aggression.Cautious,
-            FactionReconPatrolPlanner.ChooseReconAggression(faction, region));
-    }
-
-    // Ground it has scouted before: press in. This is the half the old default got wrong - defaulting
-    // to Cautious had the AI permanently penalise the intelligence check whose output is what its own
-    // garrison sizing depends on.
-    [Fact]
-    public void ReconAggression_WellKnownRegion_PressesIn()
-    {
-        (Faction faction, Region region) = ReconTarget(
-            intel: FactionThreatAssessment.GarrisonFullSightIntel);
-
-        Assert.Equal(
-            Aggression.Attritional,
-            FactionReconPatrolPlanner.ChooseReconAggression(faction, region));
-    }
-
-    // The band between the two, so the progression is graded rather than a single cliff.
-    [Fact]
-    public void ReconAggression_PartiallyKnownRegion_IsNormal()
-    {
-        (Faction faction, Region region) = ReconTarget(
-            intel: FactionReconPatrolPlanner.UnfamiliarGroundIntel);
-
-        Assert.Equal(
             Aggression.Normal,
-            FactionReconPatrolPlanner.ChooseReconAggression(faction, region));
-    }
+            Aggression.Attritional,
+            Aggression.Aggressive
+        ];
 
-    // The property that matters more than any individual band: knowing more never makes the AI scout
-    // more timidly. A future retune of the thresholds must not invert this.
-    [Fact]
-    public void ReconAggression_NeverBecomesMoreTimidAsIntelRises()
-    {
-        Aggression previous = Aggression.Avoid;
-        foreach (float intel in new[] { 0f, 0.5f, 1f, 1.5f, 2f, 4f })
+        float previousDifficulty = float.MaxValue;
+        foreach (Aggression aggression in ascending)
         {
-            (Faction faction, Region region) = ReconTarget(intel);
-            Aggression chosen = FactionReconPatrolPlanner.ChooseReconAggression(faction, region);
+            float difficulty = MissionAggressionModifiers.EffectDifficulty(aggression);
             Assert.True(
-                chosen >= previous,
-                $"intel {intel} chose {chosen}, timider than the {previous} chosen at less intel");
-            previous = chosen;
+                difficulty < previousDifficulty,
+                $"{aggression} faced observation difficulty {difficulty}, no easier than the timider step");
+            previousDifficulty = difficulty;
         }
     }
 

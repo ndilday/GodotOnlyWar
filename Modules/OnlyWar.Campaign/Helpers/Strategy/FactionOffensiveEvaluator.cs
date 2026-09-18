@@ -92,82 +92,30 @@ internal sealed class FactionOffensiveEvaluator
         return potentialOffensives;
     }
 
-    internal MissionCandidate ChooseBestMissionCandidate(
-        Faction faction,
-        List<PotentialOffensive> offensives,
-        HashSet<string> plannedTargets)
-    {
-        return offensives
-            .SelectMany(BuildMissionCandidatesForOffensive)
-            .Where(candidate => !plannedTargets.Contains(MissionTargetKey(candidate.Offensive)))
-            .OrderByDescending(candidate => candidate.Score)
-            .FirstOrDefault();
-
-        IEnumerable<MissionCandidate> BuildMissionCandidatesForOffensive(PotentialOffensive offensive) =>
-            BuildMissionCandidates(faction, offensive);
-    }
-
-    /// <summary>
-    /// Builds the one or more executable plans for an evaluated target, retaining the runtime's
-    /// recon-first and capability-specific assault/raid rules.
-    /// </summary>
-    internal IEnumerable<MissionCandidate> BuildMissionCandidates(
-        Faction faction,
-        PotentialOffensive offensive)
-    {
-        if (offensive.AvailableAttackingForce <= 0) yield break;
-
-        bool wellKnown = IsWellReconnoitred(offensive, faction.Id) || IsLocalOffensive(faction, offensive);
-        if (!wellKnown)
-        {
-            yield return new MissionCandidate
-            {
-                Plan = OffensivePlan.Recon,
-                Offensive = offensive,
-                Score = ReconUtility(faction, offensive)
-            };
-            yield break;
-        }
-
-        if (IsWinnableForFaction(faction, offensive))
-        {
-            yield return new MissionCandidate
-            {
-                Plan = OffensivePlan.Assault,
-                Offensive = offensive,
-                Score = FactionCapabilities.GeneratesInvasions(faction)
-                    ? offensive.DefenderBattleValue
-                    : RewardRiskScore(offensive) * 10.0
-            };
-        }
-        else if (!FactionCapabilities.GeneratesInvasions(faction) && IsRaidViable(offensive))
-        {
-            yield return new MissionCandidate
-            {
-                Plan = OffensivePlan.Raid,
-                Offensive = offensive,
-                Score = RaidUtility(offensive)
-            };
-        }
-    }
+    // The recon-first / assault-or-raid candidate machinery that used to live here is gone. It chose
+    // between plans from the force that happened to be spare beside a target (IsWinnable, IsRaidViable,
+    // RaidUtility all read PotentialOffensive.AvailableAttackingForce), which is exactly the coupling
+    // marginal allocation has to remove: a target's worth must be a property of the TARGET, and all
+    // force-dependence must live in the value curve or the auction counts it twice.
+    //
+    // Assault and Raid are now offered together as separate tasks and priced against each other by
+    // ForceTaskBuilder - so "cannot take it but can still hurt it" became a real option instead of a
+    // branch that a frozen region never reached.
 
     internal static string MissionTargetKey(PotentialOffensive offensive) =>
         $"{offensive.TargetRegion.Id}:{offensive.TargetFaction.PlanetFaction.Faction.Id}";
 
-    internal static PotentialOffensive ChooseBestOffensive(IEnumerable<PotentialOffensive> offensives)
-    {
-        return offensives
-            .Where(IsWinnable)
-            .OrderByDescending(RewardRiskScore)
-            .FirstOrDefault();
-    }
-
     internal static PotentialOffensive ChooseReconTarget(IEnumerable<PotentialOffensive> underKnown) =>
         underKnown.OrderByDescending(o => o.Reward).FirstOrDefault();
 
-    internal static bool IsWinnable(PotentialOffensive offensive)
+    /// <summary>
+    /// Whether this much force would carry the region. Force is now a PARAMETER rather than a property
+    /// of the target: under marginal allocation the question "is it winnable" is answered by what the
+    /// auction is willing to spend, not by what happened to be spare beside it.
+    /// </summary>
+    internal static bool IsWinnable(PotentialOffensive offensive, long attackingForce)
     {
-        return offensive.AvailableAttackingForce
+        return attackingForce
             > offensive.EstimatedDefenderBattleValue * OffensiveForceRatioThreshold;
     }
 
@@ -175,12 +123,12 @@ internal sealed class FactionOffensiveEvaluator
         offensive.TargetRegion.GetFactionRegionAwareness(attackerFactionId)
             >= FactionStrategyPlanningConstants.ReconIntelThreshold;
 
-    internal static bool IsRaidViable(PotentialOffensive offensive)
+    internal static bool IsRaidViable(PotentialOffensive offensive, long attackingForce)
     {
         if (offensive.DefenderBattleValue <= 0) return false;
         long minimum = Math.Max(MinimumRaidBattleValue,
             (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * RaidForceRatioThreshold));
-        return offensive.AvailableAttackingForce >= minimum;
+        return attackingForce >= minimum;
     }
 
     internal static double RewardRiskScore(PotentialOffensive offensive)
@@ -193,18 +141,26 @@ internal sealed class FactionOffensiveEvaluator
         return offensive.Reward / Math.Max(risk, 1.0);
     }
 
+    /// <summary>
+    /// What taking this region is worth, as a property of the TARGET alone.
+    /// </summary>
+    /// <remarks>
+    /// The trailing <c>* availableAttackingForce / defenderForce</c> is gone. It made a target score
+    /// higher because of an accident of who was standing next to it, so the planner's ranking moved
+    /// whenever troops moved - the same coupling the ReconUtility comment already had to fight off
+    /// once. Under marginal allocation it is worse than untidy: force-dependence belongs in the value
+    /// curve, and leaving it in the importance too makes the auction count it twice.
+    /// </remarks>
     internal static double CalculateOffensiveReward(
         RegionFaction targetFaction,
-        Faction attackingFaction,
-        long availableAttackingForce,
-        long defenderForce)
+        Faction attackingFaction)
     {
         double reward = targetFaction.Population;
         if (attackingFaction.GrowthType == GrowthType.Consumption)
         {
             reward += targetFaction.Region.CarryingCapacity;
         }
-        return reward * availableAttackingForce / defenderForce;
+        return reward;
     }
 
     /// <summary>
@@ -273,7 +229,7 @@ internal sealed class FactionOffensiveEvaluator
                 + $"reward={offensive.Reward:F0}, score={RewardRiskScore(offensive):F2}, "
                 + $"intel={offensive.TargetRegion.GetFactionRegionAwareness(faction.Id):F2}/"
                 + $"{FactionStrategyPlanningConstants.ReconIntelThreshold:F2}, "
-                + $"wellKnown={IsWellReconnoitred(offensive, faction.Id)}, winnable={IsWinnable(offensive)}, "
+                + $"wellKnown={IsWellReconnoitred(offensive, faction.Id)}, "
                 + $"staging={string.Join(",", offensive.AttackingRegions.Select(r => r.Name))}");
         }
     }
@@ -285,7 +241,7 @@ internal sealed class FactionOffensiveEvaluator
     // it. It is deliberately NOT divided by the force available to stage it: that made a candidate
     // look better the less able the faction was to act on it, so the planner consistently ranked
     // the offensives it could not afford above the ones it could.
-    private static double ReconUtility(Faction faction, PotentialOffensive offensive)
+    internal static double ReconUtility(Faction faction, PotentialOffensive offensive)
     {
         double intelGap = Math.Max(0.25,
             FactionStrategyPlanningConstants.ReconIntelThreshold
@@ -293,21 +249,19 @@ internal sealed class FactionOffensiveEvaluator
         return offensive.Reward * intelGap;
     }
 
-    private bool IsWinnableForFaction(Faction faction, PotentialOffensive offensive)
-    {
-        if (FactionCapabilities.GeneratesInvasions(faction))
-        {
-            return offensive.AvailableAttackingForce
-                >= (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue
-                    * (_behaviorRules?.DefendedLandingRatio ?? 2.0));
-        }
-        return IsWinnable(offensive);
-    }
-
-    private static double RaidUtility(PotentialOffensive offensive)
+    /// <summary>
+    /// What a raid of this size is worth against this target.
+    /// </summary>
+    /// <remarks>
+    /// The expected-damage term is where a raid's saturation comes from: above
+    /// <c>estimatedDefender * 0.5 / RaidCommitFraction</c> - about 1.43 times the defender - the first
+    /// half of the min() stops binding and more raiders add nothing. That figure was always implicit
+    /// here; the task builder now reads it rather than authoring a number of its own.
+    /// </remarks>
+    internal static double RaidUtilityAt(PotentialOffensive offensive, long attackingForce)
     {
         double expectedDamage = Math.Min(
-            offensive.AvailableAttackingForce * RaidCommitFraction,
+            attackingForce * RaidCommitFraction,
             Math.Max(1, offensive.EstimatedDefenderBattleValue) * 0.5);
         double risk = Math.Max(1.0, offensive.EstimatedDefenderBattleValue
             * (1.0 + RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment)
@@ -324,12 +278,10 @@ internal sealed class FactionOffensiveEvaluator
     {
         if (!attackingRegions.Any()) return;
 
-        long availableForce = attackingRegions
-            .Select(r => regionalForceStates.FirstOrDefault(s => s.RegionFaction.Region == r)?.SpareTroops ?? 0)
-            .Sum();
-
-        if (availableForce <= 0) return;
-
+        // A target is no longer dropped because the regions beside it happen to hold nothing. Under
+        // the old ladder that test removed a region as an attacker AND as a staging region the moment
+        // its defensive reserve ate its strength, which is a large part of why forces froze. Whether
+        // an offensive is affordable is now the auction's question, not the evaluator's.
         long defenderBattleValue = StrategicCombatResolver.CalculateDefenderBattleValueAgainst(
             targetFaction, attackingFaction, _strategicInvasionForces);
         PlanetFaction observer = targetFaction.Region.Planet.PlanetFactionMap
@@ -345,13 +297,37 @@ internal sealed class FactionOffensiveEvaluator
         // Regional awareness is the planner's recon signal, and it is what the prior gives way to.
         // Belief evidence is deliberately NOT used: public activity refreshes it for free.
         float intel = targetFaction.Region.GetFactionRegionAwareness(attackingFaction.Id);
+        // The awareness actually earned by scouting, kept separate from the floor applied below so the
+        // floor cannot silently buy precision it did not pay for.
+        float observedAwareness = intel;
         // Ground the attacker is already standing on needs no scouting - it can see whoever shares
         // the region with it. This mirrors IsLocalOffensive, which likewise treats a local target as
         // well known; without it a faction would refuse to engage an enemy in its own streets
         // because it assumed the neighbours might be armed.
         if (targetFaction.Region.RegionFactionMap.ContainsKey(attackingFaction.Id))
         {
+            // Two different things, and conflating them was the bug. The intel floor decides WHICH
+            // MODEL to use - sharing a region means the population-anchored prior no longer applies,
+            // because you are not guessing whether the neighbours might be armed. It says nothing about
+            // how precisely you know their strength.
             intel = Math.Max(intel, FactionStrategyPlanningConstants.ReconIntelThreshold);
+
+            // Precision stays an ESTIMATE, and it is bought with reconnaissance like every other
+            // estimate. What sharing the ground gives you is that the estimate is CURRENT: you notice a
+            // garrison marching out even if you cannot count what is left. Coarsened at the observer's
+            // real awareness, so a faction that never scouts the region it occupies knows only the
+            // order of magnitude - at awareness zero an actual 18 reads as 100 - and scouting its own
+            // streets sharpens that, which is the reason to do it.
+            //
+            // Grist Nine, 2026-09-16: the Imperials withdrew from Grist Nine Nu leaving 18 battle value,
+            // while the Orks sharing the region still believed 505 from weeks earlier. They sized the
+            // assault off that and committed 753 to kill 18.
+            estimatedDefenderBattleValue =
+                FactionIntelligenceRules.CoarsenEstimate(defenderBattleValue, observedAwareness)
+                ?? defenderBattleValue;
+            estimatedPopulation =
+                FactionIntelligenceRules.CoarsenEstimate(targetFaction.Population, observedAwareness)
+                ?? targetFaction.Population;
         }
 
         potentialOffensives.Add(new PotentialOffensive
@@ -359,8 +335,7 @@ internal sealed class FactionOffensiveEvaluator
             TargetRegion = targetFaction.Region,
             TargetFaction = targetFaction,
             AttackingRegions = attackingRegions,
-            AvailableAttackingForce = availableForce,
-            Reward = CalculateOffensiveReward(targetFaction, attackingFaction, availableForce, defenderBattleValue),
+            Reward = CalculateOffensiveReward(targetFaction, attackingFaction),
             DefenderBattleValue = defenderBattleValue,
             EstimatedDefenderBattleValue = CautiousDefenderEstimate(
                 estimatedDefenderBattleValue,
@@ -375,7 +350,7 @@ internal sealed class FactionOffensiveEvaluator
         if (offensive == null) return "none";
         return $"{offensive.TargetRegion.Planet.Name}/{offensive.TargetRegion.Name}/"
             + $"{offensive.TargetFaction.PlanetFaction.Faction.Name} "
-            + $"available={offensive.AvailableAttackingForce}, defenderBV={offensive.DefenderBattleValue}, "
+            + $"defenderBV={offensive.DefenderBattleValue}, "
             + $"estimatedDefenderBV={offensive.EstimatedDefenderBattleValue}";
     }
 }

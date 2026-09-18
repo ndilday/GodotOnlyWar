@@ -5,9 +5,12 @@ using OnlyWar.Generation.World;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Extensions;
 using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Missions.Ambush;
+using OnlyWar.Operations.Missions.Assault;
 using OnlyWar.Operations.Missions.Raid;
 using OnlyWar.Operations.Missions.Recon;
 using OnlyWar.Campaign.Strategy;
+using OnlyWar.Campaign.Strategy.Allocation;
 using OnlyWar.Operations.StrategicCombat;
 using OnlyWar.Campaign.Turns;
 using OnlyWar.Domain.Fleets;
@@ -89,7 +92,15 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void GenerateFactionOrders_NewlyRevealedUnrestOpensWithStrategicAmbush()
+    // Surprise decorates the advance instead of replacing it. The mission stays an Advance - and so
+    // keeps MissionReturnPolicy.Hold - because a force sized at twice the defender is there to TAKE the
+    // region, and MissionType.Ambush would have had it strike once and withdraw.
+    //
+    // On THIS path (Unrest always resolves through strategic combat) OpensWithAmbush is carried but not
+    // consumed: StrategicCombatResolver derives surprise from the attacker/defender awareness
+    // differential, which already covers a revolt rising inside a blind PDF region. The flag is what the
+    // tactical opening-ambush chain reads.
+    public void GenerateFactionOrders_NewlyRevealedUnrestAdvancesWithSurprise()
     {
         Faction unrest = BuildFaction(20, "Insurrectionists", false, false, GrowthType.Unrest);
         Faction pdf = CreateDefaultFaction(21);
@@ -106,7 +117,8 @@ public class FactionStrategyControllerTests
 
         Assert.Contains(orders, order =>
             order.Mission is StrategicCombatMission mission
-            && mission.MissionType == MissionType.Ambush);
+            && mission.MissionType == MissionType.Advance
+            && order.OpensWithAmbush);
         Assert.False(rebels.HasEmergenceAdvantage);
     }
 
@@ -321,7 +333,7 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void GenerateFactionOrders_LargeUnknownTargetReconSendsOneScoutSquad()
+    public void GenerateFactionOrders_LargeUnknownTargetReconSendsLedScoutSquads()
     {
         RNG.Reset(1234);
         // Deliberately a private copy of TestModelFactory's squad template rather than the shared
@@ -359,13 +371,24 @@ public class FactionStrategyControllerTests
 
         List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
-        // One scout squad is the probe. The old rule sized the sweep by battle value and let the
-        // generator buy any templates that fit, which is how leaderless formations ended up on
-        // reconnaissance; the squad count is now what bounds it.
+        // A sweep is scout squads, each of which must have a leader. That is the property this test
+        // exists for: the original defect was an AssaultForce request letting the generator buy
+        // leaderless formations, which then dragged the pooled observation margin down.
+        //
+        // The squad COUNT is deliberately a range rather than one. Recon is the only mission type that
+        // fans out into independent per-squad rolls (MissionForcePolicy.IndependentSquads), and
+        // ReconIntelligenceRules pools their margins under a square root, so more squads genuinely
+        // learn more. ForceAllocationConstants.ReconSaturationSquads is where that stops paying.
         Order reconOrder = Assert.Single(orders, o => o.Mission.MissionType == MissionType.Recon);
-        Squad scouts = Assert.Single(reconOrder.AssignedSquads);
-        Assert.Equal(swarmSquad.Id, scouts.SquadTemplate.Id);
-        Assert.NotNull(scouts.SquadLeader);
+        Assert.NotEmpty(reconOrder.AssignedSquads);
+        Assert.True(
+            reconOrder.AssignedSquads.Count <= ForceAllocationConstants.ReconSaturationSquads + 1,
+            $"a sweep must not grow past its saturation; sent {reconOrder.AssignedSquads.Count}");
+        Assert.All(reconOrder.AssignedSquads, squad =>
+        {
+            Assert.Equal(swarmSquad.Id, squad.SquadTemplate.Id);
+            Assert.NotNull(squad.SquadLeader);
+        });
     }
 
     [Fact]
@@ -418,6 +441,69 @@ public class FactionStrategyControllerTests
 
         Assert.IsType<LightningRaidMissionStep>(
             MissionStepOrchestrator.GetMainInitialStep(execution));
+    }
+
+    [Fact]
+    public void MissionStepOrchestrator_AdvanceWithSurpriseOpensFromAmbush()
+    {
+        RegionFaction target = CreateTargetRegionFaction(CreateDefaultFaction(), population: 1_000, garrison: 100);
+        Squad squad = TestModelFactory.CreateSquad("Risen",
+            TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate));
+        squad.CurrentRegion = target.Region;
+        Order order = new([squad], false, true, Aggression.Normal,
+            new Mission(MissionType.Advance, target, 0))
+        {
+            OpensWithAmbush = true
+        };
+        MissionContext context = new(order, [], []);
+        MissionExecutionContext execution = TestExecutionContextFactory.CreateMission(
+            context,
+            new StaticRNG());
+
+        // The advance opens from ambush but remains an Advance, so MissionReturnPolicy still says Hold
+        // and the force keeps whatever it takes.
+        Assert.IsType<PositionAmbushMissionStep>(
+            MissionStepOrchestrator.GetMainInitialStep(execution));
+        Assert.Equal(
+            MissionReturnPolicy.Hold,
+            MissionReturnPolicies.GetPolicy(order.Mission.MissionType));
+    }
+
+    [Fact]
+    public void MissionStepOrchestrator_AdvanceWithoutSurpriseGoesStraightToAssault()
+    {
+        RegionFaction target = CreateTargetRegionFaction(CreateDefaultFaction(), population: 1_000, garrison: 100);
+        Squad squad = TestModelFactory.CreateSquad("Advancing",
+            TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate));
+        squad.CurrentRegion = target.Region;
+        Order order = new([squad], false, true, Aggression.Normal,
+            new Mission(MissionType.Advance, target, 0));
+        MissionContext context = new(order, [], []);
+        MissionExecutionContext execution = TestExecutionContextFactory.CreateMission(
+            context,
+            new StaticRNG());
+
+        Assert.IsType<PrepareAssaultMissionStep>(
+            MissionStepOrchestrator.GetMainInitialStep(execution));
+    }
+
+    // Surprise is one turn, not one use. An advantage that expired only when it was SPENT accumulated
+    // silently in any region that could not afford to attack the week it revealed.
+    [Fact]
+    public void GenerateFactionOrders_EmergenceAdvantageExpiresEvenWhenUnused()
+    {
+        Faction unrest = BuildFaction(20, "Insurrectionists", false, false, GrowthType.Unrest);
+        Planet planet = CreatePlanet();
+        Region region = planet.Regions[0];
+        AddRegionFaction(planet, region, unrest, population: 20_000, organization: 100);
+        RegionFaction rebels = region.RegionFactionMap[unrest.Id];
+        rebels.HasEmergenceAdvantage = true;
+        // No enemy anywhere on the world, so nothing can be launched with the advantage.
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(unrest, sector);
+
+        Assert.False(rebels.HasEmergenceAdvantage);
     }
 
     [Fact]
@@ -552,13 +638,23 @@ public class FactionStrategyControllerTests
             enemyFront, FactionThreatAssessment.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
+        long needyBefore = 500;
         new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
-        // Needy is topped up to exactly its required garrison and the rear paid for it. The
-        // requirement is ExpectedAttackerCommitFraction of the 5,000-strong enemy front next door,
-        // because an attacker does not throw its whole regional strength at one border.
-        Assert.Equal(2_500, needy.RegionFactionMap[attacker.Id].MilitaryStrength);
-        Assert.True(rear.RegionFactionMap[attacker.Id].MilitaryStrength < 10_000);
+        // The rear pays, and the needy region gains. The exact figure is deliberately no longer
+        // asserted: reinforcement is not a dedicated pass that tops a region up to its requirement any
+        // more, it is the rear region losing a bid for its own troops to the neighbour's Defend task.
+        // How much crosses therefore depends on what else those troops were wanted for, which is the
+        // point of the change - the old pass moved the full shortfall before anything else was even
+        // considered.
+        long rearAfter = rear.RegionFactionMap[attacker.Id].MilitaryStrength;
+        long needyAfter = needy.RegionFactionMap[attacker.Id].MilitaryStrength;
+        Assert.True(needyAfter > needyBefore,
+            $"the threatened region must be reinforced; held {needyAfter} against {needyBefore}");
+        Assert.True(rearAfter < 10_000, "the rear region must have paid for it");
+        // And it never sends more than the threat actually calls for.
+        Assert.True(needyAfter <= 2_500,
+            $"reinforcement must stay within the perceived requirement; held {needyAfter}");
     }
 
     [Fact]
@@ -580,45 +676,49 @@ public class FactionStrategyControllerTests
         RegionFaction target = CreateTargetRegionFaction(raider, population: 1000, carryingCapacity: 5000);
 
         // A devouring swarm counts the carrying capacity it will eat; a non-consumer only the population.
-        Assert.Equal(6000.0, FactionOffensiveEvaluator.CalculateOffensiveReward(target, consumer, 1, 1));
-        Assert.Equal(1000.0, FactionOffensiveEvaluator.CalculateOffensiveReward(target, raider, 1, 1));
+        Assert.Equal(6000.0, FactionOffensiveEvaluator.CalculateOffensiveReward(target, consumer));
+        Assert.Equal(1000.0, FactionOffensiveEvaluator.CalculateOffensiveReward(target, raider));
     }
 
+    // Reward is a property of the TARGET. It used to be multiplied by the force that happened to be
+    // spare beside it, so a region's worth moved whenever troops moved - which under marginal
+    // allocation would have the auction count force twice, once in the importance and again in the
+    // value curve.
     [Fact]
-    public void ChooseBestOffensive_PicksHighestRewardToRiskAmongWinnable()
+    public void CalculateOffensiveReward_DoesNotDependOnTheAttackersAvailableForce()
+    {
+        Faction raider = CreateNonPlayerFaction();
+        RegionFaction target = CreateTargetRegionFaction(raider, population: 1000);
+
+        Assert.Equal(1000.0, FactionOffensiveEvaluator.CalculateOffensiveReward(target, raider));
+    }
+
+    // ChooseBestOffensive is gone. Picking ONE target and then discovering downstream whether it could
+    // be afforded is precisely the shape the allocation auction replaces: targets are now priced
+    // against each other and against everything else a faction could do, and affordability is what the
+    // value curve expresses rather than a gate applied beforehand. What survives from those three
+    // tests is the ranking itself, which is now the assault task's importance.
+    [Fact]
+    public void RewardRiskScore_PrefersTheRicherTargetEvenWithATougherDefender()
     {
         Faction attacker = CreateNonPlayerFaction();
-        // Easy but poor: winnable, low reward.
         var easy = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 500);
-        // Richer: also winnable, far better reward-to-risk despite a tougher defender.
         var rich = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 200, reward: 5000);
 
-        var chosen = FactionOffensiveEvaluator.ChooseBestOffensive([easy, rich]);
-
-        Assert.Same(rich, chosen);
+        Assert.True(FactionOffensiveEvaluator.RewardRiskScore(rich)
+            > FactionOffensiveEvaluator.RewardRiskScore(easy));
     }
 
+    // Winnability now takes the force as an argument instead of reading it off the target, so the same
+    // target is winnable or not depending on what the auction is willing to spend on it.
     [Fact]
-    public void ChooseBestOffensive_SkipsAnUnwinnableRichTargetForAWinnableOne()
-    {
-        // The old logic could pick a single "best" target and then a downstream strength check
-        // would veto the whole turn; now an unwinnable target is simply excluded from selection.
-        Faction attacker = CreateNonPlayerFaction();
-        var unwinnable = Offensive(CreateTargetRegionFaction(attacker), attackForce: 100, estimatedDefenderBv: 1000, reward: 1_000_000_000);
-        var winnable = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 500);
-
-        var chosen = FactionOffensiveEvaluator.ChooseBestOffensive([unwinnable, winnable]);
-
-        Assert.Same(winnable, chosen);
-    }
-
-    [Fact]
-    public void ChooseBestOffensive_ReturnsNullWhenNothingIsWinnable()
+    public void IsWinnable_AnswersForTheForceOffered_NotForWhateverWasSpare()
     {
         Faction attacker = CreateNonPlayerFaction();
-        var unwinnable = Offensive(CreateTargetRegionFaction(attacker), attackForce: 100, estimatedDefenderBv: 1000, reward: 5000);
+        var offensive = Offensive(CreateTargetRegionFaction(attacker), attackForce: 0, estimatedDefenderBv: 1000, reward: 5000);
 
-        Assert.Null(FactionOffensiveEvaluator.ChooseBestOffensive([unwinnable]));
+        Assert.False(FactionOffensiveEvaluator.IsWinnable(offensive, 100));
+        Assert.True(FactionOffensiveEvaluator.IsWinnable(offensive, 2000));
     }
 
     // Removed with the mechanic: IsWinnable_ProvocationLowersTheRequiredForceRatio covered
@@ -896,7 +996,6 @@ public class FactionStrategyControllerTests
         {
             TargetRegion = target.Region,
             TargetFaction = target,
-            AvailableAttackingForce = attackForce,
             EstimatedDefenderBattleValue = estimatedDefenderBv,
             DefenderBattleValue = estimatedDefenderBv,
             Reward = reward

@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using OnlyWar.Campaign.Strategy;
+using OnlyWar.Campaign.Strategy.Allocation;
 using StrategyPotentialOffensive = OnlyWar.Campaign.Strategy.PotentialOffensive;
 using OnlyWar.Runtime.Allocators;
 
@@ -17,11 +18,12 @@ public class FactionStrategyController
 {
     private readonly IRNG _random;
     private readonly FactionBehaviorRulesProfile _behaviorRules;
-    private readonly FactionReinforcementPlanner _reinforcementPlanner;
+    private readonly IReadOnlyDictionary<int, ForceDoctrineWeights> _factionDoctrines;
     private readonly FactionDevelopmentPlanner _developmentPlanner;
     private readonly FactionConsumptionPlanner _consumptionPlanner;
     private readonly FactionReconPatrolPlanner _reconPatrolPlanner;
     private readonly FactionOffensiveOrderBuilder _offensiveOrderBuilder;
+    private readonly ForceTaskCommitter _committer;
 
     /// <summary>
     /// Explicit planning dependencies used by session-owned production callers and isolated tests.
@@ -31,19 +33,22 @@ public class FactionStrategyController
     public FactionStrategyController(
         IRNG random,
         FactionBehaviorRulesProfile behaviorRules = null,
-        IPersistentIdAllocator identity = null)
+        IPersistentIdAllocator identity = null,
+        IReadOnlyDictionary<int, ForceDoctrineWeights> factionDoctrines = null)
     {
         _random = random ?? throw new ArgumentNullException(nameof(random));
         _behaviorRules = behaviorRules;
+        // Absent doctrine is intentionally allowed, exactly as a missing behavior profile is: detached
+        // fixtures and any faction whose row has not been authored fall back to the balanced defaults.
+        _factionDoctrines = factionDoctrines;
         identity ??= new PersistentIdAllocator();
-        _reinforcementPlanner = new FactionReinforcementPlanner();
         _developmentPlanner = new FactionDevelopmentPlanner(identity);
         _consumptionPlanner = new FactionConsumptionPlanner(identity);
         _reconPatrolPlanner = new FactionReconPatrolPlanner(identity);
         _offensiveOrderBuilder = new FactionOffensiveOrderBuilder(identity: identity);
+        _committer = new ForceTaskCommitter(
+            _developmentPlanner, _consumptionPlanner, _reconPatrolPlanner, _offensiveOrderBuilder);
     }
-
-    private const int MaxMissionPlanningIterations = 24;
 
     // When defensiveOnly is set (the Imperial PDF / default faction — PRD §4.24), the faction plans
     // only to hold: it raises fortifications and listening posts, and under assault may run defensive
@@ -87,7 +92,34 @@ public class FactionStrategyController
             }
         }
 
+        // Surprise lasts the one planning pass that follows the reveal, spent or not. It is cleared here
+        // rather than where it is consumed because an advantage that only expired on USE was an
+        // un-decaying bank: a region that revealed and was then frozen out of acting by its own
+        // defensive reserve kept the drop on its neighbours indefinitely, and would have cashed it many
+        // weeks later the moment it could afford an attack.
+        ClearEmergenceAdvantages(faction, sector);
         return allNewOrders;
+    }
+
+    private ForceDoctrineWeights DoctrineFor(Faction faction) =>
+        _factionDoctrines != null
+        && faction != null
+        && _factionDoctrines.TryGetValue(faction.Id, out ForceDoctrineWeights doctrine)
+            ? doctrine
+            : ForceDoctrineWeights.Balanced;
+
+    private static void ClearEmergenceAdvantages(Faction faction, Sector sector)
+    {
+        foreach (Planet planet in sector.Planets.Values)
+        {
+            foreach (Region region in planet.Regions)
+            {
+                if (region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction regionFaction))
+                {
+                    regionFaction.HasEmergenceAdvantage = false;
+                }
+            }
+        }
     }
 
     private void GeneratePlanetOrders(
@@ -105,26 +137,30 @@ public class FactionStrategyController
 
         if (!factionRegionsOnPlanet.Any()) return;
 
-        // PRIORITY 1: ASSESS FORCES AND GARRISON NEEDS
+        // ASSESS FORCES
+        //
+        // The defensive reserve is NO LONGER SUBTRACTED HERE. It used to be taken off the top -
+        // `spare = organized - required`, with `required` an unbounded want summed over every believed
+        // neighbour - and every later policy read the residual. A region facing three enemies therefore
+        // reserved its whole strength and then looked, to the offensive evaluator, the patrol planner,
+        // the development planner and the staging planner alike, like a region with no troops at all.
+        // That is the freeze. Defence is now a task that bids for this budget like any other.
         var regionalForceStates = new List<RegionForceState>();
         foreach (var regionFaction in factionRegionsOnPlanet)
         {
             long requiredDefensiveBattleValue =
                 FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(regionFaction);
             long organizedTroops = regionFaction.GetDeployedStrength();
-            long spareTroops = Math.Max(0, organizedTroops - requiredDefensiveBattleValue);
             long defensiveShortfall = Math.Max(0, requiredDefensiveBattleValue - organizedTroops);
-            // The requirement is a want and is deliberately unbounded (it is derived from the enemy
-            // strength next door, not from this region's own army), so what the region actually
-            // commits is the want clamped to the troops that exist. Persisting it on the region
-            // faction is the point of the clamp: the tactical assault path materialises the defence
-            // days after this planning pass, and reading the raw want there let a region field several
-            // times its entire organized strength in soldiers generated from nothing.
-            long assignedDefensiveBattleValue = Math.Min(organizedTroops, requiredDefensiveBattleValue);
-            regionFaction.AssignedDefensiveBattleValue = assignedDefensiveBattleValue;
+            // Cleared before the auction runs, and set again by ForceTaskCommitter from what the
+            // region actually committed. It stays persisted, and stays clamped to the troops that
+            // exist: the tactical assault path materialises the defence days after this pass, and
+            // reading an unbounded want there let a region field several times its entire organized
+            // strength in soldiers generated from nothing.
+            regionFaction.AssignedDefensiveBattleValue = 0;
             regionalForceStates.Add(new RegionForceState(
-                regionFaction, requiredDefensiveBattleValue, assignedDefensiveBattleValue,
-                spareTroops, defensiveShortfall));
+                regionFaction, requiredDefensiveBattleValue, 0,
+                organizedTroops, defensiveShortfall));
         }
 
         long organizedTotal = factionRegionsOnPlanet
@@ -139,145 +175,64 @@ public class FactionStrategyController
                 $"{s.RegionFaction.Region.Name}:pop={s.RegionFaction.Population},mil={s.RegionFaction.MilitaryStrength},"
                 + $"org={s.RegionFaction.Organization},required={s.RequiredDefensiveBattleValue},spare={s.SpareTroops}")));
 
-        if (defensiveOnly)
+        // A defensive faction that is not yet under assault still raises listening posts on threatened
+        // borders so it is not blind when the assault lands. Sensors only, and only there - no
+        // fortifying quiet worlds and no maneuver (PRD §4.24). This one case stays outside the auction
+        // because it is a posture restriction, not an allocation decision.
+        if (defensiveOnly && !planet.IsUnderAssault())
         {
-            bool underAssault = planet.IsUnderAssault();
-            int beforeOrders = allNewOrders.Count;
-            if (planet.IsUnderAssault())
+            int beforeBorderOrders = allNewOrders.Count;
+            // This path never reaches the auction, so it has no Defend task bidding against the build.
+            // Hand it the old net-of-reserve figure rather than the region's whole strength, or a world
+            // that is merely watched digs in with everything it has.
+            foreach (RegionForceState state in regionalForceStates)
             {
-                // Under assault: dig in fully — fortifications, listening posts, organization —
-                // then post a standing patrol screen and scout the enemy regions pressing the border
-                // so the PDF fights informed rather than blind. A defensive posture still never
-                // launches an assault of its own. Development uses the same benefit-per-cost
-                // allocator as an offensive faction's; only the surrounding posture differs.
-                _developmentPlanner.GenerateEfficientDevelopmentOrders(
-                    faction, regionalForceStates, allNewOrders);
-                PlanDefensiveReconOnPlanet(
-                    faction, planet, regionalForceStates, allNewOrders, random, offensiveEvaluator);
-                _reconPatrolPlanner.PlanPatrolMissionsOnPlanet(
-                    faction, planet, regionalForceStates, allNewOrders, random);
+                state.SpareTroops = Math.Max(
+                    0, state.SpareTroops - state.RequiredDefensiveBattleValue);
             }
-            else
-            {
-                // Not yet formally under assault, but a PDF facing an enemy massing across a
-                // border raises listening posts there so it is not blind when the assault lands.
-                // Sensors only, and only on threatened borders — no fortifying quiet worlds, no
-                // maneuver (PRD §4.24).
-                _developmentPlanner.GenerateBorderListeningPosts(
-                    faction, regionalForceStates, allNewOrders);
-            }
+            _developmentPlanner.GenerateBorderListeningPosts(
+                faction, regionalForceStates, allNewOrders);
             GameLog.Debug(() =>
-                $"AI plan {faction.Name}/{planet.Name}: defensive choice="
-                + $"{(underAssault ? "under assault; full development" : "border listening posts")}, "
-                + $"ordersAdded={allNewOrders.Count - beforeOrders}, "
-                + $"construction={SummarizeConstructionOrders(allNewOrders.Skip(beforeOrders))}");
+                $"AI plan {faction.Name}/{planet.Name}: defensive choice=border listening posts, "
+                + $"ordersAdded={allNewOrders.Count - beforeBorderOrders}, "
+                + $"construction={SummarizeConstructionOrders(allNewOrders.Skip(beforeBorderOrders))}");
             return;
         }
 
-        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: {factionRegionsOnPlanet.Count} regions, "
-            + $"spareTroops={regionalForceStates.Sum(s => s.SpareTroops)}");
+        // ONE AUCTION FOR THE WHOLE PLANET
+        //
+        // Tasks are keyed by objective rather than by region, which is what lets several regions feed
+        // one assault and what lets two regions garrisoning against the same neighbour answer a single
+        // shared threat. Bids are ranked by marginal value PER BATTLE VALUE, so a task stops attracting
+        // force when it saturates rather than when a fixed priority says the next policy may begin.
+        List<StrategyPotentialOffensive> offensives =
+            offensiveEvaluator.IdentifyPotentialOffensivesOnPlanet(faction, planet, regionalForceStates);
+        offensiveEvaluator.LogPotentialOffensives(faction, planet, offensives);
 
-        // PRIORITY 2: PLAN REGIONAL MISSIONS
-        PlanRegionalMissionsOnPlanet(
-            faction, planet, regionalForceStates, allNewOrders, random, offensiveEvaluator);
-        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: regional missions done ({allNewOrders.Count} orders)");
+        SharedThreatLedger threats = new();
+        List<ForceTask> tasks = new ForceTaskBuilder(_behaviorRules, DoctrineFor(faction)).Build(
+            faction, planet, regionalForceStates, offensives, threats, defensiveOnly);
+        List<ForceTaskAward> awards = new ForceAllocationAuction(threats).Run(
+            faction, planet, tasks, regionalForceStates);
 
-        // PRIORITY 3: PLAN DEVELOPMENT
-        if (FactionThreatAssessment.HasPublicEnemyOnPlanet(faction, planet))
-        {
-            _developmentPlanner.GenerateEfficientDevelopmentOrders(
-                faction, regionalForceStates, allNewOrders);
-            GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: development done ({allNewOrders.Count} orders)");
-        }
-        else
-        {
-            GameLog.Debug(() =>
-                $"AI plan {faction.Name}/{planet.Name}: development skipped; no public enemy threat on planet");
-        }
+        _committer.Commit(
+            faction, planet, awards, regionalForceStates, allNewOrders, random, DoctrineFor(faction));
 
-        // PRIORITY 4: PLAN PATROL MISSIONS
-        _reconPatrolPlanner.PlanPatrolMissionsOnPlanet(
-            faction, planet, regionalForceStates, allNewOrders, random);
-        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: patrols done ({allNewOrders.Count} orders)");
-
-        // PRIORITY 5/6: PLAN SWARM OPERATIONS
-        // A Consumption faction spends what is left on spreading and then feeding. They come last so
-        // both receive the true residual - what survives the defensive reserve, offensives,
-        // development and the patrol screen - and spreading precedes feeding because a consumer on the
-        // move is not grazing.
-        if (faction.GrowthType == GrowthType.Consumption)
-        {
-            _consumptionPlanner.PlanConsumptionExpansionOnPlanet(faction, planet, regionalForceStates);
-            _consumptionPlanner.PlanFeedMissionsOnPlanet(
-                faction, planet, regionalForceStates, allNewOrders);
-            GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: consumption operations done ({allNewOrders.Count} orders)");
-        }
+        GameLog.Debug(() =>
+            $"AI plan {faction.Name}/{planet.Name}: tasks={tasks.Count}, awards={awards.Count}, "
+            + $"allocated={awards.Sum(a => a.BattleValue)}, unallocated={regionalForceStates.Sum(s => s.SpareTroops)}, "
+            + $"orders={allNewOrders.Count}, spend=[" + SummarizeAwards(awards) + "]");
     }
 
-    // Defensive reconnaissance: a purely-defensive faction (the PDF under assault) never assaults,
-    // but it does scout the enemy regions massing on its borders — the recon-only slice of the same
-    // targeting machinery. The intel it gains sharpens its garrison sizing against those neighbours
-    // (CalculateRequiredDefensiveBattleValue) and denies attackers the from-within surprise edge.
-    private void PlanDefensiveReconOnPlanet(
-        Faction faction,
-        Planet planet,
-        List<RegionForceState> states,
-        List<Order> allOrders,
-        IRNG random,
-        FactionOffensiveEvaluator offensiveEvaluator)
+    // Where the planet's battle value actually went, by task family. Without this the plan line says
+    // only that everything was allocated, which is true of a faction that spent its whole army on
+    // patrols and of one that stormed three regions alike.
+    private static string SummarizeAwards(IEnumerable<ForceTaskAward> awards)
     {
-        List<StrategyPotentialOffensive> potentialTargets = offensiveEvaluator
-            .IdentifyPotentialOffensivesOnPlanet(faction, planet, states);
-        StrategyPotentialOffensive reconTarget = FactionOffensiveEvaluator.ChooseReconTarget(
-            potentialTargets.Where(o => !FactionOffensiveEvaluator.IsWellReconnoitred(o, faction.Id)).ToList());
-        if (reconTarget != null)
-        {
-            _reconPatrolPlanner.IssueReconMission(faction, reconTarget, allOrders, random);
-        }
-    }
-
-    private void PlanRegionalMissionsOnPlanet(
-        Faction faction,
-        Planet planet,
-        List<RegionForceState> regionalForceStates,
-        List<Order> allOrders,
-        IRNG random,
-        FactionOffensiveEvaluator offensiveEvaluator)
-    {
-        _reinforcementPlanner.PlanGarrisonReinforcement(faction, planet, regionalForceStates);
-        _reinforcementPlanner.PlanFrontReinforcement(faction, planet, regionalForceStates);
-        HashSet<string> plannedTargets = new();
-
-        for (int i = 0; i < MaxMissionPlanningIterations; i++)
-        {
-            List<StrategyPotentialOffensive> potentialOffensives =
-                offensiveEvaluator.IdentifyPotentialOffensivesOnPlanet(
-                    faction, planet, regionalForceStates);
-            offensiveEvaluator.LogPotentialOffensives(faction, planet, potentialOffensives);
-
-            MissionCandidate candidate = offensiveEvaluator.ChooseBestMissionCandidate(
-                faction, potentialOffensives, plannedTargets);
-            if (candidate == null) break;
-
-            bool issued = candidate.Plan switch
-            {
-                OffensivePlan.Assault => _offensiveOrderBuilder.IssueAssault(
-                    faction, candidate.Offensive, regionalForceStates, allOrders, random),
-                OffensivePlan.Raid => _offensiveOrderBuilder.IssueLightningRaid(
-                    faction, candidate.Offensive, regionalForceStates, allOrders, random),
-                OffensivePlan.Recon => _reconPatrolPlanner.IssueReconMission(
-                    faction, candidate.Offensive, regionalForceStates, allOrders, random),
-                _ => false
-            };
-
-            // A candidate that cannot be afforded is not a reason to stop planning the whole planet.
-            // This used to break, so one target whose staging regions held less than
-            // MinimumForceRequest cancelled every other option a faction had - and because recon was
-            // scored per point of available force, that unaffordable candidate was usually the one
-            // ranked first. Mark it planned so the next pass moves on to the rest.
-            plannedTargets.Add(FactionOffensiveEvaluator.MissionTargetKey(candidate.Offensive));
-            if (!issued) continue;
-        }
+        return string.Join(", ", awards
+            .GroupBy(award => award.Task.Kind)
+            .OrderByDescending(group => group.Sum(award => award.BattleValue))
+            .Select(group => $"{group.Key}={group.Sum(award => award.BattleValue)}"));
     }
 
     private static string SummarizeConstructionOrders(IEnumerable<Order> orders)

@@ -755,48 +755,75 @@ namespace OnlyWar.Campaign.Turns
                     .FirstOrDefault();
         }
 
+        /// <summary>
+        /// What it costs to land on a region at a strength that can hold it: the defender's battle
+        /// value at the doctrine ratio, or the flat undefended price on empty ground.
+        /// </summary>
+        private long LandingCost(Region region, Faction invasionFaction)
+        {
+            long defending = DefendingBattleValue(region, invasionFaction);
+            return defending > 0
+                ? (long)Math.Ceiling(defending * _turn.Rules.FactionBehaviorRules.DefendedLandingRatio)
+                : _turn.Rules.FactionBehaviorRules.UndefendedLandingBattleValue;
+        }
+
         private List<(Region Region, long BattleValue)> AllocateLanding(
             Planet planet, Faction invasionFaction, long available)
         {
-            List<Region> defended = planet.Regions
-                .Where(region => DefendingBattleValue(region, invasionFaction) > 0)
-                .OrderByDescending(region => DefendingBattleValue(region, invasionFaction))
-                .ThenBy(region => region.Id)
-                .ToList();
-            List<Region> undefended = planet.Regions
-                .Where(region => !defended.Contains(region))
-                .OrderByDescending(region => region.Population)
-                .ThenBy(region => region.Id)
-                .ToList();
-            List<(Region Region, long BattleValue)> result = [];
+            // Two rules, both about landing a force that can actually fight rather than the largest
+            // number of flags on the map.
+            //
+            // 1. NEVER LAND BELOW THE WINNING RATIO. The allocation used to be
+            //    Math.Min(remaining, desired), so once the force ran low the next region was landed on
+            //    anyway with whatever was left - a beachhead deliberately sized under
+            //    DefendedLandingRatio, which is to say one that loses. The leftover now rolls into the
+            //    primary landing instead, where it reinforces a fight that can be won.
+            //
+            // 2. PREFER GROUND BESIDE GROUND ALREADY TAKEN. Landings used to be chosen purely by
+            //    defending strength and then by population, so an invasion scattered across a planet
+            //    and every beachhead had hostile neighbours on all sides - which then charged each
+            //    landing an enormous defensive requirement for enemies it had invited on itself.
+            //    Clustering keeps the frontage short.
             long remaining = Math.Max(0, available);
+            List<(Region Region, long BattleValue)> result = [];
+            HashSet<Region> chosen = [];
+            List<Region> pool = planet.Regions.ToList();
 
-            foreach (Region region in defended)
+            while (remaining > 0)
             {
-                if (remaining <= 0) break;
-                long desired = (long)Math.Ceiling(
-                    DefendingBattleValue(region, invasionFaction) * _turn.Rules.FactionBehaviorRules.DefendedLandingRatio);
-                long allocation = Math.Min(remaining, desired);
-                result.Add((region, allocation));
+                Region next = pool
+                    .Where(region => !chosen.Contains(region)
+                        && LandingCost(region, invasionFaction) <= remaining)
+                    // Adjacency first, but only once there is something to be adjacent to.
+                    .OrderByDescending(region => chosen.Count > 0
+                        && region.GetAdjacentRegions().Any(chosen.Contains))
+                    .ThenByDescending(region => DefendingBattleValue(region, invasionFaction) > 0)
+                    .ThenByDescending(region => DefendingBattleValue(region, invasionFaction))
+                    .ThenByDescending(region => region.Population)
+                    .ThenBy(region => region.Id)
+                    .FirstOrDefault();
+                if (next == null) break;
+
+                long allocation = LandingCost(next, invasionFaction);
+                result.Add((next, allocation));
+                chosen.Add(next);
                 remaining -= allocation;
             }
-            foreach (Region region in undefended)
-            {
-                if (remaining <= 0) break;
-                long allocation = Math.Min(remaining, _turn.Rules.FactionBehaviorRules.UndefendedLandingBattleValue);
-                result.Add((region, allocation));
-                remaining -= allocation;
-            }
 
-            if (remaining > 0)
+            if (remaining > 0 && result.Count > 0)
             {
-                Region primary = defended.FirstOrDefault() ?? undefended.FirstOrDefault();
-                if (primary != null)
-                {
-                    int index = result.FindIndex(item => item.Region == primary);
-                    if (index < 0) result.Add((primary, remaining));
-                    else result[index] = (primary, result[index].BattleValue + remaining);
-                }
+                // Everything unspent reinforces the first beachhead rather than buying a losing one.
+                result[0] = (result[0].Region, result[0].BattleValue + remaining);
+            }
+            else if (result.Count == 0 && remaining > 0)
+            {
+                // Nothing on the planet is affordable at the winning ratio. Commit everything to the
+                // cheapest objective rather than declining to land at all - the force is already here.
+                Region fallback = pool
+                    .OrderBy(region => LandingCost(region, invasionFaction))
+                    .ThenBy(region => region.Id)
+                    .FirstOrDefault();
+                if (fallback != null) result.Add((fallback, remaining));
             }
             return result;
         }

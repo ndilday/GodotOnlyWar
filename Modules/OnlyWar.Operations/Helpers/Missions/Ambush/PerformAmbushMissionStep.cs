@@ -18,7 +18,17 @@ namespace OnlyWar.Operations.Missions.Ambush
 
         public bool ConsumesDay => true;
 
+        // What follows the ambush instead of withdrawing. Null is the standalone ambush: strike and
+        // exfiltrate. An opening ambush on an advance passes the assault step, so the force presses on
+        // into the region it just hit rather than melting away from ground it came to take.
+        private readonly IMissionStep _continuation;
+
         public PerformAmbushMissionStep() { }
+
+        public PerformAmbushMissionStep(IMissionStep continuation)
+        {
+            _continuation = continuation;
+        }
 
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
@@ -33,7 +43,11 @@ namespace OnlyWar.Operations.Missions.Ambush
             {
                 context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No viable target remained for ambush.");
-                return missionSquads.Count > 0 && context.MustExfiltrate
+                if (missionSquads.Count == 0) return MissionStepResult.Complete;
+                // Nothing turned out to be ambushed. For an opening ambush that is not the end of the
+                // week - the region may simply be empty, which is the assault step's unopposed branch.
+                if (_continuation != null) return MissionStepResult.Continue(_continuation);
+                return context.MustExfiltrate
                     ? MissionStepResult.Continue(new ExfiltrateMissionStep())
                     : MissionStepResult.Complete;
             }
@@ -105,7 +119,7 @@ namespace OnlyWar.Operations.Missions.Ambush
                     context.AddLog($"Day {context.DaysElapsed}: Force withdrew from the ambush under fire.");
                     return MissionStepResult.Complete;
                 }
-                return MissionStepResult.Continue(new ExfiltrateMissionStep());
+                return MissionStepResult.Continue(_continuation ?? new ExfiltrateMissionStep());
             }
 
             // A spoiled ambush turns into a meeting engagement, and the exfiltration is reached as
@@ -119,7 +133,7 @@ namespace OnlyWar.Operations.Missions.Ambush
                 $"Day {context.DaysElapsed}: Ambush was discovered before it could be sprung; "
                 + "the enemy engaged on even terms.");
             return MissionStepResult.Continue(
-                new MeetingEngagementMissionStep(), margin, new ExfiltrateMissionStep());
+                new MeetingEngagementMissionStep(), margin, _continuation ?? new ExfiltrateMissionStep());
         }
 
         private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>

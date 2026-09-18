@@ -58,9 +58,19 @@ namespace OnlyWar.Operations.Intelligence
                         FactionIntelBelief previous = observer.GetTargetBelief(
                             region,
                             target.PlanetFaction.Faction);
-                        float delta = FactionIntelligenceRules.ConfirmedThreshold
-                            - (previous?.Evidence ?? 0f);
-                        if (delta <= 0f) continue;
+                        // Evidence stops climbing at Confirmed, but the SIGHTING still happens. This
+                        // used to `continue` here, which threw the measurement away along with the
+                        // evidence increment - so once a region was seen well enough to confirm, its
+                        // believed strength was frozen at whatever it was that week and never updated
+                        // again. Battles, withdrawals and reinforcement all went unnoticed.
+                        //
+                        // Monody Prime, 2026-09-17: the Orks believed 10,000 in Monody Prime Beta while
+                        // 218 actually stood there, sized an assault at twice the belief, and committed
+                        // 20,000 to kill 164. "How sure am I that they are there" and "how strong are
+                        // they" are different questions, and only the first one saturates.
+                        float delta = Math.Max(
+                            FactionIntelligenceRules.RepeatSightingEvidence,
+                            FactionIntelligenceRules.ConfirmedThreshold - (previous?.Evidence ?? 0f));
 
                         ApplyObservation(
                             planet,

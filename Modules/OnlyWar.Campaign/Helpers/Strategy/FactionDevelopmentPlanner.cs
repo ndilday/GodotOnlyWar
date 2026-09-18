@@ -25,113 +25,130 @@ internal sealed class FactionDevelopmentPlanner
         _identity = identity ?? new PersistentIdAllocator();
     }
 
-    // Each pass either completes a whole level or drains a region below the minimum spend. The cap is
-    // a backstop against degenerate floating-point behaviour.
-    private const int MaxDevelopmentIterations = 256;
     internal const long MinimumDevelopmentSpendTroops = 100;
 
     private const long DefenseBaseBuildCost = 2;
     private const int DefenseCostCapLevel = 19;
 
-    private sealed class DevelopmentOption
+    /// <summary>
+    /// Every construction option open to a region, as raw (cost, benefit, amount) figures for the
+    /// allocation auction to price.
+    /// </summary>
+    /// <remarks>
+    /// The defence types are deliberately separate tasks rather than one "construct" task, so the
+    /// auction can price them against each other and against everything else. Organization is not a
+    /// fortification at all - it is whether the region can field its troops, bought in whole integer
+    /// points at a hundred times the unit cost.
+    ///
+    /// ANTI-AIR IS DELIBERATELY ABSENT. Nothing in combat resolution reads RegionFaction.AntiAir: it
+    /// reaches only the intelligence watch sums and the UI. Until a resolver consumes it, spending an
+    /// army's battle value on it is a straight loss, and the AI should not do it. Restore the entry
+    /// below when anti-air acquires an effect - the benefit expression it used was
+    /// `0.25 + (localEnemy || adjacentEnemy ? 0.5 : 0.0)`, which will need revisiting against whatever
+    /// that effect turns out to be.
+    /// </remarks>
+    internal static IEnumerable<(RegionForceState State, DefenseType Type, long Cost, double Benefit, double Amount)>
+        EnumerateDevelopmentOptions(Faction faction, RegionForceState state)
     {
-        public DefenseType DefenseType { get; set; }
-        public long Cost { get; set; }
-        public double Score { get; set; }
+        RegionFaction rf = state.RegionFaction;
+        var projected = (rf.Organization, (double)rf.ListeningPost, (double)rf.Entrenchment, (double)rf.AntiAir);
+        bool localEnemy = FactionThreatAssessment.HasLocalEnemyMilitary(faction, rf.Region);
+        bool adjacentEnemy = FactionThreatAssessment.VisibleAdjacentEnemyMilitary(faction, rf.Region) > 0;
+        float ownIntel = rf.GetOwnRegionAwareness();
+
+        long orgCost = projected.Organization < 100
+            ? (long)(Math.Pow(2, projected.Organization / 10) * (rf.Population / 10000.0f)) + 1
+            : long.MaxValue;
+        if (orgCost > 0 && orgCost != long.MaxValue)
+        {
+            yield return (state, DefenseType.Organization, orgCost,
+                (100 - projected.Organization) / 25.0 + (localEnemy ? 1.0 : 0.0), 1.0);
+        }
+
+        // Entrenchment is a MULTIPLIER on the garrison, not a good in its own right: every effect it
+        // has - StrategicCombatRules.DefenderProtection, the aftermath casualty multiplier,
+        // EntrenchmentMultiplier - scales the defenders standing in the region. Works protecting nobody
+        // protect nothing, so the benefit is scaled by how far the region is toward being manned at all.
+        //
+        // Grist Nine, 2026-09-16: the Imperial PDF spent 1,101 battle value on works against 298 on
+        // defending, and withdrew in the same week. Per point, a first level of entrenchment is a
+        // genuinely excellent deal - the build economy is logarithmic, so the first level is cheap -
+        // and priced alone it beat everything. It was multiplying a garrison that was not there.
+        double manned = state.RequiredDefensiveBattleValue <= 0
+            ? 1.0
+            : Math.Clamp(
+                rf.GetDeployedStrength() / (double)state.RequiredDefensiveBattleValue, 0.0, 1.0);
+
+        foreach ((DefenseType type, double level, double benefit) in new[]
+        {
+            // A listening post is not a multiplier - it watches ground whether or not anyone is
+            // holding it - so it keeps its standalone value.
+            (DefenseType.ListeningPost, projected.Item2,
+                1.0 + Math.Max(0, FactionThreatAssessment.GarrisonFullSightIntel - ownIntel)
+                    + (adjacentEnemy ? 1.5 : 0.0)),
+            (DefenseType.Entrenchment, projected.Item3,
+                (0.5 + (localEnemy ? 4.0 : 0.0) + (adjacentEnemy ? 2.0 : 0.0)) * manned)
+        })
+        {
+            long cost = DefenseBuildCost(CurrentLevelBand(level));
+            if (cost <= 0 || cost == long.MaxValue) continue;
+            yield return (state, type, cost,
+                benefit * SharedEfficiency(rf, type, level),
+                CurrentLevelBand(level) + 1.0 - level);
+        }
     }
 
-    internal void GenerateEfficientDevelopmentOrders(
+    /// <summary>Issues one construction order for the battle value the auction awarded it.</summary>
+    internal void IssueAllocatedConstruction(
         Faction faction,
-        List<RegionForceState> regionalForceStates,
+        RegionFaction regionFaction,
+        DefenseType defenseType,
+        long budget,
         List<Order> allOrders)
     {
-        // Project each stat as we plan this turn's builds; the stats themselves only change at
-        // resolution. Defense levels are fractional and can absorb the remaining budget.
-        Dictionary<RegionForceState, (int Org, double Det, double Ent, double Aa)> projected = regionalForceStates
-            .ToDictionary(
-                state => state,
-                state => (state.RegionFaction.Organization,
-                          state.RegionFaction.ListeningPost,
-                          state.RegionFaction.Entrenchment,
-                          state.RegionFaction.AntiAir));
+        if (regionFaction == null || budget <= 0) return;
 
-        for (int i = 0; i < MaxDevelopmentIterations; i++)
+        double amount;
+        if (defenseType == DefenseType.Organization)
         {
-            var best = regionalForceStates
-                .Where(state => state.SpareTroops >= MinimumDevelopmentSpendTroops)
-                .Select(state => (State: state, Option: BestDevelopmentOption(faction, state, projected[state])))
-                // Organization is an integer percentage bought in whole points, so it must be
-                // affordable outright; fractional defenses can absorb any budget.
-                .Where(choice => choice.Option != null
-                    && (choice.Option.DefenseType != DefenseType.Organization
-                        || choice.Option.Cost * 100L <= choice.State.SpareTroops))
-                .OrderByDescending(choice => choice.Option.Score)
-                .FirstOrDefault();
-
-            if (best.State == null || best.Option == null) break;
-
-            (int org, double det, double ent, double aa) = projected[best.State];
-            ConstructionMission mission;
-            long spend;
-            if (best.Option.DefenseType == DefenseType.Organization)
-            {
-                mission = new ConstructionMission(
-                    _identity.GetNextMissionId(),
-                    DefenseType.Organization,
-                    1,
-                    best.State.RegionFaction);
-                spend = best.Option.Cost * 100L;
-                org++;
-            }
-            else
-            {
-                double level = best.Option.DefenseType switch
-                {
-                    DefenseType.ListeningPost => det,
-                    DefenseType.Entrenchment => ent,
-                    _ => aa
-                };
-                // Buy up to the next whole level at this band's price, less if the budget runs out.
-                double toNextLevel = CurrentLevelBand(level) + 1.0 - level;
-                long costPerLevel = best.Option.Cost * 100L;
-                double amount = Math.Min(toNextLevel, (double)best.State.SpareTroops / costPerLevel);
-                spend = (long)Math.Ceiling(amount * costPerLevel);
-                mission = new ConstructionMission(
-                    _identity.GetNextMissionId(),
-                    best.Option.DefenseType,
-                    amount,
-                    best.State.RegionFaction);
-                switch (best.Option.DefenseType)
-                {
-                    case DefenseType.ListeningPost:
-                        det += amount;
-                        break;
-                    case DefenseType.Entrenchment:
-                        ent += amount;
-                        break;
-                    case DefenseType.AntiAir:
-                        aa += amount;
-                        break;
-                }
-            }
-
-            allOrders.Add(new Order(
-                _identity.GetNextOrderId(),
-                new List<Squad>(),
-                true,
-                false,
-                Aggression.Avoid,
-                mission,
-                faction));
-            best.State.SpareTroops = Math.Max(0, best.State.SpareTroops - spend);
-            projected[best.State] = (org, det, ent, aa);
-
-            GameLog.Trace(() =>
-                $"AI efficient construction {best.State.RegionFaction.PlanetFaction.Faction.Name}/"
-                + $"{best.State.RegionFaction.Region.Planet.Name}/{best.State.RegionFaction.Region.Name}: "
-                + $"{mission.ConstructionType}+{mission.BuildAmount:F2}, spend={spend}, score={best.Option.Score:F2}, "
-                + $"spareRemaining={best.State.SpareTroops}");
+            long orgCost = regionFaction.Organization < 100
+                ? (long)(Math.Pow(2, regionFaction.Organization / 10) * (regionFaction.Population / 10000.0f)) + 1
+                : long.MaxValue;
+            // Organization is an integer percentage bought in whole points, so it must be affordable
+            // outright; a partial payment buys nothing at all.
+            if (orgCost == long.MaxValue || orgCost * 100L > budget) return;
+            amount = 1.0;
         }
+        else
+        {
+            double level = defenseType switch
+            {
+                DefenseType.ListeningPost => regionFaction.ListeningPost,
+                DefenseType.Entrenchment => regionFaction.Entrenchment,
+                _ => regionFaction.AntiAir
+            };
+            long cost = DefenseBuildCost(CurrentLevelBand(level));
+            if (cost <= 0 || cost == long.MaxValue) return;
+            long costPerLevel = cost * 100L;
+            // Fractional defences absorb any budget, so a thin region builds what it can afford rather
+            // than staying blind.
+            amount = Math.Min(CurrentLevelBand(level) + 1.0 - level, budget / (double)costPerLevel);
+            if (amount <= 0.0) return;
+        }
+
+        allOrders.Add(new Order(
+            _identity.GetNextOrderId(),
+            new List<Squad>(),
+            true,
+            false,
+            Aggression.Avoid,
+            new ConstructionMission(
+                _identity.GetNextMissionId(), defenseType, amount, regionFaction),
+            faction));
+
+        GameLog.Trace(() =>
+            $"AI allocated construction {faction.Name}/{regionFaction.Region.Planet.Name}/"
+            + $"{regionFaction.Region.Name}: {defenseType}+{amount:F2}, budget={budget}");
     }
 
     internal void GenerateBorderListeningPosts(
@@ -180,42 +197,6 @@ internal sealed class FactionDevelopmentPlanner
         }
     }
 
-    private static DevelopmentOption BestDevelopmentOption(
-        Faction faction,
-        RegionForceState state,
-        (int Org, double Det, double Ent, double Aa) projected)
-    {
-        List<DevelopmentOption> options = new();
-        RegionFaction rf = state.RegionFaction;
-        bool localEnemy = FactionThreatAssessment.HasLocalEnemyMilitary(faction, rf.Region);
-        bool adjacentEnemy = FactionThreatAssessment.VisibleAdjacentEnemyMilitary(faction, rf.Region) > 0;
-        float ownIntel = rf.GetOwnRegionAwareness();
-
-        long orgCost = projected.Org < 100
-            ? (long)(Math.Pow(2, projected.Org / 10) * (rf.Population / 10000.0f)) + 1
-            : long.MaxValue;
-        AddDevelopmentOption(options, DefenseType.Organization, orgCost,
-            (100 - projected.Org) / 25.0 + (localEnemy ? 1.0 : 0.0));
-
-        AddDevelopmentOption(options, DefenseType.ListeningPost, DefenseBuildCost(CurrentLevelBand(projected.Det)),
-            (1.0 + Math.Max(0, FactionThreatAssessment.GarrisonFullSightIntel - ownIntel)
-                + (adjacentEnemy ? 1.5 : 0.0))
-                * SharedEfficiency(rf, DefenseType.ListeningPost, projected.Det));
-
-        AddDevelopmentOption(options, DefenseType.Entrenchment, DefenseBuildCost(CurrentLevelBand(projected.Ent)),
-            (0.5 + (localEnemy ? 4.0 : 0.0) + (adjacentEnemy ? 2.0 : 0.0))
-                * SharedEfficiency(rf, DefenseType.Entrenchment, projected.Ent));
-
-        AddDevelopmentOption(options, DefenseType.AntiAir, DefenseBuildCost(CurrentLevelBand(projected.Aa)),
-            (0.25 + (localEnemy || adjacentEnemy ? 0.5 : 0.0))
-                * SharedEfficiency(rf, DefenseType.AntiAir, projected.Aa));
-
-        return options
-            .Where(option => option.Cost != long.MaxValue)
-            .OrderByDescending(option => option.Score)
-            .FirstOrDefault();
-    }
-
     private static double SharedEfficiency(
         RegionFaction regionFaction,
         DefenseType defenseType,
@@ -229,22 +210,6 @@ internal sealed class FactionDevelopmentPlanner
         return FortificationMath.SharedContributionEfficiency(projectedOwnLevel, shared);
     }
 
-    private static void AddDevelopmentOption(
-        List<DevelopmentOption> options,
-        DefenseType defenseType,
-        long cost,
-        double benefit)
-    {
-        if (cost <= 0 || cost == long.MaxValue) return;
-        options.Add(new DevelopmentOption
-        {
-            DefenseType = defenseType,
-            Cost = cost,
-            Score = benefit / cost
-        });
-    }
-
-    // Exponential build cost for a defense stat: baseCost * 10^currentLevel. At or past the cap the
     // cost is effectively infinite, plateauing a defense rather than overflowing.
     internal static long DefenseBuildCost(int level)
     {

@@ -8,6 +8,18 @@ namespace OnlyWar.Domain.Intelligence
         public const float RumorThreshold = 0.25f;
         public const float SuspectedThreshold = 1f;
         public const float ConfirmedThreshold = 3f;
+
+        /// <summary>
+        /// Evidence a repeat sighting of already-confirmed ground contributes.
+        /// </summary>
+        /// <remarks>
+        /// Small, and deliberately not zero. Seeing a region again adds little CERTAINTY that the enemy
+        /// is there - that question is already settled - but it is still a fresh measurement of how
+        /// strong they are, and IntelObservation requires an observation to move evidence at all. The
+        /// weekly decay pulls evidence back down, so this settles at an equilibrium rather than
+        /// climbing.
+        /// </remarks>
+        public const float RepeatSightingEvidence = 0.25f;
         public const float LocatedThreshold = 6f;
         public const float MaxEvidence = 12f;
         public const float WeeklyDecayMultiplier = 0.75f;

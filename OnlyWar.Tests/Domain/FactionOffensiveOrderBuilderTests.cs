@@ -122,7 +122,6 @@ public sealed class FactionOffensiveOrderBuilderTests
                 TargetRegion = targetRegion,
                 TargetFaction = target,
                 AttackingRegions = [sourceRegion],
-                AvailableAttackingForce = 100,
                 DefenderBattleValue = 10,
                 EstimatedDefenderBattleValue = 10,
                 Reward = 100

@@ -118,7 +118,6 @@ public sealed class FactionStrategyCharacterizationTests
         {
             TargetRegion = firstRegion,
             TargetFaction = firstTarget,
-            AvailableAttackingForce = 1_000,
             Reward = 500,
             DefenderBattleValue = 100,
             EstimatedDefenderBattleValue = 100
@@ -127,13 +126,17 @@ public sealed class FactionStrategyCharacterizationTests
         {
             TargetRegion = secondRegion,
             TargetFaction = secondTarget,
-            AvailableAttackingForce = 1_000,
             Reward = 500,
             DefenderBattleValue = 100,
             EstimatedDefenderBattleValue = 100
         };
 
-        Assert.Same(first, FactionOffensiveEvaluator.ChooseBestOffensive([first, second]));
+        // Two identical targets score identically, which is what makes the ordering that consumes this
+        // score stable. The old ChooseBestOffensive tie-break is gone with the method: selecting one
+        // target up front is exactly what the allocation auction replaced.
+        Assert.Equal(
+            FactionOffensiveEvaluator.RewardRiskScore(first),
+            FactionOffensiveEvaluator.RewardRiskScore(second));
     }
 
     [Fact]

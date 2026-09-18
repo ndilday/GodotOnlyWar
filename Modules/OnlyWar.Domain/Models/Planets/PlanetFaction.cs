@@ -95,6 +95,11 @@ namespace OnlyWar.Domain.Planets
 
             long? estimatedPopulation = previous?.EstimatedPopulation;
             long? estimatedMilitaryStrength = previous?.EstimatedMilitaryStrength;
+            // A fresh sighting refreshes what is believed even when it adds almost no new certainty.
+            // Repeat observations of already-confirmed ground now arrive with
+            // FactionIntelligenceRules.RepeatSightingEvidence rather than being dropped, and the blend
+            // below weights them as a measurement rather than as the sliver of evidence they carry.
+            // Decay still carries a negative delta and only re-coarsens.
             if (observation.EvidenceDelta > 0f)
             {
                 estimatedPopulation = BlendEstimate(
@@ -213,9 +218,24 @@ namespace OnlyWar.Domain.Planets
         {
             if (!incoming.HasValue) return existing;
             if (!existing.HasValue || existingEvidence <= 0f) return incoming;
+
+            // Both weights are capped at ConfirmedThreshold, and that is the whole point of the cap.
+            // Evidence beyond Confirmed is accumulated certainty that the target IS THERE; it says
+            // nothing about how precisely its strength is known. Letting it run to MaxEvidence made a
+            // long-watched belief immovable - a prior weighted 12 against a fresh sighting weighted 1
+            // needs a dozen weeks to notice an army leaving - so a region observed every turn was the
+            // one whose numbers were most out of date.
+            //
+            // A current sighting is worth a confirmed measurement, so the two meet at equal weight and
+            // a belief halves its error each time it is looked at.
+            float priorWeight = System.Math.Min(
+                existingEvidence, FactionIntelligenceRules.ConfirmedThreshold);
+            float sightingWeight = System.Math.Min(
+                System.Math.Max(incomingEvidence, FactionIntelligenceRules.ConfirmedThreshold),
+                FactionIntelligenceRules.ConfirmedThreshold);
             return (long)System.Math.Round(
-                (existing.Value * existingEvidence + incoming.Value * incomingEvidence)
-                    / (existingEvidence + incomingEvidence),
+                (existing.Value * priorWeight + incoming.Value * sightingWeight)
+                    / (priorWeight + sightingWeight),
                 MidpointRounding.AwayFromZero);
         }
 

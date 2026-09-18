@@ -29,6 +29,19 @@ namespace OnlyWar.Domain
         public Faction DefaultFaction { get; }
         public FactionBehaviorRulesProfile FactionBehaviorRules { get; }
         public IReadOnlyDictionary<string, FactionBehaviorRulesProfile> FactionBehaviorRulesProfiles { get; }
+        /// <summary>
+        /// Allocation doctrine per faction id. A faction with no authored row gets
+        /// <see cref="ForceDoctrineWeights.Balanced"/>, so adding a faction to the rules database does
+        /// not require authoring doctrine before it can plan.
+        /// </summary>
+        public IReadOnlyDictionary<int, ForceDoctrineWeights> FactionDoctrines { get; }
+
+        public ForceDoctrineWeights GetDoctrine(Faction faction) =>
+            faction != null
+            && FactionDoctrines != null
+            && FactionDoctrines.TryGetValue(faction.Id, out ForceDoctrineWeights doctrine)
+                ? doctrine
+                : ForceDoctrineWeights.Balanced;
         public UnitTemplate StrategicCommandUnitTemplate { get; }
         public IReadOnlyDictionary<int, BaseSkill> BaseSkillMap { get => _baseSkillMap; }
         public IReadOnlyList<SkillTemplate> SkillTemplateList { get => _skillTemplateList; }
@@ -110,6 +123,8 @@ namespace OnlyWar.Domain
             FactionBehaviorRulesProfiles = ResolveFactionBehaviorRulesProfiles(
                 gameBlob.FactionBehaviorRulesProfiles);
             FactionBehaviorRules = FactionBehaviorRulesProfiles.Values.First();
+            FactionDoctrines = gameBlob.FactionDoctrines
+                ?? new Dictionary<int, ForceDoctrineWeights>();
             StrategicCommandUnitTemplate = EnsureStrategicCommandUnitTemplate();
             ValidateFactionGenerationPolicies(gameBlob.ScenarioInfiltratorOverrides);
             ValidateRatingDefinitions();

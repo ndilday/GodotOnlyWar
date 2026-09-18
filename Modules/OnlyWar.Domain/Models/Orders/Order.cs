@@ -37,6 +37,16 @@ namespace OnlyWar.Domain.Orders
         // Runtime identity used to carry a strategic invasion force through planning and result processing. It is
         // deliberately not serialized on an Order because orders are weekly work items.
         public long? StrategicInvasionForceId { get; set; }
+        // Surprise carried by a force whose region went public this week (RegionFaction.HasEmergenceAdvantage).
+        // It DECORATES the mission rather than replacing it: an advance that opens with an ambush still holds
+        // the ground it takes, because MissionType stays Advance and with it MissionReturnPolicy.Hold. Routing
+        // this through MissionType.Ambush instead - which is what the planner used to do - swapped in the whole
+        // ambush chain, including its Return policy, so an assault sized at twice the defender to TAKE a region
+        // struck once and withdrew from it.
+        //
+        // Not serialized, for the same reason as StrategicInvasionForceId above: planning and mission execution
+        // are phases 1 and 2 of a single ProcessTurn, so no save can land between them.
+        public bool OpensWithAmbush { get; set; }
 
         public OrderForce Force => new(this);
 

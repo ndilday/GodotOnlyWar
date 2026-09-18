@@ -162,10 +162,41 @@ namespace OnlyWar.Persistence.Database.GameRules
                 FactionPlanetPresenceRules = factionPlanetPresenceRules,
                 ChapterGenerationProfiles = chapterGenerationProfiles,
                 SectorGenerationProfiles = sectorGenerationProfiles,
-                FactionBehaviorRulesProfiles = factionBehaviorRulesProfiles
+                FactionBehaviorRulesProfiles = factionBehaviorRulesProfiles,
+                FactionDoctrines = GetFactionDoctrines(dbCon)
             };
             RulesDatabaseValidator.Validate(rules);
             return rules;
+        }
+
+        /// <summary>
+        /// Per-faction allocation doctrine. Absent rows are not an error: GameRulesData falls back to
+        /// ForceDoctrineWeights.Balanced, so a faction can exist before its doctrine is authored.
+        /// </summary>
+        private static Dictionary<int, ForceDoctrineWeights> GetFactionDoctrines(IDbConnection connection)
+        {
+            Dictionary<int, ForceDoctrineWeights> doctrines = [];
+            using var command = connection.CreateCommand();
+            command.CommandText = @"SELECT FactionId, Defend, Withdraw, Assault, Raid, Recon,
+                Patrol, Construct, Spread, Feed, ReconAggression FROM FactionDoctrine";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                doctrines[reader.GetInt32(0)] = new ForceDoctrineWeights
+                {
+                    Defend = Convert.ToDouble(reader[1]),
+                    Withdraw = Convert.ToDouble(reader[2]),
+                    Assault = Convert.ToDouble(reader[3]),
+                    Raid = Convert.ToDouble(reader[4]),
+                    Recon = Convert.ToDouble(reader[5]),
+                    Patrol = Convert.ToDouble(reader[6]),
+                    Construct = Convert.ToDouble(reader[7]),
+                    Spread = Convert.ToDouble(reader[8]),
+                    Feed = Convert.ToDouble(reader[9]),
+                    ReconAggression = (OnlyWar.Domain.Orders.Aggression)Convert.ToInt32(reader[10])
+                };
+            }
+            return doctrines;
         }
 
         private List<Faction> GetFactionTemplates(IDbConnection connection,

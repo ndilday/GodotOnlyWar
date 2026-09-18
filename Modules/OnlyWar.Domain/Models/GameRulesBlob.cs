@@ -41,6 +41,8 @@ namespace OnlyWar.Domain
         public IReadOnlyList<ChapterGenerationProfileData> ChapterGenerationProfiles { get; set; }
         public IReadOnlyList<SectorGenerationProfile> SectorGenerationProfiles { get; set; }
         public IReadOnlyList<FactionBehaviorRulesProfile> FactionBehaviorRulesProfiles { get; set; }
+        // One allocation-doctrine row per faction, keyed by faction id. See ForceDoctrineWeights.
+        public IReadOnlyDictionary<int, ForceDoctrineWeights> FactionDoctrines { get; set; }
 
     }
 

@@ -30,25 +30,31 @@ internal sealed class FactionReconPatrolPlanner
     internal const double WorthScreeningWorksLevel = 1.0;
     internal const float UnfamiliarGroundIntel = 1.0f;
 
-    internal void PlanPatrolMissionsOnPlanet(
+    /// <summary>
+    /// Posts a standing screen on a battle-value budget the allocation auction decided.
+    /// </summary>
+    /// <remarks>
+    /// This used to take a fraction of whatever survived the defensive reserve, which is why a region
+    /// facing several neighbours screened nothing: the fraction was applied to zero. The budget now
+    /// arrives from the auction, where a patrol's first points of force competed against the
+    /// garrison's last ones on marginal value.
+    /// </remarks>
+    internal void IssueAllocatedPatrol(
         Faction faction,
         Planet planet,
-        List<RegionForceState> regionalForceStates,
+        RegionFaction regionFaction,
+        long budget,
         List<Order> allOrders,
         IRNG random)
     {
-        foreach (RegionForceState state in regionalForceStates)
         {
-            if (state.SpareTroops <= 0) continue;
+            if (regionFaction == null || budget <= 0) return;
 
-            double patrolFraction = CalculatePatrolFraction(faction, planet, state);
-            long forceBattleValue = (long)(state.SpareTroops * patrolFraction);
-            if (forceBattleValue <= 0) continue;
+            long forceBattleValue = budget;
 
             // A patrol screen is still an order: its budget can be no smaller than the faction's
             // smallest full squad. A region too thin to field even that posts no screen.
-            forceBattleValue = Math.Max(forceBattleValue, faction.MinimumForceRequest);
-            if (forceBattleValue > state.SpareTroops) continue;
+            if (forceBattleValue < faction.MinimumForceRequest) return;
 
             var request = new ForceGenerationRequest
             {
@@ -58,13 +64,13 @@ internal sealed class FactionReconPatrolPlanner
             };
 
             List<Squad> patrolSquads = ForceGenerator.GenerateForce(request, random, _identity);
-            if (patrolSquads.Count == 0) continue;
+            if (patrolSquads.Count == 0) return;
 
             // The patrol is a standing screen, not a sweep: its squads land in the faction's own
             // region and hold, joining the defence if the region is raided and intercepting enemy
             // recon that tries to scout it. These transient forces are cleared before the next pass.
             Mission mission = new Mission(
-                _identity.GetNextMissionId(), MissionType.Patrol, state.RegionFaction, 0);
+                _identity.GetNextMissionId(), MissionType.Patrol, regionFaction, 0);
             Order order = new Order(
                 _identity.GetNextOrderId(),
                 patrolSquads,
@@ -75,49 +81,44 @@ internal sealed class FactionReconPatrolPlanner
                 faction);
             foreach (Squad squad in patrolSquads)
             {
-                squad.CurrentRegion = state.RegionFaction.Region;
+                squad.CurrentRegion = regionFaction.Region;
                 squad.CurrentOrders = order;
-                state.RegionFaction.LandedSquads.Add(squad);
+                regionFaction.LandedSquads.Add(squad);
             }
-            state.SpareTroops = Math.Max(0, state.SpareTroops - SquadBattleValue(patrolSquads));
             allOrders.Add(order);
             GameLog.Debug(() =>
-                $"AI patrol {faction.Name}/{planet.Name}/{state.RegionFaction.Region.Name}: "
+                $"AI patrol {faction.Name}/{planet.Name}/{regionFaction.Region.Name}: "
                 + $"targetBV={forceBattleValue}, squads={patrolSquads.Count}, "
                 + $"soldiers={patrolSquads.Sum(s => s.Members.Count)}, battleValue={SquadBattleValue(patrolSquads)}");
         }
     }
 
-    internal bool IssueReconMission(
+    /// <summary>
+    /// Sends a reconnaissance probe on a battle-value budget the allocation auction decided, staged
+    /// from the region that contributed most of it.
+    /// </summary>
+    internal bool IssueAllocatedRecon(
         Faction faction,
         PotentialOffensive target,
+        RegionFaction staging,
+        long budget,
+        Aggression reconAggression,
         List<Order> allOrders,
         IRNG random)
     {
-        return IssueReconMission(faction, target, null, allOrders, random);
-    }
-
-    internal bool IssueReconMission(
-        Faction faction,
-        PotentialOffensive target,
-        List<RegionForceState> regionalForceStates,
-        List<Order> allOrders,
-        IRNG random)
-    {
-        // A reconnaissance sweep is a scout's job, so it fields ONE scout squad. This used to ask for
-        // an AssaultForce, which let the generator spend the budget on whatever was affordable -
-        // including formations with no squad leader at all (the mob roster's Flash Gitz and Lootas
-        // are a single Ork Boy element). PerformReconMissionStep resolves its observation through
-        // LeaderMissionTest, which then fell back to the best Tactics present: an untrained Ork Boy
-        // at attribute-minus-four, or 4.0 against a difficulty of 9.5. Those squads returned about
-        // -7.7 a week each and swamped the one competent squad in the same tasking, so a faction's
-        // awareness of its neighbours could never leave zero no matter how long it scouted.
+        // A sweep is a scout's job, and the PROFILE is what enforces that. This used to ask for an
+        // AssaultForce, which let the generator spend the budget on whatever was affordable -
+        // including formations with no squad leader at all, such as the mob roster's single-element
+        // Flash Gitz and Lootas. Those returned around -7.7 a week each, and because the weekly
+        // margins of every participating squad are POOLED as a signed sum, they cancelled out the
+        // competent squads in the same tasking; a faction's awareness could never leave zero however
+        // long it scouted.
         long cheapestScoutBattleValue = CheapestScoutSquadBattleValue(faction);
-        if (cheapestScoutBattleValue <= 0 || target.AvailableAttackingForce <= 0)
+        if (cheapestScoutBattleValue <= 0 || budget <= 0)
         {
             GameLog.Debug(() =>
                 $"AI recon {faction.Name}: target={DescribeOffensive(target)}, "
-                + $"available={target.AvailableAttackingForce}, cheapestScout={cheapestScoutBattleValue}; "
+                + $"budget={budget}, cheapestScout={cheapestScoutBattleValue}; "
                 + "no order created");
             return false;
         }
@@ -125,13 +126,24 @@ internal sealed class FactionReconPatrolPlanner
         var request = new ForceGenerationRequest
         {
             Faction = faction,
-            // Tier caps the probe at one squad, so this budget is a ceiling rather than a target:
-            // it buys one full scout squad when the region can afford one, and falls back to a
-            // single understrength party when it cannot. Passing the cheapest full squad's price
-            // instead would deny a thin region any reconnaissance at all - a PDF infantry squad is
-            // 100 at full strength and 25 at its minimum, so a region holding 91 scouted nothing.
-            TargetBattleValue = target.AvailableAttackingForce,
-            Tier = 1,
+            // The budget is a ceiling rather than a target: it buys full scout squads while it can
+            // afford them and falls back to a single understrength party when it cannot. Passing the
+            // cheapest full squad's price instead would deny a thin region any reconnaissance at all -
+            // a PDF infantry squad is 100 at full strength and 25 at its minimum, so a region holding
+            // 91 scouted nothing.
+            //
+            // Tier is no longer pinned to one squad. Recon is the one mission type that fans out into
+            // independent per-squad rolls (MissionForcePolicy.IndependentSquads), and the pooled
+            // margin grows as the square root of the squads committed, so a three-squad sweep really
+            // does learn more than a one-squad probe. The auction decides how many via
+            // ReconSaturationSquads.
+            //
+            // The leaderless-squad hazard the old cap guarded against is handled by the PROFILE: the
+            // original failure came from requesting an AssaultForce, which let the generator spend the
+            // budget on formations with no squad leader at all. ScoutPatrol builds scout formations,
+            // and CheapestScoutSquadBattleValue below refuses the tasking outright for a faction that
+            // has none.
+            TargetBattleValue = budget,
             Profile = ForceCompositionProfile.ScoutPatrol
         };
         List<Squad> scouts = ForceGenerator.GenerateForce(request, random, _identity);
@@ -143,27 +155,16 @@ internal sealed class FactionReconPatrolPlanner
             return false;
         }
 
-        Region stagingRegion = FactionStagingPlanner
-            .ChooseStagingRegionsByOpportunityCost(target, regionalForceStates)
-            .FirstOrDefault()
-            ?? target.AttackingRegions.First();
+        Region stagingRegion = staging?.Region
+            ?? target.AttackingRegions.FirstOrDefault()
+            ?? target.TargetRegion;
         foreach (Squad squad in scouts)
         {
             squad.CurrentRegion = stagingRegion;
         }
 
-        if (regionalForceStates != null)
-        {
-            RegionForceState state = regionalForceStates.FirstOrDefault(s => s.RegionFaction.Region == stagingRegion);
-            if (state != null)
-            {
-                state.SpareTroops = Math.Max(0, state.SpareTroops - SquadBattleValue(scouts));
-            }
-        }
-
         Mission mission = new Mission(
             _identity.GetNextMissionId(), MissionType.Recon, target.TargetFaction, 0);
-        Aggression reconAggression = ChooseReconAggression(faction, target.TargetRegion);
         Order order = new Order(
             _identity.GetNextOrderId(),
             scouts,
@@ -205,17 +206,11 @@ internal sealed class FactionReconPatrolPlanner
         return squad?.SquadLeader?.Template?.Name ?? "no squad leader";
     }
 
-    /// <summary>How boldly this faction scouts a region based on its own existing awareness.</summary>
-    internal static Aggression ChooseReconAggression(Faction faction, Region target)
-    {
-        float known = target.GetFactionRegionAwareness(faction);
-        if (known < UnfamiliarGroundIntel) return Aggression.Cautious;
-        if (known < FactionThreatAssessment.GarrisonFullSightIntel) return Aggression.Normal;
-        return Aggression.Attritional;
-    }
-
-    /// <summary>Share of a region's spare troops posted as a standing patrol screen.</summary>
-    internal double CalculatePatrolFraction(Faction faction, Planet planet, RegionForceState state)
+    /// <summary>
+    /// How much of a region's strength is worth posting as a standing screen. Read by the task builder
+    /// as the patrol task's saturation and its importance.
+    /// </summary>
+    internal static double CalculatePatrolFraction(Faction faction, Planet planet, RegionForceState state)
     {
         // No declared enemy anywhere on the world: ordinary policing only. The works-based tier is
         // allowed to apply because a region worth infiltrating is worth watching whether or not an
@@ -272,7 +267,7 @@ internal sealed class FactionReconPatrolPlanner
         if (offensive == null) return "none";
         return $"{offensive.TargetRegion.Planet.Name}/{offensive.TargetRegion.Name}/"
             + $"{offensive.TargetFaction.PlanetFaction.Faction.Name} "
-            + $"available={offensive.AvailableAttackingForce}, defenderBV={offensive.DefenderBattleValue}, "
+            + $"defenderBV={offensive.DefenderBattleValue}, "
             + $"estimatedDefenderBV={offensive.EstimatedDefenderBattleValue}";
     }
 }
