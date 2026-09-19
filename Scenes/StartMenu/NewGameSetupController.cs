@@ -66,6 +66,41 @@ public partial class NewGameSetupController : Control
         ShowForm();
     }
 
+    public override void _Input(InputEvent inputEvent)
+    {
+        if (_invaderSelection == null
+            || GetViewport().GuiGetFocusOwner() != _invaderSelection
+            || _invaderSelection.GetPopup().Visible
+            || inputEvent is not InputEventKey keyEvent
+            || !keyEvent.Pressed
+            || keyEvent.Echo)
+        {
+            return;
+        }
+
+        int direction = keyEvent.Keycode == Key.Up || keyEvent.PhysicalKeycode == Key.Up
+            ? -1
+            : keyEvent.Keycode == Key.Down || keyEvent.PhysicalKeycode == Key.Down
+                ? 1
+                : 0;
+        if (direction == 0)
+        {
+            return;
+        }
+
+        if (_invaderSelection.ItemCount > 0 && _invaderSelection.Selected >= 0)
+        {
+            _invaderSelection.Selected = Mathf.Clamp(
+                _invaderSelection.Selected + direction,
+                0,
+                _invaderSelection.ItemCount - 1);
+        }
+
+        // OptionButton does not consume arrows while its popup is closed, so the default
+        // Control navigation would otherwise move focus into the next form field.
+        GetViewport().SetInputAsHandled();
+    }
+
     /// <summary>
     /// Supplies the invader candidates from the active scenario profile before this screen enters
     /// the tree. The controller only needs display identity and stable faction ids; scenario rules
@@ -176,15 +211,18 @@ public partial class NewGameSetupController : Control
     private void PopulateInvaderSelection()
     {
         _invaderSelection.Clear();
-        foreach (NewGameFactionOption faction in _invaderFactions)
-        {
-            _invaderSelection.AddItem(faction.Name, faction.Id);
-        }
 
         if (_invaderFactions.Count > 0)
         {
             _invaderSelection.AddItem("Random", RandomSelectionId);
-            _invaderSelection.Selected = _invaderFactions.Count;
+            foreach (NewGameFactionOption faction in _invaderFactions
+                         .OrderBy(faction => faction.Name, StringComparer.OrdinalIgnoreCase)
+                         .ThenBy(faction => faction.Id))
+            {
+                _invaderSelection.AddItem(faction.Name, faction.Id);
+            }
+
+            _invaderSelection.Selected = 0;
             _invaderSelection.Disabled = false;
         }
         else

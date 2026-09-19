@@ -28,8 +28,6 @@ namespace OnlyWar.Domain.FactionBehaviors
         public double GhostLogisticGrowthRate { get; }
         public double OccupiedCivilianDeclineRate { get; }
         public double ExceptionalAssassinationMargin { get; }
-        public double PublicGrowthMultiplier { get; }
-        public double DormantGrowthMultiplier { get; }
         public long DormantEmergenceMinimumPopulation { get; }
         public double DormantEmergenceChance { get; }
         public double DormantCullingPopulationReductionFraction { get; }
@@ -64,8 +62,6 @@ namespace OnlyWar.Domain.FactionBehaviors
             double ghostLogisticGrowthRate,
             double occupiedCivilianDeclineRate,
             double exceptionalAssassinationMargin,
-            double publicGrowthMultiplier,
-            double dormantGrowthMultiplier,
             long dormantEmergenceMinimumPopulation,
             double dormantEmergenceChance,
             double dormantCullingPopulationReductionFraction,
@@ -99,8 +95,6 @@ namespace OnlyWar.Domain.FactionBehaviors
             GhostLogisticGrowthRate = ghostLogisticGrowthRate;
             OccupiedCivilianDeclineRate = occupiedCivilianDeclineRate;
             ExceptionalAssassinationMargin = exceptionalAssassinationMargin;
-            PublicGrowthMultiplier = publicGrowthMultiplier;
-            DormantGrowthMultiplier = dormantGrowthMultiplier;
             DormantEmergenceMinimumPopulation = dormantEmergenceMinimumPopulation;
             DormantEmergenceChance = dormantEmergenceChance;
             DormantCullingPopulationReductionFraction = dormantCullingPopulationReductionFraction;
@@ -134,8 +128,6 @@ namespace OnlyWar.Domain.FactionBehaviors
                 || !IsFinite(GhostLogisticGrowthRate)
                 || !IsFinite(OccupiedCivilianDeclineRate)
                 || !IsFinite(ExceptionalAssassinationMargin)
-                || !IsFinite(PublicGrowthMultiplier)
-                || !IsFinite(DormantGrowthMultiplier)
                 || !IsFinite(DormantEmergenceChance)
                 || !IsFinite(DormantCullingPopulationReductionFraction)
                 || !IsFinite(DormantCullingConsolidationReductionFraction)
@@ -161,8 +153,8 @@ namespace OnlyWar.Domain.FactionBehaviors
                 || SuccessorGenerationMinimumBattleValue < 0 || SuccessorMergeLeaderLoss < 0
                 || SuccessorMergeLeaderLoss >= 1 || TravelMultiplier <= 0
                 || GhostLogisticGrowthRate < 0 || OccupiedCivilianDeclineRate < 0
-                || ExceptionalAssassinationMargin <= 0 || PublicGrowthMultiplier < 0
-                || DormantGrowthMultiplier < 0 || DormantEmergenceMinimumPopulation < 0
+                || ExceptionalAssassinationMargin <= 0
+                || DormantEmergenceMinimumPopulation < 0
                 || DormantEmergenceChance < 0 || DormantEmergenceChance > 1
                 || DormantCullingPopulationReductionFraction < 0 || DormantCullingPopulationReductionFraction > 1
                 || DormantCullingConsolidationReductionFraction < 0 || DormantCullingConsolidationReductionFraction > 1

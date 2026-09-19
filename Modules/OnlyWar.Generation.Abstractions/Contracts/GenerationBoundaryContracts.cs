@@ -7,7 +7,6 @@ using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Soldiers.Ratings;
 using OnlyWar.Domain.Units;
-using OnlyWar.Domain;
 
 namespace OnlyWar.Generation.Abstractions;
 

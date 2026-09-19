@@ -29,6 +29,18 @@ namespace OnlyWar.Domain.FactionBehaviors
 
         public double Defend { get; init; } = 1.00;
         public double Withdraw { get; init; } = 0.90;
+
+        /// <summary>
+        /// How much this faction cares about marching idle force toward the fighting.
+        /// </summary>
+        /// <remarks>
+        /// Weighs a move against the alternatives, which for a rear province are usually nothing at
+        /// all. Before this existed the only thing that relocated strength was a neighbour winning a
+        /// share of a region's Defend task, and that fires only on a defensive SHORTFALL - so a
+        /// faction strong enough to cover every border never moved a man. Grist Nine, 2026-09-18: the
+        /// Orks made zero moves in four weeks while the thinly spread Imperials made twelve.
+        /// </remarks>
+        public double Move { get; init; } = 0.50;
         public double Assault { get; init; } = 0.85;
         public double Raid { get; init; } = 0.45;
         public double Recon { get; init; } = 0.55;

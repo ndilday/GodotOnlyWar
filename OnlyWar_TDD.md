@@ -1117,68 +1117,93 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 ### 6.2 Faction Strategy
 
 `FactionStrategyController.GenerateFactionOrders(Faction, Sector)` is the public planning entry point.
-`TurnOrderPlanner` invokes it for hostile factions and invokes the same entry point with `defensiveOnly`
-for the default/PDF faction. For each selected planet where the faction has a public presence:
+`TurnOrderPlanner` invokes it for every faction, including the default/PDF faction, which plans on the
+same terms as anyone else. A `defensiveOnly` mode still exists for a faction that should be
+posture-restricted; nothing sets it (PRD §4.24).
 
-The controller composes concrete policy collaborators in the Campaign and Operations strategy namespaces: `FactionThreatAssessment`
-owns belief/public-hostility queries, reserve sizing, and strategy-side defender estimates;
-`FactionReinforcementPlanner` owns garrison and front relocation; `FactionDevelopmentPlanner` owns
-projected organization/defense development, construction affordability, cost bands, and the defensive
-border-listening-post posture; and `FactionConsumptionPlanner` owns budgeted spread followed by
-squad-less feed orders. The controller retains the per-planet state construction and phase order, so one
-`RegionForceState` reference and its `SpareTroops` budget survive across all collaborators in that pass.
-`PrepareAssaultMissionStep` reads `FactionThreatAssessment.CalculateRequiredDefensiveBattleValue`
-directly; this remains the planning want, while `RegionFaction.AssignedDefensiveBattleValue` is the
-clamped commitment materialized by assault preparation.
-`FactionReconPatrolPlanner` owns recon issuance, recon aggression, patrol fractions and order
-creation, plus the whole-sector cleanup of transient Patrol/Recon squads. `FactionStagingPlanner`
-holds the shared opportunity-cost staging order and deliberately preserves its null-state fallback
-for defensive recon. `FactionOffensiveEvaluator` owns confirmed-target enumeration, belief-backed
-defender estimates, rewards, risk/viability scoring, candidate construction, stable selection, and
-the region-plus-target-faction deduplication key. It is constructed per planning call with the
-resolved `FactionBehaviorRulesProfile`, so each planning call uses its supplied rules profile.
-`FactionOffensiveOrderBuilder` owns assault and lightning-raid issuance, strategic-versus-tactical
-routing, contribution accounting, generated-force staging, and the existing failure and shortfall
-return paths. It accepts a narrow force-generation delegate for isolated failure-path tests and
-defaults to `ForceGenerator.GenerateForce`; production receives the same planning `IRNG` that the
-controller resolved for the current call.
+**One marginal-value auction per planet.** The defensive reserve is not taken off the top.
+`RegionForceState.SpareTroops` is a region's whole allocatable battle value, and defence competes for it
+like every other kind of work. That is the core of the design: the old fixed priority ladder compared no
+margins, so it could say that all of a garrison came first but never that the last fifth of one was
+worth less than the first recon squad.
 
-1. **Force assessment:** Compute `CalculateRequiredDefensiveBattleValue` per region from visible/believed
-   adjacent threats and the minimum reserve floor, then derive `SpareTroops` from the concrete organized
-   pool. The requirement is an unbounded want; `AssignedDefensiveBattleValue` is capped at deployed
-   strength and is persisted for assault preparation. Detached fixtures retain the direct hostile-value
-   fallback when no relationship ledger exists.
-2. **Offensive planning:** `FactionOffensiveEvaluator` enumerates `Confirmed` intelligence targets
-   through `IntelligenceTargetService`, preserving local-first and stable enumeration order. The
-    controller keeps the bounded issue loop and rebuilds candidates after each issued mission, while
-   `FactionOffensiveOrderBuilder` creates the selected assault or raid; recon, assault, raid
-   eligibility, and invasion ratios use the current shared planning state and stored
-   target estimate where available. A current `RegionFaction` is attached to the target so execution
-   can resolve contact; it is not a substitute for candidate discovery.
-3. **Construction:** Development consumes the residual battle-value budget. Organization is purchased
-   in whole points only when its `orgCost × 100` price is affordable; fractional Entrenchment,
-   ListeningPost, and AntiAir use `2 × 10^currentLevel` per whole level, charge the fractional amount
-   with the existing ceiling rule, and use projected levels for stable marginal-benefit ties. This
-   section records ownership, not a second formula source.
-4. **Patrol:** A policy-selected fraction of remaining `SpareTroops` (with policing, works, local-threat,
-   and adjacent-threat tiers) becomes a generated `ScoutPatrol` order when the faction's minimum force
-   request is affordable. Generated squad BV is deducted from the planning budget; no separate military
-   pool debit is made for patrol/recon tasking.
-5. **Swarm operations (`GrowthType.Consumption` only):** Spread, then feed, from what is left.
+1. **Task list** (`ForceTaskBuilder`). Tasks are keyed by objective rather than by region, which is what
+   makes shared saturation expressible — a multi-region assault is one task with one saturation that
+   several regions bid into, and two regions garrisoning against the same neighbour answer one threat
+   through `SharedThreatLedger`. Kinds are Defend, Withdraw, Move, Recon, Patrol, Assault, Raid,
+   Construct, ConsumptionSpread and Feed.
+2. **Auction** (`ForceAllocationAuction`). Bids rank on **marginal value per battle value**, never per
+   bid, so a coarse region's larger bid cannot outrank a fine region's smaller one on size alone. Tasks
+   bid in batches, because greedy single increments are correct only for concave curves and both the
+   defence hold curve and the assault force ratio are thresholds. Re-scoring is lazy — pop the top
+   pairing, re-score only it, push it back if it fell below the new top — exact for concave curves and
+   approximate for the defence threshold. That approximation is a deliberate cost trade.
+3. **Commit** (`ForceTaskCommitter`). Polymorphic by design: Recon, Patrol, Assault, Raid, Construct and
+   Feed produce an `Order`; Defend, Withdraw, Move and ConsumptionSpread mutate strength directly.
 
-Two compatibility asymmetries are intentional and covered by `FactionOffensiveOrderBuilderTests`:
-defensive recon uses the null-state staging overload, so it does not debit the shared planning budget;
-and tactical force-generation failure returns the committed live military BV without restoring the
-already-consumed `SpareTroops`. A tactical shortfall returns only the excess to the largest
-contributor and leaves the planning debit/contribution amount unchanged. These are current behavior,
-not transactional guarantees or balance changes.
+**Saturation is read off the task's own resolver, never authored** — the point at which the resolver
+stops responding to more troops. An assault's is its force ratio against the estimated defender; a
+defence's is the reconciled requirement; a construction's is the remainder of the current level band; a
+sweep's is the squads needed to cross the reconnaissance threshold this turn.
 
-The shared planning data types are owned by the strategy boundary:
-`RegionForceState`, `PotentialOffensive`, `OffensivePlan`, and `MissionCandidate`. Their mutable
-reference and collection semantics are unchanged. The runtime planning path uses those shared types
-directly. The construction path is `FactionStrategyController(IRNG, FactionBehaviorRulesProfile)`, with
-a nullable profile preserving the existing `DefendedLandingRatio` fallback. Recon, tactical
-assault/raid generation, and patrol generation all receive the resolved planning `IRNG`.
+**Importance is a 0..1 score scaled by a per-faction doctrine weight** (`ForceDoctrineWeights`, one row
+per faction in `FactionDoctrine`). A family may normalise only against something intrinsic to itself,
+never against the other candidates: `PopulationWorth` reads the region's total population against fixed
+anchors, `FrontierWorth` is a flat floor while any enemy borders the region, and reconnaissance is flat
+with the target's population moved to `ForceTask.TieBreakValue`. Whether importance should instead state
+an expected battle-value swing is PRD §6.18.
+
+**A task declares `MinimumViableAward`, the auction never commits below it, and the committer reads that
+same field.** `TotalValue` is zero beneath it, so a bid that completes a task prices itself at the whole
+jump and the completing top-up is legal however small. Several regions may fund one task; any left short
+when the auction ends is refunded before the reserve sink runs. Awarding battle value a task cannot use
+is the most damaging failure in this design — the region is debited, the executor produces nothing, and
+the force is destroyed rather than merely misspent.
+
+**Defence is the reserve sink.** Above saturation its marginal value falls to a small positive epsilon,
+so it absorbs whatever nothing else wanted, beats idleness, and can never outbid real work. No separate
+reserve task exists. The residue is applied in one pass rather than auctioned a quantum at a time,
+because on that plateau every remaining pairing scores within rounding of every other.
+
+**Movement is bidding, not a separate pass.** Reinforcement is a neighbour winning a share of a region's
+Defend task, capped by `OutsideCapacity` at the shortfall so the men already in place are counted.
+`Move` is force with nothing to do where it stands marching toward the fighting, valued by a potential
+field: every region holding a public enemy is a source weighted by believed strength, decaying
+`FrontGradientPerHop` outward, so the gradient points forward from any depth even though bids reach one
+hop. `MaxMarchFractionPerTurn` keeps it a flow rather than a teleport, and `FrontStagingMultiple` bounds
+how much one region can usefully hold.
+
+**Offensives are properties of the target.** `FactionOffensiveEvaluator` enumerates Confirmed public
+hostile presences adjacent to or inside the faction's ground; `CalculateOffensiveReward` does not
+multiply by available force, because a target must not score higher for an accident of who is standing
+beside it. All force-dependence lives in the curve. Assault and Raid on one target share a
+`TaskExclusionGroup` and are priced against each other. A raid is not offered against ground the faction
+already occupies, where pulling back would mean not moving. A region keeps
+`OffensiveGarrisonFloor` — the minimum defensive reserve fraction — out of any offensive bid, because an
+offensive physically removes its force from the staging region.
+
+**Reconnaissance gates the offensive.** A region under `ReconIntelThreshold` awareness produces a sweep
+and no assault, so scouting precedes attacking. Occupation does not substitute for awareness:
+`NeedsSweep` reads awareness alone while `CanAssault` also accepts occupation, so a contested region
+under the threshold is offered both — the sweep sharpens next week's estimate while the assault stays
+available this week. Sweeps are sized to be actionable in one turn, because margins pool within a turn
+and a sweep that falls short buys nothing against 25% weekly decay.
+
+Collaborators own their own policy: `FactionThreatAssessment` for belief and hostility queries and
+reserve sizing; `FactionDevelopmentPlanner` for construction options and cost bands;
+`FactionReconPatrolPlanner` for sweep and screen issuance, recon aggression and transient-squad cleanup;
+`FactionOffensiveOrderBuilder` for assault and raid issuance, strategic-versus-tactical routing and
+contribution accounting; `FactionConsumptionPlanner` for spread and feed. `FactionReinforcementPlanner`
+and the old candidate machinery are deleted.
+
+The shared planning data types are owned by the strategy boundary: `RegionForceState` and
+`PotentialOffensive`. The construction path is
+`FactionStrategyController(IRNG, FactionBehaviorRulesProfile, IPersistentIdAllocator, doctrines)`, with a
+nullable profile preserving the `DefendedLandingRatio` fallback and absent doctrine falling back to
+`ForceDoctrineWeights.Balanced`. `FactionStrategyController.LogTaskRates` prints every task's importance,
+saturation and rate at Trace before the auction runs; the auction prints the winning rate per award.
+Calibration figures, measured behaviour and rejected alternatives are retained in
+`Design/Reference/ForceAllocation.md`.
 
 Transient AI forces—patrol screens and recon parties—are generated for a planning pass and cleared at
 the next pass by `ClearStaleTransientSquads`; they are not persistent campaign formations.
@@ -1202,11 +1227,11 @@ and presentation; selectors and strength calculations aggregate or target explic
 - **Strength display** uses the intel ladder and stored estimates (`FactionIntelBelief`) rather than awareness-based rounding of live truth. Rumor/Suspected entries show no exact numbers; Confirmed/Located entries use the estimate stored by the observer. The same belief query feeds the target-faction dropdown, the planet/region detail panes, and NPC target enumeration.
 
 `RegionFaction.GetDeployedStrength()` (`MilitaryStrength × Organization / 100`) is the shared
-fielded-strength measure used by garrison sizing, opportunity budgets, stealth, and strategy. The
-strategy controller passes one mutable `RegionForceState` through reinforcement, development, patrol,
-and Consumption policies so each policy consumes the same residual budget.
+fielded-strength measure used by garrison sizing, opportunity budgets, stealth, and strategy. One
+mutable `RegionForceState` per region carries that budget through the auction, debited as bids are
+awarded; there is no longer a fixed order of policies each consuming a residual.
 
-**Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when either side exceeds `MaxTacticalActors` (120), generated forces would exceed `MaxGeneratedSquads` (24), or committed strength exceeds `MassCombatBattleValueFloor` (1,500 BV). Named/player squads always remain tactical. Strategic resolution works directly in conserved BV pools: only organized BV deploys and takes ordinary battle casualties; effective strength combines committed BV, aggression, faction quality, entrenchment, and awareness-derived surprise. A Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Every participating faction receives reciprocal `BattleContact` observations at Located level with estimates based on the engaged force, not planetary totals. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Equations and rejected alternatives are retained in `Design/Reference/BattleLogic.md`.
+**Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when `committed + defender` reaches `MassCombatBattleValueFloor` (3,000 BV), when the attacker cannot field a tactical force at all (`MinimumFullSquadRequest` of zero), or when generated forces would exceed `MaxGeneratedSquads` (24) or `MaxTacticalActors` (120). Named/player squads always remain tactical. The battle-value floor is the binding gate in practice; both size estimators divide by the faction's highest-value non-HQ template, so they return counts an order of magnitude under their caps. At the planner's 2:1 commitment the crossover sits at a defender of roughly 1,000 BV — the floor is deliberately set so that mop-up resolves tactically, because strategic combat clamps defender losses at 75% and therefore cannot finish a defender. Strategic resolution works directly in conserved BV pools: only organized BV deploys and takes ordinary battle casualties; effective strength combines committed BV, aggression, faction quality, entrenchment, and awareness-derived surprise. A Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Past `OverrunForceRatio` (10) times the defender's battle value scaled by `EntrenchmentMultiplier`, the defence is overrun instead: it takes total casualties rather than the clamped share and the attacker wins regardless of the roll, since an annihilated defender reporting `DefenderHeld` is the contested-for-ever state the rule exists to end. Attacker casualties are unchanged. Every participating faction receives reciprocal `BattleContact` observations at Located level with estimates based on the engaged force, not planetary totals. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Equations and rejected alternatives are retained in `Design/Reference/BattleLogic.md`.
 
 **Organized and disorganized military strength.** `RegionFaction.MilitaryStrength` is partitioned into persisted `OrganizedMilitaryStrength` and derived `DisorganizedMilitaryStrength`. Newly raised troops, transferred formations, and returning survivors enter organized. Ordinary engagements remove organized BV and total BV together; disruptive effects may transfer BV into the disorganized pool without killing it. Reorganization is a fixed-BV transfer back, not a percentage increase. Ambush opportunities size against total military strength and distribute casualties proportionally across both pools. After an Advance has eliminated the organized defence, each remaining operating day destroys up to `attacker BV × UndefendedAssaultDestructionMultiplier` disorganized BV (initial multiplier 1.0).
 

@@ -83,6 +83,7 @@ internal sealed class ForceTaskBuilder
         }
         AddPatrolTasks(faction, planet, states, tasks);
         AddWithdrawTasks(faction, states, threats, tasks);
+        AddMoveTasks(faction, planet, states, tasks);
 
         if (!defensiveOnly)
         {
@@ -153,12 +154,6 @@ internal sealed class ForceTaskBuilder
         HashSet<RegionFaction> engagedLocally,
         List<ForceTask> tasks)
     {
-        double maxWorth = Math.Max(1.0, states.Max(RegionWorth));
-        double maxNeed = 1.0;
-        foreach (RegionForceState state in states)
-        {
-            maxNeed = Math.Max(maxNeed, threats.Unanswered(ThreatsFacing(faction, state)));
-        }
 
         foreach (RegionForceState state in states)
         {
@@ -209,7 +204,12 @@ internal sealed class ForceTaskBuilder
             // in. Scoring defence on population alone made exactly that region worthless to hold - a
             // rear province would not spare a man for the border it sits behind, because the border had
             // fewer inhabitants than it did.
-            double worth = Math.Max(RegionWorth(state) / maxWorth, need / maxNeed);
+            //
+            // The exposure half is counted in HOSTILE FRONTS, not in enemy battle value. It used to be
+            // `need / maxNeed`, and `need` is also this task's saturation - so the two cancelled and
+            // every threatened region bid at the identical rate however hard it was pressed. Position
+            // is what this term is for; the enemy's size is already in the saturation.
+            double worth = Math.Max(PopulationWorth(state), FrontierWorth(facing));
 
             tasks.Add(new ForceTask
             {
@@ -237,8 +237,43 @@ internal sealed class ForceTaskBuilder
         }
     }
 
-    private static double RegionWorth(RegionForceState state) =>
-        Math.Max(1.0, state.RegionFaction.Population);
+    /// <summary>
+    /// What a region's inhabitants are worth holding, on a fixed logarithmic scale.
+    /// </summary>
+    /// <remarks>
+    /// Reads the REGION's population - everyone in it, summed across factions - and not the acting
+    /// faction's own presence. That distinction is the whole point, and getting it wrong produced a
+    /// visible regression on Grist Nine.
+    ///
+    /// `RegionFaction.Population` means two different things depending on who is asking: civilians for
+    /// the Imperials, and for a PopulationIsMilitary faction like the Orks, the size of the warband
+    /// standing there. So a region "was worth defending" in proportion to how many of our own troops
+    /// were already in it, which is neither its value nor anything intrinsic to it. Under the old
+    /// divide-by-the-largest form that misread was hidden: 51 Orks against a 2,045-Ork maximum scored
+    /// 0.025, low enough to look like a deliberate "do not fortify a backwater".
+    ///
+    /// Anchored to constants rather than to the largest region on the planet, so one big region no
+    /// longer devalues every other. See ForceAllocationConstants.RegionWorthReferencePopulation.
+    /// </remarks>
+    private static double PopulationWorth(RegionForceState state)
+    {
+        double floor = Math.Log10(ForceAllocationConstants.RegionWorthFloorPopulation);
+        double reference = Math.Log10(ForceAllocationConstants.RegionWorthReferencePopulation);
+        double population = Math.Log10(
+            Math.Max(1.0, state.RegionFaction.Region.Population));
+        return Math.Clamp((population - floor) / (reference - floor), 0.0, 1.0);
+    }
+
+    /// <summary>
+    /// The floor a region's worth takes while any enemy borders it or stands in it.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not scaled by how many fronts it faces - see
+    /// ForceAllocationConstants.FrontierWorthFloor, where counting them saturated the term and shut the
+    /// population out of the decision entirely.
+    /// </remarks>
+    private static double FrontierWorth(IEnumerable<RegionFaction> facing) =>
+        facing.Any() ? ForceAllocationConstants.FrontierWorthFloor : 0.0;
 
     // ---- Withdraw ----------------------------------------------------------------------------
 
@@ -355,6 +390,147 @@ internal sealed class ForceTaskBuilder
             .FirstOrDefault();
     }
 
+    // ---- Movement ----------------------------------------------------------------------------
+
+    /// <summary>
+    /// Marching force that has nothing to do where it stands toward the ground where the fighting is.
+    /// </summary>
+    /// <remarks>
+    /// The design listed Move as a task and it was never built: movement was folded into "a neighbour
+    /// wins a share of a region's Defend task, and the committer moves the strength to make it real".
+    /// That path is gated by ForceTask.OutsideCapacity, which asks outsiders only for a region's
+    /// SHORTFALL - so a faction strong enough to cover every border asks for nothing anywhere, and
+    /// never moves. Grist Nine, 2026-09-18: zero Ork moves in four weeks against twelve Imperial ones,
+    /// purely because the Imperials were thin enough to have shortfalls.
+    ///
+    /// The second half of the problem is reach. Bids carry one hop, which is right for staging an
+    /// attack - a force two borders away cannot join this week's fight - but it leaves an interior
+    /// region unable to see the front at all. Its neighbours are friendly and adequately held, so it
+    /// has no task of any kind to bid on, and the reserve sink hands its whole strength back to its own
+    /// garrison. It then sits there for the rest of the campaign.
+    ///
+    /// A potential field answers both. Every region holding a public enemy is a source; the value
+    /// decays per hop outward; and a move is worth the rise in that value. The gradient points forward
+    /// from any depth, so the front does not have to be adjacent for a rear province to know which way
+    /// it is.
+    /// </remarks>
+    private void AddMoveTasks(
+        Faction faction,
+        Planet planet,
+        IReadOnlyList<RegionForceState> states,
+        List<ForceTask> tasks)
+    {
+        Dictionary<Region, double> pull = BuildFrontGradient(faction, planet);
+        if (pull.Count == 0) return;
+
+        foreach (RegionForceState state in states)
+        {
+            Region region = state.RegionFaction.Region;
+            double here = pull.GetValueOrDefault(region);
+
+            // Only what the region does not need for its own defence may march. The defence task's
+            // saturation is the same figure the patrol screen is sized against - the want already
+            // reconciled against the shared threat ledger - rather than the unbounded one.
+            long garrison = _defenceSaturations.GetValueOrDefault(state, 0L);
+            long marchable = Math.Max(0L, state.RegionFaction.GetDeployedStrength() - garrison);
+            if (marchable <= 0L) continue;
+
+            long march = (long)(marchable * ForceAllocationConstants.MaxMarchFractionPerTurn);
+            if (march <= 0L) continue;
+
+            foreach (Region destination in region.GetAdjacentRegions())
+            {
+                // Into ground we hold. Moving into an enemy region is an assault, and moving into
+                // empty ground is an expansion; neither is this task, and the committer here does
+                // nothing but shift strength between two presences that already exist.
+                if (!destination.RegionFactionMap.ContainsKey(faction.Id)) continue;
+
+                double there = pull.GetValueOrDefault(destination);
+                if (there <= here) continue;
+
+                // What the destination can still usefully hold. A frontier region massing for an
+                // attack wants more than its own defence needs, but the ground does fill up, and
+                // its Defend task may be pulling reinforcements out of this same neighbour in this
+                // same pass - so the shortfall sits INSIDE this headroom rather than on top of it.
+                RegionForceState ahead = states.FirstOrDefault(
+                    candidate => candidate.RegionFaction.Region == destination);
+                if (ahead == null) continue;
+                long capacity = (long)(_defenceSaturations.GetValueOrDefault(ahead, 0L)
+                    * ForceAllocationConstants.FrontStagingMultiple);
+                long headroom = Math.Max(
+                    0L, capacity - ahead.RegionFaction.GetDeployedStrength());
+                long saturation = Math.Min(march, headroom);
+                if (saturation <= 0L) continue;
+
+                tasks.Add(new ForceTask
+                {
+                    Kind = ForceTaskKind.Move,
+                    Objective = destination,
+                    Home = state.RegionFaction,
+                    Destination = destination,
+                    // Worth the ground gained toward the fighting. A contested region is already at
+                    // the maximum, so nothing marches out of one; a region three hops back sees
+                    // 0.36 against its own 0.216 and moves up.
+                    Importance = _doctrine.Move * (there - here),
+                    Saturation = saturation,
+                    Shape = bv => ForceValueCurves.Linear(bv / (double)saturation)
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// How strongly each region on the planet is pulled toward the fighting, by hops from the enemy.
+    /// </summary>
+    /// <remarks>
+    /// Multi-source breadth-first relaxation. Sources are weighted by believed enemy strength so the
+    /// army flows toward the main fight rather than the nearest picket, floored at MinimumFrontPull so
+    /// a lone enemy still pulls. A region is visited once per improvement, so this is linear in the
+    /// planet's adjacency and runs once per faction per planet per turn.
+    /// </remarks>
+    private static Dictionary<Region, double> BuildFrontGradient(Faction faction, Planet planet)
+    {
+        var seeds = new Dictionary<Region, long>();
+        foreach (Region region in planet.Regions)
+        {
+            long hostile = region.RegionFactionMap.Values
+                .Where(rf => rf.IsPublic
+                    && rf.PlanetFaction.Faction != faction
+                    && FactionRelationshipService.AreHostile(
+                        faction, rf.PlanetFaction.Faction, planet))
+                .Sum(FactionThreatAssessment.CalculateDefenderBattleValue);
+            if (hostile > 0L) seeds[region] = hostile;
+        }
+        if (seeds.Count == 0) return [];
+
+        double strongest = seeds.Values.Max();
+        var pull = new Dictionary<Region, double>();
+        var frontier = new List<Region>();
+        foreach ((Region region, long hostile) in seeds)
+        {
+            pull[region] = Math.Max(
+                ForceAllocationConstants.MinimumFrontPull, hostile / strongest);
+            frontier.Add(region);
+        }
+
+        while (frontier.Count > 0)
+        {
+            var next = new List<Region>();
+            foreach (Region region in frontier)
+            {
+                double spread = pull[region] * ForceAllocationConstants.FrontGradientPerHop;
+                foreach (Region adjacent in region.GetAdjacentRegions())
+                {
+                    if (pull.GetValueOrDefault(adjacent) >= spread) continue;
+                    pull[adjacent] = spread;
+                    next.Add(adjacent);
+                }
+            }
+            frontier = next;
+        }
+        return pull;
+    }
+
     // ---- Offensives --------------------------------------------------------------------------
 
     private void AddOffensiveTasks(
@@ -365,64 +541,101 @@ internal sealed class ForceTaskBuilder
     {
         if (offensives.Count == 0) return;
 
-        double maxReward = Math.Max(1.0, offensives.Max(o => o.Reward));
         long scoutSquad = Math.Max(1L, FactionReconPatrolPlanner.CheapestScoutSquadBattleValue(faction));
 
-        foreach (PotentialOffensive offensive in offensives)
+        // ONE SWEEP PER REGION, not one per enemy. Region awareness belongs to the REGION, so two
+        // hostile factions sharing one region used to raise two recon tasks against a single awareness
+        // figure - both sized from the same gap, neither aware of the other - and funding both paid
+        // twice for one sweep's worth of intelligence.
+        //
+        // Grouping is safe because IsWellKnown reads only the region: its awareness, and whether we
+        // stand in it. Every offensive against the same ground therefore agrees on which branch it
+        // takes, and a group can never be split across the recon and assault branches.
+        foreach (IGrouping<Region, PotentialOffensive> group in offensives
+            .Where(offensive => NeedsSweep(offensive, faction))
+            .GroupBy(offensive => offensive.TargetRegion))
         {
-            bool wellKnown = FactionOffensiveEvaluator.IsWellReconnoitred(offensive, faction.Id)
-                || offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id);
-
-            if (!wellKnown)
+            // Which enemy the sweep is nominally aimed at does not change what it learns: the stealth
+            // check aggregates every hostile presence in the region (MissionStealthDifficulty), the
+            // spotter is drawn from the region, and the awareness gain is recorded against the region.
+            // The richest target is taken as the representative so the tie-break below has a figure.
+            PotentialOffensive offensive = group
+                .OrderByDescending(candidate => candidate.Reward)
+                .ThenBy(candidate => candidate.TargetFaction.PlanetFaction.Faction.Id)
+                .First();
+            // Size the sweep to be ACTIONABLE THIS TURN rather than sending a flat three squads.
+            //
+            // Margins pool within a turn - TurnIntelligenceLedger aggregates every participating
+            // squad's every daily margin per region - and ReconIntelligenceRules.AwarenessDelta
+            // takes the square root of that total. So the squad count decides whether a week of
+            // scouting crosses ReconIntelThreshold at all, and a sweep that falls short buys
+            // nothing: awareness decays 25% before the next attempt.
+            //
+            // Grist Nine, 2026-09-17. Epsilon pooled 3.00 + 3.41 = 6.41 from two squads, cleared
+            // the threshold in one week and was assaulted immediately. Kappa pooled 2.83, fell
+            // short, and needed a second week. Iota took three separate sweeps that returned
+            // 0.04, -0.36 and -0.35 and never became actionable at all.
+            //
+            // This also replaces the old "scout what you know least about" factor, which was
+            // backwards: it scored a region NEARER the threshold LOWER, so the planner kept
+            // abandoning half-scouted ground to start somewhere new. Sizing to the remaining gap
+            // makes a nearly-finished region cheap instead, so it wins on value per battle value
+            // and gets completed.
+            long saturation = scoutSquad
+                * ReconSquadsToCrossThreshold(
+                    offensive.TargetRegion.GetFactionRegionAwareness(faction.Id));
+            tasks.Add(new ForceTask
             {
-                // Size the sweep to be ACTIONABLE THIS TURN rather than sending a flat three squads.
+                Kind = ForceTaskKind.Recon,
+                Objective = offensive.TargetRegion,
+                Offensive = offensive,
+                // FLAT, and deliberately independent of every other candidate. How far from
+                // actionable the region is lives in the SATURATION, and that is the whole of the
+                // ranking: bids rank on Importance / Saturation, so the region a sweep can finish
+                // this week wins, which is the intended primary consideration.
                 //
-                // Margins pool within a turn - TurnIntelligenceLedger aggregates every participating
-                // squad's every daily margin per region - and ReconIntelligenceRules.AwarenessDelta
-                // takes the square root of that total. So the squad count decides whether a week of
-                // scouting crosses ReconIntelThreshold at all, and a sweep that falls short buys
-                // nothing: awareness decays 25% before the next attempt.
+                // This used to be scaled by sqrt(Reward / maxReward) - the target's population
+                // against the biggest candidate on the planet. Two things were wrong with it. The
+                // size of the prize is a property of the ASSAULT, not of looking; and normalising
+                // against the largest candidate meant one big region made every other region less
+                // worth scouting, so adding a city to the map changed what a sweep of a hamlet was
+                // worth.
                 //
-                // Grist Nine, 2026-09-17. Epsilon pooled 3.00 + 3.41 = 6.41 from two squads, cleared
-                // the threshold in one week and was assaulted immediately. Kappa pooled 2.83, fell
-                // short, and needed a second week. Iota took three separate sweeps that returned
-                // 0.04, -0.36 and -0.35 and never became actionable at all.
+                // Grist Nine, 2026-09-17, against Xi's 35,824: Epsilon scored 0.60, Kappa 0.24,
+                // Omicron 0.17, Zeta 0.12. Zeta is held by fifteen PDF and is among the cheapest
+                // conquests on the planet, and it was priced at an eighth of Epsilon purely for
+                // being small - so it was never scouted, and therefore never attackable.
                 //
-                // This also replaces the old "scout what you know least about" factor, which was
-                // backwards: it scored a region NEARER the threshold LOWER, so the planner kept
-                // abandoning half-scouted ground to start somewhere new. Sizing to the remaining gap
-                // makes a nearly-finished region cheap instead, so it wins on value per battle value
-                // and gets completed.
-                long saturation = scoutSquad
-                    * ReconSquadsToCrossThreshold(
-                        offensive.TargetRegion.GetFactionRegionAwareness(faction.Id));
-                tasks.Add(new ForceTask
-                {
-                    Kind = ForceTaskKind.Recon,
-                    Objective = offensive.TargetRegion,
-                    Offensive = offensive,
-                    // Worth what scouting it would unlock. How far from actionable the region is lives
-                    // in the SATURATION now, not here.
-                    Importance = _doctrine.Recon * (offensive.Reward / maxReward),
-                    Saturation = saturation,
-                    // Anything less than the full sweep is wasted: a pooled margin short of the
-                    // threshold leaves the region unactionable and the awareness decays away before
-                    // the next attempt. Send enough squads or send none.
-                    MinimumViableAward = saturation,
-                    // Concave, and it is the one task that earns it. A recon order fans into one
-                    // independent roll per squad and the margins are POOLED under a square root
-                    // (ReconIntelligenceRules.AwarenessDelta), so the sqrt here is the mechanic rather
-                    // than a stand-in for one. The per-battle-value spike that made Concave wrong for
-                    // feeding and patrolling is bounded here because the saturation is only a few
-                    // squads, so the smallest bid is already a large fraction of it.
-                    Shape = bv => ForceValueCurves.Concave(bv / (double)saturation)
-                });
-                // Attacking ground nobody has scouted stays off the table. The pessimistic prior in
-                // CautiousDefenderEstimate would price it out anyway, but stating it keeps the
-                // recon-first rule legible.
-                continue;
-            }
+                // Population survives as a TIE-BREAK (ForceTask.TieBreakValue), which is where a
+                // preference for the richer target belongs: it separates sweeps that cost the
+                // same, and it cannot make one target's existence devalue another.
+                Importance = _doctrine.Recon,
+                TieBreakValue = offensive.Reward,
+                Saturation = saturation,
+                // Anything less than the full sweep is wasted: a pooled margin short of the
+                // threshold leaves the region unactionable and the awareness decays away before
+                // the next attempt. Send enough squads or send none.
+                MinimumViableAward = saturation,
+                // Concave, and it is the one task that earns it. A recon order fans into one
+                // independent roll per squad and the margins are POOLED under a square root
+                // (ReconIntelligenceRules.AwarenessDelta), so the sqrt here is the mechanic rather
+                // than a stand-in for one. The per-battle-value spike that made Concave wrong for
+                // feeding and patrolling is bounded here because the saturation is only a few
+                // squads, so the smallest bid is already a large fraction of it.
+                Shape = bv => ForceValueCurves.Concave(bv / (double)saturation)
+            });
+            // Attacking ground nobody has scouted stays off the table: an unoccupied region under the
+            // threshold appears in this loop and NOT in the assault loop below, so it gets a sweep and
+            // nothing else. The pessimistic prior in CautiousDefenderEstimate would price it out
+            // anyway, but the two loops state the recon-first rule outright.
+            //
+            // A region we OCCUPY appears in both, which is the point: the sweep sharpens next week's
+            // estimate while the assault stays available this week.
+        }
 
+        foreach (PotentialOffensive offensive in offensives.Where(
+            candidate => CanAssault(candidate, faction)))
+        {
             // A defensive posture launches no offensive of its own - but retaking ground the enemy has
             // walked away from is not an offensive, it is restoring the line. A planetary defence force
             // that watches an emptied region and does nothing is not defending; it is conceding.
@@ -436,11 +649,21 @@ internal sealed class ForceTaskBuilder
             double ratio = FactionCapabilities.GeneratesInvasions(faction)
                 ? (_behaviorRules?.DefendedLandingRatio ?? 2.0)
                 : FactionOffensiveEvaluator.OffensiveForceRatioThreshold;
-            // Floored at one squad's price. Force generation cannot honour a smaller request, so an
-            // assault sized off a near-dead garrison would be allocated a few points of battle value
-            // and then silently produce no force at all, and the target would never be attacked.
+            // Floored at one WHOLE squad's price, not at the minimum-strength one. Force generation
+            // cannot honour a smaller request, so an assault sized off a near-dead garrison would be
+            // allocated a few points of battle value and then silently produce no force at all, and
+            // the target would never be attacked.
+            //
+            // MinimumForceRequest is the wrong figure here and was quietly failing: the generic
+            // generator's main loop gates on the template's FULL price and only falls through to a
+            // partial squad, which can build nothing. Grist Nine, 2026-09-18: two Ork advances sized
+            // at 30 against near-dead defenders generated no force at all, while advances at 60, 100
+            // and 142 all mustered. Reconnaissance already prices its tasking off the full squad
+            // (CheapestScoutSquadBattleValue); this is the same rule for the offensive profiles.
+            long squadFloor = Math.Max(
+                1L, Math.Max(faction.MinimumForceRequest, faction.MinimumFullSquadRequest));
             long assaultSaturation = Math.Max(
-                Math.Max(1L, faction.MinimumForceRequest),
+                squadFloor,
                 (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * ratio));
             // Storming a region and raiding it are alternatives for the same week, not a pair.
             TaskExclusionGroup exclusion = new();
@@ -461,7 +684,7 @@ internal sealed class ForceTaskBuilder
                 // Grist Nine, 2026-09-17: the Orks awarded 2,376 to an assault needing 7,000, the commit
                 // refused it, and half the army evaporated. They issued ONE order that week.
                 MinimumViableAward = Math.Max(
-                    Math.Max(1L, faction.MinimumForceRequest),
+                    squadFloor,
                     (long)Math.Ceiling(assaultSaturation * ForceAllocationConstants.AssaultKnee)),
                 // An assault is an all-or-nothing commitment: half the force needed to carry a region
                 // does not half-take it. The knee is what batch bidding exists to find.
@@ -474,8 +697,18 @@ internal sealed class ForceTaskBuilder
             // exactly what a frozen region lacked. Assault and Raid are now offered TOGETHER and priced
             // against each other, instead of the old IsWinnable branch choosing between them from
             // whatever force happened to be spare.
+            //
+            // NOT on ground we already stand on. A raid strikes and pulls back, and pulling back to
+            // the region it just hit is not a withdrawal - the force ends the week exactly where it
+            // started, beside an enemy it chose not to engage properly. An enemy sharing our streets
+            // is a standing fight, which is what Assault and Defend are for.
+            //
+            // The opening was AddPotentialOffensive flooring `intel` to the threshold for any region
+            // the attacker occupies: that is there so a faction will engage a neighbour it can plainly
+            // see, and it made local targets well known enough to raid as a side effect.
             if (!FactionCapabilities.GeneratesInvasions(faction)
-                && offensive.DefenderBattleValue > 0L)
+                && offensive.DefenderBattleValue > 0L
+                && !offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id))
             {
                 long raidSaturation = Math.Max(
                     FactionOffensiveEvaluator.MinimumRaidBattleValue,
@@ -491,13 +724,54 @@ internal sealed class ForceTaskBuilder
                         * Math.Min(1.0, FactionOffensiveEvaluator.RaidUtilityAt(offensive, raidSaturation)),
                     Saturation = raidSaturation,
                     MinimumViableAward = Math.Max(
-                        Math.Max(1L, faction.MinimumForceRequest),
+                        squadFloor,
                         FactionOffensiveEvaluator.MinimumRaidBattleValue),
                     Shape = bv => ForceValueCurves.Linear(bv / (double)raidSaturation)
                 });
             }
         }
     }
+
+    /// <summary>
+    /// Whether this region is still worth scouting, which depends on AWARENESS and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Occupying a region used to count as knowing it, so no sweep was ever offered for ground the
+    /// faction stood on. That closed a trap on itself: standing somewhere denied it a sweep, which kept
+    /// its awareness under the threshold, which kept every estimate there rounded to a power of ten by
+    /// FactionIntelligenceRules.CoarsenEstimate, which set an assault floor bearing no relation to the
+    /// enemy actually present.
+    ///
+    /// Grist Nine, 2026-09-18. Ork awareness of the three regions they held was 0.20, 0.38 and 0.49,
+    /// against 1.06 and 1.22 on neighbouring ground they were free to scout. The only awareness an
+    /// occupied region could earn was the listening-post trickle, and that cannot reach the threshold
+    /// on its own: ApplyAwareness decays 25% and then adds 0.2 per level, so it settles at 0.8 x level
+    /// and a whole level-1 post tops out BELOW 1.0. Assaults on those regions were priced at a 1,400
+    /// floor week after week and refunded every time.
+    ///
+    /// AddPotentialOffensive already said this should not be so - sharing the ground makes the estimate
+    /// CURRENT, not precise, and "scouting its own streets sharpens that, which is the reason to do
+    /// it". The task builder simply never offered the sweep.
+    ///
+    /// Reads only the region, so a group of offensives against the same ground always agrees.
+    /// </remarks>
+    private static bool NeedsSweep(PotentialOffensive offensive, Faction faction) =>
+        !FactionOffensiveEvaluator.IsWellReconnoitred(offensive, faction.Id);
+
+    /// <summary>
+    /// Whether this target can be attacked at all, scouted or not.
+    /// </summary>
+    /// <remarks>
+    /// Occupation still counts here, and must. An enemy sharing our streets is a fight already
+    /// happening; refusing to engage it until a sweep finishes would freeze every contested region,
+    /// which is the failure this whole design exists to escape. So an occupied region under the
+    /// threshold is offered BOTH tasks - the sweep sharpens next week's estimate while the assault
+    /// stays available this week - and the auction prices them against each other. They share no
+    /// exclusion group, so it may fund either or both.
+    /// </remarks>
+    private static bool CanAssault(PotentialOffensive offensive, Faction faction) =>
+        FactionOffensiveEvaluator.IsWellReconnoitred(offensive, faction.Id)
+        || offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id);
 
     /// <summary>
     /// Scout squads needed for one week's pooled sweep to carry a region over the reconnaissance
@@ -629,9 +903,6 @@ internal sealed class ForceTaskBuilder
         SharedThreatLedger threats,
         List<ForceTask> tasks)
     {
-        double maxWorth = Math.Max(1.0, states.Max(RegionWorth));
-        double maxNeed = Math.Max(1.0, states.Max(
-            state => (double)threats.Unanswered(ThreatsFacing(faction, state))));
         var raw = new List<(RegionForceState State, DefenseType Type, long Cost, double Benefit, double Amount)>();
         foreach (RegionForceState state in states)
         {
@@ -653,11 +924,22 @@ internal sealed class ForceTaskBuilder
                 // still decides how far the battle value goes, through the saturation; benefit and the
                 // ground's worth decide whether the build is worth bidding for at all.
                 Importance = _doctrine.Construct
-                    * Math.Max(RegionWorth(state) / maxWorth,
-                        threats.Unanswered(ThreatsFacing(faction, state)) / maxNeed)
+                    * Math.Max(
+                        PopulationWorth(state),
+                        FrontierWorth(ThreatsFacing(faction, state)))
                     * Math.Min(1.0, benefit / ForceAllocationConstants.ReferenceConstructionBenefit)
                     * ForceAllocationConstants.ConstructionLevelShareOfDefence,
                 Saturation = saturation,
+                // Organization is bought in WHOLE PERCENTAGE POINTS, and IssueAllocatedConstruction
+                // refuses the order outright when the award does not cover one - so a part-funded
+                // reorganization debits the region and builds nothing at all. Every other work is
+                // fractional and spends whatever it is given, so only this one needs a floor.
+                //
+                // Grist Nine, 2026-09-17: the Ork construction spend exceeded what its orders account
+                // for by 20, 10 and 6 battle value across the three weeks, with no order to show for
+                // it. This is the "never award battle value a task cannot use" rule, which the other
+                // families already obey.
+                MinimumViableAward = type == DefenseType.Organization ? saturation : 1L,
                 // Works are bought by the point, so value accrues linearly to the next whole level.
                 Shape = bv => Math.Clamp(bv / (double)saturation, 0.0, 1.0)
             });

@@ -60,7 +60,9 @@ public class PlanetaryOperationsServiceTests
     [InlineData(MissionAvailabilityKind.Patrol)]
     [InlineData(MissionAvailabilityKind.FortifyEntrenchment)]
     [InlineData(MissionAvailabilityKind.BuildListeningPost)]
-    [InlineData(MissionAvailabilityKind.BuildAntiAir)]
+    // BuildAntiAir is no longer offered - MissionAvailability stopped listing it because nothing in
+    // combat reads the defence it builds. The kind still exists for saved orders and for the day an
+    // air-attack track is built, so this row comes back with the option, not before it.
     public void Eligibility_StaticMissionKinds_ExcludeAdjacentOrigin(
         MissionAvailabilityKind kind)
     {

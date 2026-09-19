@@ -67,6 +67,8 @@
    - 6.15 [Techmarine Cohort Shape & Roster Visibility (raised by the Mars Pipeline, §4.28)](#615-techmarine-cohort-shape--roster-visibility-raised-by-the-mars-pipeline-428)
    - 6.16 [Techmarine Maintenance Scope & Local Fabrication (raised by the Mars Pipeline, §4.28)](#616-techmarine-maintenance-scope--local-fabrication-raised-by-the-mars-pipeline-428)
    - 6.17 [Cybernetic Replacement of Crippled Vital Locations (raised by the Mars Pipeline, §4.28)](#617-cybernetic-replacement-of-crippled-vital-locations-raised-by-the-mars-pipeline-428)
+   - 6.18 [Force Allocation Common Currency (raised by Faction Strategy, TDD §6.2)](#618-force-allocation-common-currency-raised-by-faction-strategy-tdd-62)
+   - 6.19 [Mop-Up Resolution Seam (raised by Strategic Combat, TDD §6.2)](#619-mop-up-resolution-seam-raised-by-strategic-combat-tdd-62)
 7. [Glossary](#7-glossary)
 
 ---
@@ -1242,9 +1244,11 @@ behavior changed.
 - Each turn, ~5% of a hidden remnant's population flees to **adjacent Imperial-controlled regions**, distributed **weighted by the destination's population** (refugees pour toward the nearest dense fortification — the suburb, not the desert). A fully-surrounded remnant (no eligible neighbor) cannot flee and faces predation in place.
 - Emigration is **not** clamped to destination capacity: overfilling a refuge is intended. The crowding term (§4.15) then models the resulting deprivation die-off, and the swollen population makes that region a worse massacre if the swarm reaches it next — a deliberate grimdark feedback loop.
 
-**PDF as a Defensive Actor**
-- For the pre-arrival and invasion simulation to produce believable outcomes (regions where a dug-in PDF drives the Cult back), the default-Imperial faction acts as a defensive strategic actor through `FactionStrategyController`: it can develop threatened regions while launching no offensives.
-- First cut is **defensive only**: the PDF fortifies (Entrenchment), builds `ListeningPost` sensor infrastructure, and holds — it runs the development/construction slice of `FactionStrategyController` but launches no offensives. It is deliberately **less effective than the Imperial Guard** forces specified later (§6.4): the PDF holds the line and buys time; it does not maneuver or counterattack.
+**PDF as a Strategic Actor**
+- For the pre-arrival and invasion simulation to produce believable outcomes (regions where a dug-in PDF drives the Cult back), the default-Imperial faction plans through `FactionStrategyController` like any other faction.
+- The first cut was **defensive only** — fortify, build sensors, hold, never attack. That restriction was **removed 2026-09-18**, because a faction that cannot attack still has to be garrisoned against by everyone who does not know that, and posture is an intention rather than anything reconnaissance can observe. On Monody Prime it held over a third of the Ork army opposite a neighbour that could not move.
+- The PDF is still expected to be **less effective than the Imperial Guard** (§6.4) and to attack rarely — but that is now an outcome of the marginal-value auction rather than a rule. An assault must clear its force ratio against the estimated defender, and an outnumbered garrison cannot fund one. It holds the line because it cannot afford to do otherwise, not because it is forbidden to try.
+- `FactionStrategyController` retains a `defensiveOnly` mode for any faction that should be posture-restricted in future. Nothing sets it today.
 
 **Strategic Combat Model**
 - PDF ↔ Tyranid ↔ Cult fighting resolves as a lightweight **strategic attrition** step — committed organized force × effectiveness against the defender's organized BV, modified by `Entrenchment`, `ListeningPost`-fed regional intel, and `AntiAir`. This is distinct from the tactical Battle engine (§4.14), which is reserved for Astartes engagements; running tactical resolution for every AI skirmish across a multi-turn headless pre-simulation would be far too costly.
@@ -1713,6 +1717,28 @@ fleets. See §4.22 and `OnlyWar_TDD.md` §6.12.
 **Question:** Should a crippled *vital* hit location require partial cybernetic or vat-grown replacement — an organ rather than a limb?
 
 **Why it comes up.** §4.28 makes damaged cybernetics Techmarine work and §4.8 already models significant body-part replacement, so the machinery exists; the open part is whether vital locations should be routed into it rather than recovering conventionally. It bears directly on how survivable a torso or head wound is across a long career and on how much Techmarine capacity a battered chapter needs, which couples it to §6.16's scope question rather than leaving it independent.
+
+### 6.18 Force Allocation Common Currency (raised by Faction Strategy, TDD §6.2)
+
+**Question:** Should a force-allocation task's importance state an expected **battle-value swing**, rather than a 0..1 score scaled by a per-faction doctrine weight?
+
+**Why it comes up.** Bids rank on `Importance / Saturation`, so importance and saturation must be in compatible units for the ratio to mean anything across *families*. Within a family the units now behave: three separate normalisation errors were found and fixed, and the invariant that came out of them — a family may normalise only against something intrinsic to itself — is recorded with the evidence in `Design/Reference/ForceAllocation.md`. What remains is that comparing a defence against a sweep against a fortification still rests on the doctrine weights being right, and a weight is supposed to say only "how much does this faction care".
+
+The principled form is concrete for at least one family: a reconnaissance sweep is worth the option value of the offensives it unlocks, since an unscouted region produces no assault task at all. Its importance is currently flat, which is a placeholder that at least does not lie about relative size.
+
+**Why it is not committed.** It re-scales every family at once and therefore re-tunes six factions' doctrine weights, moving every seeded outcome, and there is no evidence of a live problem it would fix. `FactionStrategyController.LogTaskRates` prints each task's importance, saturation and rate at Trace so the evidence can be gathered: **act when one family's rates sit an order of magnitude from the others across every planet**, which is a scale error, rather than on one planet, which is a planet where that family genuinely matters more.
+
+A smaller open piece sits inside this one: `RegionWorthReferencePopulation` is 100,000, chosen against a world whose regions run 507 to 35,824. On a hive world with regions of 160,000 and 753,000 it will clamp several to 1.0 and stop discriminating — the same saturation failure as the rejected front-count term, one scale up. Unverified.
+
+### 6.19 Mop-Up Resolution Seam (raised by Strategic Combat, TDD §6.2)
+
+**Question:** How should a fight be finished when the defender is a remnant the attacker vastly outnumbers?
+
+**Why it comes up.** Two rules now cover this and they meet with a gap between them. Strategic combat clamps defender losses at 75%, so it cannot reduce a defender to the exactly-zero that going-to-ground requires; **overrun** was added for that, annihilating a defence past ten times its entrenched battle value. But `MassCombatBattleValueFloor` was raised to 3,000 so that small fights resolve **tactically** — and overrun is a strategic-combat rule, so a fight small enough to route tactically cannot be overrun.
+
+Observed on Monody Prime, 2026-09-18: Alpha held **35,164 Ork battle value against 33 Imperial** and remained contested. A ratio of a thousand to one that overrun would clear instantly, except an assault sized against a 33-point defender commits too little to reach the floor.
+
+**Why it comes up now rather than before.** Both halves are recent and each was correct in isolation. The question is whether tactical resolution should gain an equivalent rule, whether the floor should have an exception for extreme ratios, or whether tactical resolution already reaches zero reliably enough that the seam is theoretical — it does clear defenders in practice on smaller worlds, which is why this is a question and not a defect.
 
 ---
 

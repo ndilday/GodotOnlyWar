@@ -652,9 +652,24 @@ public class FactionStrategyControllerTests
         Assert.True(needyAfter > needyBefore,
             $"the threatened region must be reinforced; held {needyAfter} against {needyBefore}");
         Assert.True(rearAfter < 10_000, "the rear region must have paid for it");
-        // And it never sends more than the threat actually calls for.
-        Assert.True(needyAfter <= 2_500,
-            $"reinforcement must stay within the perceived requirement; held {needyAfter}");
+
+        // The cap here USED to be the perceived requirement, 2,500 - "reinforcement never sends more
+        // than the threat calls for". That contract was replaced deliberately when Move was added, and
+        // the assertion is restated rather than loosened.
+        //
+        // Two mechanisms now put force into this region and they answer different questions. Defend
+        // reinforcement meets a garrison SHORTFALL, and it is still capped by the requirement. Move
+        // marches surplus toward the fighting, and a frontier region massing for an attack is supposed
+        // to hold more than holding the ground needs - that is the point of massing. What bounds it is
+        // the staging capacity, FrontStagingMultiple x the defensive requirement, past which the ground
+        // is full and the force is better left where it stands.
+        Assert.True(needyAfter <= 7_500,
+            $"the front region must not exceed its staging capacity; held {needyAfter}");
+        // And the rear does not empty in one turn. MaxMarchFractionPerTurn keeps the gradient a flow
+        // rather than a teleport, so the province behind the line thins over several turns and always
+        // keeps its own minimum garrison.
+        Assert.True(rearAfter >= 2_000,
+            $"the rear region must keep its own garrison; held {rearAfter}");
     }
 
     [Fact]

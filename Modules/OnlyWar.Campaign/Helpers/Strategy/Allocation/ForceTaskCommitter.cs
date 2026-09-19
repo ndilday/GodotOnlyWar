@@ -68,6 +68,9 @@ internal sealed class ForceTaskCommitter
                 case ForceTaskKind.Withdraw:
                     CommitWithdraw(faction, planet, task, total, states);
                     break;
+                case ForceTaskKind.Move:
+                    CommitMove(faction, planet, task, total, states);
+                    break;
                 case ForceTaskKind.Patrol:
                     _reconPatrol.IssueAllocatedPatrol(
                         faction, planet, task.Home, total, allOrders, random);
@@ -151,6 +154,40 @@ internal sealed class ForceTaskCommitter
 
         GameLog.Debug(() =>
             $"AI withdraw {faction.Name}/{planet.Name}: {task.Home.Region.Name}->{task.Destination.Name}, "
+            + $"moved={moved}, remaining={task.Home.MilitaryStrength}");
+    }
+
+    /// <summary>
+    /// Marching force forward. The same strength transfer a withdrawal makes, in the other direction.
+    /// </summary>
+    /// <remarks>
+    /// A chain of moves resolves in one pass - A marches to B while B marches to C - and each is sized
+    /// off the strength its region held when the task list was built. That is deliberate: the result is
+    /// a flow toward the front rather than a single region emptying into the next, and it settles over
+    /// turns rather than in one.
+    /// </remarks>
+    private static void CommitMove(
+        Faction faction,
+        Planet planet,
+        ForceTask task,
+        long battleValue,
+        IReadOnlyList<RegionForceState> states)
+    {
+        RegionForceState destination = states
+            .FirstOrDefault(state => state.RegionFaction.Region == task.Destination);
+        if (destination == null) return;
+
+        long moved = Math.Min(battleValue, task.Home.MilitaryStrength);
+        if (moved <= 0L) return;
+
+        task.Home.RemoveMilitaryStrength(moved);
+        destination.RegionFaction.AddMilitaryStrength(moved);
+        // Not credited to the destination's planning budget, for the reason CommitWithdraw records:
+        // the auction has already finished, so nothing can spend it, and crediting it only made the
+        // plan's own log report the arriving force as unallocated.
+
+        GameLog.Debug(() =>
+            $"AI move {faction.Name}/{planet.Name}: {task.Home.Region.Name}->{task.Destination.Name}, "
             + $"moved={moved}, remaining={task.Home.MilitaryStrength}");
     }
 

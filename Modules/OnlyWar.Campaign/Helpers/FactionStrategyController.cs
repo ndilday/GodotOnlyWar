@@ -212,6 +212,8 @@ public class FactionStrategyController
         SharedThreatLedger threats = new();
         List<ForceTask> tasks = new ForceTaskBuilder(_behaviorRules, DoctrineFor(faction)).Build(
             faction, planet, regionalForceStates, offensives, threats, defensiveOnly);
+        LogTaskRates(faction, planet, tasks);
+
         List<ForceTaskAward> awards = new ForceAllocationAuction(threats).Run(
             faction, planet, tasks, regionalForceStates);
 
@@ -221,7 +223,72 @@ public class FactionStrategyController
         GameLog.Debug(() =>
             $"AI plan {faction.Name}/{planet.Name}: tasks={tasks.Count}, awards={awards.Count}, "
             + $"allocated={awards.Sum(a => a.BattleValue)}, unallocated={regionalForceStates.Sum(s => s.SpareTroops)}, "
-            + $"orders={allNewOrders.Count}, spend=[" + SummarizeAwards(awards) + "]");
+            + $"orders={allNewOrders.Count}, spend=[" + SummarizeAwards(awards) + "], "
+            + SummarizeOffensiveReach(faction, offensives, tasks, awards));
+    }
+
+    /// <summary>
+    /// Every task's asking rate, before the auction decides anything.
+    /// </summary>
+    /// <remarks>
+    /// Bids rank on `Importance / Saturation`, so that ratio is the number the whole allocation turns
+    /// on - and the auction's own trace only prints it for tasks that WON. A family that is
+    /// systematically losing on scale rather than on doctrine is therefore exactly the one invisible in
+    /// the logs, which is how construction's size trap and reconnaissance's normaliser both survived
+    /// several rounds of tuning.
+    ///
+    /// This is the measurement behind the open question on the common currency: importances are
+    /// normalised per family and then weighted by doctrine, so a weight is supposed to say "how much
+    /// this faction cares" and nothing else. If one family's rates sit an order of magnitude above
+    /// another's across every planet, the weights are silently carrying a scale correction instead, and
+    /// that is the signal to do something about it. Sorted by rate so the comparison is immediate.
+    /// </remarks>
+    private static void LogTaskRates(Faction faction, Planet planet, List<ForceTask> tasks)
+    {
+        if (tasks.Count == 0) return;
+        GameLog.Trace(() =>
+            $"AI task rates {faction.Name}/{planet.Name}: "
+            + string.Join("; ", tasks
+                .Select(task => new
+                {
+                    Task = task,
+                    Rate = task.Saturation > 0L ? task.Importance / task.Saturation : 0.0
+                })
+                .OrderByDescending(entry => entry.Rate)
+                .Select(entry =>
+                    $"{entry.Task.Kind} {entry.Task.Objective?.Name} "
+                    + $"imp={entry.Task.Importance:F3} sat={entry.Task.Saturation} "
+                    + $"perBv={entry.Rate:E2}")));
+    }
+
+    /// <summary>
+    /// Why the faction is not attacking more: how many targets it can see, how many are scouted well
+    /// enough to be attackable at all, and how many of each kind of task actually drew force.
+    /// </summary>
+    /// <remarks>
+    /// A target that is not well reconnoitred gets no assault task, only a recon one, so "plenty of
+    /// spare battle value and few assaults" has two completely different causes - nothing affordable
+    /// to attack, or nothing scouted to attack - and the spend breakdown alone cannot tell them apart.
+    /// Working that out from the code took a round of guessing that this line would have settled.
+    /// </remarks>
+    private static string SummarizeOffensiveReach(
+        Faction faction,
+        IReadOnlyList<StrategyPotentialOffensive> offensives,
+        IReadOnlyList<ForceTask> tasks,
+        IReadOnlyList<ForceTaskAward> awards)
+    {
+        int attackable = offensives.Count(offensive =>
+            FactionOffensiveEvaluator.IsWellReconnoitred(offensive, faction.Id)
+            || offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id));
+        HashSet<ForceTask> funded = awards.Select(award => award.Task).ToHashSet();
+
+        int Count(ForceTaskKind kind, bool onlyFunded) => onlyFunded
+            ? tasks.Count(task => task.Kind == kind && funded.Contains(task))
+            : tasks.Count(task => task.Kind == kind);
+
+        return $"targets={offensives.Count}(attackable={attackable}), "
+            + $"assaultTasks={Count(ForceTaskKind.Assault, true)}/{Count(ForceTaskKind.Assault, false)}, "
+            + $"reconTasks={Count(ForceTaskKind.Recon, true)}/{Count(ForceTaskKind.Recon, false)} funded";
     }
 
     // Where the planet's battle value actually went, by task family. Without this the plan line says

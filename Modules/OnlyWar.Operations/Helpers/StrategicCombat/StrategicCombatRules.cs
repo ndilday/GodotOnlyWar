@@ -19,7 +19,29 @@ namespace OnlyWar.Operations.StrategicCombat
         // These strategic thresholds retain the pre-recalculation unit scale. BattleValues are
         // deliberately compressed to that same scale so garrison growth, force pools, and
         // tactical/strategic handoff decisions remain comparable.
-        public const long MassCombatBattleValueFloor = 1500;
+        // Raised from 1500 on 2026-09-18. This is the handoff: at or above it a fight resolves
+        // strategically, and strategic combat CANNOT finish a defender, because defenderLossRate is
+        // clamped at 0.75 while HideBrokenCivilianDefender needs exactly zero. So every point of this
+        // floor is mop-up that the game can actually conclude.
+        //
+        // At the 2:1 commitment the offensive planner uses, `committed + defender` is about three
+        // times the defender, so 1500 put the crossover at a defender of ~500 and 3000 puts it at
+        // ~1000 - roughly ten attacking squads against fewer than ten defending ones, which is well
+        // inside what the tactical resolver handles. Measured on Monody Prime, the smallest strategic
+        // battle in a five-week run was 1753 against a defender of 553; under this floor it resolves
+        // tactically and can end.
+        public const long MassCombatBattleValueFloor = 3000;
+
+        // Force ratio at which an attack stops being a battle and becomes an overrun: the defence is
+        // swept aside and takes total casualties rather than the usual clamped share. The defender is
+        // measured at `battleValue * EntrenchmentMultiplier(level)` - the same entrenchment curve the
+        // fight itself uses, so works are exactly as protective here as they are anywhere else.
+        //
+        // This exists because the 0.75 loss clamp made annihilation unreachable at ANY ratio. Monody
+        // Prime, 2026-09-18: 22,000 battle value committed against a defender of 18, and 45,153 Orks
+        // sharing a region with 58 Imperials that they could not finish. Attacker casualties are
+        // unchanged - an overrun is cheap, not free.
+        public const double OverrunForceRatio = 10.0;
 
         // One point of reorganization effort reforms this much disorganized military BV. Anchored
         // to a ten-trooper PDF squad so the rate is expressed in the same currency as force pools.

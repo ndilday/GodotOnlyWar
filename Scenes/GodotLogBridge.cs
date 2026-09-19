@@ -42,6 +42,12 @@ public partial class GodotLogBridge : Node
                 GD.PushWarning(message);
             }
         };
+        // Raise to Trace when tuning force allocation: FactionStrategyController.LogTaskRates prints
+        // every task's Importance / Saturation before the auction runs, the auction prints the winning
+        // rate per award, and FactionOffensiveEvaluator prints each candidate's estimate against its
+        // real strength. Those are the numbers the allocation turns on, and at Debug they are
+        // invisible - which is how three separate scale errors in one expression each hid the next.
+        // Costs roughly 250 KB per three simulated weeks, so it is not the default.
         GameLog.MinimumLevel = GameLogLevel.Debug;
 
         GD.Print($"OnlyWar log sink: {_logSink.LogPath}");

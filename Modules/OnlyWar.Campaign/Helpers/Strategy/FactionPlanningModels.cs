@@ -1,4 +1,5 @@
 using OnlyWar.Domain;
+using OnlyWar.Domain.Extensions;
 using OnlyWar.Domain.Planets;
 using System;
 using System.Collections.Generic;
@@ -52,6 +53,28 @@ internal class RegionForceState
     /// </summary>
     public long Quantum { get; }
 
+    /// <summary>
+    /// Strength this region may never send away on an offensive, however badly the attack needs it.
+    /// </summary>
+    /// <remarks>
+    /// An offensive DRAWS its force out of the staging regions - FactionOffensiveOrderBuilder calls
+    /// RemoveMilitaryStrength on each contributor - and nothing stopped a region contributing the
+    /// whole of itself. Grist Nine, 2026-09-18: the Orks took Theta with a 60-point foothold one week
+    /// and spent all 60 of it on the assault on Mu the next, so the region they had just captured was
+    /// left with no garrison at all. Iota did the same.
+    ///
+    /// That is worse than it sounds for an Indelible faction, because a presence whose population
+    /// reaches zero hides itself permanently (RegionFaction.Population) and nothing outside the
+    /// strategic-invasion lifecycle ever republishes it. Both regions ended the run invisible, Iota
+    /// while holding 573 Orks.
+    ///
+    /// Deliberately the MINIMUM reserve fraction and not the region's defensive requirement. The
+    /// requirement is an unbounded want - on Grist Nine it read 31,599 against an army of 4,827 - so
+    /// reserving it would bar a frontier region from ever attacking, which is the freeze this whole
+    /// design exists to escape. This only guarantees the region is not stripped bare.
+    /// </remarks>
+    public long OffensiveGarrisonFloor { get; }
+
     public RegionForceState(
         RegionFaction factionInfo,
         long requiredDefensiveBattleValue,
@@ -64,6 +87,9 @@ internal class RegionForceState
         AssignedDefensiveBattleValue = assignedDefensiveBattleValue;
         SpareTroops = spareTroops;
         DefensiveShortfall = defensiveShortfall;
+
+        OffensiveGarrisonFloor = (long)(factionInfo.GetDeployedStrength()
+            * OnlyWar.Operations.Strategy.FactionThreatAssessment.MinimumDefensiveReserveFraction);
 
         MinimumBid = Math.Max(1L, factionInfo.PlanetFaction.Faction.MinimumForceRequest);
         long steps = Math.Max(

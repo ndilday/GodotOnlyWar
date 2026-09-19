@@ -58,17 +58,47 @@ internal sealed class ForceAllocationAuction
         // constant for a (task, source) pair, so it is computed ONCE here rather than on every bid
         // evaluation - it walks region adjacency and tests faction hostility, and doing that inside the
         // scoring loop made full sector generation several times slower on its own.
-        var queue = new PriorityQueue<Pairing, double>();
+        var queue = new PriorityQueue<Pairing, (double Score, double Tie)>();
         foreach (ForceTask task in tasks)
         {
-            foreach ((RegionForceState source, int hops) in EligibleBidders(task, stateByRegion))
+            List<(RegionForceState Source, int Hops)> bidders = EligibleBidders(task, stateByRegion);
+
+            // A task its bidders cannot collectively fund never enters the auction at all.
+            //
+            // While a bid had to cover the whole viable award alone, this was implicit: an unaffordable
+            // task simply received no bids. Once several regions can share one, an unaffordable task
+            // starts drawing force it will never be able to use, and the refund pass only returns that
+            // force AFTER the auction has ended - by which time whatever it was outbidding has lost.
+            //
+            // The case that showed it: an assault on a target too strong to storm outranks the raid it
+            // excludes, because a threshold curve priced at its knee beats a linear one. The assault
+            // took the force, never reached its launch threshold, was refunded, and the region was
+            // neither stormed nor raided. Refusing it up front leaves the raid to win, which is the
+            // whole point of offering the two together.
+            //
+            // This is an upper bound: those budgets are also being spent on other tasks, so a task can
+            // still pass here and fall short later. The refund pass remains the backstop.
+            if (task.MinimumViableAward > 1L
+                && bidders.Sum(bidder => bidder.Source.SpareTroops) < task.MinimumViableAward)
             {
+                GameLog.Trace(() =>
+                    $"AI skip {faction.Name}/{planet.Name}: {task.Kind} {task.DescribeTarget()} "
+                    + $"needs {task.MinimumViableAward}, bidders hold "
+                    + $"{bidders.Sum(bidder => bidder.Source.SpareTroops)}");
+                continue;
+            }
+
+            foreach ((RegionForceState source, int hops) in bidders)
+            {
+                double flexibility = PaysFlexibilityPrice(task.Kind)
+                    ? ForceAllocationConstants.SourceFlexibilityPenalty
+                        * ReachableEnemyTargets(source, task.Objective)
+                    : 0.0;
                 double discount = Math.Pow(ForceAllocationConstants.TransitDiscountPerHop, hops)
-                    / (1.0 + ForceAllocationConstants.SourceFlexibilityPenalty
-                        * ReachableEnemyTargets(source, task.Objective));
+                    / (1.0 + flexibility);
                 Pairing pairing = new(task, source, hops, discount);
                 Bid bid = BestBid(pairing);
-                if (bid.BattleValue > 0L) queue.Enqueue(pairing, -bid.ScorePerBattleValue);
+                if (bid.BattleValue > 0L) queue.Enqueue(pairing, PriorityOf(task, bid));
             }
         }
 
@@ -88,10 +118,10 @@ internal sealed class ForceAllocationAuction
 
             // Lazy re-scoring: if this pairing is no longer the best, put it back at its real score and
             // let whatever now leads be examined instead.
-            if (queue.TryPeek(out _, out double nextPriority)
-                && -bid.ScorePerBattleValue > nextPriority)
+            if (queue.TryPeek(out _, out (double, double) nextPriority)
+                && PriorityOf(task, bid).CompareTo(nextPriority) > 0)
             {
-                queue.Enqueue(pairing, -bid.ScorePerBattleValue);
+                queue.Enqueue(pairing, PriorityOf(task, bid));
                 continue;
             }
 
@@ -110,9 +140,38 @@ internal sealed class ForceAllocationAuction
                 Bid next = BestBid(pairing);
                 if (next.BattleValue > 0L)
                 {
-                    queue.Enqueue(pairing, -next.ScorePerBattleValue);
+                    queue.Enqueue(pairing, PriorityOf(task, next));
                 }
             }
+        }
+
+        // A task left short of the award that makes it work at all gives everything back.
+        //
+        // This is the other half of letting several regions fund one task. A bid no longer has to
+        // cover the whole viable award on its own, so a task CAN end the auction part-funded - and
+        // committing that is the worst failure this design has: the regions are debited, the executor
+        // produces nothing, and the force is gone rather than merely misspent. Checking once, here, is
+        // the only point at which the total is known.
+        //
+        // It runs before the reserve sink below, so what comes back is not left idle - it garrisons the
+        // region that offered it.
+        foreach (ForceTask task in tasks)
+        {
+            if (task.Assigned <= 0L || !task.ShortOfViableAward) continue;
+
+            long returned = 0L;
+            foreach (ForceTaskAward award in awards.Where(a => ReferenceEquals(a.Task, task)))
+            {
+                award.Source.SpareTroops += award.BattleValue;
+                returned += award.BattleValue;
+            }
+            awards.RemoveAll(award => ReferenceEquals(award.Task, task));
+            task.Refund();
+
+            long refunded = returned;
+            GameLog.Debug(() =>
+                $"AI refund {faction.Name}/{planet.Name}: {task.Kind} {task.DescribeTarget()} "
+                + $"held {refunded} of a {task.MinimumViableAward} minimum; returned unspent");
         }
 
         // The reserve sink, applied in one pass rather than auctioned a quantum at a time. Force that
@@ -140,6 +199,39 @@ internal sealed class ForceAllocationAuction
     /// </summary>
     private const double EpsilonScoreFloor =
         ForceAllocationConstants.DefenceEpsilonTailPerBattleValue * 10.0;
+
+    /// <summary>
+    /// Queue priority: best value per battle value first, ties broken by the task's own preference.
+    /// </summary>
+    /// <remarks>
+    /// Both terms are negated because PriorityQueue pops the SMALLEST. The tie-break only ever
+    /// separates bids that score identically, so it cannot reorder work - which is exactly what makes
+    /// it the right place for a preference that must not distort the ranking. Recon puts its target's
+    /// population here; with a flat recon importance, equal scores are common rather than a rounding
+    /// accident, so the tie-break genuinely decides which of two equally cheap sweeps goes first.
+    /// </remarks>
+    private static (double, double) PriorityOf(ForceTask task, Bid bid) =>
+        (-bid.ScorePerBattleValue, -task.TieBreakValue);
+
+    /// <summary>
+    /// Whether this kind of work is charged for the other enemies its source region could have
+    /// answered instead.
+    /// </summary>
+    /// <remarks>
+    /// The price came from FactionStagingPlanner's opportunity-cost ordering, and it prices one thing:
+    /// committing a region's force to a fight, which is then not available for another border. A
+    /// reconnaissance sweep and a standing screen are not that. Their squads are GENERATED
+    /// (ForceGenerator, discarded again next turn) rather than drawn from the garrison, and the region's
+    /// military strength is untouched, so a frontier region loses no ability to answer its other
+    /// neighbours by scouting one of them.
+    ///
+    /// Charging them anyway hit reconnaissance hardest, because it pays a transit hop as well: a region
+    /// facing three other enemies kept 0.6 / (1 + 0.35 x 3) = 0.29 of its bid, against the 0.49 the
+    /// works on its own ground kept. That is most of a factor of two, applied to precisely the task
+    /// that was already losing to those works.
+    /// </remarks>
+    private static bool PaysFlexibilityPrice(ForceTaskKind kind) =>
+        kind is not (ForceTaskKind.Recon or ForceTaskKind.Patrol);
 
     /// <summary>One region's standing offer to one task, with its price already resolved.</summary>
     private readonly record struct Pairing(
@@ -173,9 +265,24 @@ internal sealed class ForceAllocationAuction
     {
         (ForceTask task, RegionForceState source, int hops, double discount) = pairing;
         long budget = source.SpareTroops;
+        // An offensive physically removes its force from the staging region, so a region may not
+        // offer the strength it needs to keep standing where it is. Only Assault and Raid draw this
+        // way; Defend and Move relocate strength between two presences that both survive, and Move
+        // already holds a garrison back by construction.
+        if (task.Kind is ForceTaskKind.Assault or ForceTaskKind.Raid)
+        {
+            budget = Math.Min(budget, Math.Max(0L, source.SpareTroops - source.OffensiveGarrisonFloor));
+            if (budget <= 0L) return default;
+        }
         // A bid must be big enough for the TASK to produce something, not merely big enough for the
         // faction to build its cheapest squad of any kind. A bid below that is burned battle value.
         long floor = task.MinimumBidGiven(Math.Max(1L, source.MinimumBid));
+        // ...except the top-up that COMPLETES a task, which is always legal however small. A task's
+        // viable award is not a multiple of any region's quantum, so the last sliver is routinely
+        // under the source floor: an Ork assault 13 short of its 1,400 threshold could not be finished
+        // by a region whose own minimum bid is 30, and was refunded at 99% instead.
+        long completion = CompletionAmount(task);
+        if (completion > 0L) floor = Math.Min(floor, completion);
         if (budget < floor || !task.AcceptsMore) return default;
 
         // The reserve sink absorbs from its OWN region only. Defend accepts battle value past its
@@ -190,10 +297,18 @@ internal sealed class ForceAllocationAuction
         Bid best = default;
         foreach (long candidate in CandidateAmounts(task, source, budget, floor))
         {
-            double marginal = task.MarginalValue(candidate) * discount;
-            if (marginal <= 0.0) continue;
-            double perBattleValue = marginal / candidate;
-            if (perBattleValue > best.ScorePerBattleValue)
+            // BidValue, not MarginalValue: while a task is short of its viable award, every point is
+            // priced at the rate the completed task earns, so several regions can fill it between them
+            // without a smaller share ever looking like the better buy.
+            double value = task.BidValue(candidate) * discount;
+            if (value <= 0.0) continue;
+            double perBattleValue = value / candidate;
+            // Ties go to the LARGER amount, and CandidateAmounts is ascending. Below a task's viable
+            // award every amount scores the same per point, so preferring the smaller one would have a
+            // region creep toward the floor a quantum per auction round - many more iterations for the
+            // same plan, and a real risk of hitting MaxAuctionIterations on a busy planet.
+            if (perBattleValue >= best.ScorePerBattleValue && best.BattleValue > 0L
+                || perBattleValue > best.ScorePerBattleValue)
             {
                 best = new Bid(candidate, perBattleValue);
             }
@@ -228,6 +343,13 @@ internal sealed class ForceAllocationAuction
         long remaining = task.Remaining;
         if (remaining > 0L) amounts.Add(Math.Min(remaining, budget));
 
+        // The amount that would carry the task over its viable award is always on the table, whatever
+        // the grid. A region able to finish a task outright should be able to offer exactly that
+        // rather than the nearest quantum below it, which would leave the task short and send it to
+        // the refund pass.
+        long completion = CompletionAmount(task);
+        if (completion > 0L && completion <= budget) amounts.Add(completion);
+
         // The threshold of a non-concave curve is always a candidate whatever the grid. Without this a
         // coarse region can step over the knee of a defence or an assault and badly over- or
         // under-commit - the one case where a coarse quantum causes a wrong decision and not merely a
@@ -240,6 +362,12 @@ internal sealed class ForceAllocationAuction
 
         return amounts.Where(amount => amount >= floor && amount <= budget && amount > 0L);
     }
+
+    /// <summary>
+    /// What it would take to carry this task over its viable award, or zero when it is already there.
+    /// </summary>
+    private static long CompletionAmount(ForceTask task) =>
+        task.ShortOfViableAward ? Math.Max(0L, task.MinimumViableAward - task.Assigned) : 0L;
 
     private static IEnumerable<double> KneeFractions(ForceTask task)
     {
@@ -322,10 +450,13 @@ internal sealed class ForceAllocationAuction
     /// </remarks>
     private static int BidReach(ForceTaskKind kind) => kind switch
     {
+        // Move takes no outside bids either: the task IS one region's own force marching, so the only
+        // region that can offer it is the one holding it.
         ForceTaskKind.Patrol
             or ForceTaskKind.Construct
             or ForceTaskKind.Feed
             or ForceTaskKind.Withdraw
+            or ForceTaskKind.Move
             or ForceTaskKind.ConsumptionSpread => 0,
         ForceTaskKind.Defend => 1,
         _ => ForceAllocationConstants.MaxBidHops

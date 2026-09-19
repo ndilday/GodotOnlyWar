@@ -56,16 +56,18 @@ namespace OnlyWar.Campaign.Turns
             else switch (regionFaction.PlanetFaction.Faction.GrowthType)
             {
                 case GrowthType.Logistic:
-                    float factionGrowthMultiplier = regionFaction.GrowthMultiplier;
-                    if (FactionCapabilities.HasDormantPopulations(
-                        regionFaction.PlanetFaction.Faction))
-                    {
-                        factionGrowthMultiplier *= (float)DormantPopulationRules.GrowthEfficiency(
-                            _turn.Rules.FactionBehaviorRules,
-                            regionFaction.IsPublic);
-                    }
+                    // Visibility no longer scales growth. A dormant population used to grow at 0.10
+                    // and a public one at 2.0, which made the two differ by twenty times - but against
+                    // a base rate of 0.0006 a week, neither figure meant anything on a campaign
+                    // timescale. A hidden band of 573 needed roughly NINE HUNDRED YEARS to reach the
+                    // 10,000 that dormant emergence requires, and a fully public one still needed
+                    // about fifty. The multiplier was a knob that changed an unreachable number into a
+                    // differently unreachable number.
+                    //
+                    // Orks grow by conquest and mobilization, not by breeding, so the rate is now the
+                    // plain logistic one whether the population is hiding or marching.
                     newPop = ApplyCarryingCapacity(
-                        regionFaction.Population * LogisticGrowthRate * factionGrowthMultiplier,
+                        regionFaction.Population * LogisticGrowthRate * regionFaction.GrowthMultiplier,
                         regionFaction.Region);
                     break;
                 case GrowthType.Conversion:

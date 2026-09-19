@@ -12,8 +12,9 @@ namespace OnlyWar.Domain.FactionBehaviors
         public const double MobilizationSigma = 0.10;
         public const double MobilizationMinimum = 0.25;
         public const double MobilizationMaximum = 0.90;
-        public const double PublicGrowthMultiplier = 2.0;
-        public const double DormantGrowthMultiplier = 0.10;
+        // PublicGrowthMultiplier (2.0) and DormantGrowthMultiplier (0.10) are gone, along with the
+        // GrowthEfficiency helpers that read them. Population growth no longer depends on whether a
+        // presence is hiding: see PlanetDemographicsProcessor for why neither figure was reachable.
         public const double ExceptionalAssassinationMargin = 3.0;
 
         public static double UpdateConsolidation(double current, double zValue) =>
@@ -34,10 +35,5 @@ namespace OnlyWar.Domain.FactionBehaviors
             System.Math.Clamp(profile.MobilizationMedian + profile.MobilizationSigma * zValue,
                 profile.MobilizationMinimum, profile.MobilizationMaximum);
 
-        public static double GrowthEfficiency(bool isPublic) =>
-            isPublic ? PublicGrowthMultiplier : DormantGrowthMultiplier;
-
-        public static double GrowthEfficiency(FactionBehaviorRulesProfile profile, bool isPublic) =>
-            isPublic ? profile.PublicGrowthMultiplier : profile.DormantGrowthMultiplier;
     }
 }

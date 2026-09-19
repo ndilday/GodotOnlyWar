@@ -319,9 +319,16 @@ internal sealed class FactionOffensiveOrderBuilder
         if (attacker == null || offensive?.TargetFaction == null) return false;
         if (attacker.IsPlayerFaction || offensive.TargetFaction.PlanetFaction.Faction.IsPlayerFaction) return false;
         if (offensive.TargetFaction.LandedSquads.Any(s => s.Faction?.IsPlayerFaction == true)) return false;
-        // Secular insurgents are represented by abstract embedded-PDF and armed-civilian pools;
-        // they deliberately have no squad templates to generate for tactical combat.
-        if (attacker.GrowthType == GrowthType.Unrest) return true;
+        // A faction that cannot field a tactical force has to resolve strategically: the tactical path
+        // generates nothing, and FinishOffensive then abandons the offensive and hands the battle value
+        // back, so the attack simply never happens.
+        //
+        // This used to be keyed on GrowthType.Unrest, on the grounds that secular insurgents were
+        // abstract embedded-PDF and armed-civilian pools with no squad templates. The Insurrectionists
+        // have templates now - a Mob and a Weapon Team, plus a Firebrand HQ - so the GROWTH TYPE is the
+        // wrong test and they should size like anyone else. The CONDITION it stood for is still real,
+        // and any faction with no usable template meets it, whatever its growth type.
+        if (attacker.MinimumFullSquadRequest <= 0) return true;
 
         long defenderBattleValue = offensive.DefenderBattleValue > 0
             ? offensive.DefenderBattleValue

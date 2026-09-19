@@ -53,9 +53,21 @@ namespace OnlyWar.Campaign.Turns
                 return;
             }
 
+            // The default faction plans like everyone else. It used to be pinned to defensiveOnly
+            // (PRD §4.24, which describes itself as a "first cut"), and that had a cost the rest of
+            // the planner then had to work around: a faction that never attacks was still garrisoned
+            // against at the same rate as one that does, because posture is an intention and nothing
+            // observable. On Monody Prime that held over a third of the Ork army opposite a neighbour
+            // that could not move.
+            //
+            // Putting every faction on the same footing removes the special case rather than pricing
+            // it. A PDF will still almost never attack, but the ECONOMICS will be what stops it: an
+            // assault has to clear its force ratio against the estimated defender, and a garrison that
+            // is outnumbered cannot fund one. That is the same test every other faction passes, and it
+            // fails honestly instead of by fiat.
             orders.AddRange(planet == null
-                ? _strategyController.GenerateFactionOrders(defaultFaction, sector, defensiveOnly: true)
-                : _strategyController.GenerateFactionOrders(defaultFaction, sector, planet, defensiveOnly: true));
+                ? _strategyController.GenerateFactionOrders(defaultFaction, sector)
+                : _strategyController.GenerateFactionOrders(defaultFaction, sector, planet));
 
             // Attach after every faction has planned. This lets a strategic invasion force see an assault generated
             // by a later NPC faction and reserve its Warboss for the defensive battle, preserving

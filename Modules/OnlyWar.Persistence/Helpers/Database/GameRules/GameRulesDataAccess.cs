@@ -60,10 +60,18 @@ namespace OnlyWar.Persistence.Database.GameRules
                 throw new FileNotFoundException("The game rules database is missing.", fullPath);
             }
 
+            // Pooling is off deliberately. A pooled connection keeps the database file open
+            // after Dispose, so `using` stops being a release point and callers have to reach
+            // for the process-global SqliteConnection.ClearAllPools() to get the handle back.
+            // That global is not a reliable per-caller release under xUnit parallelism: tests
+            // that load a throwaway copy of the rules database and delete it afterwards failed
+            // intermittently with "the process cannot access the file". The rules database is
+            // opened once per game load, so pooling buys nothing here.
             var connectionString = new SqliteConnectionStringBuilder()
             {
                 Mode = SqliteOpenMode.ReadOnly,
-                DataSource = fullPath
+                DataSource = fullPath,
+                Pooling = false
             }.ToString();
             using IDbConnection dbCon = new SqliteConnection(connectionString);
             dbCon.Open();
@@ -178,7 +186,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             Dictionary<int, ForceDoctrineWeights> doctrines = [];
             using var command = connection.CreateCommand();
             command.CommandText = @"SELECT FactionId, Defend, Withdraw, Assault, Raid, Recon,
-                Patrol, Construct, Spread, Feed, ReconAggression FROM FactionDoctrine";
+                Patrol, Construct, Spread, Feed, ReconAggression, Move FROM FactionDoctrine";
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -193,7 +201,8 @@ namespace OnlyWar.Persistence.Database.GameRules
                     Construct = Convert.ToDouble(reader[7]),
                     Spread = Convert.ToDouble(reader[8]),
                     Feed = Convert.ToDouble(reader[9]),
-                    ReconAggression = (OnlyWar.Domain.Orders.Aggression)Convert.ToInt32(reader[10])
+                    ReconAggression = (OnlyWar.Domain.Orders.Aggression)Convert.ToInt32(reader[10]),
+                    Move = Convert.ToDouble(reader[11])
                 };
             }
             return doctrines;

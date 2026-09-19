@@ -61,6 +61,7 @@ namespace OnlyWar.Operations.StrategicCombat
             double defenderRoll = defenderEffective * Math.Exp(_rng.NextRandomZValue() * StrategicCombatRules.CombatSigma);
             bool attackerWon = attackerRoll > defenderRoll * StrategicCombatRules.CaptureThreshold;
 
+
             double intensity = StrategicCombatRules.BaseIntensity
                 * StrategicCombatRules.AggressionCasualtyMultiplier(mission.Aggression);
             double attackerPressure = attackerEffective / Math.Max(defenderEffective, 1.0);
@@ -77,8 +78,41 @@ namespace OnlyWar.Operations.StrategicCombat
             long attackerLosses = ClampLoss((long)Math.Round(committed * attackerLossRate), committed, defenderEffective);
             long mutableDefenderStrength = defenders.Sum(
                 defender => defender.OrganizedMilitaryStrength);
-            long defenderLosses = ClampLoss((long)Math.Round(defenderBattleValue * defenderLossRate),
-                mutableDefenderStrength, attackerEffective);
+
+            // OVERRUN. Past a decisive force ratio the defence is swept aside rather than ground down,
+            // and takes TOTAL casualties instead of the clamped share. Measured against the defender's
+            // battle value scaled by its entrenchment, so dug-in troops need proportionally more to
+            // roll over.
+            //
+            // Without this, annihilation is unreachable at any ratio: defenderLossRate is clamped at
+            // 0.75 and HideBrokenCivilianDefender needs exactly zero, so a region could be contested
+            // for ever by a remnant nobody could finish. Monody Prime, 2026-09-18: 22,000 committed
+            // against a defender of 18, and 45,153 Orks unable to clear 58 Imperials out of Gamma.
+            //
+            // Attacker casualties are deliberately untouched. An overrun is cheap, not free - the
+            // attacker still pays whatever the pressure exchange says, which at these ratios is the
+            // 0.01 floor.
+            // Entrenchment scales this on the SAME curve the fight itself uses. A first pass used
+            // (1 + level), which made works three times as protective against being overrun as they
+            // are in combat - at level 2.0 that is 3.00x against EntrenchmentMultiplier's 1.20x and
+            // DefenderProtection's 0.86x - and it was the binding constraint: Monody Prime Gamma held
+            // 3,592 dug-in Imperials against 47,883 Orks and could not be broken, which is the shape
+            // of the problem this rule exists to remove.
+            double entrenchedDefence = defenderBattleValue
+                * StrategicCombatRules.EntrenchmentMultiplier(
+                    RegionDefenses.GetShared(target, DefenseType.Entrenchment));
+            bool overrun = defenderBattleValue > 0
+                && committed >= entrenchedDefence * StrategicCombatRules.OverrunForceRatio;
+
+            long defenderLosses = overrun
+                ? mutableDefenderStrength
+                : ClampLoss((long)Math.Round(defenderBattleValue * defenderLossRate),
+                    mutableDefenderStrength, attackerEffective);
+
+            // A defence that no longer exists cannot hold the ground. Leaving the roll to decide would
+            // let an annihilated defender still report DefenderHeld, which is the contested-for-ever
+            // state this rule exists to end.
+            if (overrun) attackerWon = true;
 
             ApplyDefenderLosses(defenders, defenderLosses, mutableDefenderStrength);
             long attackerSurvivors = committed - attackerLosses;

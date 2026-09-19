@@ -175,9 +175,19 @@ namespace OnlyWar.Operations.Missions
                 missionOptions.Add(new AvailableMission(
                     GetConstructionLabel(DefenseType.ListeningPost),
                     MissionAvailabilityKind.BuildListeningPost));
-                missionOptions.Add(new AvailableMission(
-                    GetConstructionLabel(DefenseType.AntiAir),
-                    MissionAvailabilityKind.BuildAntiAir));
+                // ANTI-AIR IS NOT OFFERED. Nothing in combat resolution reads RegionFaction.AntiAir,
+                // so building it costs a squad its turn and buys nothing - the same trap
+                // FactionDevelopmentPlanner already refuses on the AI's behalf, left open on the
+                // player's side.
+                //
+                // It defends against attacks that cannot happen: DeepStrike, EstablishAirhead and
+                // CloseAirSupport exist as mission types with return policies and display names, and
+                // NOTHING issues any of them. Giving anti-air an effect means building that air track
+                // first.
+                //
+                // Everything else about the defence stays - the stored level, occupation decay,
+                // sabotage, ally transfer, the map overlay and the intelligence watch sums - so this
+                // reverses with one line the day air attacks exist.
                 AddAttackOptions(missionOptions, publicEnemies);
             }
             else if (publicEnemies.Count > 0)

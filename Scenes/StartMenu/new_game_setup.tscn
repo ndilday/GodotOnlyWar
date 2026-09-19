@@ -69,16 +69,16 @@ text = "Chapter Name"
 layout_mode = 2
 placeholder_text = "e.g. Heart of the Emperor"
 
-[node name="SeedLabel" type="Label" parent="FormPanel/VBox"]
-layout_mode = 2
-text = "Sector Seed"
-
 [node name="InvaderSelectionLabel" type="Label" parent="FormPanel/VBox"]
 layout_mode = 2
 text = "Opening Invader"
 
 [node name="InvaderSelection" type="OptionButton" parent="FormPanel/VBox"]
 layout_mode = 2
+
+[node name="SeedLabel" type="Label" parent="FormPanel/VBox"]
+layout_mode = 2
+text = "Sector Seed"
 
 [node name="SeedRow" type="HBoxContainer" parent="FormPanel/VBox"]
 layout_mode = 2

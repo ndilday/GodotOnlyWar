@@ -74,6 +74,30 @@ namespace OnlyWar.Domain
                 .DefaultIfEmpty(0)
                 .Min() ?? 0;
 
+        private long? _minimumFullSquadRequest;
+        // The budget at which force generation reliably produces a squad: the cheapest non-HQ
+        // template at its FULL price.
+        //
+        // MinimumForceRequest is the lower bound and it is not a safe floor for an order. The
+        // generic generator's main loop gates on SquadTemplate.BattleValue - the full price - and
+        // only falls through to GeneratePartialRemainderSquad when nothing is affordable at it. That
+        // fallback can return null, and then the whole request produces an EMPTY force.
+        //
+        // Grist Nine, 2026-09-18: two Ork advances were sized at MinimumForceRequest (30) against
+        // near-dead defenders, generated nothing, and were returned unissued - while advances at 60,
+        // 100 and 142 all mustered. Reconnaissance already prices its tasking this way, through
+        // FactionReconPatrolPlanner.CheapestScoutSquadBattleValue, which reads the same full price.
+        //
+        // Squad templates are fixed at load, so this is computed once.
+        public long MinimumFullSquadRequest =>
+            _minimumFullSquadRequest ??= SquadTemplates?.Values
+                .Where(st => st.IsPresentOperationalForce
+                    && st.BattleValue > 0
+                    && (st.SquadType & SquadTypes.HQ) == 0)
+                .Select(st => (long)st.BattleValue)
+                .DefaultIfEmpty(0)
+                .Min() ?? 0;
+
         public Faction(int id, string name, Color color, bool isPlayerFaction,
                        bool isDefaultFaction, FactionBehavior behavior, GrowthType growthType,
                        IReadOnlyDictionary<int, Species> species,

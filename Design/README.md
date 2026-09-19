@@ -86,6 +86,19 @@ Its one residual, recalibrating `MeleeClosingFactor` now that closing costs an e
 PRD §5.7 before the file was deleted. Everything else in it was scoping, corrections to that scoping,
 and test counts, which the rule names explicitly as delete-on-promotion.
 
+`UnifiedForceAllocation.md` was implemented, verified in play, and **promoted and deleted on
+2026-09-18**. The faction planner's fixed priority ladder is now one marginal-value auction per planet;
+the mechanism is `OnlyWar_TDD.md` §6.2, which the plan had left badly stale — it still described
+`FactionReinforcementPlanner`, `MissionCandidate` and a five-step residual-budget ladder, none of which
+survive. `Reference/ForceAllocation.md` keeps what the TDD cannot absorb: the measured reconnaissance
+margins, the awareness arithmetic showing why a level-1 listening post can never reach the scouting
+threshold, the construction cost bands, what "contested" actually means against the 75% loss clamp, and
+the rejected alternatives — including three normalisation errors in one expression, each of which hid
+the next. Its two residual design questions moved to PRD §6.18 (whether importance should state an
+expected battle-value swing) and §6.19 (overrun is a strategic-combat rule, but the raised handoff floor
+now sends small fights to tactical). Everything else was phase history, a code-impact table and session
+narrative, which the rule names explicitly as delete-on-promotion.
+
 `ConsumptionFeedingAsMission.md` also moved to `Reference/` on 2026-08-07, implemented: biomass feeding
 and swarm spreading are now planner-allocated taskings competing on the same per-region force budget
 as defence and offence, rather than planet-update side effects that each spent the whole swarm. It is
