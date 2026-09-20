@@ -78,8 +78,32 @@ internal static class ForceAllocationConstants
     /// <summary>Fraction of its saturation at which a defence's hold probability turns over.</summary>
     internal const double DefenceHoldKnee = 0.6;
 
-    /// <summary>Fraction of its saturation at which an assault becomes likely to carry the region.</summary>
+    /// <summary>Fraction of its CARRY POINT at which an assault becomes likely to take the region.</summary>
     internal const double AssaultKnee = 0.7;
+
+    /// <summary>
+    /// What an assault that annihilates the defence is worth against one that merely carries the
+    /// region.
+    /// </summary>
+    /// <remarks>
+    /// An assault used to saturate at its force ratio - about 1.5 times the believed defender - so the
+    /// auction was told that more force than that changes nothing. The resolver says otherwise. A
+    /// defence takes clamped losses at any ordinary ratio and can go to ground only at exactly zero, so
+    /// force ABOVE the carry point buys the one outcome the carry point cannot: annihilation
+    /// (StrategicCombatRules.OverrunForceRatio).
+    ///
+    /// Monody Prime, 2026-09-18: 35,164 Ork battle value shared Alpha with 33 Imperials and the region
+    /// stayed contested week after week. The Orks were not refusing to finish it - they were never
+    /// asked to. The assault was sized against the remnant, so about fifty points attacked it, and a
+    /// 1.5:1 fight leaves a remnant that re-arms its population growth before the next turn
+    /// (PlanetDemographicsProcessor.OverrunRemnantGarrisonArmingRate).
+    ///
+    /// The multiple is what the tail is worth, not what it costs: value at and below the carry point is
+    /// UNCHANGED, because the importance is raised by exactly the share the shape gives back there. So
+    /// this cannot make an assault outbid or underbid anything at its launch threshold; it only prices
+    /// the force beyond it, which nothing else was bidding for anyway.
+    /// </remarks>
+    internal const double AnnihilationValueMultiple = 4.0 / 3.0;
 
     /// <summary>
     /// Scout squads past which another observer adds little, read off the resolver as the rule
@@ -320,6 +344,33 @@ internal static class ForceValueCurves
     }
 
     /// <summary>
+    /// An assault: a threshold at the force ratio that carries the region, then a linear tail to the
+    /// ratio that annihilates the defence rather than merely beating it.
+    /// </summary>
+    /// <remarks>
+    /// Two thresholds, not one, because the resolver has two. Taking the ground needs the force ratio;
+    /// finishing the defenders needs StrategicCombatRules.OverrunForceRatio, and between the two the
+    /// extra force buys a steadily better chance of leaving nothing behind. A single threshold at the
+    /// carry point told the auction that the second one did not exist, which is why a horde beside a
+    /// remnant kept sending a squad at it.
+    ///
+    /// The tail is LINEAR. It is not a second threshold: every point of it makes the mop-up more
+    /// complete, and the overrun ratio is where that stops rather than where it starts.
+    /// </remarks>
+    internal static double Assault(long battleValue, long carryPoint, long annihilationPoint)
+    {
+        if (carryPoint <= 0L) return 0.0;
+        double carried = Threshold(
+            battleValue / (double)carryPoint, ForceAllocationConstants.AssaultKnee);
+        if (annihilationPoint <= carryPoint) return carried;
+
+        double carryShare = 1.0 / ForceAllocationConstants.AnnihilationValueMultiple;
+        double surplus = Math.Clamp(
+            (battleValue - carryPoint) / (double)(annihilationPoint - carryPoint), 0.0, 1.0);
+        return carried * carryShare + surplus * (1.0 - carryShare);
+    }
+
+    /// <summary>
     /// Best-of-n: each added observer is an independent draw, and is worth the chance it beats every
     /// observer already assigned. Steeply concave, which is why reconnaissance groups rather than
     /// either going alone or scaling indefinitely.
@@ -426,6 +477,20 @@ internal sealed class ForceTask
 
     /// <summary>Cumulative fraction of Importance earned by a given battle value.</summary>
     internal Func<long, double> Shape { get; init; }
+
+    /// <summary>
+    /// Battle values at which this task's own curve turns, always offered as bid amounts whatever the
+    /// bidder's quantum.
+    /// </summary>
+    /// <remarks>
+    /// For curves whose turns sit at a fixed fraction of the saturation the auction can derive them
+    /// (ForceAllocationAuction.KneeFractions). An assault's cannot be derived that way any more: its
+    /// saturation is the overrun ratio while its threshold is at the carry point, and the two are set
+    /// from different things. A coarse region stepping over the carry point badly over- or
+    /// under-commits, which is the one case where a coarse quantum causes a wrong decision rather than
+    /// a rough one.
+    /// </remarks>
+    internal IReadOnlyList<long> ValueBreakPoints { get; init; } = Array.Empty<long>();
 
     /// <summary>
     /// Enemy presences this task's saturation is shared with. Two regions garrisoning against the same

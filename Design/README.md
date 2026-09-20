@@ -94,10 +94,12 @@ survive. `Reference/ForceAllocation.md` keeps what the TDD cannot absorb: the me
 margins, the awareness arithmetic showing why a level-1 listening post can never reach the scouting
 threshold, the construction cost bands, what "contested" actually means against the 75% loss clamp, and
 the rejected alternatives — including three normalisation errors in one expression, each of which hid
-the next. Its two residual design questions moved to PRD §6.18 (whether importance should state an
-expected battle-value swing) and §6.19 (overrun is a strategic-combat rule, but the raised handoff floor
-now sends small fights to tactical). Everything else was phase history, a code-impact table and session
-narrative, which the rule names explicitly as delete-on-promotion.
+the next. One residual design question moved to PRD §6.18 (whether importance should state an expected
+battle-value swing). The second — overrun is a strategic-combat rule, but the raised handoff floor now
+sends small fights to tactical — was closed on 2026-09-19 by sizing the assault to annihilate rather than
+by adding a rule to either resolver, and PRD §6.19 was removed with it. Everything else was phase
+history, a code-impact table and session narrative, which the rule names explicitly as
+delete-on-promotion.
 
 `ConsumptionFeedingAsMission.md` also moved to `Reference/` on 2026-08-07, implemented: biomass feeding
 and swarm spreading are now planner-allocated taskings competing on the same per-region force budget

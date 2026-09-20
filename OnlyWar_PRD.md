@@ -68,7 +68,6 @@
    - 6.16 [Techmarine Maintenance Scope & Local Fabrication (raised by the Mars Pipeline, §4.28)](#616-techmarine-maintenance-scope--local-fabrication-raised-by-the-mars-pipeline-428)
    - 6.17 [Cybernetic Replacement of Crippled Vital Locations (raised by the Mars Pipeline, §4.28)](#617-cybernetic-replacement-of-crippled-vital-locations-raised-by-the-mars-pipeline-428)
    - 6.18 [Force Allocation Common Currency (raised by Faction Strategy, TDD §6.2)](#618-force-allocation-common-currency-raised-by-faction-strategy-tdd-62)
-   - 6.19 [Mop-Up Resolution Seam (raised by Strategic Combat, TDD §6.2)](#619-mop-up-resolution-seam-raised-by-strategic-combat-tdd-62)
 7. [Glossary](#7-glossary)
 
 ---
@@ -1455,10 +1454,6 @@ opening-scenario sequencing, and large-scale NPC combat now ship in 0.8. Their b
 §4.24 and their architecture and formulas belong in `OnlyWar_TDD.md` and
 `Design/Reference/BattleLogic.md`. This section records only the incomplete follow-through.
 
-- **Correct the Imperial remnant lifecycle.** A hidden default-Imperial remnant must receive no
-  organic growth or garrison drafting, and should return to public control only after the last public
-  hostile faction has been cleared. Preserve the existing region-level state transition and defense
-  handoff behavior while correcting these conditions. Spec: §4.24.
 - **Complete civilian emigration destinations.** Refugees from a hidden remnant should be able to
   move to any adjacent public Imperial-controlled region, including a player-held region, weighted by
   destination population and without a capacity clamp. Spec: §4.24.
@@ -1729,16 +1724,6 @@ The principled form is concrete for at least one family: a reconnaissance sweep 
 **Why it is not committed.** It re-scales every family at once and therefore re-tunes six factions' doctrine weights, moving every seeded outcome, and there is no evidence of a live problem it would fix. `FactionStrategyController.LogTaskRates` prints each task's importance, saturation and rate at Trace so the evidence can be gathered: **act when one family's rates sit an order of magnitude from the others across every planet**, which is a scale error, rather than on one planet, which is a planet where that family genuinely matters more.
 
 A smaller open piece sits inside this one: `RegionWorthReferencePopulation` is 100,000, chosen against a world whose regions run 507 to 35,824. On a hive world with regions of 160,000 and 753,000 it will clamp several to 1.0 and stop discriminating — the same saturation failure as the rejected front-count term, one scale up. Unverified.
-
-### 6.19 Mop-Up Resolution Seam (raised by Strategic Combat, TDD §6.2)
-
-**Question:** How should a fight be finished when the defender is a remnant the attacker vastly outnumbers?
-
-**Why it comes up.** Two rules now cover this and they meet with a gap between them. Strategic combat clamps defender losses at 75%, so it cannot reduce a defender to the exactly-zero that going-to-ground requires; **overrun** was added for that, annihilating a defence past ten times its entrenched battle value. But `MassCombatBattleValueFloor` was raised to 3,000 so that small fights resolve **tactically** — and overrun is a strategic-combat rule, so a fight small enough to route tactically cannot be overrun.
-
-Observed on Monody Prime, 2026-09-18: Alpha held **35,164 Ork battle value against 33 Imperial** and remained contested. A ratio of a thousand to one that overrun would clear instantly, except an assault sized against a 33-point defender commits too little to reach the floor.
-
-**Why it comes up now rather than before.** Both halves are recent and each was correct in isolation. The question is whether tactical resolution should gain an equivalent rule, whether the floor should have an exception for extreme ratios, or whether tactical resolution already reaches zero reliably enough that the seam is theoretical — it does clear defenders in practice on smaller worlds, which is why this is a question and not a defect.
 
 ---
 

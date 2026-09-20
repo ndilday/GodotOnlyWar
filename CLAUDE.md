@@ -146,29 +146,80 @@ ahead of the path breaks first-token matching.
   than most optimizations — so a wall-clock comparison taken while the user is in Godot,
   Visual Studio, or a build is not evidence of anything. Confirm the machine is quiet
   before believing a timing, and prefer call counts, which are contention-immune.
-- Full suite, idle machine, 2026-08-08: **1709 tests in 10m54s**. For reference the same
-  filter at commit `0dcc7d2` took 22m4s for 1679 tests, so the early-August work roughly
-  halved it.
-- Roughly nine of those eleven minutes are ~10 tests, nearly all full sector generation:
-  `ScenarioBuilderTests` (3 tests, 1m17s run alone), `SaveLoadRoundTripTests` (3, they
-  generate a sector before round-tripping), `NewChapterBuilderTests`,
-  `GovernanceHierarchyTests`. (Two untagged Missions tests used to be on this list; see the
-  `Category!=Slow` bullet below for why they no longer are.)
+- **Every count below is from 2026-09-19 unless dated otherwise. The suite has roughly
+  doubled since the August figures, so treat any number older than that as gone, not
+  merely drifted.** The `Category!=Slow` bullet was still claiming 1700 tests when the
+  filter actually ran 3185.
+- There are **two test projects**, and both run on an unfiltered `dotnet test`:
+  `OnlyWar.Tests` (the suite proper) and `OnlyWar.HeadlessTests` (14 tests, ~0.2s warm and
+  ~8s on the session's first run, which is start-up and not the tests). Every
+  filter below is written against `OnlyWar.Tests` and the headless project runs alongside
+  it regardless, which is why two "Passed!" lines come back per invocation.
+- The suite is **3183 tests, and it splits cleanly in two**: `Category!=Slow` is 3171 in
+  ~3m41s and `Category=Slow` is **12 tests in 8m33s** (measured once, under the same load
+  that doubled the readings below it, so treat it as an upper bound). Nobody has timed one
+  unfiltered run since 2026-08-08 (1709 tests, 10m54s idle; 22m4s for 1679 at commit
+  `0dcc7d2`). Run the two halves separately — you almost never want the slow half.
+- Those 12 slow tests, from a TRX on 2026-09-19, are all full sector generation or a save
+  round-trip of one:
+  `ScenarioBuilderTests` (4: 2m39s on seed 3, 1m34s, 36.9s, 22.2s), `SaveLoadRoundTripTests`
+  (3, about 51s each), `NewChapterBuilderTests` (25.8s), `OrkSaveLoadRegressionTests`
+  (16.9s), `ChapterMusterPerformanceTests` (0.5s — tagged `Slow`, and no longer is), and the
+  two `ScenarioTraceDiagnostics` entries, which return in microseconds unless
+  `RUN_SCENARIO_TRACE=1` is set.
 - Per-test durations from a TRX of a PARALLEL run are inflated by contention between the
-  tests themselves — those three `ScenarioBuilderTests` report 1m53s+1m50s+22s inside the
-  full run and total 1m17s alone. Rank with them; never size with them.
-- `--filter "Category!=Slow"` is **1700 tests in ~1m7s** (2026-08-09), and is the practical
-  default. The two Missions tests that used to dominate it —
+  tests themselves — the three `ScenarioBuilderTests` of 2026-08-08 reported 1m53s+1m50s+22s
+  inside the full run and totalled 1m17s alone. Rank with them; never size with them.
+- `--filter "Category!=Slow"` is 3171 tests in **~3m41s on a quiet machine**, and it is
+  still the practical default. Ignore older notes about it blowing past a 600s timeout.
+  **Three runs of the identical binary on 2026-09-19 gave 7m52s, 7m24s and 3m41s.** The
+  first two were taken while the user was working. Do not repeat the mistake made that day:
+  two consistent slow readings were written down here as "the cost and not a load spike",
+  and a TRX of the third run then showed 215s of summed test time against a 3m41s wall
+  clock — nothing was missing, the machine was simply busy. **Two agreeing measurements
+  under load agree about the load.**
+- **61% of that run is ONE test.**
+  `Generation.GovernanceHierarchyTests.Governance_IsDeterministicForSeed` is **131s of the
+  215s**, because it generates two full sectors on seed 4 and loads the rules database twice
+  to do it. It is not tagged `Slow`. The rest of the top five are the same shape — sector
+  generation in an untagged test: `Generation.SectorBuilderTests` (2 tests, 19s),
+  `Domain.FactionCapabilityStateTests` (2 tests, 17s),
+  `Battles.BattleMoraleResolverTests.HighEgoSquadsFightingToAnnihilation_NeverRout` (5.1s),
+  `Data.NewGameSaveTests` (2 tests, 4.9s). Those nine tests are 84% of the suite; the other
+  3,162 share about 35 seconds between them. **If this filter feels slow, suspect one of
+  those nine or a busy machine — not general growth.**
+- Every area below was measured separately on 2026-09-19, so the times include process
+  start-up and exclude contention with the other areas.
+
+  | Filter (`FullyQualifiedName~OnlyWar.Tests.` + …) | Tests | Time |
+  |---|---|---|
+  | `Battles` | 1682 | ~4s |
+  | `Domain` | 559 | ~18s |
+  | `Turns` | 338 | ~1s |
+  | `Missions` | 168 | ~0.8s |
+  | `UI` | 132 | ~1s |
+  | `Application` | 82 | ~1s |
+  | `Generation` | 68 | **~2m** |
+  | `Data` | 55 | **~31s** |
+  | `Orders` | 44 | ~0.8s |
+  | `Narrative`, `Math`, `Architecture`, `Diagnostics` together | 45 | ~0.1s |
+
+  Every area except `Generation` and `Data` answers in about a second, so there is no
+  reason to widen a filter to save a call. `Generation` and `Data` are the two to avoid
+  unless the change touches them, and both rows above already exclude their `Slow` tests.
+  `Generation`'s two minutes are almost entirely `GovernanceHierarchyTests`.
+- The Missions area is 168 tests in ~0.8s, and it is the worked example of why an untagged
+  test is worse than a slow one. Two of them —
   `MissionTargetStrengthTests.AssassinateStealth_UntrainedForceAgainstASearchedRegion_IsDetected`
   and `MissionStealthDifficultyTests.SabotageStealth_UntrainedForceAgainstASearchedRegion_IsDetected`
-  — were about a minute each because each one fought seven full battles that had nothing to do
-  with the detection they assert. They now drive two mission steps instead of `RunToCompletion`
-  and finish in milliseconds; the whole `OnlyWar.Tests.Missions` area is 170 tests in ~0.4s.
-  Ignore older notes about this filter blowing past a 600s timeout.
-- While iterating, `--filter "FullyQualifiedName~OnlyWar.Tests.Battles"` (546 tests, ~7s)
-  is still the fastest useful signal.
-- Filter by area while iterating, e.g. `--filter "FullyQualifiedName~OnlyWar.Tests.Turns"`
-  (also `.Domain`, `.Generation`, `.Data`, `.Battles`, `.UI`).
+  — took about a minute each, because each fought seven full battles that had nothing to do
+  with the detection it asserts. They now drive two mission steps instead of
+  `RunToCompletion`. **Fix the test rather than tag it `Slow`** where the cost is incidental
+  to what it proves.
+- While iterating, `--filter "FullyQualifiedName~OnlyWar.Tests.Battles"` (1682 tests, ~4s)
+  is still the fastest useful signal — it tripled in count and got faster.
+- Add `&Category!=Slow` to an area filter. `Generation` (6), `Data` (4) and `Turns` (2)
+  carry every `Slow` test between them, and an area name alone will pull them in.
 - Run `ScenarioTraceDiagnostics` only when asked, with `-e RUN_SCENARIO_TRACE=1`. Narrow it
   with `-e SCENARIO_TRACE_SEEDS=1` — seed 1 alone is ~17.5 min (2026-08-02), all eight
   seeds far longer. Traces land in `%TEMP%\GodotOnlyWar\scenario-trace\seed-<n>.txt` at

@@ -1,10 +1,12 @@
 using OnlyWar.Domain;
 using OnlyWar.Domain.Extensions;
 using OnlyWar.Domain.FactionBehaviors;
+using OnlyWar.Domain.Fortifications;
 using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Orders;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Operations.Missions.Recon;
+using OnlyWar.Operations.StrategicCombat;
 using OnlyWar.Operations.Turns;
 using System;
 using System.Collections.Generic;
@@ -662,9 +664,30 @@ internal sealed class ForceTaskBuilder
             // (CheapestScoutSquadBattleValue); this is the same rule for the offensive profiles.
             long squadFloor = Math.Max(
                 1L, Math.Max(faction.MinimumForceRequest, faction.MinimumFullSquadRequest));
-            long assaultSaturation = Math.Max(
+            // What carries the region. It is the LAUNCH threshold and nothing beyond it: a fraction of
+            // this is a defeat, and the committer refuses one.
+            long carryPoint = Math.Max(
                 squadFloor,
                 (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * ratio));
+            // What finishes the defenders, which is a different and larger number. Measured exactly as
+            // the resolver measures it - the believed defender behind the same entrenchment curve the
+            // fight itself uses (StrategicCombatResolver's overrun test) - so works are as protective
+            // in the sizing as they are in the battle.
+            //
+            // This is the saturation, so it is also the CEILING on the award: a mop-up draws ten times
+            // the remnant and not one point more, and the rest of the horde stays available for the
+            // rest of the planet. Without it an assault stopped responding at its force ratio, which
+            // said a thousand-to-one local superiority was worth no more than three-to-two.
+            long assaultSaturation = Math.Max(
+                carryPoint,
+                (long)Math.Ceiling(
+                    offensive.EstimatedDefenderBattleValue
+                    * StrategicCombatRules.EntrenchmentMultiplier(
+                        RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment))
+                    * StrategicCombatRules.OverrunForceRatio));
+            long launchThreshold = Math.Max(
+                squadFloor,
+                (long)Math.Ceiling(carryPoint * ForceAllocationConstants.AssaultKnee));
             // Storming a region and raiding it are alternatives for the same week, not a pair.
             TaskExclusionGroup exclusion = new();
             tasks.Add(new ForceTask
@@ -673,8 +696,15 @@ internal sealed class ForceTaskBuilder
                 Objective = offensive.TargetRegion,
                 Offensive = offensive,
                 Exclusion = exclusion,
+                // Raised by exactly the share the shape gives back at the carry point, so the value of
+                // an assault AT ITS LAUNCH THRESHOLD is unchanged and only the mop-up tail above it is
+                // new. An assault with no tail - one whose carry point already reaches the overrun
+                // ratio - keeps the plain weight.
                 Importance = _doctrine.Assault
-                    * Math.Min(1.0, FactionOffensiveEvaluator.RewardRiskScore(offensive)),
+                    * Math.Min(1.0, FactionOffensiveEvaluator.RewardRiskScore(offensive))
+                    * (assaultSaturation > carryPoint
+                        ? ForceAllocationConstants.AnnihilationValueMultiple
+                        : 1.0),
                 Saturation = assaultSaturation,
                 // The LAUNCH THRESHOLD, not merely a generatable squad. ForceTaskCommitter refuses an
                 // assault funded below its force ratio - correctly, since a fraction of the force needed
@@ -683,13 +713,18 @@ internal sealed class ForceTaskBuilder
                 //
                 // Grist Nine, 2026-09-17: the Orks awarded 2,376 to an assault needing 7,000, the commit
                 // refused it, and half the army evaporated. They issued ONE order that week.
-                MinimumViableAward = Math.Max(
-                    squadFloor,
-                    (long)Math.Ceiling(assaultSaturation * ForceAllocationConstants.AssaultKnee)),
+                //
+                // Priced off the CARRY POINT, not the saturation. The saturation now runs on to the
+                // overrun ratio, and gating the launch on a fraction of THAT would refuse every attack
+                // a faction could not also finish - the opposite of the intent, and it would have made
+                // poor factions stop attacking altogether.
+                MinimumViableAward = launchThreshold,
+                ValueBreakPoints = new[] { launchThreshold, carryPoint },
                 // An assault is an all-or-nothing commitment: half the force needed to carry a region
-                // does not half-take it. The knee is what batch bidding exists to find.
-                Shape = bv => ForceValueCurves.Threshold(
-                    bv / (double)assaultSaturation, ForceAllocationConstants.AssaultKnee)
+                // does not half-take it. The knee is what batch bidding exists to find. Above it the
+                // curve keeps climbing to the ratio that annihilates the defence rather than going
+                // flat at the one that beats it.
+                Shape = bv => ForceValueCurves.Assault(bv, carryPoint, assaultSaturation)
             });
 
             // A raid is what a faction does when it cannot take the ground but can still hurt whoever

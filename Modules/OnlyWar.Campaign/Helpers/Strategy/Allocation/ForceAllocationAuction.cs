@@ -360,6 +360,13 @@ internal sealed class ForceAllocationAuction
             if (knee > 0L && knee <= budget) amounts.Add(knee);
         }
 
+        // The same rule for a curve whose turns are not a fixed fraction of its saturation.
+        foreach (long breakPoint in task.ValueBreakPoints)
+        {
+            long toBreak = breakPoint - task.Assigned;
+            if (toBreak > 0L && toBreak <= budget) amounts.Add(toBreak);
+        }
+
         return amounts.Where(amount => amount >= floor && amount <= budget && amount > 0L);
     }
 
@@ -377,8 +384,9 @@ internal sealed class ForceAllocationAuction
                 yield return ForceAllocationConstants.DefenceHoldKnee;
                 yield return 1.0;
                 break;
+            // An assault's threshold is NOT a fraction of its saturation: the saturation is the overrun
+            // ratio and the threshold is at the carry point, so it comes through ValueBreakPoints.
             case ForceTaskKind.Assault:
-                yield return ForceAllocationConstants.AssaultKnee;
                 yield return 1.0;
                 break;
             default:

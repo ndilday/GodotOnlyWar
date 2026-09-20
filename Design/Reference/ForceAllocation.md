@@ -129,6 +129,30 @@ Both defenders sit under the crossover and should have resolved tactically. The 
 power of ten, so zero significant figures, so awareness below 1.0 on ground the faction occupied and
 could not then scout.
 
+### Sizing the mop-up (2026-09-19)
+
+The opposite failure was live at the same time and took longer to see, because the ratio that makes it
+obvious is not the ratio the resolver is given. Monody Prime, 2026-09-18: Alpha held **35,164 Ork battle
+value against 33 Imperial** and stayed contested week after week. A thousand to one — but the Orks never
+sent a thousand to one. An assault was sized at the force ratio against the *remnant*, so about fifty
+points attacked it, the remnant survived a fair fight, and
+`PlanetDemographicsProcessor.OverrunRemnantGarrisonArmingRate` re-armed it before the next turn.
+
+Neither resolver was at fault, and neither gained a rule. **The saturation was wrong**: it said an
+assault stops responding to more troops at its force ratio, when in fact it keeps responding to the
+overrun ratio, where the defence is annihilated rather than beaten. An assault's curve is now a threshold
+at the carry point followed by a linear tail to `OverrunForceRatio` × the entrenched defender, and the
+importance is raised by exactly the share the shape gives back at the carry point — so value at and below
+the launch threshold is **unchanged to the point**, and only the tail is new. The tail's rate is low, so
+it is bought with force nothing else wanted, and the saturation caps it: a mop-up draws ten times the
+remnant and not one point more.
+
+This does not re-open the trap above. Over-commitment was fatal while strategic combat could not finish a
+defender; overrun (2026-09-18) is exactly the rule that lets it, at the same ratio this sizing aims for.
+A mop-up now ends the contest on either side of the handoff floor — below it by fighting ten to one on
+the table, above it by being overrun — which is why the seam was closed here rather than in either
+resolver. PRD §6.19 was removed with it.
+
 ## Construction economics
 
 `DefenseBuildCost` is `2 × 10^band`, charged at ×100, so a first level costs 200 battle value and a
