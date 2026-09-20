@@ -39,6 +39,14 @@ window/size/resizable=false
 
 project/assembly_name="OnlyWarGodot"
 
+[gui]
+
+; The project-wide default theme. Tooltips are built by the engine as their own popup, so
+; the only way to style every one of them is to make the theme the default rather than
+; attaching it scene by scene - a screen that forgets the theme falls back to Godot's stock
+; tooltip panel, which is 50% transparent and bleeds the map through the hover text.
+theme/custom="res://Scenes/OnlyWarTheme.tres"
+
 [network]
 
 limits/debugger/max_chars_per_second=100000
