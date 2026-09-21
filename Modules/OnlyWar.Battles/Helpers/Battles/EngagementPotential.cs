@@ -15,13 +15,26 @@ namespace OnlyWar.Battles
     /// </summary>
     internal sealed class EngagementPotential
     {
-        private const int PursuitFireWindowTurns = RangedTargetSelector.FullAimBonusTurns + 2;
         private const float ContactSeekerRangedRelevanceFraction = 0.02f;
         private const float FinitePoolEpsilon = 0.0001f;
         // Access is tempo rather than casualty value: it prices how long a squad remains unable to
         // contribute. Five turns keeps that signal material without letting it recreate the
         // whole-horizon multiplication removed from the finite exchange component.
+        //
+        // This sets the MAGNITUDE of the tempo signal only. Whether a squad counts as unable to
+        // contribute is a separate question, and is measured against the negligible-removal floor
+        // -- see EvaluateContinuousAccessValue for why reusing this constant for that test made a
+        // shooting squad read as helpless.
         internal const float AccessValueTurns = 5f;
+
+        /// <summary>
+        /// How far beyond the range it wants a squad must be for the pursuit contact-progress
+        /// potential to fall to half of <c>attainable</c>, in strides of its own move. Ten keeps
+        /// the gradient perceptible over a long approach without letting position value rival the
+        /// exchange terms at the ranges where the squad is already shooting. It is a floor under
+        /// the band width, so a squad with a wide preferred band uses the band instead.
+        /// </summary>
+        internal const float ContactProgressHalfValueStrides = 10f;
 
         private static bool IsPursuitRole(EngagementSquadRole role) =>
             role is EngagementSquadRole.Pursuit
@@ -156,8 +169,7 @@ namespace OnlyWar.Battles
                 float desiredRange = state.Profile.IsContactSeeking
                     ? 1f
                     : Math.Max(1f, state.Profile.EffectiveEngagementRange);
-                float turnsToUsefulRange = Math.Max(0, range - desiredRange)
-                    / Math.Max(0.1f, state.Profile.MoveSpeed);
+                float turnsToUsefulRange = TurnsToUsefulRange(state, range, desiredRange);
                 // Pursuit fire-support saturates at the useful band's boundary. Once it is inside
                 // that band, moving still changes the live shot but does not create a new arrival
                 // opportunity worth buying with a whole-battle horizon. Other doctrines retain
@@ -304,6 +316,43 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
+        /// How long before this squad reaches the range at which it wants to be shooting,
+        /// measured against the NET closing rate rather than the squad's own move.
+        ///
+        /// <para>WHY NET. A chase closes at the difference of the two speeds, because the quarry
+        /// is running as well. Dividing the raw gap by the pursuer's own move prices a full step
+        /// against a stationary target, and the next turn re-prices the shortened gap the same
+        /// way, so the access term pays the same tempo bonus every turn for an arrival that keeps
+        /// receding. Observed 2026-09-20 (Grist Nine Epsilon): 315 marines pursued 20 routing
+        /// orks for the last 700 turns of a 1000-turn battle. The access delta held at ~10 battle
+        /// value per turn while the separation fell from 323 to 104 -- a stock that should have
+        /// been depleting did not move -- and it outbid a standing shot worth ~3 on 1112 of 1112
+        /// squad-turns. <see cref="BattleContactRules.CanReachContactThisTurn"/> carries the same
+        /// correction for the contact-break tests, made after a 2026-08-04 stern chase ran to the
+        /// turn cap for the same reason.</para>
+        ///
+        /// <para>A quarry the squad cannot out-run returns positive infinity, which
+        /// <see cref="EvaluateContinuousAccessValue"/>'s non-finite guard turns into no access
+        /// value at all. That is the right answer rather than a degenerate one: the arrival never
+        /// happens, so there is no delay to buy out, and the squad should shoot from where it
+        /// stands. The exchange integral reads the same infinity as "stay at the current rate for
+        /// the whole horizon", which is also correct.</para>
+        ///
+        /// <para>Only a pursuit frame carries a quarry speed; every other role sees the
+        /// unchanged raw-move behaviour.</para>
+        /// </summary>
+        private static float TurnsToUsefulRange(State state, float range, float desiredRange)
+        {
+            float gap = Math.Max(0, range - desiredRange);
+            if (gap <= 0) return 0;
+            float quarrySpeed = state.Frame != null && IsPursuitRole(state.Frame.Role)
+                ? Math.Max(0, state.Frame.QuarryRunSpeed)
+                : 0;
+            float closingRate = state.Profile.MoveSpeed - quarrySpeed;
+            return closingRate <= 0 ? float.PositiveInfinity : gap / closingRate;
+        }
+
+        /// <summary>
         /// Prices delay before a squad can contribute without a hard useful/useless branch. The
         /// weight approaches zero smoothly as current fire becomes useful, and is exactly zero
         /// when the destination geometry cannot produce removal either.
@@ -327,7 +376,32 @@ namespace OnlyWar.Battles
 
             float scale = targetBattleValue / AccessValueTurns;
             float nonNegativeCurrent = Math.Max(0, currentRate);
-            float helplessness = scale / (scale + nonNegativeCurrent);
+            // HELPLESSNESS IS MEASURED AGAINST THE PLINKING FLOOR, NOT AGAINST `scale`.
+            //
+            // `scale` is a tempo MAGNITUDE -- a fifth of the target's battle value, i.e. the rate
+            // that would clear the enemy squad in AccessValueTurns. No real squad removes 20% of
+            // an enemy squad per turn, so using it as the reference for "is my current fire
+            // useful" pinned this factor near 1 for every squad that was shooting perfectly well.
+            // Against a 200-BV mob a squad removing 3 BV a turn still scored 0.93 helpless, and
+            // the summary above this method -- "approaches zero smoothly as current fire becomes
+            // useful" -- was only ever true against a target so weak that a fifth of its worth
+            // was a rate a squad could actually reach.
+            //
+            // The engine already defines the rate below which fire is worth nothing:
+            // RangedEffectivenessCurve.NegligibleRemovalFraction, the share of target battle
+            // value per turn under which a curve is treated as flat zero. That is the honest zero
+            // point for "contributing", and it is a REMOVAL RATE, so it is dimensionally the same
+            // kind of thing as currentRate. A squad exactly at the plinking floor is half
+            // helpless; one an order of magnitude above it is nearly not helpless at all.
+            //
+            // Note this is deliberately NOT a fraction of what the squad could achieve by moving.
+            // A squad at 5% of its best rate is not helpless, it is merely suboptimally placed,
+            // and the loss from that is already priced by the net-rate exchange integral above.
+            // Access exists to price being unable to contribute AT ALL; keying it to the
+            // destination rate would double-count the exchange term and reproduce the same bug.
+            float negligibleRate =
+                targetBattleValue * RangedEffectivenessCurve.NegligibleRemovalFraction;
+            float helplessness = negligibleRate / (negligibleRate + nonNegativeCurrent);
             float viability = destinationRate / (scale + destinationRate);
             float tempoRate = scale * helplessness * viability;
             return -tempoRate * turnsToUsefulRange;
@@ -559,6 +633,36 @@ namespace OnlyWar.Battles
                 * interceptDiscount;
         }
 
+        /// <summary>
+        /// How much of its own fighting value this squad can bring to bear from where it now
+        /// stands, rising as it closes on its quarry and saturating at <c>attainable</c> once it
+        /// is inside the range it wants.
+        ///
+        /// <para>A FUNCTION OF PROJECTED GEOMETRY ONLY. This used to multiply <c>attainable</c> by
+        /// the fraction of the squad's maximum closing speed the candidate actually used, which
+        /// made a state potential depend on how fast the squad was travelling when it arrived.
+        /// The root state is always evaluated at zero speed, so the root scored zero and every
+        /// moving candidate scored the whole bounty; the potential difference never telescoped
+        /// and degenerated into a per-turn payment that could not deplete. Observed 2026-09-20
+        /// (Grist Nine Epsilon, second run): this term read EXACTLY 141.150 for a running squad in
+        /// two windows seventy turns apart while the separation closed, against a standing shot
+        /// worth 7.4, and no amount of closing ever reduced it.</para>
+        ///
+        /// <para>Expressed as a position value the same reward telescopes: closing pays for the
+        /// ground gained, once, and the whole approach is worth <c>attainable</c> in total rather
+        /// than <c>attainable</c> every turn. It is also a genuine Φ term again, per §5.2's rule
+        /// that doctrine lives in the legal-option mask and value lives in Φ.</para>
+        ///
+        /// <para>The quarry's speed is deliberately absent. A positional potential answers "how
+        /// good is standing here"; how long the ground takes to cover is a question about time,
+        /// and is priced by the access term and by
+        /// <see cref="EvaluatePursuitClosingValue"/>. Splitting them keeps each term telescoping
+        /// on its own.</para>
+        ///
+        /// <para>The saturating form has no flat region, so there is always a gradient toward the
+        /// quarry however far away it is. The old form went flat once the band pressure clamped,
+        /// which is the dead zone the approach-gradient test was written to catch.</para>
+        /// </summary>
         private static float EvaluatePursuitContactProgress(State state)
         {
             bool closingIsTheOnlyPlay = HasNoViableRangedOption(state.Profile);
@@ -569,58 +673,34 @@ namespace OnlyWar.Battles
                 return 0;
             }
 
-            float before = EngagementExchangeModel.Distance(
-                state.Centroid,
-                BattleEngagementFrameBuilder.Centroid(state.Primary));
-            EngagementSquadRole? quarryRole = state.Frames
-                .GetValueOrDefault(state.Primary.Id)?.Role;
-            float quarrySpeed = EngagementExchangeModel.QuarryWithdrawalRate(
-                state.Frame,
-                quarryRole);
             float attainable = state.Profile.IsContactSeeking
                 ? state.Profile.UsableMeleeBattleValue
                 : state.Profile.UsableRangedBattleValue;
-
-            if (IsFirePreservingPursuitRole(state.Frame.Role)
-                && !state.Profile.IsContactSeeking
-                && state.Profile.PreferredBandUpper > state.Profile.PreferredBandLower)
-            {
-                float bandWidth = Math.Max(
-                    0.1f,
-                    state.Profile.PreferredBandUpper - state.Profile.PreferredBandLower);
-                float bandPressure = Math.Clamp(
-                    (before - state.Profile.PreferredBandLower) / bandWidth,
-                    0,
-                    1);
-                float maximumNetClosing = Math.Max(
-                    0,
-                    state.Profile.MoveSpeed - quarrySpeed);
-                float actualNetClosing = Math.Max(
-                    0,
-                    state.FeasibleSpeed - quarrySpeed);
-                float closingFraction = maximumNetClosing <= 0
-                    ? 0
-                    : Math.Clamp(actualNetClosing / maximumNetClosing, 0, 1);
-                return attainable * bandPressure * closingFraction;
-            }
-
-            float desiredRange = state.Profile.IsContactSeeking
-                ? 1f
-                : Math.Max(1f, state.Profile.PreferredBandUpper);
-            if (before <= desiredRange)
+            if (attainable <= 0)
             {
                 return 0;
             }
 
-            float usefulStride = Math.Min(
-                Math.Max(0, state.Profile.MoveSpeed - quarrySpeed),
-                before - desiredRange);
-            float progress = Math.Min(
-                usefulStride,
-                Math.Max(0, state.FeasibleSpeed - quarrySpeed));
-            return usefulStride <= 0
-                ? 0
-                : attainable * progress / Math.Max(0.1f, usefulStride);
+            float projectedDistance = EngagementExchangeModel.Distance(
+                state.Centroid,
+                BattleEngagementFrameBuilder.Centroid(state.Primary));
+            // A squad that keeps shooting while it pursues wants the near edge of its band; one
+            // closing to contact, or pressing without fire, wants contact or its reach.
+            bool holdsFireWhilePursuing = IsFirePreservingPursuitRole(state.Frame.Role)
+                && !state.Profile.IsContactSeeking
+                && state.Profile.PreferredBandUpper > state.Profile.PreferredBandLower;
+            float desiredRange = state.Profile.IsContactSeeking
+                ? 1f
+                : holdsFireWhilePursuing
+                    ? state.Profile.PreferredBandLower
+                    : Math.Max(1f, state.Profile.PreferredBandUpper);
+            float span = Math.Max(
+                holdsFireWhilePursuing
+                    ? state.Profile.PreferredBandUpper - state.Profile.PreferredBandLower
+                    : 0f,
+                Math.Max(1f, state.Profile.MoveSpeed) * ContactProgressHalfValueStrides);
+            float excess = Math.Max(0, projectedDistance - desiredRange);
+            return attainable * span / (span + excess);
         }
 
         private float EvaluateFireWindow(State state)
@@ -641,7 +721,6 @@ namespace OnlyWar.Battles
             float quarrySpeed = EngagementExchangeModel.QuarryWithdrawalRate(
                 state.Frame,
                 quarryRole);
-            float projectedOpening = quarrySpeed * PursuitFireWindowTurns;
             Dictionary<int, float> awardedByTarget = [];
             float projectedValue = 0;
 
@@ -660,25 +739,19 @@ namespace OnlyWar.Battles
                         && _grid.IsSoldierPlaced(candidate.Soldier.Id))
                     .OrderBy(candidate => candidate.Soldier.Id))
                 {
-                    float currentRange = _grid.GetDistanceBetweenSoldiers(
-                        shooter.Soldier.Id,
-                        target.Soldier.Id);
-                    float projectedRange = currentRange + projectedOpening;
                     foreach (RangedWeapon weapon in shooter.EquippedRangedWeapons
                         .Where(candidate => !candidate.Template.IsTemplateWeapon
-                            && candidate.LoadedAmmo > 0
-                            && projectedRange <= candidate.Template.MaximumRange)
+                            && candidate.LoadedAmmo > 0)
                         .OrderByDescending(candidate => candidate.Template.DamageMultiplier)
                         .ThenBy(candidate => candidate.Template.Id))
                     {
-                        RangedTargetEvaluation evaluation = _ranged.EvaluateRangedTarget(
+                        RangedTargetEvaluation evaluation = _ranged.EvaluatePursuitFireWindowShot(
                             shooter,
                             target,
                             weapon,
-                            projectedRange,
-                            weapon.Template.Accuracy + RangedTargetSelector.FullAimBonusTurns + 1,
                             quarrySpeed);
-                        if (evaluation.HitProbability <= RangedTargetSelector.StickyMinimumHitProbability
+                        if (evaluation == null
+                            || evaluation.HitProbability <= RangedTargetSelector.StickyMinimumHitProbability
                             || evaluation.Score <= 0)
                         {
                             continue;
@@ -716,7 +789,7 @@ namespace OnlyWar.Battles
             return projectedValue
                 * (float)Math.Pow(
                     EngagementExchangeModel.EngagementFutureDiscount,
-                    PursuitFireWindowTurns);
+                    RangedTargetSelector.PursuitFireWindowTurns);
         }
     }
 }

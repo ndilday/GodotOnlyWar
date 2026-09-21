@@ -72,8 +72,9 @@ internal sealed class ForceTaskCommitter
                     CommitMove(faction, planet, task, total, states);
                     break;
                 case ForceTaskKind.Patrol:
-                    _reconPatrol.IssueAllocatedPatrol(
-                        faction, planet, task.Home, total, allOrders, random);
+                    // Produces no Order: a screen is a designation on the RegionFaction, like Defend
+                    // and Withdraw, rather than a force. See FactionReconPatrolPlanner.
+                    _reconPatrol.IssueAllocatedPatrol(faction, planet, task.Home, total);
                     break;
                 case ForceTaskKind.Recon:
                     _reconPatrol.IssueAllocatedRecon(

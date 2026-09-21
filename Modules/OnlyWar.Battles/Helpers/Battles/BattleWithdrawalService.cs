@@ -1,5 +1,6 @@
 using OnlyWar.Battles.Models;
 using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -434,34 +435,22 @@ namespace OnlyWar.Battles
 
             List<BattleSquad> pursuers = GetActiveSquads(pursuerSide).ToList();
             PursuitPosture posture = GetPursuitPosture(pursuerSide);
-            BattleForceMetrics pursuerMetrics = _roundMetrics.BuildMetrics(pursuerSide);
-            BattleForceMetrics withdrawalMetrics = _roundMetrics.BuildMetrics(withdrawingSide);
-            float separation = MinimumSeparation(pursuerSide, withdrawingSide);
-            float attackReach = MaximumOneTurnAttackReach(pursuerSide, withdrawingSide);
-            float declaredPursuitSpeed = FastestDeclaredPursuitSpeed(pursuers);
-            // Keep contact alive while the same projection used by BattlePursuitPlanner says a
-            // worthwhile shot is available now. The squad planner may spend several stationary
-            // turns converting that opportunity into a fully aimed ShootAction.
-            bool pursuersHaveReasonableShot = ProjectedFollowShotTurns(
+            IReadOnlyList<PursuitPairActivity> pursuitPairs = BuildPursuitPairActivities(
                 pursuerSide,
-                withdrawingSide,
-                separation,
-                withdrawalMetrics.SlowestMainBodySquadSpeed) == 0f;
+                withdrawingSide);
             BattleContactRules.Result forceResult = BattleContactRules.Evaluate(new(
                 _state.TurnNumber,
                 withdrawingSide == BattleSide.Attacker,
                 pursuers.Count,
                 posture == PursuitPosture.BreakOff,
                 IsWithdrawalIntent(GetSideState(pursuerSide).Intent),
-                separation,
-                attackReach,
-                declaredPursuitSpeed,
-                withdrawalMetrics.SlowestMainBodySquadSpeed,
+                pursuitPairs,
                 state.RearGuardSquadId.HasValue,
                 0,
-                withdrawalMetrics.SlowestMainBodySquadSpeed,
-                PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently,
-                PursuersHaveReasonableShot: pursuersHaveReasonableShot));
+                GetActiveSquads(withdrawingSide)
+                    .Select(SafeSquadMove)
+                    .DefaultIfEmpty(0)
+                    .Min()));
             if (forceResult.Decision == ContactBreakResult.OrganizedForceDisengages)
             {
                 return CompleteWithdrawal(withdrawingSide, events);
@@ -483,15 +472,11 @@ namespace OnlyWar.Battles
                         pursuers.Count,
                         false,
                         false,
-                        separation,
-                        attackReach,
-                        declaredPursuitSpeed,
-                        squad.GetSquadMove(),
+                        pursuitPairs,
                         true,
                         Math.Max(0, current - start),
                         squad.GetSquadMove(),
-                        PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently,
-                        PursuersHaveReasonableShot: pursuersHaveReasonableShot));
+                        HasImmediateDisengagementCapability: false));
                     if (masked.Decision == ContactBreakResult.SquadDisengages)
                     {
                         DisengageSquad(
@@ -761,22 +746,136 @@ namespace OnlyWar.Battles
                 $"{squad.Name} {reason}."));
         }
 
-        private static float FastestDeclaredPursuitSpeed(
-            IReadOnlyCollection<BattleSquad> pursuers)
+        /// <summary>
+        /// Materializes contact evidence for the exact pursuer/quarry assignments selected by the
+        /// current planning pass. No force-wide speed, separation, attack, or shot projection is
+        /// allowed to enter this list.
+        /// </summary>
+        internal IReadOnlyList<PursuitPairActivity> BuildPursuitPairActivities(
+            BattleSide pursuerSide,
+            BattleSide quarrySide)
         {
-            return pursuers
-                .Where(squad => squad.LastEngagementOptionKind is
-                    EngagementOptionKind.StepForward
-                    or EngagementOptionKind.JogToward
-                    or EngagementOptionKind.RunToward
-                    or EngagementOptionKind.CloseToContact)
-                .Select(squad => squad.AbleSoldiers
-                    .Select(soldier => soldier.CurrentSpeed)
-                    .DefaultIfEmpty(0)
-                    .Min())
-                .DefaultIfEmpty(0)
-                .Max();
+            Dictionary<int, BattleSquad> pursuers = GetActiveSquads(pursuerSide)
+                .ToDictionary(squad => squad.Id);
+            Dictionary<int, BattleSquad> quarries = GetActiveSquads(quarrySide)
+                .ToDictionary(squad => squad.Id);
+            RangedTargetSelector ranged = CreateContactRangedTargetSelector();
+
+            return _pursuitTargetsBySquad
+                .OrderBy(pairing => pairing.Key)
+                .Select(pairing =>
+                {
+                    if (!pursuers.TryGetValue(pairing.Key, out BattleSquad pursuer)
+                        || !quarries.TryGetValue(pairing.Value, out BattleSquad quarry))
+                    {
+                        return (Pursuer: (BattleSquad)null, Quarry: (BattleSquad)null);
+                    }
+                    return (Pursuer: pursuer, Quarry: quarry);
+                })
+                .Where(pair => pair.Pursuer != null && pair.Quarry != null)
+                .Select(pair =>
+                {
+                    bool preparedFireCommitment = HasViablePreparedFireCommitment(
+                        pair.Pursuer,
+                        pair.Quarry,
+                        ranged);
+                    bool viableAimCommitment = HasViableFireCommitment(
+                        pair.Pursuer,
+                        pair.Quarry,
+                        ranged);
+                    return new PursuitPairActivity(
+                        pair.Pursuer.Id,
+                        pair.Quarry.Id,
+                        MinimumSquadSeparation(pair.Pursuer, pair.Quarry),
+                        DeclaredTurnSpeed(pair.Pursuer),
+                        DeclaredTurnSpeed(pair.Quarry),
+                        _roundMetrics.HasPairAttackedRecently(
+                            pair.Pursuer.Id,
+                            pair.Quarry.Id),
+                        _roundMetrics.HasPairFireCycleProgressedThisRound(
+                            pair.Pursuer.Id,
+                            pair.Quarry.Id)
+                            || preparedFireCommitment,
+                        viableAimCommitment || preparedFireCommitment);
+                })
+                .ToList();
         }
+
+        private RangedTargetSelector CreateContactRangedTargetSelector()
+        {
+            SquadPlanningServices services = new(
+                _grid,
+                _state.Soldiers,
+                _rules.MeleeWeaponTemplates,
+                log: null,
+                new BattlePlanningContext());
+            return new RangedTargetSelector(new RangedTargetingServices(services));
+        }
+
+        private bool HasViableFireCommitment(
+            BattleSquad pursuer,
+            BattleSquad quarry,
+            RangedTargetSelector ranged)
+        {
+            return pursuer.AbleSoldiers.Any(soldier =>
+                soldier.Aim is ValueTuple<int, RangedWeapon, int> aim
+                && _state.Soldiers.TryGetValue(aim.Item1, out BattleSoldier target)
+                && target.BattleSquad?.Id == quarry.Id
+                && ranged.IsExistingAimStillViable(soldier));
+        }
+
+        /// <summary>
+        /// A Ready or Reload action has no target id of its own. It can still be evidence for this
+        /// exact pair because the current-turn pairing and the selected Hold policy are both live
+        /// on the squad when contact is evaluated. The metrics provide only successful executed
+        /// preparations; this method supplies the missing pair-local viability check.
+        /// </summary>
+        private bool HasViablePreparedFireCommitment(
+            BattleSquad pursuer,
+            BattleSquad quarry,
+            RangedTargetSelector ranged)
+        {
+            if (pursuer.LastEngagementOptionKind != EngagementOptionKind.Hold)
+            {
+                return false;
+            }
+
+            // Match the fire-window's quarry opening projection. Bound and routing quarries are
+            // the only withdrawal roles that contribute an opening speed; a covering or ordinary
+            // target contributes no withdrawal opening for this check.
+            float quarrySpeed = quarry.WithdrawalRole is WithdrawalRole.Bound or WithdrawalRole.Routing
+                ? DeclaredTurnSpeed(quarry)
+                : 0;
+            foreach (BattleRoundMetrics.RangedPreparationProgress progress in
+                _roundMetrics.GetRangedPreparationProgressThisRound(pursuer.Id))
+            {
+                BattleSoldier shooter = pursuer.AbleSoldiers.FirstOrDefault(
+                    soldier => soldier.Soldier.Id == progress.SoldierId);
+                if (shooter == null
+                    || !shooter.EquippedRangedWeapons.Contains(progress.Weapon))
+                {
+                    continue;
+                }
+
+                if (quarry.AbleSoldiers.Any(target =>
+                    ranged.IsWorthwhilePursuitFollowUpShot(
+                        shooter,
+                        target,
+                        progress.Weapon,
+                        quarrySpeed,
+                        allowPendingPreparation: true)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static float DeclaredTurnSpeed(BattleSquad squad) => squad.AbleSoldiers
+            .Select(soldier => soldier.CurrentSpeed)
+            .DefaultIfEmpty(0)
+            .Min();
 
         private float MinimumSeparation(BattleSide first, BattleSide second)
         {

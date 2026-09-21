@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using OnlyWar.Battles;
 using Xunit;
 
@@ -5,29 +6,158 @@ namespace OnlyWar.Tests.Battles;
 
 public class BattleContactRulesTests
 {
-    private static BattleContactRules.Input Input() =>
-        new(7, false, 2, false, false, 15, 10, 9, 7, false, 0, 7);
+    private static PursuitPairActivity Pair(
+        int pursuerId = 11,
+        int quarryId = 22,
+        float separation = 15,
+        float pursuerSpeed = 9,
+        float quarrySpeed = 7,
+        bool pairAttackedRecently = false,
+        bool fireCycleProgressedThisTurn = false,
+        bool fireCommitmentRemainsViable = false) =>
+        new(
+            pursuerId,
+            quarryId,
+            separation,
+            pursuerSpeed,
+            quarrySpeed,
+            pairAttackedRecently,
+            fireCycleProgressedThisTurn,
+            fireCommitmentRemainsViable);
+
+    private static BattleContactRules.Input Input(
+        IReadOnlyCollection<PursuitPairActivity> pairs = null,
+        bool rearGuardActive = false,
+        float maskedDepartureProgress = 0,
+        float withdrawingSquadRunAllowance = 7,
+        bool hasImmediateDisengagementCapability = false,
+        int activePursuerCount = 2,
+        bool allPursuersBreakOff = false,
+        bool enemyAlsoWithdrawing = false) =>
+        new(
+            Turn: 7,
+            IsFirstSide: false,
+            ActivePursuerCount: activePursuerCount,
+            AllPursuersBreakOff: allPursuersBreakOff,
+            EnemyAlsoWithdrawing: enemyAlsoWithdrawing,
+            PursuitPairs: pairs ?? new[] { Pair() },
+            RearGuardActive: rearGuardActive,
+            MaskedDepartureProgress: maskedDepartureProgress,
+            WithdrawingSquadRunAllowance: withdrawingSquadRunAllowance,
+            HasImmediateDisengagementCapability: hasImmediateDisengagementCapability);
 
     [Fact]
     public void SlowerWithdrawal_CannotEscapeActiveFasterPursuit()
     {
-        Assert.Equal(ContactBreakResult.RemainInContact,
+        Assert.Equal(
+            ContactBreakResult.RemainInContact,
             BattleContactRules.Evaluate(Input()).Decision);
     }
 
     [Fact]
-    public void EqualSpeedWithdrawalBeyondAttackReach_OpensMobilityBreak()
+    public void EqualSpeedSilentPairWithOnlyTheoreticalShot_Disengages()
     {
-        var input = Input() with { FastestPursuerSpeed = 7 };
+        PursuitPairActivity silent = Pair(pursuerSpeed: 7, quarrySpeed: 7);
 
-        Assert.Equal(ContactBreakResult.OrganizedForceDisengages,
-            BattleContactRules.Evaluate(input).Decision);
+        BattleContactRules.Result result = BattleContactRules.Evaluate(Input([silent]));
+
+        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
+        Assert.Equal("stalled_pursuit", result.Reason);
+    }
+
+    [Fact]
+    public void PairWithAdvancingViableAim_RemainsInContact()
+    {
+        PursuitPairActivity aiming = Pair(
+            pursuerSpeed: 7,
+            quarrySpeed: 7,
+            fireCycleProgressedThisTurn: true,
+            fireCommitmentRemainsViable: true);
+
+        Assert.Equal(
+            ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(Input([aiming])).Decision);
+    }
+
+    [Fact]
+    public void RetainedButNonAdvancingAim_DoesNotPreserveContact()
+    {
+        PursuitPairActivity retainedAim = Pair(
+            pursuerSpeed: 7,
+            quarrySpeed: 7,
+            fireCycleProgressedThisTurn: false,
+            fireCommitmentRemainsViable: true);
+
+        Assert.Equal(
+            ContactBreakResult.OrganizedForceDisengages,
+            BattleContactRules.Evaluate(Input([retainedAim])).Decision);
+    }
+
+    [Fact]
+    public void FasterAssignedPursuer_PreservesContact()
+    {
+        PursuitPairActivity faster = Pair(pursuerSpeed: 8, quarrySpeed: 7);
+
+        Assert.Equal(
+            ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(Input([faster])).Decision);
+    }
+
+    [Fact]
+    public void AttackAgainstAssignedQuarry_PreservesContact()
+    {
+        PursuitPairActivity attack = Pair(
+            pursuerSpeed: 7,
+            quarrySpeed: 7,
+            pairAttackedRecently: true);
+
+        Assert.Equal(
+            ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(Input([attack])).Decision);
+    }
+
+    [Fact]
+    public void UnrelatedAttackOrAim_DoesNotQualifyAssignedPair()
+    {
+        // The action metrics must not copy evidence from another target into this assigned pair.
+        // The contact rule sees only the pair-local facts built by BattleWithdrawalService.
+        PursuitPairActivity assignedPair = Pair(
+            pursuerSpeed: 7,
+            quarrySpeed: 7,
+            pairAttackedRecently: false,
+            fireCycleProgressedThisTurn: false,
+            fireCommitmentRemainsViable: false);
+
+        Assert.Equal(
+            ContactBreakResult.OrganizedForceDisengages,
+            BattleContactRules.Evaluate(Input([assignedPair])).Decision);
+    }
+
+    [Fact]
+    public void FastPursuerAndSlowQuarryFromDifferentAssignments_CannotBeCombined()
+    {
+        // Each actual assignment is equal-speed. A force-wide max pursuer speed plus min quarry
+        // speed would invent a positive closing rate of four for this input.
+        PursuitPairActivity fastPair = Pair(
+            pursuerId: 11,
+            quarryId: 22,
+            pursuerSpeed: 10,
+            quarrySpeed: 10);
+        PursuitPairActivity slowPair = Pair(
+            pursuerId: 33,
+            quarryId: 44,
+            pursuerSpeed: 6,
+            quarrySpeed: 6);
+
+        Assert.Equal(
+            ContactBreakResult.OrganizedForceDisengages,
+            BattleContactRules.Evaluate(Input(new[] { fastPair, slowPair })).Decision);
     }
 
     [Fact]
     public void RearGuardMasksOnlyAfterFullRunAllowanceWhileActive()
     {
-        var almost = Input() with { RearGuardActive = true, MaskedDepartureProgress = 6.99f };
+        var almost = Input(rearGuardActive: true, maskedDepartureProgress: 6.99f);
         var enough = almost with { MaskedDepartureProgress = 7 };
         var inactive = enough with { RearGuardActive = false };
 
@@ -39,22 +169,24 @@ public class BattleContactRulesTests
     [Fact]
     public void SpecialCapability_ImmediatelyDisengagesSquad()
     {
-        var input = Input() with { HasImmediateDisengagementCapability = true };
+        var input = Input(hasImmediateDisengagementCapability: true);
 
-        Assert.Equal(ContactBreakResult.SquadDisengages,
+        Assert.Equal(
+            ContactBreakResult.SquadDisengages,
             BattleContactRules.Evaluate(input).Decision);
     }
 
     [Fact]
-    public void TrivialPursuerSpeedEdge_StillOpensMobilityBreak()
+    public void TrivialPairSpeedEdge_DoesNotPreserveContact()
     {
-        // Within the tolerance the pursuer would need hundreds of turns to make up a single hex.
-        var withinTolerance = Input() with { FastestPursuerSpeed = 7.1f };
-        var beyondTolerance = Input() with { FastestPursuerSpeed = 7.2f };
+        var withinTolerance = Input([Pair(pursuerSpeed: 7.1f, quarrySpeed: 7)]);
+        var beyondTolerance = Input([Pair(pursuerSpeed: 7.2f, quarrySpeed: 7)]);
 
-        Assert.Equal(ContactBreakResult.OrganizedForceDisengages,
+        Assert.Equal(
+            ContactBreakResult.OrganizedForceDisengages,
             BattleContactRules.Evaluate(withinTolerance).Decision);
-        Assert.Equal(ContactBreakResult.RemainInContact,
+        Assert.Equal(
+            ContactBreakResult.RemainInContact,
             BattleContactRules.Evaluate(beyondTolerance).Decision);
     }
 
@@ -65,10 +197,8 @@ public class BattleContactRulesTests
     // Genuinely faster pursuer: only the two-per-turn it actually gains counts.
     [InlineData(8f, 6f, 3f, true)]
     [InlineData(8f, 6f, 3.01f, false)]
-    // The Xibarrus Theta fixed point (2026-08-04). Separation settles at exactly the pursuer's
-    // move because that is how far it travels while the quarry travels the same, so measuring
-    // against the raw move reported "contact is one move away" on every one of ~997 turns. Net of
-    // the quarry's withdrawal the pursuer gains 0.001 a turn and can reach nothing.
+    // The Xibarrus Theta fixed point: net closing is only 0.001, so six units of separation are
+    // not a same-turn collision even though the pursuer's raw move is six.
     [InlineData(6.001f, 6.001f, 6f, false)]
     public void CanReachContactThisTurn_MeasuresNetClosingNotRawMove(
         float pursuerSpeed,
@@ -82,106 +212,80 @@ public class BattleContactRulesTests
     }
 
     [Fact]
-    public void SilentSternChaseAtMatchedSpeed_Disengages()
+    public void SameTurnContactReach_RemainsValidForAssignedPair()
     {
-        // Regression for the Xibarrus Theta ambush (2026-08-04): two Marine squads ran after one
-        // Abominant at 6.001 vs 6.001 with the separation pinned at 6, landing nothing from turn 4
-        // to the resolver's 1000-turn cap. The stalled_pursuit break should have ended it — the
-        // pursuers had gone silent and could not close — but its "not standing on top of the
-        // quarry" guard compared separation to the pursuer's raw move, which at matched speed is
-        // exactly the separation. The guard is now net of the withdrawal, so the break fires.
-        var sternChase = Input() with
-        {
-            MinimumCurrentSeparation = 6,
-            FastestPursuerSpeed = 6.001f,
-            SlowestWithdrawalSpeed = 6.001f,
-            PursuersAttackedRecently = false
-        };
-
-        BattleContactRules.Result result = BattleContactRules.Evaluate(sternChase);
-
-        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
-        Assert.Equal("stalled_pursuit", result.Reason);
-    }
-
-    [Fact]
-    public void SilentPursuitThatCannotClose_DisengagesInsideMaximumWeaponRange()
-    {
-        // Separation sits inside the pursuer's nominal attack reach, so the mobility break never
-        // fires — but the pursuer has landed nothing and cannot close, which is a chase in name
-        // only.
-        var stalled = Input() with
-        {
-            MinimumCurrentSeparation = 9,
-            FastestPursuerSpeed = 7,
-            PursuersAttackedRecently = false
-        };
-
-        BattleContactRules.Result result = BattleContactRules.Evaluate(stalled);
-
-        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
-        Assert.Equal("stalled_pursuit", result.Reason);
-    }
-
-    [Fact]
-    public void ReasonableShotKeepsSilentPursuitInContactWhileAimMatures()
-    {
-        var aimingPursuit = Input() with
-        {
-            MinimumCurrentSeparation = 9,
-            FastestPursuerSpeed = 7,
-            PursuersAttackedRecently = false,
-            PursuersHaveReasonableShot = true
-        };
+        PursuitPairActivity atContact = Pair(
+            separation: 1,
+            pursuerSpeed: 7,
+            quarrySpeed: 7);
+        PursuitPairActivity justOutsideContact = atContact with { CurrentSeparation = 1.01f };
 
         Assert.Equal(
             ContactBreakResult.RemainInContact,
-            BattleContactRules.Evaluate(aimingPursuit).Decision);
-    }
-
-    [Fact]
-    public void StalledPursuitBreak_RequiresSilence_NoSpeedEdge_AndMeleeSeparation()
-    {
-        var stalled = Input() with
-        {
-            MinimumCurrentSeparation = 9,
-            FastestPursuerSpeed = 7,
-            PursuersAttackedRecently = false
-        };
-
-        // Still shooting: the running firefight is a real engagement.
-        Assert.Equal(ContactBreakResult.RemainInContact,
-            BattleContactRules.Evaluate(stalled with { PursuersAttackedRecently = true }).Decision);
-        // Faster pursuer: it will close and the silence is temporary.
-        Assert.Equal(ContactBreakResult.RemainInContact,
-            BattleContactRules.Evaluate(stalled with { FastestPursuerSpeed = 9 }).Decision);
-        // Within a run-and-charge of the quarry: out of ammo is not out of contact. "Within a
-        // charge" is net of the quarry's own withdrawal, so at the matched speeds this case holds
-        // fixed it means the contact allowance and nothing more — the pursuer gains no ground, and
-        // the eight yards this used to accept were eight yards it could never take back.
-        Assert.Equal(ContactBreakResult.RemainInContact,
-            BattleContactRules.Evaluate(stalled with { MinimumCurrentSeparation = 1 }).Decision);
-        Assert.Equal(ContactBreakResult.OrganizedForceDisengages,
-            BattleContactRules.Evaluate(stalled with { MinimumCurrentSeparation = 1.01f }).Decision);
+            BattleContactRules.Evaluate(Input([atContact])).Decision);
+        Assert.Equal(
+            ContactBreakResult.OrganizedForceDisengages,
+            BattleContactRules.Evaluate(Input([justOutsideContact])).Decision);
     }
 
     [Fact]
     public void PursuerStopping_DisengagesOrganizedForce()
     {
-        var input = Input() with { AllPursuersBreakOff = true };
+        var input = Input(allPursuersBreakOff: true);
 
         Assert.Equal("pursuer_stops", BattleContactRules.Evaluate(input).Reason);
     }
 
     [Fact]
-    public void TraceRenderer_UsesStableFields()
+    public void TraceRenderer_UsesPairEvidenceFields()
     {
         string trace = BattleContactRules.Evaluate(Input()).Trace.Render();
 
-        Assert.Equal("CONTACT_EVAL turn=7 side=second active_pursuers=2 separation=15 attack_reach=10 " +
-                     "pursuer_speed=9 withdrawal_speed=7 pursuers_attacked=true " +
-                     "pursuers_reasonable_shot=false rear_guard_active=false " +
-                     "masked_progress=0 masked_required=7 decision=RemainInContact " +
-                     "reason=pursuit_can_maintain_contact", trace);
+        Assert.Equal(
+            "CONTACT_EVAL turn=7 side=second active_pursuers=2 pursuit_pairs=1 "
+            + "positive_closing_pairs=1 attacked_recently_pairs=0 "
+            + "viable_fire_cycle_pairs=0 maintenance_evidence=close pair_reasons=11>22:close "
+            + "pair_active=true pair_reach_this_turn=false rear_guard_active=false "
+            + "masked_progress=0 masked_required=7 decision=RemainInContact "
+            + "reason=pursuit_can_maintain_contact",
+            trace);
+    }
+
+    [Fact]
+    public void TraceRenderer_ClassifiesEachPairWithoutTheoreticalShotEvidence()
+    {
+        string trace = BattleContactRules.Evaluate(Input(
+            [
+                Pair(11, 22, pursuerSpeed: 7, quarrySpeed: 7, pairAttackedRecently: true),
+                Pair(33, 44, pursuerSpeed: 7, quarrySpeed: 7,
+                    fireCycleProgressedThisTurn: true,
+                    fireCommitmentRemainsViable: true),
+                Pair(55, 66, pursuerSpeed: 7, quarrySpeed: 7)
+            ])).Trace.Render();
+
+        Assert.Contains("pursuit_pairs=3", trace);
+        Assert.Contains("positive_closing_pairs=0", trace);
+        Assert.Contains("attacked_recently_pairs=1", trace);
+        Assert.Contains("viable_fire_cycle_pairs=1", trace);
+        Assert.Contains("maintenance_evidence=attack+fire", trace);
+        Assert.Contains("pair_reasons=11>22:attack|33>44:fire|55>66:none", trace);
+        Assert.Contains("reason=pursuit_can_maintain_contact", trace);
+        Assert.DoesNotContain("pursuers_reasonable_shot", trace);
+    }
+
+    [Fact]
+    public void TraceRenderer_ReportsFinalStallReasonWhenOnlyTheoreticalCapabilityRemains()
+    {
+        string trace = BattleContactRules.Evaluate(Input(
+            [Pair(11, 22, pursuerSpeed: 7, quarrySpeed: 7)])).Trace.Render();
+
+        Assert.Contains("pursuit_pairs=1", trace);
+        Assert.Contains("positive_closing_pairs=0", trace);
+        Assert.Contains("attacked_recently_pairs=0", trace);
+        Assert.Contains("viable_fire_cycle_pairs=0", trace);
+        Assert.Contains("maintenance_evidence=none", trace);
+        Assert.Contains("pair_reasons=11>22:none", trace);
+        Assert.Contains("decision=OrganizedForceDisengages", trace);
+        Assert.Contains("reason=stalled_pursuit", trace);
     }
 }

@@ -338,6 +338,9 @@ namespace OnlyWar.Battles
                     soldier.TurnsDefending++;
                 }
             }
+            // Capture pair-local action facts while the turn's actor/target squad membership is
+            // still available. The post-cleanup force snapshot is committed below.
+            _roundMetrics.RecordExecutedActions(executedActions);
             _woundResolver.Resolve();
 
             CleanupAtEndOfTurn();
@@ -345,7 +348,7 @@ namespace OnlyWar.Battles
             {
                 _currentState.RemoveSoldier(casualtyId);
             }
-            _roundMetrics.RecordRound(executedActions);
+            _roundMetrics.RecordRound();
             // Terminal casualties take precedence over contact resolution. A force that was
             // already withdrawing can still kill the last opposing squad during this turn; if
             // the opponent is gone, that is an annihilation victory rather than a withdrawal.

@@ -132,6 +132,39 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
+    public void HoldReadyPreparation_IsFollowedByNormalAimOrShoot()
+    {
+        BattleSquad pursuer = CreateSquad("Preparing Pursuer", 72_045);
+        BattleSquad withdrawing = CreateSquad("Preparing Quarry", 72_046);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 10, 0));
+        BattleSoldier shooter = pursuer.Soldiers[0];
+        shooter.ClearReadiedRangedWeapons();
+
+        PlanPursuit(
+            fixture,
+            pursuer,
+            [withdrawing],
+            EngagementOptionKind.Hold,
+            role: EngagementSquadRole.Standoff);
+        ReadyRangedWeaponAction ready = Assert.IsType<ReadyRangedWeaponAction>(
+            Assert.Single(fixture.ShootActions));
+        ready.Execute(null);
+        fixture.ShootActions.Clear();
+
+        PlanPursuit(
+            fixture,
+            pursuer,
+            [withdrawing],
+            EngagementOptionKind.Hold,
+            role: EngagementSquadRole.Standoff);
+
+        IAction nextAction = Assert.Single(fixture.ShootActions);
+        Assert.True(nextAction is AimAction or ShootAction);
+    }
+
+    [Fact]
     public void Standoff_HoldsAndFiresWithoutMovement()
     {
         BattleSquad pursuer = CreateSquad("Standoff Pursuer", 72_043);

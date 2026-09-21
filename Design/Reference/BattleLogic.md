@@ -229,6 +229,15 @@ before scoring. A contact-seeking squad with no ranged answer worth preserving c
 ground beyond contact; a ranged squad outside its own useful band cannot pretend that a close charge
 is its normal opening; and a pursuit standoff cannot run without a meaningful speed advantage.
 
+The baseline answers "am I roughly in the fight" from reach, not from the sharply derived
+effective engagement range — feeding the derivation into the fallback would make the fallback carry
+the judgement the score is meant to make. A contact-seeker closes unless it is already in contact;
+a squad inside its band holds; one that has closed past the near edge steps back; and one beyond
+its own reach takes the fast approach if it can run. That last case was a jog until 2026-09-20, and
+it only ever shows when the scored options sit inside the indifference band — which is exactly the
+far-away case, where every option is worth about the same. Against a quarry of equal speed a jog
+does not merely close more slowly; it does not close at all.
+
 The baseline and previous option are tie-breakers inside the small indifference band, not additive
 Battle Value. A previous posture cannot win when another legal option is materially better. Absolute
 destinations are not semantic identity and are never used for cross-turn hysteresis.
@@ -267,7 +276,13 @@ preserving a continuous positional gradient. Contribution access separately appl
 tempo cost:
 
 ```text
-access = -tempoRate × turnsToUsefulRange
+access           = -tempoRate × turnsToUsefulRange
+tempoRate        = scale × helplessness × viability
+scale            = targetBattleValue / AccessValueTurns
+helplessness     = negligibleRate / (negligibleRate + currentRate)
+negligibleRate   = targetBattleValue × NegligibleRemovalFraction
+viability        = destinationRate / (scale + destinationRate)
+turnsToUsefulRange = (range - desiredRange) / (ownMoveSpeed - quarrySpeed)
 ```
 
 The tempo rate fades as current contribution becomes useful and is zero when the destination cannot
@@ -275,8 +290,89 @@ produce removal. There is no activation branch at the old half-pool/four-pool bo
 derived once per planning turn from Battle Value at risk and current removal rate, capped by the
 implementation's maximum exchange horizon, and is shared by every candidate on both sides.
 
+Two properties of that decomposition are load-bearing and were both wrong until 2026-09-20.
+
+**Helplessness is measured against the plinking floor, not against `scale`.** `scale` is a tempo
+magnitude — the rate that would clear the enemy squad in `AccessValueTurns` — and no real squad
+achieves it, so using it as the reference for "is my current fire useful" pins the factor near 1
+for a squad that is shooting perfectly well. The reference is the negligible-removal rate, the
+same floor `RangedEffectivenessCurve` uses to decide a curve is worth nothing; that is a removal
+rate, so it is dimensionally the same kind of quantity as the current rate, and a squad an order
+of magnitude above the floor is priced as barely helpless. It is deliberately **not** a fraction
+of what the squad could achieve by moving: a squad at a small share of its best rate is not
+helpless, only suboptimally placed, and that loss is already carried by the net-rate integral.
+Keying access to the destination rate would double-count it.
+
+**The delay is priced against the net closing rate.** A chase closes at the difference of the two
+speeds. Dividing the gap by the pursuer's own move prices a full stride against a stationary
+target and then re-prices the shortened gap the same way next turn, so the same tempo bonus is
+paid every turn for an arrival that keeps receding. A quarry the squad cannot out-run yields no
+access value at all: the arrival never happens, so there is no delay to buy out, and the squad is
+scored on the fire it can deliver where it stands. Only a pursuit frame carries a quarry speed.
+
+Both errors were found together in the Grist Nine Epsilon battle of 2026-09-20, where 315 marines
+pursued 20 routing orks for the last 700 turns of a 1000-turn battle without firing. The access
+delta held near 10 Battle Value per turn while the separation fell from 323 to 104 — a stock that
+should have been depleting did not move — and it outbid a standing shot worth ~3 on 1112 of 1112
+squad-turns where one was available. Deleting the term alone would have reversed 997 of them.
+
+**Every `Phi` component is a function of state, never of the option that produced it.** The
+pursuit contact-progress term broke this and was the larger half of the same failure. It used to
+pay `attainable` — the squad's whole usable ranged or melee Battle Value — scaled by the fraction
+of its top speed the candidate actually used. Because the root state is always evaluated at zero
+speed, the root scored zero and every moving candidate scored the entire bounty, so
+`gamma*Phi(s') - Phi(s)` never telescoped and became a per-turn payment that could not deplete. In
+the second Grist Nine Epsilon run it read **exactly 141.150** for a running squad in two windows
+seventy turns apart while the separation closed, against a standing shot worth 7.4. Neither term
+alone decided those turns; removing both reversed all 115 of them.
+
+It is now a position value that saturates as the squad closes:
+
+```text
+contactProgress = attainable × span / (span + max(0, projectedDistance - desiredRange))
+```
+
+The whole approach is worth `attainable` once, rather than `attainable` every turn, and the
+saturating form has no flat region, so there is a gradient toward the quarry at any distance. The
+quarry's speed is deliberately absent: a positional potential answers "how good is standing here",
+while how long the ground takes to cover is a question about time, priced by the access term and
+by the pursuit closing value. Splitting them keeps each term telescoping on its own.
+
+Two consequences are deliberate. The marginal value of a yard RISES as a squad approaches its
+band, rather than tapering; the taper the older form showed was the per-turn bounty, not a
+gradient. And because the total is bounded, the per-turn delta at long range is small — smaller
+than the squad-scoring indifference band. Position value is a tie-breaker and a gradient where the
+exchange integral is flat; it is not meant to outvote real fire, and the exchange terms decide
+whenever a squad has a shot worth taking.
+
+A squad beyond its own reach therefore falls through to the baseline posture, whose derivation is
+in §5.1.
+
+**One known exception remains.** The pursuit closing value still reads the candidate's speed, to
+penalise a half-hearted chase by a pursuer slower than its quarry. It is bounded by the squad's
+Battle Value, fires only in that case, and its sign pushes toward standing still rather than
+toward moving, so it does not compound the way the two terms above did. It is nevertheless not a
+state function, and whether "am I keeping up" belongs in `Phi` at all — rather than in the
+immediate exchange or the legal-option mask — is open. The speed-invariance regression test is
+scoped around it deliberately and says so.
+
 The value model intentionally keeps doctrine in the legal-option mask and value in `Phi`. A large
 negative future value cannot make an able melee-only contact-seeker retreat by outvoting its doctrine.
+
+Options whose scores differ by less than an indifference band are treated as equivalent, and the
+baseline posture, then the previous turn's choice, break the tie. **That band is a fraction of the
+best score, not of the squad's Battle Value.** Battle Value is a stock and these scores are
+per-turn rates, so sizing the band from the stock made it unescapable for any squad whose
+shooting was worth less than that fraction of its own worth per turn: every option read as
+indifferent and the tie-break decided in place of the score. A 191-value marine squad carried a
+3.82 band while its whole shooting was worth 1.3 a turn. An absolute floor still applies, for the
+case where every option really is worth about nothing — which is when the baseline and the
+previous posture should carry the decision.
+
+This was the last of the three defects behind the Grist Nine Epsilon turn-cap battles, and the
+only one of them that was not itself a scoring error. It stayed invisible while the pursuit
+shaping terms paid out more than a hundred Battle Value per turn, because that put the moving
+options far outside any band; correcting those terms is what exposed it.
 
 ### 5.3 Range and removal models
 
@@ -350,6 +446,15 @@ disengages when pairwise relative closing speed places interception beyond the t
 horizon. There is no battlefield-edge escape rule. Burrow-capable squads may break contact
 immediately; flight will use the same capability seam when introduced.
 
+**Active-pursuit invariant.** Contact remains active only while an actual pursuer-quarry pairing
+has at least one of: meaningful positive closing speed; a worthwhile attack executable now; or a
+committed fire cycle making observable progress toward a worthwhile attack. The aiming exception is
+deliberately narrower than weapon capability: a theoretical shot may bridge turns in which a squad
+holds, retains its viable target, and accumulates readiness, but it may not preserve contact while
+the chosen policy repeatedly declines that fire plan. `Standoff` already implies the committed-fire
+branch because it permits only holding and firing; `Follow` may instead keep contact by genuinely
+closing. Force-level capability must not substitute for pair-local progress on either branch.
+
 Battle completion produces typed `BattleOutcome` and `BattleEvent` records for withdrawal, cover,
 rear guard, pursuit, rout, disengagement, field holder, and casualty/aftermath consumers.
 
@@ -410,6 +515,12 @@ These decisions replace earlier forms and should not be reintroduced during main
 | Hard `min(pool, rate × horizon)` cap | Continuous finite-pool saturation plus continuous access cost |
 | Saturation activated at a threshold | Saturation is continuous for all positive opportunity |
 | Ranged removal discounted by enemy arrival time | Ranged removal is immediate; only delayed contact payoff is arrival-discounted |
+| Access helplessness referenced to `targetBattleValue / AccessValueTurns` | Referenced to the negligible-removal rate, so a squad whose fire is landing is not priced as helpless |
+| Access delay measured against the pursuer's own move | Measured against the net closing rate; an un-outrunnable quarry yields no access value |
+| A `Phi` term scaled by the candidate's speed (pursuit contact progress) | `Phi` is a function of projected state only, so the potential difference telescopes |
+| Pursuit contact progress paying `attainable` per turn of movement | A saturating position value worth `attainable` across the whole approach, once |
+| Jogging as the baseline posture beyond a squad's reach | The fast approach, when the squad can run |
+| Indifference band as a fraction of the squad's Battle Value | A fraction of the best score, with an absolute floor — stock and rate are not the same dimension |
 | Per-soldier movement vote and weak-ranged fallback tree | Squad semantic options with doctrine masks and executable root policies |
 | A flat dual-wield defense bonus | Weapon `ParryModifier`s only |
 | Wound ratio as damage value | Resolver-mirroring take-out probability with live wound state |

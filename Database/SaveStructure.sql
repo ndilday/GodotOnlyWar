@@ -84,7 +84,12 @@ CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NO
 -- planning pass (including every row in a save written before the column existed), which the loader
 -- keeps distinct from an assignment of zero so the assault path derives the clamp instead of fielding
 -- no defence. Read by name via GetOrdinalOrDefault, so older saves load unchanged.
-CREATE TABLE RegionFaction (RegionId INTEGER REFERENCES Region (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment REAL NOT NULL, ListeningPost REAL NOT NULL, AntiAir REAL NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0, Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0, HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT, AssignedDefensiveBattleValue BIGINT, StrategicInvasionForceId BIGINT, DormantConsolidation REAL NOT NULL DEFAULT 0.0);
+-- PatrolScreenBattleValue is the standing screen this faction posts over the region: a designation
+-- out of the organized pool, not a force. It is NOT NULL DEFAULT 0 rather than nullable, because
+-- zero already says "no screen" unambiguously and there is nothing an unplanned region needs to
+-- derive - unlike the defensive assignment above, a missing screen is simply no screen. A save
+-- written before this column loads as zero and the next planning pass posts the screens again.
+CREATE TABLE RegionFaction (RegionId INTEGER REFERENCES Region (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment REAL NOT NULL, ListeningPost REAL NOT NULL, AntiAir REAL NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0, Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0, HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT, AssignedDefensiveBattleValue BIGINT, StrategicInvasionForceId BIGINT, DormantConsolidation REAL NOT NULL DEFAULT 0.0, PatrolScreenBattleValue BIGINT NOT NULL DEFAULT 0);
 
 -- Table: PlanetFaction
 CREATE TABLE PlanetFaction (PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, PlanetaryControl INTEGER NOT NULL, PlayerReputation REAL NOT NULL, LeaderId INTEGER REFERENCES Character (Id));

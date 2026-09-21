@@ -113,6 +113,42 @@ public class InterceptionSizingTests
             line => line.Contains("no combat-capable mission force remained"));
     }
 
+    // A region whose screen is a battle value rather than a force still intercepts, and raises only
+    // as much of that screen as the intrusion calls for. This is the whole point of making the screen
+    // abstract: a region holding a large screen used to turn all of it into Squad and Soldier objects
+    // at planning time so that a handful could ever fight.
+    [Fact]
+    public void Interception_RaisesTheAbstractScreen_AndOnlyAsMuchOfItAsIsNeeded()
+    {
+        // 50,000 points of screen, against a 4-battle-value intruder seen at -1 sigma: required is 6.
+        MissionContext context = CreateDetectionScenario(screenSquads: 0, screenBattleValue: 50_000);
+
+        new DetectedMissionStep().ExecuteMissionStep(
+            CreateExecution(context), -1.0f, resumeStep: null);
+
+        Assert.NotEmpty(context.OpposingSquads);
+        // The screen could have paid for 12,500 four-point squads. What matters is that the number
+        // raised is set by the intrusion and not by the screen's size.
+        Assert.InRange(context.OpposingSquads.Count, 1, 4);
+        Assert.InRange(CommittedBattleValue(context), 4, 20);
+    }
+
+    [Fact]
+    public void Interception_AThinAbstractScreenDeclinesRatherThanFeedingItselfIn()
+    {
+        // Below parity with the intruder the screen stays out of it, exactly as a thin screen of real
+        // squads does. The abstract screen must not be able to conjure its way up to parity.
+        MissionContext context = CreateDetectionScenario(screenSquads: 0, screenBattleValue: 2);
+
+        new DetectedMissionStep().ExecuteMissionStep(
+            CreateExecution(context), -1.0f, resumeStep: null);
+
+        Assert.Empty(context.OpposingSquads);
+        Assert.Contains(
+            context.Log,
+            line => line.Contains("no force strong enough to engage it is in position"));
+    }
+
     // --- fixtures ---
 
     private static int CommittedBattleValue(MissionContext context) =>
@@ -123,19 +159,34 @@ public class InterceptionSizingTests
     // A two-man intruder (4 battle value) caught in a region held by one enemy faction, with
     // `screenSquads` interchangeable two-man patrols out looking. Spotter is left unset so the step
     // falls back to the mission's own target RegionFaction, which is where the screen lives.
-    private static MissionContext CreateDetectionScenario(int screenSquads)
+    private static MissionContext CreateDetectionScenario(
+        int screenSquads, long screenBattleValue = 0)
     {
         Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Target Region", new RegionCoordinate(0, 0), 0);
         planet.Regions[0] = region;
 
-        Faction defenderFaction = CreateFaction(20, "Swarm");
+        // The abstract screen is raised through ForceGenerator, so a faction that is to post one
+        // needs a Scout-flagged formation to post it in. A faction with none fields no screen at all,
+        // which is why the landed-squad scenarios above can leave the template map empty.
+        Faction defenderFaction = screenBattleValue > 0
+            ? CreateFaction(20, "Swarm", CreateScoutTemplate())
+            : CreateFaction(20, "Swarm");
         PlanetFaction planetFaction = new(defenderFaction) { IsPublic = true };
         RegionFaction defender = new(planetFaction, region)
         {
-            Population = 10_000,
+            // Garrison is a subset of Population and the screen is a subset of the organized pool,
+            // so the population has to be able to hold the screen or the clamps quietly shrink it.
+            // System.Math, not the OnlyWar.Tests.Math namespace this assembly also has.
+            Population = System.Math.Max(10_000, screenBattleValue * 2),
             IsPublic = true
         };
+        // PopulationIsMilitary is off for this faction, so the screen is clamped against Garrison.
+        if (screenBattleValue > 0)
+        {
+            defender.Garrison = screenBattleValue;
+            defender.PatrolScreenBattleValue = screenBattleValue;
+        }
         region.RegionFactionMap[defenderFaction.Id] = defender;
 
         for (int i = 0; i < screenSquads; i++)
@@ -183,7 +234,24 @@ public class InterceptionSizingTests
     private static MissionExecutionContext CreateExecution(MissionContext context) =>
         TestExecutionContextFactory.CreateMission(context, new FixedRNG());
 
-    private static Faction CreateFaction(int id, string name) =>
+    // A two-man Scout formation worth 4 battle value, matching the landed screen squads above so the
+    // arithmetic in the assertions stays the same on both paths.
+    private static SquadTemplate CreateScoutTemplate()
+    {
+        SoldierTemplate trooper = new(
+            40, TestModelFactory.HumanSpecies, "Screen Trooper",
+            1, 1, false, 0, [], null, 2);
+        return new SquadTemplate(
+            40,
+            "Screen Patrol",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [new SquadTemplateElement(trooper, 2, 2, rollsStrength: false)],
+            SquadTypes.Scout);
+    }
+
+    private static Faction CreateFaction(int id, string name, params SquadTemplate[] squadTemplates) =>
         new(
             id,
             name,
@@ -192,9 +260,9 @@ public class InterceptionSizingTests
             isDefaultFaction: false,
             behavior: FactionBehavior.None,
             GrowthType.Conversion,
-            new Dictionary<int, Species>(),
+            new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),
-            new Dictionary<int, SquadTemplate>(),
+            squadTemplates.ToDictionary(st => st.Id),
             new Dictionary<int, UnitTemplate>(),
             new Dictionary<int, BoatTemplate>(),
             new Dictionary<int, ShipTemplate>(),

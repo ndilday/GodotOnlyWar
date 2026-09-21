@@ -338,6 +338,27 @@ public class ForceGeneratorTests
     }
 
     [Fact]
+    public void ScoutPatrol_TruncatesAnUnboundedBudgetInsteadOfMaterialisingIt()
+    {
+        // 396,030 is the budget Diocesan Prime Delta actually handed this method on the turn-1 save
+        // of 2026-09-20, because a patrol's saturation was a fraction of a region's MilitaryStrength
+        // and that is a raw population figure. It built 3,960 squads and 79,200 soldiers for one
+        // region's screen. The sizing fix is at the caller; this is the backstop that keeps a bad
+        // budget from consuming the machine, and the ceiling sits far above any real request.
+        SquadTemplate scout = CreateTemplate(1, "Scout", SquadTypes.Scout, 10, 100, minSoldiers: 4);
+        Faction faction = CreateFaction(scout);
+
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 396_030,
+            Profile = ForceCompositionProfile.ScoutPatrol
+        });
+
+        Assert.Equal(64, generated.Count);
+    }
+
+    [Fact]
     public void ScoutPatrol_SendsAnUnderstrengthPartyRatherThanNothing()
     {
         // Below the price of a full squad, an undersized scouting party beats no party at all.

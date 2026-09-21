@@ -275,6 +275,8 @@ namespace OnlyWar.Persistence.Database.GameState
                         GetOrdinalOrDefault(reader, "OrganizedMilitaryStrength");
                     int assignedDefensiveOrdinal =
                         GetOrdinalOrDefault(reader, "AssignedDefensiveBattleValue");
+                    int patrolScreenOrdinal =
+                        GetOrdinalOrDefault(reader, "PatrolScreenBattleValue");
                     int strategicForceOrdinal = GetOrdinalOrDefault(reader, "StrategicInvasionForceId");
                     if (strategicForceOrdinal < 0)
                     {
@@ -340,6 +342,13 @@ namespace OnlyWar.Persistence.Database.GameState
                     {
                         regionFaction.AssignedDefensiveBattleValue =
                             reader.GetInt64(assignedDefensiveOrdinal);
+                    }
+                    // Absent for a save predating the column, which reads as no screen. The next
+                    // planning pass posts one, so nothing needs deriving here.
+                    if (patrolScreenOrdinal >= 0 && !reader.IsDBNull(patrolScreenOrdinal))
+                    {
+                        regionFaction.PatrolScreenBattleValue =
+                            reader.GetInt64(patrolScreenOrdinal);
                     }
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
                 }
@@ -646,6 +655,29 @@ namespace OnlyWar.Persistence.Database.GameState
             // current save schema uses capability-neutral column names.
             bool hasStrategicForceColumns = HasColumn(transaction.Connection, "RegionFaction", "StrategicInvasionForceId")
                 && HasColumn(transaction.Connection, "RegionFaction", "DormantConsolidation");
+            bool hasPatrolScreenColumn = HasColumn(
+                transaction.Connection, "RegionFaction", "PatrolScreenBattleValue");
+
+            // Built rather than written out per combination. Two optional column groups is where the
+            // hardcoded-string-per-variant approach stops paying: a third would need eight.
+            List<string> columns =
+            [
+                "RegionId", "FactionId", "IsPublic", "Population", "Garrison", "Organization",
+                "Entrenchment", "ListeningPost", "AntiAir", "GrowthMultiplier", "Contentment",
+                "ArmedCivilians", "HasEmergenceAdvantage", "OrganizedMilitaryStrength",
+                "AssignedDefensiveBattleValue"
+            ];
+            if (hasStrategicForceColumns)
+            {
+                columns.Add("StrategicInvasionForceId");
+                columns.Add("DormantConsolidation");
+            }
+            if (hasPatrolScreenColumn)
+            {
+                columns.Add("PatrolScreenBattleValue");
+            }
+            string insertSql = $"INSERT INTO RegionFaction ({string.Join(", ", columns)}) VALUES "
+                + $"({string.Join(", ", columns.Select(column => "@" + char.ToLowerInvariant(column[0]) + column[1..]))});";
             foreach (var region in regions)
             {
                 foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
@@ -653,11 +685,7 @@ namespace OnlyWar.Persistence.Database.GameState
                     using (var command = transaction.Connection.CreateCommand())
                     {
                         command.Transaction = transaction;
-                        command.CommandText = hasStrategicForceColumns ? @"INSERT INTO RegionFaction
-                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage, OrganizedMilitaryStrength, AssignedDefensiveBattleValue, StrategicInvasionForceId, DormantConsolidation) VALUES
-                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage, @organizedMilitaryStrength, @assignedDefensiveBattleValue, @strategicForceId, @dormantConsolidation);" : @"INSERT INTO RegionFaction
-                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage, OrganizedMilitaryStrength, AssignedDefensiveBattleValue) VALUES
-                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage, @organizedMilitaryStrength, @assignedDefensiveBattleValue);";
+                        command.CommandText = insertSql;
                         command.AddParam("@regionId", region.Id);
                         command.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
                         command.AddParam("@isPublic", regionFaction.IsPublic ? 1 : 0);
@@ -679,8 +707,14 @@ namespace OnlyWar.Persistence.Database.GameState
                             regionFaction.AssignedDefensiveBattleValue);
                         if (hasStrategicForceColumns)
                         {
-                            command.AddParam("@strategicForceId", regionFaction.StrategicInvasionForceId);
+                            // Named for its column now that the parameter list is derived from the
+                            // column list; it was @strategicForceId while both were written by hand.
+                            command.AddParam("@strategicInvasionForceId", regionFaction.StrategicInvasionForceId);
                             command.AddParam("@dormantConsolidation", regionFaction.DormantConsolidation);
+                        }
+                        if (hasPatrolScreenColumn)
+                        {
+                            command.AddParam("@patrolScreenBattleValue", regionFaction.PatrolScreenBattleValue);
                         }
                         command.ExecuteNonQuery();
                     }

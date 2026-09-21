@@ -113,8 +113,8 @@ namespace OnlyWar.Campaign.Turns
                 .SelectMany(region => region.SpecialMissions)
                 .Where(mission => MissionAvailability.IsPlayerVisibleSpecialMission(mission)
                     && !assignedMissionIds.Contains(mission.Id))
-                .OrderBy(mission => mission.RegionFaction?.Region?.Planet?.Name)
-                .ThenBy(mission => mission.RegionFaction?.Region?.Name)
+                .OrderBy(mission => mission.Region?.Planet?.Name)
+                .ThenBy(mission => mission.Region?.Name)
                 .ThenBy(mission => mission.MissionType)
                 .ThenBy(mission => mission.Id)
                 .Select(BuildSpecialMissionFact));
@@ -358,7 +358,9 @@ namespace OnlyWar.Campaign.Turns
 
         private static CommandAttentionFact BuildSpecialMissionFact(Mission mission)
         {
-            Region region = mission.RegionFaction?.Region;
+            // Intelligence-led missions against a target with no current regional presence carry
+            // no RegionFaction, but they still know their region: Mission.Region falls back to it.
+            Region region = mission.Region;
             string location = region == null
                 ? "an unknown location"
                 : $"{region.Name}, {region.Planet?.Name ?? "unknown planet"}";

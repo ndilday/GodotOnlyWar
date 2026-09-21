@@ -31,65 +31,66 @@ internal sealed class FactionReconPatrolPlanner
     internal const float UnfamiliarGroundIntel = 1.0f;
 
     /// <summary>
-    /// Posts a standing screen on a battle-value budget the allocation auction decided.
+    /// Posts a standing screen on a battle-value budget the allocation auction decided. The screen is
+    /// a designation, not a force: nothing is generated until something arrives that it has to fight.
     /// </summary>
     /// <remarks>
     /// This used to take a fraction of whatever survived the defensive reserve, which is why a region
     /// facing several neighbours screened nothing: the fraction was applied to zero. The budget now
     /// arrives from the auction, where a patrol's first points of force competed against the
     /// garrison's last ones on marginal value.
+    ///
+    /// And it used to build the screen here, which is what made it the only defensive task in the game
+    /// that allocated soldiers. Defend, Withdraw and Move settle in battle-value arithmetic on
+    /// RegionFaction; Patrol called ForceGenerator for every point the auction awarded it, and the
+    /// award is a share of MilitaryStrength — a population headcount for the Imperium, in the billions
+    /// on a hive world. See RegionFaction.PatrolScreenBattleValue for what that cost.
+    ///
+    /// Patrol is now to Recon what Defend is to Assault: the intelligence role belongs to Recon, which
+    /// fields real squads against a real target, and the screen is the abstract standing counterpart.
+    /// The consequence to know about is that an NPC screen no longer runs a PatrolSweepMissionStep, so
+    /// it no longer records PatrolContact observations. That was deliberate — it was duplicating what
+    /// Recon exists to do, and it was the last thing keeping the screen's squads alive.
     /// </remarks>
     internal void IssueAllocatedPatrol(
         Faction faction,
         Planet planet,
         RegionFaction regionFaction,
-        long budget,
-        List<Order> allOrders,
-        IRNG random)
+        long budget)
     {
+        if (regionFaction == null || budget <= 0) return;
+
+        // A screen is still a formation's worth of work: a region too thin to post the faction's
+        // smallest squad posts no screen, exactly as when this generated one.
+        if (budget < faction.MinimumForceRequest) return;
+
+        regionFaction.PatrolScreenBattleValue = budget;
+        GameLog.Debug(() =>
+            $"AI patrol {faction.Name}/{planet.Name}/{regionFaction.Region.Name}: "
+            + $"screenBV={regionFaction.PatrolScreenBattleValue} (awarded={budget}, "
+            + $"organized={regionFaction.OrganizedMilitaryStrength})");
+    }
+
+    /// <summary>
+    /// Clears every faction's standing screen over the sector, so a planning pass that no longer wants
+    /// one leaves none behind.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of ClearStaleTransientSquads, which does the same for the real squads Recon
+    /// still fields. A screen is rewritten wholesale each pass rather than accumulated, so this runs
+    /// before planning and the pass re-posts whatever it still wants.
+    /// </remarks>
+    internal static void ClearPatrolScreens(Faction faction, Sector sector)
+    {
+        foreach (Planet planet in sector.Planets.Values)
         {
-            if (regionFaction == null || budget <= 0) return;
-
-            long forceBattleValue = budget;
-
-            // A patrol screen is still an order: its budget can be no smaller than the faction's
-            // smallest full squad. A region too thin to field even that posts no screen.
-            if (forceBattleValue < faction.MinimumForceRequest) return;
-
-            var request = new ForceGenerationRequest
+            foreach (Region region in planet.Regions)
             {
-                Faction = faction,
-                TargetBattleValue = forceBattleValue,
-                Profile = ForceCompositionProfile.ScoutPatrol
-            };
-
-            List<Squad> patrolSquads = ForceGenerator.GenerateForce(request, random, _identity);
-            if (patrolSquads.Count == 0) return;
-
-            // The patrol is a standing screen, not a sweep: its squads land in the faction's own
-            // region and hold, joining the defence if the region is raided and intercepting enemy
-            // recon that tries to scout it. These transient forces are cleared before the next pass.
-            Mission mission = new Mission(
-                _identity.GetNextMissionId(), MissionType.Patrol, regionFaction, 0);
-            Order order = new Order(
-                _identity.GetNextOrderId(),
-                patrolSquads,
-                true,
-                false,
-                Aggression.Cautious,
-                mission,
-                faction);
-            foreach (Squad squad in patrolSquads)
-            {
-                squad.CurrentRegion = regionFaction.Region;
-                squad.CurrentOrders = order;
-                regionFaction.LandedSquads.Add(squad);
+                if (region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction regionFaction))
+                {
+                    regionFaction.PatrolScreenBattleValue = 0;
+                }
             }
-            allOrders.Add(order);
-            GameLog.Debug(() =>
-                $"AI patrol {faction.Name}/{planet.Name}/{regionFaction.Region.Name}: "
-                + $"targetBV={forceBattleValue}, squads={patrolSquads.Count}, "
-                + $"soldiers={patrolSquads.Sum(s => s.Members.Count)}, battleValue={SquadBattleValue(patrolSquads)}");
         }
     }
 

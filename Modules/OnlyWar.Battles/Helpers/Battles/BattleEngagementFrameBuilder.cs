@@ -870,7 +870,17 @@ internal static class BattleEngagementFrameBuilder
         if (profile.IsContactSeeking) return distance <= 1
             ? EngagementOptionKind.Hold
             : EngagementOptionKind.CloseToContact;
-        if (distance > profile.PreferredBandUpper + 1) return EngagementOptionKind.JogToward;
+        // Beyond its own reach a squad is not in the fight at all, so the containment answer is
+        // "close, fast". Jogging was the fallback until 2026-09-20, and it only ever showed when
+        // the scored options sat inside the indifference band -- which is exactly the far-away
+        // case, where every option is worth about the same and the baseline decides. A jog does
+        // not merely close more slowly: against a quarry of equal speed it does not close at all.
+        if (distance > profile.PreferredBandUpper + 1)
+        {
+            return profile.CanRun
+                ? EngagementOptionKind.RunToward
+                : EngagementOptionKind.JogToward;
+        }
         if (distance < profile.PreferredBandLower - 1) return EngagementOptionKind.StepBack;
         return EngagementOptionKind.Hold;
     }

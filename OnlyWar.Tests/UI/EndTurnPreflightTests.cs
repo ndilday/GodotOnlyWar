@@ -219,6 +219,37 @@ public class EndTurnPreflightTests
     }
 
     [Fact]
+    public void Evaluate_SpecialMissionWithoutCurrentTargetPresenceStillNamesItsRegion()
+    {
+        TestCampaign campaign = CreateCampaign();
+        campaign.PlayerPlanetFaction.SetRegionAwareness(campaign.Region, 3f);
+        // An intelligence-led mission against a target with no current regional presence carries
+        // no RegionFaction, but it still knows the region it is fought in. The warning used to
+        // read the location through the missing RegionFaction and report "an unknown location".
+        Mission mission = new(
+            MissionType.Ambush,
+            campaign.Region,
+            campaign.EnemyRegionFaction.PlanetFaction.Faction,
+            1);
+        Assert.Null(mission.RegionFaction);
+        campaign.Region.SpecialMissions.Add(mission);
+
+        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
+            campaign.Sector,
+            new EndTurnWarningPreferences
+            {
+                WarnIdleDeployableSquads = false,
+                WarnActionableTaskForces = false
+            });
+
+        EndTurnAttentionItem item = Assert.Single(report.Items);
+        Assert.DoesNotContain("unknown location", item.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("Region Primus, Vigilus", item.Detail);
+        Assert.True(item.NavigationTarget.IsAvailable);
+        Assert.Equal(campaign.Region.Id, item.NavigationTarget.PrimaryId);
+    }
+
+    [Fact]
     public void Evaluate_SpecialMissionWithIntelBelowOneExplainsItWillBeCleared()
     {
         TestCampaign campaign = CreateCampaign();

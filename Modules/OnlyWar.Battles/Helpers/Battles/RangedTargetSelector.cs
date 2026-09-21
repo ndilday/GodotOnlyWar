@@ -45,6 +45,9 @@ namespace OnlyWar.Battles
         // The planner's "aim can no longer be improved" ceiling. A held aim is judged at this bonus
         // rather than its current one -- see IsExistingAimStillViable.
         internal const int FullAimBonusTurns = 3;
+        // Shared with the pursuit fire-window projection. This is a shot-value horizon, not a
+        // contact grace-period timer.
+        internal const int PursuitFireWindowTurns = FullAimBonusTurns + 2;
 
         private readonly RangedTargetingServices _services;
         // Aliases onto the bundle, named as the planner named them so the moved bodies read
@@ -161,6 +164,89 @@ namespace OnlyWar.Battles
                 range,
                 weapon.Template.Accuracy + Math.Max(aim.Item3, FullAimBonusTurns) + 1);
             return evaluation.Score > 0 && evaluation.HitProbability > StickyMinimumHitProbability;
+        }
+
+        /// <summary>
+        /// Evaluates the same full-aim, projected-range shot used by the pursuit fire window.
+        /// Preparation actions may call this before the weapon has ammunition in its magazine:
+        /// a successful reload can be the first step of a multi-round reload, so the question is
+        /// whether the weapon can lead to a worthwhile follow-up, not whether it can fire this
+        /// instant.
+        /// </summary>
+        internal bool IsWorthwhilePursuitFollowUpShot(
+            BattleSoldier shooter,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float quarrySpeed,
+            bool allowPendingPreparation = false)
+        {
+            RangedTargetEvaluation evaluation = EvaluatePursuitFireWindowShot(
+                shooter,
+                target,
+                weapon,
+                quarrySpeed,
+                allowPendingPreparation);
+            return evaluation != null
+                && evaluation.HitProbability > StickyMinimumHitProbability
+                && evaluation.Score > 0;
+        }
+
+        /// <summary>
+        /// Returns the fire-window shot for one exact shooter/target/weapon combination. Keeping
+        /// this calculation here lets the planner's projected Hold value and the withdrawal
+        /// evidence check share range projection, aim bonus, target viability, and worthwhile-shot
+        /// inputs instead of growing two ranged-combat approximations.
+        /// </summary>
+        internal RangedTargetEvaluation EvaluatePursuitFireWindowShot(
+            BattleSoldier shooter,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float quarrySpeed,
+            bool allowPendingPreparation = false)
+        {
+            if (shooter == null
+                || target == null
+                || weapon == null
+                || !shooter.IsCombatEffective
+                || !target.IsCombatEffective
+                || !IsPlaced(shooter)
+                || !IsPlaced(target)
+                || _grid.GetSoldierSide(shooter.Soldier.Id)
+                    == _grid.GetSoldierSide(target.Soldier.Id)
+                || weapon.Template.IsTemplateWeapon
+                || !shooter.RangedWeapons.Contains(weapon))
+            {
+                return null;
+            }
+
+            if (allowPendingPreparation)
+            {
+                if (!weapon.CanFire && !weapon.CanReload && weapon.ReloadProgress == 0)
+                {
+                    return null;
+                }
+            }
+            else if (weapon.LoadedAmmo <= 0)
+            {
+                return null;
+            }
+
+            float projectedRange = _grid.GetDistanceBetweenSoldiers(
+                    shooter.Soldier.Id,
+                    target.Soldier.Id)
+                + Math.Max(0, quarrySpeed) * PursuitFireWindowTurns;
+            if (projectedRange > weapon.Template.MaximumRange)
+            {
+                return null;
+            }
+
+            return _shotEvaluator.EvaluateRangedTarget(
+                shooter,
+                target,
+                weapon,
+                projectedRange,
+                weapon.Template.Accuracy + FullAimBonusTurns + 1,
+                quarrySpeed);
         }
 
         // Evaluates only the target the soldier already committed to (soldier.TargetId), skipping the

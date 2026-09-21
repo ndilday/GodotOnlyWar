@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Battles;
 
@@ -16,11 +17,11 @@ public static class BattleContactRules
     public const float MaskedDepartureRunAllowanceMultiplier = 1.0f;
 
     /// <summary>
-    /// How much faster than the slowest withdrawing squad a pursuer must be before it counts as
-    /// able to close the gap at all. A hair of extra speed is not a chase: at a tenth of a hex
-    /// per turn the pursuer needs hundreds of turns to make up a single hex, which reads as a
-    /// hung battle rather than a pursuit. Shared with <see cref="BattlePursuitPlanner"/> so the
-    /// posture decision and the contact break agree on what "cannot close" means.
+    /// How much faster than its assigned quarry a pursuer must be before it counts as able to
+    /// close the gap at all. A hair of extra speed is not a chase: at a tenth of a hex per turn
+    /// the pursuer needs hundreds of turns to make up a single hex, which reads as a hung battle
+    /// rather than a pursuit. Shared with <see cref="BattlePursuitPlanner"/> so the posture
+    /// decision and the contact break agree on what "cannot close" means.
     /// </summary>
     public const float PursuitSpeedAdvantageTolerance = 0.1f;
 
@@ -61,31 +62,17 @@ public static class BattleContactRules
         float quarrySpeed) =>
         separation <= Math.Max(0, pursuerSpeed - quarrySpeed) + MeleeContactAllowance;
 
-    /// <param name="PursuersAttackedRecently">
-    /// The pursuing side produced a damaging action (fire or melee) within the evaluator's recent
-    /// window. False means the pursuit is silent — it is neither shooting nor reaching melee.
-    /// </param>
-    /// <param name="PursuersHaveReasonableShot">
-    /// The pursuing side's current fire-control projection says that a worthwhile shot is available
-    /// now. This remains true while a stationary shooter is investing turns to mature an aimed shot,
-    /// even though no attack action has executed yet.
-    /// </param>
     public sealed record Input(
         int Turn,
         bool IsFirstSide,
         int ActivePursuerCount,
         bool AllPursuersBreakOff,
         bool EnemyAlsoWithdrawing,
-        float MinimumCurrentSeparation,
-        float MaximumOneTurnAttackReach,
-        float FastestPursuerSpeed,
-        float SlowestWithdrawalSpeed,
+        IReadOnlyCollection<PursuitPairActivity> PursuitPairs,
         bool RearGuardActive,
         float MaskedDepartureProgress,
         float WithdrawingSquadRunAllowance,
-        bool HasImmediateDisengagementCapability = false,
-        bool PursuersAttackedRecently = true,
-        bool PursuersHaveReasonableShot = false);
+        bool HasImmediateDisengagementCapability = false);
 
     public sealed record Result(ContactBreakResult Decision, string Reason, BattleDecisionTrace Trace);
 
@@ -94,7 +81,24 @@ public static class BattleContactRules
 
     public static Result Evaluate(Input input)
     {
+        IReadOnlyCollection<PursuitPairActivity> pairs = input.PursuitPairs ?? [];
         float required = RequiredMaskedDepartureDistance(input.WithdrawingSquadRunAllowance);
+        int positiveClosingPairs = 0;
+        int attackedRecentlyPairs = 0;
+        int viableFireCyclePairs = 0;
+        int reachThisTurnPairs = 0;
+        foreach (PursuitPairActivity pair in pairs)
+        {
+            if (pair.HasMeaningfulPositiveClosingSpeed) positiveClosingPairs++;
+            if (pair.PairAttackedRecently) attackedRecentlyPairs++;
+            if (pair.HasQualifyingFireCycleProgress) viableFireCyclePairs++;
+            if (pair.CanReachContactThisTurn) reachThisTurnPairs++;
+        }
+
+        bool pairHasActiveEvidence = positiveClosingPairs > 0
+            || attackedRecentlyPairs > 0
+            || viableFireCyclePairs > 0;
+        bool pairCanReachContactThisTurn = reachThisTurnPairs > 0;
         ContactBreakResult decision;
         string reason;
 
@@ -104,41 +108,50 @@ public static class BattleContactRules
             (decision, reason) = (ContactBreakResult.OrganizedForceDisengages, "pursuer_stops");
         else if (input.EnemyAlsoWithdrawing)
             (decision, reason) = (ContactBreakResult.OrganizedForceDisengages, "mutual_withdrawal");
-        else if (input.MinimumCurrentSeparation > input.MaximumOneTurnAttackReach &&
-                 !PursuerCanClose(input))
-            (decision, reason) = (ContactBreakResult.OrganizedForceDisengages, "mobility_break");
-        // A pursuit that can neither close the gap nor land a blow has already ended in fact; the
-        // mobility break alone does not catch it, because that clause measures separation against
-        // the pursuer's *maximum* weapon range. A long-ranged pursuer therefore stays nominally in
-        // contact forever at a distance where no shot is ever worth taking. Once its guns have gone
-        // silent, has no reasonable shot to prepare, and is no longer running anyone down, let the
-        // withdrawal succeed. A stationary shooter may spend several turns maturing an aim before
-        // a ShootAction executes. Melee reach is still checked so a pursuer that is merely out of
-        // ammo but standing on top of the quarry does not hand it a free escape.
-        else if (!input.PursuersAttackedRecently
-                 && !input.PursuersHaveReasonableShot
-                 && !PursuerCanClose(input)
-                 && !CanReachContactThisTurn(
-                     input.MinimumCurrentSeparation,
-                     input.FastestPursuerSpeed,
-                     input.SlowestWithdrawalSpeed))
+        // Contact is maintained only by evidence from an assigned pair. In particular, a
+        // theoretical force-wide shot is not evidence: a stationary pursuer has to execute an
+        // AimAction this round and retain a viable commitment to this pair's quarry. Same-turn
+        // reach remains a valid collision exception, evaluated with the same pair-local speeds.
+        else if (!pairHasActiveEvidence && !pairCanReachContactThisTurn)
             (decision, reason) = (ContactBreakResult.OrganizedForceDisengages, "stalled_pursuit");
         else if (input.RearGuardActive && input.MaskedDepartureProgress >= required)
             (decision, reason) = (ContactBreakResult.SquadDisengages, "masked_departure");
         else
             (decision, reason) = (ContactBreakResult.RemainInContact, "pursuit_can_maintain_contact");
 
+        string maintenanceEvidence = string.Join(
+            "+",
+            new[]
+            {
+                positiveClosingPairs > 0 ? "close" : null,
+                attackedRecentlyPairs > 0 ? "attack" : null,
+                viableFireCyclePairs > 0 ? "fire" : null,
+                pairCanReachContactThisTurn ? "reach" : null
+            }.Where(code => code != null));
+        if (maintenanceEvidence.Length == 0) maintenanceEvidence = "none";
+
+        string pairReasons = string.Join(
+            "|",
+            pairs
+                .OrderBy(pair => pair.PursuerSquadId)
+                .ThenBy(pair => pair.QuarrySquadId)
+                .Select(pair =>
+                    $"{pair.PursuerSquadId}>{pair.QuarrySquadId}:{pair.EvidenceReasonCode}"));
+        if (pairReasons.Length == 0) pairReasons = "none";
+
         BattleDecisionTrace trace = new("CONTACT_EVAL", new List<KeyValuePair<string, string>>
         {
             BattleDecisionTrace.Field("turn", input.Turn),
             BattleDecisionTrace.Field("side", input.IsFirstSide ? "first" : "second"),
             BattleDecisionTrace.Field("active_pursuers", input.ActivePursuerCount),
-            BattleDecisionTrace.Field("separation", input.MinimumCurrentSeparation),
-            BattleDecisionTrace.Field("attack_reach", input.MaximumOneTurnAttackReach),
-            BattleDecisionTrace.Field("pursuer_speed", input.FastestPursuerSpeed),
-            BattleDecisionTrace.Field("withdrawal_speed", input.SlowestWithdrawalSpeed),
-            BattleDecisionTrace.Field("pursuers_attacked", input.PursuersAttackedRecently),
-            BattleDecisionTrace.Field("pursuers_reasonable_shot", input.PursuersHaveReasonableShot),
+            BattleDecisionTrace.Field("pursuit_pairs", pairs.Count),
+            BattleDecisionTrace.Field("positive_closing_pairs", positiveClosingPairs),
+            BattleDecisionTrace.Field("attacked_recently_pairs", attackedRecentlyPairs),
+            BattleDecisionTrace.Field("viable_fire_cycle_pairs", viableFireCyclePairs),
+            BattleDecisionTrace.Field("maintenance_evidence", maintenanceEvidence),
+            BattleDecisionTrace.Field("pair_reasons", pairReasons),
+            BattleDecisionTrace.Field("pair_active", pairHasActiveEvidence),
+            BattleDecisionTrace.Field("pair_reach_this_turn", pairCanReachContactThisTurn),
             BattleDecisionTrace.Field("rear_guard_active", input.RearGuardActive),
             BattleDecisionTrace.Field("masked_progress", input.MaskedDepartureProgress),
             BattleDecisionTrace.Field("masked_required", required),
@@ -148,8 +161,4 @@ public static class BattleContactRules
         BattleLog.Write(trace.Render());
         return new Result(decision, reason, trace);
     }
-
-    private static bool PursuerCanClose(Input input) =>
-        input.FastestPursuerSpeed
-            > input.SlowestWithdrawalSpeed + PursuitSpeedAdvantageTolerance;
 }

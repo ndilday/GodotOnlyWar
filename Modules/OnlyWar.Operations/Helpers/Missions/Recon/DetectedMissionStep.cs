@@ -79,13 +79,17 @@ namespace OnlyWar.Operations.Missions.Recon
             long requiredBattleValue = (long)Math.Round(intruderBattleValue * requiredMultiple);
 
             // Only forces actually out looking can intercept: squads on a Patrol or Recon order in the
-            // spotter's region. Nothing is conjured. A region with sensors but nobody sweeping knows
-            // perfectly well that there are enemies out there and is too busy to do anything about it.
+            // spotter's region, plus the standing screen the spotter's controller posted over it.
+            // Nothing is conjured beyond what that screen was already holding. A region with sensors
+            // but nobody sweeping knows perfectly well that there are enemies out there and is too
+            // busy to do anything about it.
+            IEngagementElementFactory elementFactory = execution.EngagementElements
+                ?? throw new InvalidOperationException(
+                    "Mission execution did not provide a battle element factory.");
             List<OperationalMissionElement> screen = spotter.LandedSquads
                 .Where(squad => squad.CurrentOrders?.Mission.MissionType == MissionType.Patrol
                     || squad.CurrentOrders?.Mission.MissionType == MissionType.Recon)
-                .Select(squad => (execution.EngagementElements ?? throw new InvalidOperationException(
-                        "Mission execution did not provide a battle element factory.")).CreateSquad(
+                .Select(squad => elementFactory.CreateSquad(
                     squad.Faction?.IsPlayerFaction == true,
                     squad,
                     squad.Faction?.IsPlayerFaction == true
@@ -93,10 +97,31 @@ namespace OnlyWar.Operations.Missions.Recon
                         : null,
                     execution.Campaign.Recruitment))
                 .Where(squad => squad?.AbleMembers.Count > 0)
-                // Largest first, so the screen commits the fewest squads that will do the job and the
-                // rest carry on screening.
-                .OrderByDescending(AbleBattleValue)
                 .ToList();
+
+            // Raise the abstract screen, and raise only as much of it as this intrusion calls for. The
+            // requirement is already computed above, so the generator is asked for the interception
+            // rather than for the whole screen: a region screening ten thousand points does not turn
+            // ten thousand points of soldiers into objects to catch one scout squad. What is left over
+            // stays a number and carries on screening.
+            long screenShortfall = requiredBattleValue - screen.Sum(AbleBattleValue);
+            if (screenShortfall > 0 && spotter.PatrolScreenBattleValue > 0)
+            {
+                var request = new ForceGenerationRequest
+                {
+                    Faction = spotter.PlanetFaction.Faction,
+                    TargetBattleValue = Math.Min(screenShortfall, spotter.PatrolScreenBattleValue),
+                    Profile = ForceCompositionProfile.ScoutPatrol
+                };
+                screen.AddRange(ForceGenerator
+                    .GenerateForce(request, execution.Random, execution.EntityIds)
+                    .Select(squad => elementFactory.CreateSquad(false, squad))
+                    .Where(squad => squad?.AbleMembers.Count > 0));
+            }
+
+            // Largest first, so the screen commits the fewest squads that will do the job and the
+            // rest carry on screening.
+            screen = screen.OrderByDescending(AbleBattleValue).ToList();
             long screenBattleValue = screen.Sum(AbleBattleValue);
 
             // Below parity with the intruder the screen declines to engage rather than feeding itself in

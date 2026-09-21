@@ -117,6 +117,58 @@ public class PatrolAndReconPlanningTests
         }
     }
 
+    // ----- The screen is a designation, not a force -----
+
+    [Fact]
+    public void IssueAllocatedPatrol_PostsTheScreenAsBattleValueAndRaisesNoForce()
+    {
+        // 396,030 is the budget Diocesan Prime Delta was handed on the turn-1 save of 2026-09-20,
+        // because a patrol's saturation is a fraction of MilitaryStrength and that is a population
+        // headcount for the Imperium. It built 3,960 squads and 79,200 soldiers for one region's
+        // screen; the turn never finished, and no battle in the game can field more than 24 squads.
+        Faction faction = CreateFaction(2, "Test PDF");
+        Planet planet = CreatePlanet();
+        RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 5_000_000);
+        rf.Garrison = 1_000_000;
+
+        new FactionReconPatrolPlanner().IssueAllocatedPatrol(faction, planet, rf, 396_030);
+
+        Assert.Equal(396_030, rf.PatrolScreenBattleValue);
+        Assert.Empty(rf.LandedSquads);
+    }
+
+    [Fact]
+    public void PatrolScreen_CannotOutliveTheOrganizedPoolItWasDrawnFrom()
+    {
+        // The screen is part of the organized pool rather than conjured on top of it, so battle
+        // losses shrink it through the ordinary casualty path with nothing to reconcile. Before it
+        // was abstract the generated squads survived their own garrison being wiped out.
+        Faction faction = CreateFaction(2, "Test PDF");
+        Planet planet = CreatePlanet();
+        RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 5_000);
+        rf.Garrison = 1_000;
+        rf.PatrolScreenBattleValue = 800;
+
+        rf.RemoveOrganizedMilitaryStrength(900);
+
+        Assert.Equal(100, rf.PatrolScreenBattleValue);
+    }
+
+    [Fact]
+    public void GetPatrolStrength_CountsTheAbstractScreenAlongsideRealSquads()
+    {
+        // Search difficulty reads this term (MissionStealthDifficulty.CalculateWatchTerms), and it
+        // must not fall to zero just because the screen stopped being squads - a screened region has
+        // to stay hard to cross.
+        Faction faction = CreateFaction(2, "Test PDF");
+        Planet planet = CreatePlanet();
+        RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 5_000);
+        rf.Garrison = 1_000;
+        rf.PatrolScreenBattleValue = 450;
+
+        Assert.Equal(450, rf.GetPatrolStrength());
+    }
+
     // --- fixtures ---
 
     // A region held by an enemy, with the scouting faction holding `intel` about it. Region intel is

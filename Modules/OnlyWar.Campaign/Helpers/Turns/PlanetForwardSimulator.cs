@@ -132,7 +132,7 @@ namespace OnlyWar.Campaign.Turns
         /// Removes the transient AI forces still standing when the simulation stops.
         /// </summary>
         /// <remarks>
-        /// A patrol screen or recon party is conjured for one week and discarded at the top of the
+        /// A recon party is conjured for one week and discarded at the top of the
         /// planner's next pass (FactionReconPatrolPlanner.ClearStaleTransientSquads). Generation has
         /// no next pass, so without this the final week's forces are still landed in their regions
         /// when the world is handed to the player - squads belonging to no army, on a board the

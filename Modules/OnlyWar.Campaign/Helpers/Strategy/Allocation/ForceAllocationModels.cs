@@ -168,6 +168,13 @@ internal static class ForceAllocationConstants
     /// </summary>
     internal const int MaxReconSquadsPerSweep = 6;
 
+    // A MaxPatrolSquadsPerRegion sat here briefly on 2026-09-20, capping the patrol task's saturation
+    // because a screen was the one defensive task that spent its award by instantiating soldiers. The
+    // screen is now abstract (RegionFaction.PatrolScreenBattleValue), so the cap was removed rather
+    // than kept: it would have constrained balance to solve a problem that no longer exists. The
+    // ceiling that matters now is StrategicCombatRules.MaxGeneratedSquads / MaxTacticalActors, which
+    // bounds every force that actually reaches a battle.
+
     /// <summary>
     /// Population at or below which a region is not worth holding for its inhabitants alone, and the
     /// population at which it is worth the maximum. Worth scales logarithmically between them.

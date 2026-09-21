@@ -13,6 +13,7 @@ namespace OnlyWar.Battles.Actions
         private bool _isNew;
 
         public int ActorId => _soldierId;
+        public int TargetId => _targetId;
 
         public AimAction(BattleSoldier soldier, BattleSoldier target, RangedWeapon weapon, Action<string> log)
         {

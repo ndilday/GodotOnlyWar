@@ -275,14 +275,19 @@ namespace OnlyWar.Operations.Missions.Assault
             // generated out of nothing, and bounded only by MaxTacticalDefenderBattleValue and the
             // actor cap rather than by anything the defender actually had.
             //
-            // The reserve and the region's landed patrol squads (added above) are intended to be
-            // disjoint: patrol screens are drawn from SPARE troops, i.e. what is left after the
-            // reserve. Note that this is an intent, not an enforced invariant - patrols and recon debit
-            // only the planner's transient SpareTroops and never OrganizedMilitaryStrength, so a
-            // screening squad is counted both in the pool the reserve is clamped against and in
-            // LandedSquads. Clamping the reserve to organized strength bounds the overlap to at most
-            // the screen's own battle value instead of leaving it unbounded, but it does not eliminate
-            // it. Nothing is debited at generation time.
+            // The reserve and the standing screen are intended to be disjoint: both are drawn from
+            // the same auction, where a patrol's first points of force compete against the garrison's
+            // last ones and SpareTroops is debited once. Note that this remains an intent rather than
+            // an enforced invariant - neither debits OrganizedMilitaryStrength, so both are clamped
+            // against a pool that still contains the other, and a region whose strength falls between
+            // planning and contact can have them overlap. Clamping each to organized strength bounds
+            // that overlap rather than eliminating it.
+            //
+            // What is no longer true is the version of this note that preceded the abstract screen:
+            // the screen used to be real squads in LandedSquads, generated at planning time out of
+            // nothing and counted BOTH there and in the pool the reserve was clamped against. It is
+            // now a battle value on the RegionFaction, so it is inside MilitaryStrength like every
+            // other designation and nothing is conjured on top of the region's army.
             //
             // The reserve is drawn down by whatever this mission has already destroyed. Without that, a
             // multi-day assault would raise a fresh full-strength defence every morning - the region's
@@ -291,13 +296,65 @@ namespace OnlyWar.Operations.Missions.Assault
             // tolerance while re-fighting an identical battle. Spreading the deduction across allied
             // defenders in proportion to their share keeps a multi-faction defence consistent with the
             // single-faction case.
+            // The STANDING SCREEN is drawn down by the same deduction and in the same proportion. It
+            // is a battle value the controller designated rather than a force it built
+            // (RegionFaction.PatrolScreenBattleValue), so it has exactly the property the paragraph
+            // above describes: nothing about it is reduced until the turn ends, and raising it whole
+            // each morning would let a screen fight a multi-day assault indefinitely. The landed
+            // patrols in step 1a do not need this - they are persistent objects whose dead stay dead
+            // within the week - which is precisely why the abstract screen does.
             Dictionary<RegionFaction, long> reserves = alliedDefenders.ToDictionary(
                 rf => rf,
                 ResolveDefensiveReserve);
-            long totalReserve = reserves.Values.Sum();
+            Dictionary<RegionFaction, long> screens = alliedDefenders.ToDictionary(
+                rf => rf,
+                rf => rf.PatrolScreenBattleValue);
+            long totalReserve = reserves.Values.Sum() + screens.Values.Sum();
             long remainingToDeduct = Math.Max(0L, defenderBattleValueAlreadyDestroyed);
             foreach (RegionFaction alliedDefender in alliedDefenders)
             {
+                // The screen is raised first and independently of the reserve: it answers the same
+                // "was it looking the right way" question a landed patrol answers in step 1a, while a
+                // reserve is on prepared ground by intent and always fights. It deliberately took no
+                // part in the preparation contest above for the same reason - a screen is dispersed
+                // and sweeping, which is the whole distinction between Patrol and Defense.
+                long screen = screens[alliedDefender];
+                long survivingScreen = totalReserve <= 0
+                    ? screen
+                    : Math.Max(0L, screen - (long)((double)remainingToDeduct * screen / totalReserve));
+                if (survivingScreen > 0)
+                {
+                    var screenRequest = new ForceGenerationRequest
+                    {
+                        Faction = alliedDefender.PlanetFaction.Faction,
+                        TargetBattleValue = Math.Min(survivingScreen, MaxTacticalDefenderBattleValue),
+                        Profile = ForceCompositionProfile.ScoutPatrol
+                    };
+                    List<Squad> screenSquads = CapTacticalForce(
+                        ForceGenerator.GenerateForce(screenRequest, random, entityIds));
+                    // Load-bearing: PatrolDetectedAttack resolves the screen's own presence through
+                    // the squad's region in order to read CommittedAttention, and a squad raised here
+                    // has no order to resolve it from. Without this the feint interaction would
+                    // silently stop applying to abstract screens - a diversion would divert the
+                    // player's patrols and not the AI's, which is precisely backwards.
+                    //
+                    // Aggression resolves to Normal rather than the Cautious the old generated screen
+                    // carried on its order, so an abstract screen detects fractionally more readily
+                    // than a landed one at the same strength. Left as the default deliberately: a
+                    // standing screen over one's own ground is not a cautious infiltration, and
+                    // inventing an order here to carry the old value would need mission and order ids
+                    // this step has no allocator for.
+                    foreach (Squad screenSquad in screenSquads)
+                    {
+                        screenSquad.CurrentRegion = alliedDefender.Region;
+                    }
+                    defendingForce.AddRange(screenSquads
+                        .Select(s => elementFactory.CreateSquad(false, s))
+                        .Where(s => s?.AbleMembers.Count > 0)
+                        .Where(s => PatrolDetectedAttack(
+                            s, attackerBattleValue, defenderTactics, random)));
+                }
+
                 long reserve = reserves[alliedDefender];
                 if (reserve <= 0) continue;
 

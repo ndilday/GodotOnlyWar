@@ -23,6 +23,14 @@ namespace OnlyWar.Battles
         private const float WalkBulkMultiplier = SoldierMovementProjector.WalkBulkMultiplier;
         private const float FullBulkMultiplier = SoldierMovementProjector.FullBulkMultiplier;
         private const float EngagementIndifferenceFraction = 0.02f;
+
+        /// <summary>
+        /// The smallest score difference worth acting on when every option is worth about
+        /// nothing. Below this the baseline posture and the previous turn's choice carry the
+        /// decision, which is what keeps a squad with no shot and nowhere useful to be from
+        /// twitching between Hold and a step.
+        /// </summary>
+        private const float EngagementIndifferenceFloor = 0.1f;
         private const float ContactSeekerRangedRelevanceFraction = 0.02f;
 
         private readonly SquadPlanningServices _services;
@@ -106,9 +114,29 @@ namespace OnlyWar.Battles
             float bestScore = evaluations.Select(candidate => candidate.Score)
                 .DefaultIfEmpty(0)
                 .Max();
+            // SCALED TO THE DECISION, NOT TO THE SQUAD'S STOCK OF BATTLE VALUE.
+            //
+            // This band exists to stop a squad dithering between options whose scores differ only
+            // by noise. Until 2026-09-20 it was a fraction of TotalAbleBattleValue, which is the
+            // wrong quantity by a dimension: battle value is a STOCK and these scores are per-turn
+            // RATES. A 191-value marine squad therefore carried a 3.82 band while its entire
+            // shooting was worth 1.3 a turn, so no shooting decision it could ever make escaped
+            // the band -- every option was "indifferent" and the tie-break decided instead.
+            //
+            // Observed that day in Grist Nine Epsilon: Hold scored 2.398 against RunToward's
+            // -1.414, a spread of 3.812 just inside a 3.82 band, and the squad ran anyway on
+            // LastEngagementOptionKind stickiness alone. It had been running for seven hundred
+            // turns. The defect was invisible while the pursuit shaping terms were paying out
+            // more than a hundred battle value a turn, because that put the moving options far
+            // outside any band; removing them exposed it.
+            //
+            // A fraction of the best score compares like with like: ignore differences that are
+            // small RELATIVE TO WHAT IS BEING DECIDED. The absolute floor still covers the case
+            // where every option is worth about nothing, which is exactly when the baseline and
+            // the previous posture should carry the decision.
             float indifference = Math.Max(
-                0.1f,
-                profile.TotalAbleBattleValue * EngagementIndifferenceFraction);
+                EngagementIndifferenceFloor,
+                Math.Abs(bestScore) * EngagementIndifferenceFraction);
             EngagementOptionEvaluation chosen = evaluations
                 .Where(candidate => bestScore - candidate.Score <= indifference)
                 .OrderByDescending(candidate => candidate.Kind == frame.BaselinePosture)

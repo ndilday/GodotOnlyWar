@@ -887,6 +887,10 @@ internal sealed class ForceTaskBuilder
             long defenceNeed = _defenceSaturations.GetValueOrDefault(state, 0L);
             long screenable = Math.Max(
                 0L, state.RegionFaction.GetDeployedStrength() - defenceNeed);
+            // Deliberately uncapped. A cap belonged here while the award was spent by instantiating
+            // soldiers; the award is now a number on the RegionFaction, and the two places that raise
+            // real troops from it size what they raise against what they are fighting. Capping the
+            // screen would constrain balance to solve a problem that no longer exists.
             long saturation = (long)(screenable * fraction);
             if (saturation < scoutSquad) continue;
 

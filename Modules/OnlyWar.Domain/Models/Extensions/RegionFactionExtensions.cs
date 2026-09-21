@@ -83,10 +83,17 @@ namespace OnlyWar.Domain.Extensions
         // Using BV rather than bodies also reads correctly on its own terms: a patrol's worth as a
         // search is not just how many pairs of eyes it has but how well equipped and trained they are
         // to use them, which is most of what BV already measures.
+        // The abstract standing screen and the real squads are ADDED, not maxed, and they do not
+        // overlap: the screen is what an NPC controller designated out of its organized pool
+        // (RegionFaction.PatrolScreenBattleValue) and the squads below are formations physically on a
+        // Patrol or Recon order — the player's own patrols, and the recon sweeps that are still real
+        // forces for every faction. Before the screen became abstract both arrived as LandedSquads and
+        // this loop was the whole of it; the term is unchanged in meaning and in scale.
         public static long GetPatrolStrength(this RegionFaction rf)
         {
-            if (rf?.LandedSquads == null) return 0L;
-            long total = 0L;
+            if (rf == null) return 0L;
+            long total = rf.PatrolScreenBattleValue;
+            if (rf.LandedSquads == null) return total;
             foreach (Squad squad in rf.LandedSquads)
             {
                 Mission mission = squad?.CurrentOrders?.Mission;

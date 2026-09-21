@@ -64,10 +64,12 @@ public class FactionStrategyController
         IRNG random = _random;
         FactionBehaviorRulesProfile behaviorRules = _behaviorRules;
 
-        // Discard last turn's transient screens and recon parties before planning this turn's (they
-        // are not persisted roster squads, so they would otherwise pile up in the regions'
-        // LandedSquads).
+        // Discard last turn's transient recon parties before planning this turn's (they are not
+        // persisted roster squads, so they would otherwise pile up in the regions' LandedSquads), and
+        // last turn's standing screens, which are a battle value on the RegionFaction rather than a
+        // force and would otherwise persist through a pass that no longer wants one.
         FactionReconPatrolPlanner.ClearStaleTransientSquads(faction, sector);
+        FactionReconPatrolPlanner.ClearPatrolScreens(faction, sector);
         FactionOffensiveEvaluator offensiveEvaluator = new(behaviorRules, sector?.StrategicInvasionForces);
 
         if (onlyPlanet != null)

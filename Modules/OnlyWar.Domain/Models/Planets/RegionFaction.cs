@@ -15,6 +15,7 @@ namespace OnlyWar.Domain.Planets
         private long _garrison;
         private long _armedCivilians;
         private long? _organizedMilitaryStrength;
+        private long _patrolScreenBattleValue;
         private int _legacyOrganization = 100;
         private float _contentment = 70f;
 
@@ -130,6 +131,33 @@ namespace OnlyWar.Domain.Planets
         // deriving the clamp themselves rather than treating an unplanned region as undefended, which
         // would hand an attacker free ground.
         public long? AssignedDefensiveBattleValue { get; set; }
+
+        // The battle value this faction is holding out as a standing screen over this region: troops
+        // sweeping their own ground rather than standing on a position. Patrol is to Recon what Defend
+        // is to Assault, and this field is what makes that true — the screen is a DESIGNATION of part
+        // of the organized pool, not a force, and no soldiers exist for it until something arrives that
+        // it has to fight.
+        //
+        // It used to be a force. FactionReconPatrolPlanner called ForceGenerator and allocated a Squad
+        // plus twenty Soldier objects per hundred points of a budget that was a fraction of
+        // MilitaryStrength — a raw population figure on a hive world. One region of the turn-1 save of
+        // 2026-09-20 built 3,960 squads and 79,200 soldiers as its screen, and the turn never finished.
+        // Nothing could ever have used them: StrategicCombatRules caps any battle at 24 squads and 120
+        // actors, so 99.4% of that force was unreachable by every code path in the game.
+        //
+        // Zero is simply "no screen", which needs no null to say. The getter clamps to the organized
+        // pool, so a screen cannot outlive the troops it was drawn from: battle losses reduce organized
+        // strength through the ordinary casualty path and the screen shrinks with it, with nothing to
+        // reconcile.
+        //
+        // Materialised at two points, both of which already bound what they raise: DetectedMissionStep
+        // generates interceptors to the requirement it computes, and PrepareAssaultMissionStep.
+        // AssembleDefendingForce raises the screen into the defence if it saw the attack coming.
+        public long PatrolScreenBattleValue
+        {
+            get => System.Math.Min(_patrolScreenBattleValue, OrganizedMilitaryStrength);
+            set => _patrolScreenBattleValue = value < 0 ? 0 : value;
+        }
 
         /// <summary>
         /// Whether this presence is openly active on the ground. For dormant populations this remains

@@ -266,9 +266,17 @@ public class SquadEngagementPlanningTests
     [Fact]
     public void Pursuit_RunPressureTapersAcrossPreferredBand()
     {
-        // Run pressure is a band, not a reach cliff: zero at PreferredBandLower, half-way in
-        // the middle, and full at PreferredBandUpper. The quarry is Bound so the test also
-        // exercises the net-closing-speed factor used by a real withdrawal pursuit.
+        // Contact progress is a POSITION VALUE, so RoleTerm is the ground a candidate gains,
+        // not standing pressure to move. Until 2026-09-20 this asserted the opposite shape --
+        // pressure rising with distance across the band, which is what a per-turn bounty looks
+        // like -- because the term multiplied the squad's whole attainable battle value by the
+        // fraction of its top speed the candidate used. The root state is always evaluated at
+        // zero speed, so that never telescoped and was re-paid in full every turn.
+        //
+        // What survives: a squad already at the near edge of its band gains nothing by closing
+        // further, and a squad outside the band does. What changed: the marginal value of a yard
+        // now RISES as the squad approaches, because the potential saturates as it enters the
+        // band. The taper the old name described was the bug.
         float[] distances = [70, 85, 100];
         List<float> runTerms = [];
         foreach (int distance in distances)
@@ -305,9 +313,18 @@ public class SquadEngagementPlanningTests
                 candidate.Kind == EngagementOptionKind.RunToward).RoleTerm);
         }
 
+        string detail = $"runTerms=[{string.Join(", ", runTerms.Select(t => t.ToString("F4")))}]";
+        // At the near edge of the band there is no ground left worth gaining.
         Assert.Equal(0, runTerms[0], 3);
-        Assert.InRange(runTerms[1], runTerms[0] + 0.1f, runTerms[2] - 0.1f);
-        Assert.True(runTerms[2] > runTerms[1]);
+        // Outside it there is, at every distance, with no dead zone.
+        Assert.All(
+            runTerms.Skip(1),
+            term => Assert.True(term > 0.1f, $"no pull to close outside the band: {detail}"));
+        // The reward is bounded by what the squad can bring to bear, so a single stride can
+        // never collect more than a fraction of it -- the property the old per-turn form broke.
+        Assert.All(
+            runTerms,
+            term => Assert.True(term < 20f * 0.5f, $"a single stride paid too much: {detail}"));
     }
 
     [Fact]
@@ -485,47 +502,293 @@ public class SquadEngagementPlanningTests
         Assert.Equal(0, projected.ReadinessValue);
     }
 
+    /// <summary>
+    /// Sweeps the access penalty across a whole approach. This replaces an earlier test that
+    /// required the gradient to stay within one order of magnitude over the same distances. That
+    /// requirement described the old helplessness reference, which compared current fire against
+    /// a fifth of the target's battle value and so stayed pinned near 1 for a squad that was
+    /// already shooting well -- the access pull never faded, and a force that could have stood
+    /// and fired marched instead. The invariant the original test was protecting is the ABSENCE
+    /// OF A CLIFF, which is asserted here directly and densely rather than inferred from four
+    /// samples; that the pull now decays as the guns come to bear is the intended behaviour and
+    /// is pinned by AccessPotential_FadesOnceTheSquadsOwnFireIsUseful.
+    /// </summary>
     [Fact]
-    public void AccessPotential_HasNonVanishingGradientAcrossTheApproach()
+    public void AccessPotential_FallsSmoothlyAndMonotonicallyAcrossTheApproach()
     {
-        float[] distances = [900, 400, 120, 40];
+        float[] distances = Enumerable.Range(0, 44)
+            .Select(step => 900f - (step * 20f))
+            .ToArray();
         List<float> values = [];
         for (int index = 0; index < distances.Length; index++)
         {
-            BattleSquad gunners = Squad("Gradient Gunners", 81_700 + index, 10, 0.05f);
-            BattleSquad targets = Squad("Gradient Targets", 81_800 + index, 10, 0.05f);
-            ((Soldier)gunners.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
-            EquipAutogun(gunners.Soldiers[0], 91_700 + index);
-            targets.Soldiers[0].Armor = new Armor(
-                new ArmorTemplate(92_700 + index, "Gradient Flak", 10, 0));
-            BattleGridManager grid = new();
-            Place(grid, gunners, true, 0, 0);
-            Place(grid, targets, false, (int)distances[index], 0);
-            BattleEngagementFrameBuilder.PairedFrame paired =
-                BattleEngagementFrameBuilder.Build([gunners], [targets]);
-            BattleSquadCapabilityProfile profile = paired.Profiles[gunners.Id];
-            EngagementPotential.Breakdown potential = Planner(grid, gunners, targets)
-                .EvaluatePotential(new EngagementPotential.State(
-                    gunners,
-                    BattleEngagementFrameBuilder.Centroid(gunners),
-                    profile,
-                    paired.Profiles,
-                    paired.Frames,
-                    [targets],
-                    paired.Frames[gunners.Id]));
-            values.Add(potential.AccessValue);
+            values.Add(AccessValueAtRange(index, distances[index]));
         }
 
-        float[] slopes = Enumerable.Range(0, distances.Length - 1)
-            .Select(index => System.Math.Abs(values[index] - values[index + 1])
-                / (distances[index] - distances[index + 1]))
-            .ToArray();
-        Assert.All(slopes, slope => Assert.True(slope > 0, $"flat access slope: {string.Join(", ", slopes)}"));
+        string detail = $"values=[{string.Join(", ", values.Select(value => value.ToString("F3")))}]";
+        Assert.All(values, value => Assert.True(value <= 0, $"access is a penalty: {detail}"));
+        // Closing is never priced as worse than standing still.
+        Assert.All(
+            Enumerable.Range(0, values.Count - 1),
+            index => Assert.True(
+                values[index + 1] >= values[index] - 0.0001f,
+                $"access penalty grew while closing at index {index}: {detail}"));
+        // No activation cliff: the whole span is not carried by one 20-yard step.
+        float span = values[^1] - values[0];
+        float largestStep = Enumerable.Range(0, values.Count - 1)
+            .Max(index => values[index + 1] - values[index]);
         Assert.True(
-            slopes.Max() <= slopes.Min() * 10,
-            $"arrival gradient varied by more than one order of magnitude: values="
-                + $"[{string.Join(", ", values.Select(value => value.ToString("F3")))}], "
-                + $"slopes=[{string.Join(", ", slopes.Select(slope => slope.ToString("F5")))}]");
+            largestStep <= span * 0.4f,
+            $"activation cliff: one step carried {largestStep:F3} of a {span:F3} span. {detail}");
+    }
+
+    /// <summary>
+    /// The behaviour the 2026-09-20 Grist Nine Epsilon timeout turned on. Access prices being
+    /// unable to contribute; a squad whose fire is already landing is not in that state, so the
+    /// pull to close must be small beside the shot it would give up. Under the old reference the
+    /// squad below scored ~0.93 helpless and the penalty barely moved.
+    /// </summary>
+    [Fact]
+    public void AccessPotential_FadesOnceTheSquadsOwnFireIsUseful()
+    {
+        const float targetValue = 200f;
+        float silent = EngagementPotential.EvaluateContinuousAccessValue(
+            currentRate: 0,
+            destinationRate: 60,
+            turnsToUsefulRange: 50,
+            targetBattleValue: targetValue);
+        float contributing = EngagementPotential.EvaluateContinuousAccessValue(
+            currentRate: 3,
+            destinationRate: 60,
+            turnsToUsefulRange: 50,
+            targetBattleValue: targetValue);
+
+        Assert.True(silent < 0);
+        Assert.True(
+            System.Math.Abs(contributing) < System.Math.Abs(silent) * 0.1f,
+            $"a squad removing 3 of a 200-value enemy per turn still read as helpless: "
+                + $"silent={silent:F3}, contributing={contributing:F3}");
+    }
+
+    /// <summary>
+    /// A chase closes at the difference of the two speeds. Pricing the delay against the
+    /// pursuer's own move understates it every turn and re-pays the same tempo bonus for an
+    /// arrival that keeps receding.
+    /// </summary>
+    [Fact]
+    public void AccessPotential_PricesDelayAgainstTheNetClosingRate()
+    {
+        // The pursuer moves 6 in both cases; only the quarry's speed changes.
+        (float Access, float Quarry) crawling = PursuitAccessValue(1, quarryMoveSpeed: 0.2f);
+        (float Access, float Quarry) running = PursuitAccessValue(2, quarryMoveSpeed: 3f);
+
+        string detail = $"crawling={crawling.Access:F4} (quarry {crawling.Quarry:F2}), "
+            + $"running={running.Access:F4} (quarry {running.Quarry:F2})";
+        Assert.True(crawling.Access < 0, detail);
+        Assert.True(running.Quarry > crawling.Quarry, detail);
+        // Net closing shrinks from ~6 to ~3, so the same gap takes materially longer and the
+        // penalty for not yet being there is materially larger. Under the raw-move calculation
+        // the two were identical.
+        Assert.True(
+            running.Access < crawling.Access * 1.1f,
+            $"a faster quarry did not lengthen the priced delay: {detail}");
+    }
+
+    /// <summary>
+    /// The invariant that would have caught the 2026-09-20 contact-progress bug. Φ values a
+    /// STATE. Two candidates that end in the same place must be worth the same, however fast the
+    /// squad was travelling to get there — otherwise the root state, always evaluated at zero
+    /// speed, scores zero, the potential difference stops telescoping, and the term becomes a
+    /// per-turn bounty for moving.
+    ///
+    /// <para>SCOPED DELIBERATELY. Both sampled speeds are above the quarry's, because
+    /// EngagementPotential.EvaluatePursuitClosingValue is a KNOWN, REMAINING violation of this
+    /// invariant: it reads the candidate's speed to penalise a half-hearted chase, and it lands
+    /// in the same RoleValue this test reads. It is bounded, it only fires when the pursuer is
+    /// slower than its quarry, and its sign pushes toward standing still rather than toward
+    /// moving, so it is not the treadmill this round removed — but it is not a state function
+    /// either, and whether "am I keeping up" belongs in Φ at all is an open design question.
+    /// Widening this fixture's speeds below the quarry's will fail the test, correctly.</para>
+    /// </summary>
+    [Fact]
+    public void ContactProgressPotential_DoesNotDependOnTheSpeedThatReachedTheState()
+    {
+        BattleSquad pursuer = Squad("Speed Invariance Pursuer", 81_970, 20, 0.05f);
+        BattleSquad quarry = Squad("Speed Invariance Quarry", 81_971, 10, 0.05f);
+        ((Soldier)pursuer.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
+        EquipRifle(pursuer.Soldiers[0], 91_970, range: 1_000, damage: 20);
+        EquipMelee(quarry.Soldiers[0], 91_971);
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 8;
+        ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = 3;
+        BattleGridManager grid = new();
+        Place(grid, pursuer, true, 0, 0);
+        Place(grid, quarry, false, 400, 0);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [pursuer.Id] = new EngagementRoleConstraint(
+                EngagementSquadRole.Pursuit,
+                RoleTargets: [quarry]),
+            [quarry.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([pursuer], [quarry], constraints);
+        BattleSquadPlanner planner = Planner(grid, pursuer, quarry);
+        EngagementPotential.State crawled = new(
+            pursuer,
+            BattleEngagementFrameBuilder.Centroid(pursuer),
+            paired.Profiles[pursuer.Id],
+            paired.Profiles,
+            paired.Frames,
+            [quarry],
+            paired.Frames[pursuer.Id],
+            FeasibleSpeed: 4f,
+            Primary: quarry);
+        EngagementPotential.State sprinted = crawled with { FeasibleSpeed = 8f };
+
+        Assert.Equal(
+            planner.EvaluatePotential(crawled).RoleValue,
+            planner.EvaluatePotential(sprinted).RoleValue,
+            4);
+    }
+
+    /// <summary>
+    /// Grist Nine Epsilon, 2026-09-20, third run. With the pursuit shaping terms cut down to
+    /// size the score finally favoured standing and shooting — Hold 2.398 against RunToward's
+    /// -1.414 — and the squad ran anyway, because the 3.812 spread fitted inside an indifference
+    /// band sized at 2% of the squad's 191 battle value. The band was a fraction of a STOCK
+    /// compared against per-turn RATES, so a squad whose shooting was worth less than 2% of its
+    /// own worth per turn could never escape it, and the tie-break decided every turn instead.
+    /// </summary>
+    [Fact]
+    public void IndifferenceBand_DoesNotSwallowARealShotForASquadThatIsAlreadyMoving()
+    {
+        BattleSquad pursuer = Squad("Banded Pursuer", 81_980, 200, 0.05f);
+        BattleSquad quarry = Squad("Banded Quarry", 81_981, 10, 0.05f);
+        ((Soldier)pursuer.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
+        EquipRifle(pursuer.Soldiers[0], 91_980, range: 1_000, damage: 20);
+        EquipMelee(quarry.Soldiers[0], 91_981);
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 6;
+        ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = 2;
+        // The squad has been running for many turns, so stickiness favours carrying on.
+        pursuer.LastEngagementOptionKind = EngagementOptionKind.RunToward;
+        BattleGridManager grid = new();
+        Place(grid, pursuer, true, 0, 0);
+        Place(grid, quarry, false, 120, 0);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [pursuer.Id] = new EngagementRoleConstraint(
+                EngagementSquadRole.Follow,
+                RoleTargets: [quarry]),
+            [quarry.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([pursuer], [quarry], constraints);
+
+        SquadEngagementDecision decision = Planner(grid, pursuer, quarry).ChooseEngagementOption(
+            pursuer,
+            paired.Frames[pursuer.Id],
+            paired.Profiles,
+            paired.Frames,
+            [quarry],
+            [quarry]);
+
+        EngagementOptionEvaluation best = decision.Candidates
+            .OrderByDescending(candidate => candidate.Score)
+            .First();
+        string detail = string.Join(" | ", decision.Candidates
+            .Select(c => $"{c.Kind}={c.Score:F3}"));
+        // Whatever the planner picks, it must not pick something the score says is materially
+        // worse. A large squad's total battle value is not a licence to ignore its own scoring.
+        Assert.True(
+            best.Score - decision.Chosen.Score <= 0.2f,
+            $"selection discarded a materially better option: chosen={decision.Chosen.Kind} "
+                + $"({decision.Chosen.Score:F3}), best={best.Kind} ({best.Score:F3}). {detail}");
+    }
+
+    [Fact]
+    public void AccessPotential_IsZeroAgainstAQuarryTheSquadCannotOutrun()
+    {
+        (float Access, float Quarry) catchable = PursuitAccessValue(3, quarryMoveSpeed: 2f);
+        (float Access, float Quarry) uncatchable = PursuitAccessValue(4, quarryMoveSpeed: 20f);
+
+        Assert.True(uncatchable.Quarry >= 6, $"fixture: quarry {uncatchable.Quarry:F2} is not faster");
+        Assert.True(catchable.Quarry < 6, $"fixture: quarry {catchable.Quarry:F2} is not slower");
+        // The arrival never happens, so there is no delay to buy out and nothing to gain from
+        // closing. The squad should be scored on the fire it can deliver where it stands.
+        Assert.Equal(0, uncatchable.Access);
+        Assert.True(
+            catchable.Access < 0,
+            "a pursuer that can still close keeps a finite access penalty");
+    }
+
+    private float AccessValueAtRange(int index, float distance)
+    {
+        BattleSquad gunners = Squad("Gradient Gunners", 81_700 + index, 10, 0.05f);
+        BattleSquad targets = Squad("Gradient Targets", 81_800 + index, 10, 0.05f);
+        ((Soldier)gunners.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
+        EquipAutogun(gunners.Soldiers[0], 91_700 + index);
+        targets.Soldiers[0].Armor = new Armor(
+            new ArmorTemplate(92_700 + index, "Gradient Flak", 10, 0));
+        BattleGridManager grid = new();
+        Place(grid, gunners, true, 0, 0);
+        Place(grid, targets, false, (int)distance, 0);
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([gunners], [targets]);
+        return Planner(grid, gunners, targets)
+            .EvaluatePotential(new EngagementPotential.State(
+                gunners,
+                BattleEngagementFrameBuilder.Centroid(gunners),
+                paired.Profiles[gunners.Id],
+                paired.Profiles,
+                paired.Frames,
+                [targets],
+                paired.Frames[gunners.Id]))
+            .AccessValue;
+    }
+
+
+    /// <summary>
+    /// One pursuit geometry with the quarry's speed as the only variable, so the comparison
+    /// cannot pick up the Pursuit role's separate destination-range treatment. Returns the
+    /// frame's derived quarry speed alongside the access value: for a Bound quarry
+    /// BattleEngagementFrameBuilder reads the quarry's own profile rather than the constraint,
+    /// so the assertions are made against the speed the engine actually used.
+    /// </summary>
+    private (float Access, float QuarryRunSpeed) PursuitAccessValue(
+        int index,
+        float quarryMoveSpeed)
+    {
+        BattleSquad pursuer = Squad($"Net Closing Pursuer {index}", 81_900 + index, 20, 0.05f);
+        BattleSquad quarry = Squad($"Net Closing Quarry {index}", 81_950 + index, 10, 0.05f);
+        ((Soldier)pursuer.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
+        EquipRifle(pursuer.Soldiers[0], 91_900 + index, range: 1_000, damage: 20);
+        EquipMelee(quarry.Soldiers[0], 91_950 + index);
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 6;
+        ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = quarryMoveSpeed;
+        BattleGridManager grid = new();
+        Place(grid, pursuer, true, 0, 0);
+        Place(grid, quarry, false, 500, 0);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [pursuer.Id] = new EngagementRoleConstraint(
+                EngagementSquadRole.Pursuit,
+                RoleTargets: [quarry]),
+            [quarry.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([pursuer], [quarry], constraints);
+        SquadEngagementFrame frame = paired.Frames[pursuer.Id];
+        float access = Planner(grid, pursuer, quarry)
+            .EvaluatePotential(new EngagementPotential.State(
+                pursuer,
+                BattleEngagementFrameBuilder.Centroid(pursuer),
+                paired.Profiles[pursuer.Id],
+                paired.Profiles,
+                paired.Frames,
+                [quarry],
+                frame))
+            .AccessValue;
+        return (access, frame.QuarryRunSpeed);
     }
 
     [Fact]

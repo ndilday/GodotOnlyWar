@@ -465,7 +465,22 @@ namespace OnlyWar.Runtime.Factories
             // ground, and DetectedMissionStep intercepts with patrol and recon squads, so nothing
             // has ever intercepted an intruder either. And a probe was generated at full strength
             // whatever it could afford.
-            int maximumSquads = request.Tier > 0 ? request.Tier : int.MaxValue;
+            // "Bounded by its battle-value budget alone" was true and was not enough. The budget is a
+            // share of a region's MilitaryStrength, which on a hive world is a raw population figure
+            // in the billions, and every hundred points of it allocates a Squad and twenty Soldiers.
+            // A turn-1 save on 2026-09-20 built a 3,960-squad "screen" for one region and had eaten
+            // forty gigabytes thirteen minutes later, on a planet two orders of magnitude smaller
+            // than the largest one in the sector.
+            //
+            // The sizing fix belongs to the caller (ForceAllocationConstants.MaxPatrolSquadsPerRegion
+            // caps the task's saturation, which is what actually decides how large a screen should
+            // be). This ceiling is the backstop: it is set far above any legitimate request, so
+            // reaching it means a caller has handed us an unbounded budget, and it says so out loud
+            // instead of consuming the machine.
+            const int AbsoluteSquadCeiling = 64;
+            int maximumSquads = request.Tier > 0
+                ? Math.Min(request.Tier, AbsoluteSquadCeiling)
+                : AbsoluteSquadCeiling;
             long remainingValue = request.TargetBattleValue;
 
             while (opposingForces.Count < maximumSquads)
@@ -479,6 +494,15 @@ namespace OnlyWar.Runtime.Factories
                 Squad squad = SquadFactory.GenerateSquad(template, random, entityIds);
                 opposingForces.Add(squad);
                 remainingValue -= Math.Max(1, SquadBattleValue(squad));
+            }
+
+            if (opposingForces.Count >= AbsoluteSquadCeiling && remainingValue > 0)
+            {
+                GameLog.Warn(() =>
+                    $"GenerateScoutPatrol {request.Faction?.Name}: budget={request.TargetBattleValue} "
+                    + $"hit the {AbsoluteSquadCeiling}-squad ceiling with {remainingValue} unspent. "
+                    + "A caller is sizing a scout force from an unbounded pool; the force was "
+                    + "truncated rather than materialised in full.");
             }
 
             // Nothing was affordable at full strength. Between an undersized scouting party and no
