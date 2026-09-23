@@ -331,6 +331,7 @@ namespace OnlyWar.Battles
             // is fighting a standing melee, not charging again.
             ClearSpentCharges();
             HandleMoving(moveSegmentActions, executedActions);
+            _withdrawalService.LogPursuitProgress(moveSegmentActions);
             foreach (int soldierId in defendingSoldierIds)
             {
                 if (_currentState.Soldiers.TryGetValue(soldierId, out BattleSoldier soldier))
@@ -354,28 +355,33 @@ namespace OnlyWar.Battles
             // the opponent is gone, that is an annihilation victory rather than a withdrawal.
             // Running escape/contact logic first would disengage the surviving force and make the
             // subsequent terminal check report Withdrawal (or Rout) instead.
-            if (_currentState.ActiveAttackerSquads.Count > 0
-                && _currentState.ActiveOpposingSquads.Count > 0)
+            // Nothing below moves, fires, or changes weapon state until next turn's planning, so
+            // the escape pass and every pursuit response in it can share attack projections.
+            using (_withdrawalService.BeginFrozenGeometryScope())
             {
-                ApplyWithdrawalTerminalRequest(
-                    _withdrawalService.ResolveUnpursuedWithdrawalEscapes(events));
-                if (BattleHistory.Outcome == null)
-                {
-                    ApplyWithdrawalTerminalRequest(
-                        _withdrawalService.ResolveContactBreaks(events));
-                }
-            }
-            if (_currentState.ActiveAttackerSquads.Count > 0
-                && _currentState.ActiveOpposingSquads.Count > 0)
-            {
-                // Stage 6 (OnlyWar_TDD.md §6.6): a rout preempts the plan,
-                // so the morale check runs BEFORE the continuation/rear-guard decision.
-                EvaluateMorale(events);
-                if (BattleHistory.Outcome == null
-                    && _currentState.ActiveAttackerSquads.Count > 0
+                if (_currentState.ActiveAttackerSquads.Count > 0
                     && _currentState.ActiveOpposingSquads.Count > 0)
                 {
-                    EvaluateContinuation(events);
+                    ApplyWithdrawalTerminalRequest(
+                        _withdrawalService.ResolveUnpursuedWithdrawalEscapes(events));
+                    if (BattleHistory.Outcome == null)
+                    {
+                        ApplyWithdrawalTerminalRequest(
+                            _withdrawalService.ResolveContactBreaks(events));
+                    }
+                }
+                if (_currentState.ActiveAttackerSquads.Count > 0
+                    && _currentState.ActiveOpposingSquads.Count > 0)
+                {
+                    // Stage 6 (OnlyWar_TDD.md §6.6): a rout preempts the plan,
+                    // so the morale check runs BEFORE the continuation/rear-guard decision.
+                    EvaluateMorale(events);
+                    if (BattleHistory.Outcome == null
+                        && _currentState.ActiveAttackerSquads.Count > 0
+                        && _currentState.ActiveOpposingSquads.Count > 0)
+                    {
+                        EvaluateContinuation(events);
+                    }
                 }
             }
 
@@ -878,10 +884,17 @@ namespace OnlyWar.Battles
             List<BattleSquad> squads = _currentState.AllAttackerSquads.Values
                 .Concat(_currentState.AllOpposingSquads.Values)
                 .ToList();
+            // A squad that stood down from a pursuit left the field, but it did not withdraw; the
+            // mission layer reads a disengaged mission squad as the mission side withdrawing.
+            HashSet<int> stoodDown = GetSideState(BattleSide.Attacker).StoodDownSquadIds
+                .Concat(GetSideState(BattleSide.Opposing).StoodDownSquadIds)
+                .ToHashSet();
             return new BattleOutcome(
                 reason,
                 holder,
-                squads.Where(squad => squad.Status == BattleSquadStatus.Disengaged).Select(squad => squad.Id),
+                squads.Where(squad => squad.Status == BattleSquadStatus.Disengaged
+                        && !stoodDown.Contains(squad.Id))
+                    .Select(squad => squad.Id),
                 squads.Where(squad => squad.Status == BattleSquadStatus.Eliminated).Select(squad => squad.Id),
                 squads.Where(squad => squad.WithdrawalRole == WithdrawalRole.Routing)
                     .Select(squad => squad.Id)

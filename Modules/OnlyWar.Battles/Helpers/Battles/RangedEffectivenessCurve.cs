@@ -84,7 +84,13 @@ namespace OnlyWar.Battles
         /// Fraction of its own peak removal a force must still be achieving for a range to count as
         /// inside its useful band: "still doing real work here, even if well off its best".
         ///
-        /// <para>0.1 SINCE 2026-08-05, down from 0.5. The consumers of
+        /// <para>0.2 AS OF 2026-09-21, WHEN THE CONSTANT AND THIS COMMENT WERE RECONCILED. The
+        /// comment claimed 0.1 and the constant has read 0.2 since the library split (`7f977d9`);
+        /// no note anywhere records the intent, so the VALUE was kept and the prose corrected
+        /// rather than the other way round. Treat 0.2 as the calibrated figure, not as a typo to
+        /// be tidied back to 0.1.</para>
+        ///
+        /// <para>It came down from 0.5 on 2026-08-05. The consumers of
         /// <see cref="BattleModifiersUtil.CalculateOptimalDistance"/> all ask a CAPABILITY question
         /// -- "can these guns still do something from here" -- and 0.5 answered a PREFERENCE
         /// question instead. Xibarrus Nu (2026-08-05) is the case: on turn 11 the Genestealer force
@@ -94,7 +100,7 @@ namespace OnlyWar.Battles
         /// 53 battle value over two rounds. The band was not wrong about 925 being off-peak; it was
         /// being read as though off-peak meant harmless.</para>
         ///
-        /// <para>A 0.9 band was tried first, long before that, and pulled degrading weapons in to
+        /// <para>A 0.9 band was tried first, long before the 0.5, and pulled degrading weapons in to
         /// near contact, because their damage falloff is linear and 90% of peak is a narrow window.
         /// The direction of travel has been the same both times: every consumer wants the OUTER edge
         /// of usefulness, and each tightening of this fraction has understated it. The floor at
@@ -108,6 +114,20 @@ namespace OnlyWar.Battles
         /// hand-placed one-third-quantile damage roll stopped penetrating.</para>
         /// </summary>
         internal const float SaturationFraction = 0.2f;
+
+        /// <summary>
+        /// Initial capability criterion for the separately named useful-fire range. A range is
+        /// useful when its removal clears the negligible-removal floor plus this share of the
+        /// curve's removal above that floor.
+        ///
+        /// <para>This is deliberately <c>floor + 0.2 * (peak - floor)</c>, not merely 20% of
+        /// point-blank/peak performance and not merely the floor itself. The former can bless a
+        /// vanishingly weak curve; the latter would make the first numerically non-negligible tail
+        /// automatic proof that holding to fire is worthwhile. The 20% share preserves the
+        /// established baseline calibration of <see cref="SaturationFraction"/>, while anchoring
+        /// it to the absolute rate at which this model stops treating fire as plinking.</para>
+        /// </summary>
+        internal const float UsefulRemovalAboveFloorFraction = 0.2f;
 
         /// <summary>
         /// SAMPLING BUDGET. 33 coarse samples spanning [1, reach] locate the peak (or the outermost
@@ -283,7 +303,7 @@ namespace OnlyWar.Battles
                 List<WeaponCurve> weapons = [];
                 foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons)
                 {
-                    if ((int)weapon.Template.Location > freeHands)
+                    if (weapon.LoadedAmmo <= 0 || (int)weapon.Template.Location > freeHands)
                     {
                         continue;
                     }
@@ -468,6 +488,66 @@ namespace OnlyWar.Battles
                 return best;
             }
             // Refine inside the one coarse interval where the curve crosses the threshold.
+            float refineStep = step / (RefineSampleCount - 1);
+            for (int index = 1; index < RefineSampleCount; index++)
+            {
+                float range = best + (refineStep * index);
+                if (RemovalAt(range) >= threshold)
+                {
+                    continue;
+                }
+                return best + (refineStep * (index - 1));
+            }
+            return best + step;
+        }
+
+        /// <summary>
+        /// Outer range at which this squad's existing outgoing-removal curve still meets the
+        /// useful-fire criterion. Returns 0 when no ranged weapon is available or when the curve's
+        /// best result never clears the negligible-removal floor; a positive result therefore
+        /// distinguishes a weapon that becomes useful after closing from one that is ineffective
+        /// everywhere.
+        /// </summary>
+        internal float UsefulFireRange(float peak)
+        {
+            if (IsEmpty || Reach <= 0f || peak <= _negligibleRemoval)
+            {
+                return 0f;
+            }
+
+            float threshold = _negligibleRemoval
+                + (UsefulRemovalAboveFloorFraction * (peak - _negligibleRemoval));
+            return OuterRangeMeeting(threshold);
+        }
+
+        private float OuterRangeMeeting(float threshold)
+        {
+            float lower = Math.Min(1f, Reach);
+            float step = (Reach - lower) / (CoarseSampleCount - 1);
+            if (step <= 0f)
+            {
+                return RemovalAt(lower) >= threshold ? lower : 0f;
+            }
+
+            int last = -1;
+            for (int index = CoarseSampleCount - 1; index >= 0; index--)
+            {
+                if (RemovalAt(lower + (step * index)) >= threshold)
+                {
+                    last = index;
+                    break;
+                }
+            }
+            if (last < 0)
+            {
+                return 0f;
+            }
+
+            float best = lower + (step * last);
+            if (last == CoarseSampleCount - 1)
+            {
+                return best;
+            }
             float refineStep = step / (RefineSampleCount - 1);
             for (int index = 1; index < RefineSampleCount; index++)
             {

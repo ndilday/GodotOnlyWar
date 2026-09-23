@@ -386,7 +386,8 @@ public class StrategicCombatResolverTests
 
         public int GetPreferredOpeningRange(
             EngagementParticipant element,
-            IReadOnlyList<EngagementParticipant> opposingElements) => 0;
+            IReadOnlyList<EngagementParticipant> opposingElements,
+            IReadOnlyList<EngagementParticipant> friendlyElements = null) => 0;
     }
 
     private sealed class NoOpEngagementElementFactory : IEngagementElementFactory

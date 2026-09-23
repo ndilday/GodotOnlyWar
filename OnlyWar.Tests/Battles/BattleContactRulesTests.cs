@@ -14,7 +14,8 @@ public class BattleContactRulesTests
         float quarrySpeed = 7,
         bool pairAttackedRecently = false,
         bool fireCycleProgressedThisTurn = false,
-        bool fireCommitmentRemainsViable = false) =>
+        bool fireCommitmentRemainsViable = false,
+        bool hasObservedClosingProgress = false) =>
         new(
             pursuerId,
             quarryId,
@@ -23,7 +24,8 @@ public class BattleContactRulesTests
             quarrySpeed,
             pairAttackedRecently,
             fireCycleProgressedThisTurn,
-            fireCommitmentRemainsViable);
+            fireCommitmentRemainsViable,
+            HasObservedClosingProgress: hasObservedClosingProgress);
 
     private static BattleContactRules.Input Input(
         IReadOnlyCollection<PursuitPairActivity> pairs = null,
@@ -51,7 +53,54 @@ public class BattleContactRulesTests
     {
         Assert.Equal(
             ContactBreakResult.RemainInContact,
-            BattleContactRules.Evaluate(Input()).Decision);
+            BattleContactRules.Evaluate(Input([Pair(hasObservedClosingProgress: true)])).Decision);
+    }
+
+    // Grist Nine Epsilon, 2026-09-22: 16 pursuers gained about half a cell a turn on routing
+    // orks 445 cells away, never fired, and held contact to the 1000-turn cap on that progress
+    // alone. Progress now counts only if it brings the pair to where it can act within the chase
+    // horizon.
+    [Fact]
+    public void ProgressTooSlowToReachEffectRangeWithinTheChaseHorizon_DoesNotHoldContact()
+    {
+        PursuitPairActivity crawling = new(
+            11, 22, CurrentSeparation: 445, 6, 5,
+            PairAttackedRecently: false,
+            FireCycleProgressedThisTurn: false,
+            FireCommitmentRemainsViable: false,
+            ObservedSeparationGain: 2,
+            HasObservedClosingProgress: true,
+            ProgressHistorySamples: 4,
+            EffectSeparation: 1);
+
+        BattleContactRules.Result result = BattleContactRules.Evaluate(Input([crawling]));
+
+        Assert.False(crawling.HasTimelyClosingProgress);
+        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
+        Assert.Equal("stalled_pursuit", result.Reason);
+        Assert.Contains("slow_progress_pairs=1", result.Trace.Render());
+        Assert.Contains("11>22:slow_progress", result.Trace.Render());
+    }
+
+    [Fact]
+    public void ProgressThatReachesUsefulFireRangeWithinTheChaseHorizon_HoldsContact()
+    {
+        // 40 cells outside a 400-cell useful fire range, closing 2 a turn: 20 turns.
+        PursuitPairActivity closing = new(
+            11, 22, CurrentSeparation: 440, 7, 5,
+            PairAttackedRecently: false,
+            FireCycleProgressedThisTurn: false,
+            FireCommitmentRemainsViable: false,
+            ObservedSeparationGain: 8,
+            HasObservedClosingProgress: true,
+            ProgressHistorySamples: 4,
+            EffectSeparation: 400);
+
+        Assert.Equal(20f, closing.TurnsToEffect, 3);
+        Assert.True(closing.HasTimelyClosingProgress);
+        Assert.Equal(
+            ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(Input([closing])).Decision);
     }
 
     [Fact]
@@ -96,7 +145,10 @@ public class BattleContactRulesTests
     [Fact]
     public void FasterAssignedPursuer_PreservesContact()
     {
-        PursuitPairActivity faster = Pair(pursuerSpeed: 8, quarrySpeed: 7);
+        PursuitPairActivity faster = Pair(
+            pursuerSpeed: 8,
+            quarrySpeed: 7,
+            hasObservedClosingProgress: true);
 
         Assert.Equal(
             ContactBreakResult.RemainInContact,
@@ -157,7 +209,10 @@ public class BattleContactRulesTests
     [Fact]
     public void RearGuardMasksOnlyAfterFullRunAllowanceWhileActive()
     {
-        var almost = Input(rearGuardActive: true, maskedDepartureProgress: 6.99f);
+        var almost = Input(
+            [Pair(hasObservedClosingProgress: true)],
+            rearGuardActive: true,
+            maskedDepartureProgress: 6.99f);
         var enough = almost with { MaskedDepartureProgress = 7 };
         var inactive = enough with { RearGuardActive = false };
 
@@ -177,7 +232,7 @@ public class BattleContactRulesTests
     }
 
     [Fact]
-    public void TrivialPairSpeedEdge_DoesNotPreserveContact()
+    public void DeclaredSpeedAdvantage_DoesNotPreserveContact()
     {
         var withinTolerance = Input([Pair(pursuerSpeed: 7.1f, quarrySpeed: 7)]);
         var beyondTolerance = Input([Pair(pursuerSpeed: 7.2f, quarrySpeed: 7)]);
@@ -186,7 +241,7 @@ public class BattleContactRulesTests
             ContactBreakResult.OrganizedForceDisengages,
             BattleContactRules.Evaluate(withinTolerance).Decision);
         Assert.Equal(
-            ContactBreakResult.RemainInContact,
+            ContactBreakResult.OrganizedForceDisengages,
             BattleContactRules.Evaluate(beyondTolerance).Decision);
     }
 
@@ -239,12 +294,15 @@ public class BattleContactRulesTests
     [Fact]
     public void TraceRenderer_UsesPairEvidenceFields()
     {
-        string trace = BattleContactRules.Evaluate(Input()).Trace.Render();
+        string trace = BattleContactRules.Evaluate(
+            Input([Pair(hasObservedClosingProgress: true)])).Trace.Render();
 
         Assert.Equal(
             "CONTACT_EVAL turn=7 side=second active_pursuers=2 pursuit_pairs=1 "
-            + "positive_closing_pairs=1 attacked_recently_pairs=0 "
-            + "viable_fire_cycle_pairs=0 maintenance_evidence=close pair_reasons=11>22:close "
+            + "observed_progress_pairs=1 positive_closing_pairs=1 slow_progress_pairs=0 "
+            + "startup_grace_pairs=0 "
+            + "attacked_recently_pairs=0 viable_fire_cycle_pairs=0 quarry_eliminated_pairs=0 "
+            + "maintenance_evidence=progress pair_reasons=11>22:progress "
             + "pair_active=true pair_reach_this_turn=false rear_guard_active=false "
             + "masked_progress=0 masked_required=7 decision=RemainInContact "
             + "reason=pursuit_can_maintain_contact",

@@ -38,9 +38,11 @@ namespace OnlyWar.Battles
             RangedWeapon weapon,
             float range,
             float additionalToHitModifier,
-            float? targetSpeed = null)
+            float? targetSpeed = null,
+            int? availableAmmo = null)
         {
             float evaluatedTargetSpeed = targetSpeed ?? target.CurrentSpeed;
+            int evaluatedAmmo = availableAmmo ?? weapon.LoadedAmmo;
             var cacheKey = (
                 soldier.Soldier.Id,
                 target.Soldier.Id,
@@ -48,7 +50,7 @@ namespace OnlyWar.Battles
                 BitConverter.SingleToInt32Bits(range),
                 BitConverter.SingleToInt32Bits(additionalToHitModifier),
                 BitConverter.SingleToInt32Bits(evaluatedTargetSpeed),
-                (int)weapon.LoadedAmmo);
+                evaluatedAmmo);
             if (_context.RangedEvaluations.TryGetValue(cacheKey, out RangedTargetEvaluation cached))
             {
                 return cached;
@@ -64,7 +66,8 @@ namespace OnlyWar.Battles
                     weapon,
                     range,
                     additionalToHitModifier,
-                    evaluatedTargetSpeed);
+                    evaluatedTargetSpeed,
+                    evaluatedAmmo);
             float clampedTakeOutProbability = Math.Clamp(takeOutProbability, 0, 1);
 
             // This is the expected battle value removed THIS TURN. It is deliberately
@@ -105,12 +108,15 @@ namespace OnlyWar.Battles
         internal int CalculateShotsToFire(
             RangedWeapon weapon,
             float toHitAtPlannedRateOfFire,
-            float takeOutProbabilityOnHit)
+            float takeOutProbabilityOnHit,
+            int? availableAmmo = null)
         {
             int minRoF = 1;
             int maxRof = Math.Max(
                 1,
-                Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
+                Math.Min(
+                    (int)weapon.Template.RateOfFire,
+                    Math.Max(0, availableAmmo ?? weapon.LoadedAmmo)));
             // Assume all machine guns have to fire at least one quarter of their maximum.
             if (weapon.Template.RateOfFire > 10)
             {
@@ -149,11 +155,13 @@ namespace OnlyWar.Battles
             RangedWeapon weapon,
             float range,
             float moveAndAimMod,
-            float? targetSpeed = null)
+            float? targetSpeed = null,
+            int? availableAmmo = null)
         {
+            int ammunitionAvailable = availableAmmo ?? weapon.LoadedAmmo;
             int shotsToFire = Math.Max(
                 1,
-                Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
+                Math.Min((int)weapon.Template.RateOfFire, Math.Max(0, ammunitionAvailable)));
             float armor = target.Armor?.Template.ArmorProvided ?? 0;
             (float takeOutProbability, float woundProgress) = CalculateRangedHitRemoval(
                 target,
@@ -166,11 +174,11 @@ namespace OnlyWar.Battles
             RangedHitEstimateContext hitContext = new(
                 soldier,
                 target,
-                weapon,
-                range,
-                moveAndAimMod,
-                firingIntoMelee,
-                targetSpeed);
+                    weapon,
+                    range,
+                    moveAndAimMod,
+                    firingIntoMelee,
+                    targetSpeed);
             (float HitProbability, float TakeOutProbabilityOnHit, float PreRollHitTotal) estimate =
                 new(0, 0, 0);
             for (int iteration = 0; iteration < 4; iteration++)
@@ -182,7 +190,8 @@ namespace OnlyWar.Battles
                 int revisedShots = CalculateShotsToFire(
                     weapon,
                     estimate.HitProbability,
-                    estimate.TakeOutProbabilityOnHit);
+                    estimate.TakeOutProbabilityOnHit,
+                    ammunitionAvailable);
                 if (revisedShots == shotsToFire)
                 {
                     return (

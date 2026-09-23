@@ -18,6 +18,9 @@ namespace OnlyWar.Battles
     internal sealed class SoldierActionPlanner
     {
         private const float WalkAimMultiplier = 0.5f;
+        // A held aim fires once hit × take-out reaches this, whatever further aiming might add:
+        // a likely kill now is not traded for a slightly likelier one later.
+        private const float LikelyTakeOutProbability = 0.33f;
 
         private readonly BattleGridManager _grid;
         private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
@@ -89,9 +92,23 @@ namespace OnlyWar.Battles
                     stickyAim.Item2,
                     stickyRange,
                     stickyAim.Item2.Template.Accuracy + stickyAim.Item3 + 1);
-                bool shoot = stickyAim.Item3 >= 3
-                    || stickyTarget.GetMoveSpeed() > stickyRange
-                    || stickyShot.TakeOutProbabilityOnHit * stickyShot.HitProbability >= 0.33f;
+                RangedTargetSelector.FireTiming stickyTiming = _ranged.EvaluateFireTiming(
+                    soldier,
+                    stickyTarget,
+                    stickyShot,
+                    stickyAim.Item2,
+                    stickyRange,
+                    stickyAim.Item3,
+                    bulkMultiplier: 0,
+                    aimMultiplier: 1f);
+                // Fire when the target could reach this soldier this turn, when the shot is
+                // already likely to put the target down, or when no further aiming pays for the
+                // turns and rounds it costs (see EvaluateFireTiming; full aim leaves nothing to
+                // wait for).
+                bool shoot = stickyTarget.GetMoveSpeed() > stickyRange
+                    || stickyShot.TakeOutProbabilityOnHit * stickyShot.HitProbability
+                        >= LikelyTakeOutProbability
+                    || stickyTiming.ShootNow;
                 return shoot
                     ? PlanConventionalShot(soldier, stickyShot, 0, 1)
                     : new PlannedSoldierAction(
@@ -102,9 +119,7 @@ namespace OnlyWar.Battles
                         stickyRange,
                         ExpectedEnemyBattleValueRemoved:
                             stickyShot.ExpectedEnemyBattleValueRemoved,
-                        ReadinessValue: EngagementPotential.ReadinessForPreparedShot(
-                            soldier,
-                            stickyShot));
+                        ReadinessValue: stickyTiming.Readiness);
             }
 
             float aimMultiplier = tier switch
@@ -230,8 +245,24 @@ namespace OnlyWar.Battles
                     useAccuracy: true,
                     aimMultiplier: aimMultiplier)
                 : null;
-            if (shootNow != null
-                && (aimNow == null || shootNow.HitProbability * 2 > aimNow.HitProbability))
+            RangedWeapon aimWeapon = aimMultiplier > 0
+                ? aimNow?.Weapon
+                    ?? soldier.EquippedRangedWeapons
+                        .Where(weapon => !weapon.Template.IsTemplateWeapon)
+                        .OrderByDescending(weapon => weapon.Template.MaximumRange)
+                        .ThenBy(weapon => weapon.Template.Id)
+                        .FirstOrDefault()
+                : null;
+            RangedTargetSelector.FireTiming timing = _ranged.EvaluateFireTiming(
+                soldier,
+                target,
+                shootNow,
+                aimWeapon,
+                range,
+                currentAimBonus: null,
+                bulkMultiplier,
+                aimMultiplier);
+            if (shootNow != null && (aimNow == null || timing.ShootNow))
             {
                 return PlanConventionalShot(
                     soldier,
@@ -239,27 +270,16 @@ namespace OnlyWar.Battles
                     bulkMultiplier,
                     aimMultiplier);
             }
-            if (aimMultiplier > 0)
+            if (aimWeapon != null)
             {
-                RangedWeapon aimWeapon = aimNow?.Weapon
-                    ?? soldier.EquippedRangedWeapons
-                        .Where(weapon => !weapon.Template.IsTemplateWeapon)
-                        .OrderByDescending(weapon => weapon.Template.MaximumRange)
-                        .ThenBy(weapon => weapon.Template.Id)
-                        .FirstOrDefault();
-                if (aimWeapon != null)
-                {
-                    return new PlannedSoldierAction(
-                        soldier.Soldier.Id,
-                        PlannedSoldierActionKind.Aim,
-                        target.Soldier.Id,
-                        aimWeapon.Template.Id,
-                        range,
-                        ExpectedEnemyBattleValueRemoved: aimNow?.ExpectedEnemyBattleValueRemoved ?? 0,
-                        ReadinessValue: EngagementPotential.ReadinessForPreparedShot(
-                            soldier,
-                            aimNow));
-                }
+                return new PlannedSoldierAction(
+                    soldier.Soldier.Id,
+                    PlannedSoldierActionKind.Aim,
+                    target.Soldier.Id,
+                    aimWeapon.Template.Id,
+                    range,
+                    ExpectedEnemyBattleValueRemoved: aimNow?.ExpectedEnemyBattleValueRemoved ?? 0,
+                    ReadinessValue: timing.Readiness);
             }
             return new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None);
         }

@@ -17,9 +17,38 @@ public enum PursuitPosture
     Press
 }
 
-/// <summary>Pure force-level pursuit policy. Action planning remains the resolver's concern.</summary>
+/// <summary>
+/// How a squad's equipment inclines it to pursue, from the melee share of its combat value (the
+/// same bands as <see cref="BattleSquadCapabilityProfile.IsContactSeeking"/> and
+/// <see cref="BattleSquadCapabilityProfile.IsFireSupport"/>).
+/// </summary>
+public enum PursuitDoctrine
+{
+    /// <summary>Neither band: a tactical squad. Press and Follow are weighed on the projections.</summary>
+    Mixed,
+    /// <summary>Mostly melee value (assault squads): closes with the quarry.</summary>
+    ContactSeeking,
+    /// <summary>Mostly ranged value (devastators): keeps shooting.</summary>
+    FireSupport
+}
+
+/// <summary>
+/// Pure pursuit policy for ONE pursuing squad against the withdrawing force, from that squad's own
+/// pair projections. The resolver evaluates it per squad, so an assault squad and a devastator
+/// squad in the same force can pursue differently. Action planning remains the resolver's concern.
+/// </summary>
 public static class BattlePursuitPlanner
 {
+    /// <summary>
+    /// TUNABLE: the longest chase, in attack phases, a pressing squad will run to reach contact. A
+    /// pursuer only a sliver faster than its quarry does reach it in the projection's arithmetic,
+    /// but only after hundreds of turns, and that is not catching up. Observed 2026-09-22 in
+    /// sector generation (Grist Nine Xi): a Genestealer Cult force out of useful fire chased a
+    /// Guard withdrawal at a one-cell-per-turn gain, contact projected ~700 turns out, to the
+    /// 1000-turn cap. Beyond this horizon a pressing squad is treated as unable to catch up.
+    /// </summary>
+    public const float MaximumChaseTurns = 30f;
+
     public sealed record Input(
         int Turn,
         bool IsFirstSide,
@@ -31,7 +60,48 @@ public static class BattlePursuitPlanner
         float ProjectedPressInterceptTurns,
         float? ProjectedFollowPositiveShotTurns,
         bool WithdrawerReturnsFire,
-        bool PursuerCanReachContactThisTurn = false);
+        bool PursuerCanReachContactThisTurn = false,
+        int? ProjectedPressPursuerSquadId = null,
+        int? ProjectedPressQuarrySquadId = null,
+        float? ProjectedPressMovementContactTurns = null,
+        int? ProjectedFollowPursuerSquadId = null,
+        int? ProjectedFollowQuarrySquadId = null,
+        BattleAttackMode? ProjectedFollowAttackMode = null,
+        BattleAttackPreparation? ProjectedFollowPreparation = null,
+        bool? ProjectedFollowRequiresMovement = null,
+        PursuitDoctrine Doctrine = PursuitDoctrine.Mixed,
+        int? PursuerSquadId = null,
+        bool FollowProjectionEvaluated = true);
+
+    /// <summary>
+    /// Whether the follow (ranged) projection can change this squad's posture. It cannot when the
+    /// squad presses whatever it finds -- a contact-seeking squad under a Normal policy, or any
+    /// squad under an Attritional or Aggressive one while the unresisting-prey exception cannot
+    /// apply -- and it can reach contact within <see cref="MaximumChaseTurns"/>; nor under Avoid,
+    /// which always breaks off. Skipping the projection then matters: a squad with no useful gun
+    /// has no immediate shot to stop the search early, so its projection is the expensive full
+    /// route search, repeated every pursuit turn.
+    /// </summary>
+    public static bool NeedsFollowProjection(
+        Aggression aggression,
+        PursuitDoctrine doctrine,
+        bool withdrawerReturnsFire,
+        float projectedPressInterceptTurns,
+        bool pursuerCanReachContactThisTurn)
+    {
+        if (aggression == Aggression.Avoid) return false;
+        bool catchable = pursuerCanReachContactThisTurn
+            || projectedPressInterceptTurns <= MaximumChaseTurns;
+        if (!catchable) return true;
+        bool alwaysPresses = aggression switch
+        {
+            Aggression.Normal => doctrine == PursuitDoctrine.ContactSeeking,
+            Aggression.Attritional or Aggression.Aggressive =>
+                withdrawerReturnsFire || doctrine == PursuitDoctrine.ContactSeeking,
+            _ => false
+        };
+        return !alwaysPresses;
+    }
 
     public sealed record Result(PursuitPosture Posture, string Reason, BattleDecisionTrace Trace);
 
@@ -48,8 +118,30 @@ public static class BattlePursuitPlanner
             Aggression.Cautious => (PursuitPosture.Follow, "cautious_follows"),
             Aggression.Attritional => (PursuitPosture.Press, "attritional_presses"),
             Aggression.Aggressive => (PursuitPosture.Press, "aggressive_presses"),
-            _ => SelectNormal(input)
+            _ => input.Doctrine switch
+            {
+                // Under a Normal policy the squad's equipment decides: an assault squad runs its
+                // quarry down, a devastator squad keeps shooting. A mixed squad weighs which of
+                // the two lands first.
+                PursuitDoctrine.ContactSeeking =>
+                    (PursuitPosture.Press, "contact_seeking_presses"),
+                PursuitDoctrine.FireSupport =>
+                    (PursuitPosture.Follow, "fire_support_follows"),
+                _ => SelectNormal(input)
+            }
         };
+
+        // A squad with no shot to take -- out of ammunition, or no gun that will ever reach --
+        // gains nothing from following or standing off: its only way to hurt the quarry is to
+        // catch it. So it chases, whatever its policy or equipment would otherwise prefer, and the
+        // cannot-close check below turns that into a break-off when it cannot catch up either.
+        // Observed 2026-09-22 (Grist Nine Epsilon): with posture decided for the whole force, a
+        // handful of marines with rounds left held ~270 dry ones at standoff for hundreds of turns.
+        if (posture is PursuitPosture.Follow or PursuitPosture.Standoff
+            && !input.ProjectedFollowPositiveShotTurns.HasValue)
+        {
+            (posture, reason) = (PursuitPosture.Press, "cannot_shoot_chases");
+        }
 
         // A pursuer with no real speed edge is never going to run its quarry down, and neither
         // chasing posture is worth anything against it. Pressing trails the withdrawal at a
@@ -61,18 +153,36 @@ public static class BattlePursuitPlanner
         // nothing left to gain from contact and it breaks off, ending the engagement.
         //
         // This overrides every aggression policy — arithmetic, not temperament, decides whether
-        // a quarry is catchable — but only once the pursuer has actually lost the chase. A
-        // pursuer that can reach melee THIS turn can still catch someone despite the equal
-        // speeds, so it keeps whatever posture its policy chose. The tolerance is shared with
-        // BattleContactRules so the posture and the contact break agree on "cannot close".
+        // a quarry is catchable — but only once the pair projection says no concrete pair can ever
+        // make contact. A pursuer that can reach contact THIS turn can still catch someone despite
+        // an equal-speed stern chase, so it keeps whatever posture its policy chose. The force
+        // speed extrema are retained in the input for other policy terms, but they do not decide
+        // whether this pair-local projection is reachable.
         if (posture != PursuitPosture.BreakOff
             && !input.PursuerCanReachContactThisTurn
-            && input.FastestPursuitSpeed
-                <= input.SlowestWithdrawalSpeed + BattleContactRules.PursuitSpeedAdvantageTolerance)
+            && float.IsPositiveInfinity(input.ProjectedPressInterceptTurns))
         {
             (posture, reason) = input.ProjectedFollowPositiveShotTurns == 0f
                 ? (PursuitPosture.Standoff, "cannot_close_stands_and_fires")
                 : (PursuitPosture.BreakOff, "cannot_close_or_shoot");
+        }
+        // A chase that closes, but too slowly to matter. Only a squad that means to PRESS is judged
+        // on it: a following squad is not trying to reach contact, it is trying to keep shooting,
+        // and its projected contact time says nothing about that. A squad that cannot catch up
+        // still has its guns: with a shot now it stands and fires, with a shot later it follows
+        // to take it, and only a squad with no shot at all breaks off. Observed 2026-09-22 (Grist
+        // Nine Epsilon): assault squads with bolt pistols broke off on the first pursuit turn
+        // because their chase was too long, although they could still shoot.
+        else if (posture == PursuitPosture.Press
+            && !input.PursuerCanReachContactThisTurn
+            && input.ProjectedPressInterceptTurns > MaximumChaseTurns)
+        {
+            (posture, reason) = input.ProjectedFollowPositiveShotTurns switch
+            {
+                0f => (PursuitPosture.Standoff, "chase_too_long_stands_and_fires"),
+                float => (PursuitPosture.Follow, "chase_too_long_follows"),
+                null => (PursuitPosture.BreakOff, "chase_too_long_breaks_off")
+            };
         }
 
         // Even the most aggressive pursuer keeps shooting rather than closing to melee when
@@ -80,7 +190,10 @@ public static class BattlePursuitPlanner
         // follow shot exists), is faster (so following concedes nothing — the quarry cannot
         // open the gap), and the withdrawer is not returning fire (routing, or simply has no
         // ranged weapons). Charging such an enemy only hands it the melee exchange it wanted.
+        // Not for a contact-seeking squad: running prey down is what an assault squad is for, and
+        // its pistols are not the kind of gun this argument is about.
         if (posture == PursuitPosture.Press
+            && input.Doctrine != PursuitDoctrine.ContactSeeking
             && !input.WithdrawerReturnsFire
             && input.ProjectedFollowPositiveShotTurns.HasValue
             && input.FastestPursuitSpeed > input.SlowestWithdrawalSpeed)
@@ -89,10 +202,18 @@ public static class BattlePursuitPlanner
             reason = "shoots_unresisting_prey";
         }
 
-        BattleDecisionTrace trace = new("PURSUIT_EVAL", new List<KeyValuePair<string, string>>
+        List<KeyValuePair<string, string>> fields = new()
         {
             BattleDecisionTrace.Field("turn", input.Turn),
             BattleDecisionTrace.Field("side", input.IsFirstSide ? "first" : "second"),
+        };
+        if (input.PursuerSquadId.HasValue)
+        {
+            fields.Add(BattleDecisionTrace.Field("squad", input.PursuerSquadId));
+            fields.Add(BattleDecisionTrace.Field("doctrine", input.Doctrine));
+        }
+        fields.AddRange(new[]
+        {
             BattleDecisionTrace.Field("pursuer_soldiers", input.PursuerAbleSoldiers),
             BattleDecisionTrace.Field("withdrawing_soldiers", input.WithdrawingAbleSoldiers),
             BattleDecisionTrace.Field("fastest_pursuit_speed", input.FastestPursuitSpeed),
@@ -100,11 +221,45 @@ public static class BattlePursuitPlanner
             BattleDecisionTrace.Field("aggression", input.Aggression),
             BattleDecisionTrace.Field("withdrawer_returns_fire", input.WithdrawerReturnsFire),
             BattleDecisionTrace.Field("melee_reach_this_turn", input.PursuerCanReachContactThisTurn),
-            BattleDecisionTrace.Field("press_intercept_turns", input.ProjectedPressInterceptTurns),
-            BattleDecisionTrace.Field("follow_shot_turns", input.ProjectedFollowPositiveShotTurns),
-            BattleDecisionTrace.Field("decision", posture),
-            BattleDecisionTrace.Field("reason", reason)
+            BattleDecisionTrace.Field("press_estimate_kind", "hypothetical_press_to_contact"),
+            BattleDecisionTrace.Field(
+                "press_attack_phase_turns",
+                float.IsPositiveInfinity(input.ProjectedPressInterceptTurns)
+                    ? "never"
+                    : input.ProjectedPressInterceptTurns),
+            BattleDecisionTrace.Field("press_contact_turns", input.ProjectedPressMovementContactTurns),
+            BattleDecisionTrace.Field("press_contact_pursuer", input.ProjectedPressPursuerSquadId),
+            BattleDecisionTrace.Field("press_contact_quarry", input.ProjectedPressQuarrySquadId),
+            BattleDecisionTrace.Field(
+                "follow_estimate_kind", "hypothetical_useful_attack_opportunity"),
+            input.FollowProjectionEvaluated
+                ? BattleDecisionTrace.Field(
+                    "follow_useful_attack_turns", input.ProjectedFollowPositiveShotTurns)
+                : BattleDecisionTrace.Field("follow_useful_attack_turns", "not_evaluated"),
         });
+        if (input.ProjectedPressPursuerSquadId.HasValue
+            || input.ProjectedPressQuarrySquadId.HasValue)
+        {
+            fields.Add(BattleDecisionTrace.Field("press_attack_mode", BattleAttackMode.Melee));
+        }
+        if (input.ProjectedFollowPursuerSquadId.HasValue
+            || input.ProjectedFollowQuarrySquadId.HasValue
+            || input.ProjectedFollowAttackMode.HasValue)
+        {
+            fields.Add(BattleDecisionTrace.Field(
+                "follow_pursuer", input.ProjectedFollowPursuerSquadId));
+            fields.Add(BattleDecisionTrace.Field(
+                "follow_quarry", input.ProjectedFollowQuarrySquadId));
+            fields.Add(BattleDecisionTrace.Field(
+                "follow_attack_mode", input.ProjectedFollowAttackMode));
+            fields.Add(BattleDecisionTrace.Field(
+                "follow_preparation", input.ProjectedFollowPreparation));
+            fields.Add(BattleDecisionTrace.Field(
+                "follow_requires_movement", input.ProjectedFollowRequiresMovement));
+        }
+        fields.Add(BattleDecisionTrace.Field("decision", posture));
+        fields.Add(BattleDecisionTrace.Field("reason", reason));
+        BattleDecisionTrace trace = new("PURSUIT_EVAL", fields);
         BattleLog.Write(trace.Render());
         return new Result(posture, reason, trace);
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using OnlyWar.Battles;
 using OnlyWar.Battles.Aftermath;
@@ -75,21 +76,48 @@ public sealed class ActivePursuitScaleDiagnosticsTests
             marineSquadCount,
             idBase);
         List<string> contactTrace = [];
+        List<string> engagementTrace = [];
+        List<string> actionTrace = [];
+        List<string> diagnosticTrace = [];
+        int resolvingTurn = 0;
+        int? firstShotTurn = null;
+        int shotsFired = 0;
         Action<string> previousSink = BattleLog.Sink;
         Stopwatch stopwatch = Stopwatch.StartNew();
         try
         {
             BattleLog.Sink = line =>
             {
-                if (line.StartsWith("CONTACT_EVAL ", StringComparison.Ordinal))
+                if (line.StartsWith("PRESS_CONTACT_PROJECTION ", StringComparison.Ordinal)
+                    || line.StartsWith("FOLLOW_SHOT_EVAL ", StringComparison.Ordinal)
+                    || line.StartsWith("ESCAPE_EVAL ", StringComparison.Ordinal)
+                    || line.StartsWith("PURSUIT_PROGRESS ", StringComparison.Ordinal))
+                {
+                    diagnosticTrace.Add(line);
+                }
+                else if (line.StartsWith("CONTACT_EVAL ", StringComparison.Ordinal))
                 {
                     contactTrace.Add(line);
+                }
+                else if (line.StartsWith("ENGAGE_EVAL ", StringComparison.Ordinal))
+                {
+                    engagementTrace.Add(line);
+                }
+                else if (line.StartsWith("ACTION ", StringComparison.Ordinal))
+                {
+                    actionTrace.Add(line);
+                    if (Field(line, "action") == "Shoot")
+                    {
+                        firstShotTurn ??= resolvingTurn;
+                        shotsFired += int.Parse(Field(line, "shots"), CultureInfo.InvariantCulture);
+                    }
                 }
             };
 
             while (scenario.Resolver.BattleHistory.Outcome == null
                 && scenario.Resolver.BattleHistory.Turns.Count - 1 < 1_000)
             {
+                resolvingTurn = scenario.Resolver.BattleHistory.Turns.Count;
                 scenario.Resolver.ProcessNextTurn();
             }
         }
@@ -111,6 +139,17 @@ public sealed class ActivePursuitScaleDiagnosticsTests
                 ? "inert_watchdog_no_casualty_or_separation_change"
                 : "1000_turn_cap"
             : "none";
+        List<string> chosen = engagementTrace
+            .Where(line => bool.Parse(Field(line, "chosen")))
+            .OrderBy(line => int.Parse(Field(line, "turn"), CultureInfo.InvariantCulture))
+            .ThenBy(line => int.Parse(Field(line, "squad"), CultureInfo.InvariantCulture))
+            .ToList();
+        int holdAdvanceSwitches = chosen
+            .GroupBy(line => Field(line, "squad"))
+            .Sum(group => group.Zip(group.Skip(1), (before, after) =>
+                    IsHold(Field(before, "kind")) != IsHold(Field(after, "kind")) ? 1 : 0)
+                .Sum());
+        int maximumWorthwhileFireChase = MaximumWorthwhileFireChase(engagementTrace);
         string summary =
             $"PURSUIT_SCALE name={name} soldiers={marineCount + quarryCount} "
             + $"turns={turns} runtime_ms={stopwatch.Elapsed.TotalMilliseconds:F0} "
@@ -118,13 +157,22 @@ public sealed class ActivePursuitScaleDiagnosticsTests
             + $"killed={scenario.Resolver.BattleHistory.KilledSoldierIds.Count} "
             + $"damaged={scenario.Resolver.BattleHistory.DamagedSoldierIds.Count} "
             + $"incapacitated={scenario.Resolver.BattleHistory.IncapacitatedSoldierIds.Count} "
+            + $"first_shot_turn={firstShotTurn?.ToString(CultureInfo.InvariantCulture) ?? "none"} "
+            + $"shots_fired={shotsFired} "
+            + $"max_worthwhile_fire_chase={maximumWorthwhileFireChase} "
+            + $"hold_advance_switches={holdAdvanceSwitches} "
             + $"final_evidence={FieldOrDefault(finalMaintained, "maintenance_evidence", "none")} "
             + $"final_reason={FieldOrDefault(finalMaintained, "reason", "none")} "
             + $"terminal_diagnostic={terminalDiagnostic} "
-            + $"trace_lines={contactTrace.Count}";
+            + $"trace_lines={contactTrace.Count} "
+            + $"diagnostic_trace_lines={diagnosticTrace.Count}";
         Directory.CreateDirectory(TraceDirectory);
         string reportPath = Path.Combine(TraceDirectory, name + ".log");
-        File.WriteAllLines(reportPath, new[] { summary }.Concat(contactTrace));
+        File.WriteAllLines(reportPath, new[] { summary }
+            .Concat(contactTrace)
+            .Concat(engagementTrace)
+            .Concat(actionTrace)
+            .Concat(diagnosticTrace));
         Console.WriteLine(summary + $" trace={reportPath}");
 
         Assert.NotNull(outcome);
@@ -147,6 +195,38 @@ public sealed class ActivePursuitScaleDiagnosticsTests
                 $"contact was maintained without closing, attack, or fire-cycle progress: {line}");
         }
     }
+
+    private static int MaximumWorthwhileFireChase(IReadOnlyCollection<string> engagementTrace)
+    {
+        var turns = engagementTrace
+            .GroupBy(line => (Turn: Field(line, "turn"), Squad: Field(line, "squad")))
+            .Select(group => new
+            {
+                Turn = int.Parse(group.Key.Turn, CultureInfo.InvariantCulture),
+                Squad = group.Key.Squad,
+                Chosen = group.Single(line => bool.Parse(Field(line, "chosen"))),
+                Hold = group.FirstOrDefault(line => Field(line, "kind") == "Hold")
+            })
+            .OrderBy(entry => entry.Squad)
+            .ThenBy(entry => entry.Turn);
+        int maximum = 0;
+        foreach (var squad in turns.GroupBy(entry => entry.Squad))
+        {
+            int consecutive = 0;
+            foreach (var turn in squad)
+            {
+                bool worthwhileHold = turn.Hold != null
+                    && float.Parse(Field(turn.Hold, "outgoing"), CultureInfo.InvariantCulture) > 0;
+                consecutive = worthwhileHold && !IsHold(Field(turn.Chosen, "kind"))
+                    ? consecutive + 1
+                    : 0;
+                maximum = System.Math.Max(maximum, consecutive);
+            }
+        }
+        return maximum;
+    }
+
+    private static bool IsHold(string kind) => kind == "Hold";
 
     private static ScaleScenario BuildScenario(
         int marineCount,

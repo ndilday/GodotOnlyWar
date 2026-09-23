@@ -95,6 +95,13 @@ public sealed record BattleSquadCapabilityProfile(
     // the gun. 0 means "nothing to stand off for" -- no usable ranged weapon, or a target that
     // cannot be penetrated at any range.
     float EffectiveEngagementRange,
+    // Outer edge at which the existing outgoing-removal curve remains useful against the same
+    // representative opposing profile. Unlike EffectiveEngagementRange this ignores return fire:
+    // it answers "can shooting still contribute here?", not "where is the exchange optimal?".
+    // Cached with the planning profile and used by fire-preserving pursuit scoring. 0 means no
+    // available ranged weapon or no range whose removal clears the usefulness criterion, so
+    // ineffective-everywhere weapons remain distinct from short-ranged weapons.
+    float UsefulFireRange,
     // BEST CASE ranged effectiveness against the force this profile was built against: how much
     // ONE of this squad's shooters removes per turn of ONE representative opponent, maximized over
     // every range it could shoot from, as a fraction of that opponent's battle value.
@@ -118,8 +125,11 @@ public sealed record BattleSquadCapabilityProfile(
     int ContactCapacity,
     IReadOnlyDictionary<int, float> CapabilityGroups)
 {
-    public bool IsContactSeeking => EffectiveMeleeFraction >= 0.55f;
-    public bool IsFireSupport => EffectiveMeleeFraction <= 0.35f
+    internal const float ContactSeekingMeleeFraction = 0.55f;
+    internal const float FireSupportMeleeFraction = 0.35f;
+
+    public bool IsContactSeeking => EffectiveMeleeFraction >= ContactSeekingMeleeFraction;
+    public bool IsFireSupport => EffectiveMeleeFraction <= FireSupportMeleeFraction
         && UsableRangedBattleValue > UsableMeleeBattleValue;
 }
 
@@ -187,4 +197,5 @@ public sealed record SquadEngagementDecision(
     SquadEngagementFrame Frame,
     EngagementOptionEvaluation Chosen,
     IReadOnlyList<EngagementOptionEvaluation> Candidates,
-    IReadOnlyCollection<BattleSquad> RoleTargets = null);
+    IReadOnlyCollection<BattleSquad> RoleTargets = null,
+    IReadOnlyList<string> PursuitDiagnostics = null);

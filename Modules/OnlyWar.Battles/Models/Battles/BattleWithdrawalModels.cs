@@ -81,6 +81,16 @@ namespace OnlyWar.Battles.Models
         public int? RearGuardSquadId { get; set; }
         public int? WithdrawalStartedTurn { get; set; }
 
+        /// <summary>
+        /// Pursuing squads that broke off while the rest of their force kept up the pursuit, and so
+        /// left the field. They are disengaged, but they did not withdraw: the battle outcome does
+        /// not report them as disengaged, and their battle value at the time they stood down
+        /// (<see cref="StoodDownBattleValue"/>) still counts toward the side's strength, so the
+        /// force evaluator does not read their exit as casualties.
+        /// </summary>
+        public HashSet<int> StoodDownSquadIds { get; } = [];
+        public int StoodDownBattleValue { get; set; }
+
         public BattleSideState(BattleSideProfile profile, int startingBattleValue, int startingSoldierCount)
         {
             if (profile == null) throw new ArgumentNullException(nameof(profile));
@@ -105,6 +115,8 @@ namespace OnlyWar.Battles.Models
             CoveringSquadId = original.CoveringSquadId;
             RearGuardSquadId = original.RearGuardSquadId;
             WithdrawalStartedTurn = original.WithdrawalStartedTurn;
+            StoodDownSquadIds = [.. original.StoodDownSquadIds];
+            StoodDownBattleValue = original.StoodDownBattleValue;
         }
     }
 

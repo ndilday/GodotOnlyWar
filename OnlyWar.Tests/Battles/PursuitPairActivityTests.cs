@@ -10,7 +10,9 @@ public class PursuitPairActivityTests
         float quarrySpeed = 7,
         bool pairAttackedRecently = false,
         bool fireCycleProgressedThisTurn = false,
-        bool fireCommitmentRemainsViable = false) =>
+        bool fireCommitmentRemainsViable = false,
+        bool observedProgress = false,
+        bool startupGrace = false) =>
         new(
             PursuerSquadId: 11,
             QuarrySquadId: 22,
@@ -19,12 +21,27 @@ public class PursuitPairActivityTests
             QuarryWithdrawalSpeed: quarrySpeed,
             PairAttackedRecently: pairAttackedRecently,
             FireCycleProgressedThisTurn: fireCycleProgressedThisTurn,
-            FireCommitmentRemainsViable: fireCommitmentRemainsViable);
+            FireCommitmentRemainsViable: fireCommitmentRemainsViable,
+            ObservedSeparationGain: observedProgress ? 1 : 0,
+            HasObservedClosingProgress: observedProgress,
+            HasStartupGrace: startupGrace);
 
     [Fact]
-    public void PositivePairwiseClosingSpeed_QualifiesAsActivePursuit()
+    public void PositiveDeclaredSpeedAlone_DoesNotQualifyAsActivePursuit()
     {
         PursuitPairActivity activity = Activity(pursuerSpeed: 8, quarrySpeed: 7);
+
+        Assert.False(activity.HasMeaningfulPositiveClosingSpeed);
+        Assert.False(activity.HasActivePursuitEvidence);
+    }
+
+    [Fact]
+    public void ObservedGeometricProgress_QualifiesAsActivePursuit()
+    {
+        PursuitPairActivity activity = Activity(
+            pursuerSpeed: 6,
+            quarrySpeed: 8,
+            observedProgress: true);
 
         Assert.True(activity.HasMeaningfulPositiveClosingSpeed);
         Assert.True(activity.HasActivePursuitEvidence);
@@ -78,5 +95,17 @@ public class PursuitPairActivityTests
         Assert.False(activity.HasMeaningfulPositiveClosingSpeed);
         Assert.False(activity.HasQualifyingFireCycleProgress);
         Assert.False(activity.HasActivePursuitEvidence);
+    }
+
+    [Fact]
+    public void StartupGrace_IsIndependentOfDeclaredSpeed()
+    {
+        PursuitPairActivity activity = Activity(
+            pursuerSpeed: 5,
+            quarrySpeed: 8,
+            startupGrace: true);
+
+        Assert.False(activity.HasMeaningfulPositiveClosingSpeed);
+        Assert.True(activity.HasActivePursuitEvidence);
     }
 }

@@ -249,7 +249,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            battleValue: 1);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_051, zeroValueHuman);
         BattleSquad pursuer = CreateSquad(
             "Pursuer",
@@ -288,14 +288,40 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            battleValue: 1);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_056, zeroValueHuman);
         withdrawing.Soldiers[0].RangedWeapons.Clear();
         withdrawing.Soldiers[0].ClearReadiedRangedWeapons();
+        ((Soldier)withdrawing.Soldiers[0].Soldier).Constitution = 5_000;
+        // Keep this a positive-valued, concrete quarry while still making the resolver enter a
+        // withdrawal. The engagement-participant boundary leaves one able runner in a three-body
+        // starting roster, so Normal aggression has a real < 0.5 remaining-value trigger instead
+        // of relying on the old zero-value fixture that cannot demonstrate useful fire.
+        foreach (int soldierId in new[] { 73_059, 73_060 })
+        {
+            Soldier reserve = TestModelFactory.CreateSoldier(
+                zeroValueHuman,
+                $"Withdrawing Reserve {soldierId}");
+            reserve.Id = soldierId;
+            reserve.MoveSpeed = 6;
+            withdrawing.Squad.AddSquadMember(reserve);
+            withdrawing.Soldiers.Add(new BattleSoldier(reserve, withdrawing));
+        }
+        withdrawing.RefreshEngagementParticipants([withdrawing.Soldiers[0].Soldier]);
+        SoldierTemplate highValuePursuer = new(
+            73_058,
+            TestModelFactory.HumanSpecies,
+            "High Value Pursuer",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 10);
         BattleSquad pursuer = CreateSquad(
             "Rifle Pursuer",
             73_057,
-            TestModelFactory.MarineTemplate,
+            highValuePursuer,
             isPlayerSquad: true);
         EquipAccurateLongGun(pursuer.Soldiers[0]);
         pursuer.Soldiers[0].MeleeWeapons.Clear();

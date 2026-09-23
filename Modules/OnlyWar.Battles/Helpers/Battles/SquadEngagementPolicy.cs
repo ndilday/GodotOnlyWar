@@ -165,7 +165,52 @@ namespace OnlyWar.Battles
                 frame,
                 chosen,
                 evaluations,
-                roleTargets);
+                roleTargets,
+                BuildPursuitFireDiagnostics(squad, frame, primary, legal));
+        }
+
+        // Capture counterfactual stationary actions against the planning snapshot, before live
+        // movement declarations. Emit later in the serial materialization pass, never on workers.
+        private IReadOnlyList<string> BuildPursuitFireDiagnostics(BattleSquad squad,
+            SquadEngagementFrame frame, BattleSquad primary, IReadOnlyCollection<EngagementOptionKind> legal)
+        {
+            if (!BattleLog.IsEnabled || !IsPursuitRole(frame.Role)) return null;
+            List<string> records = [];
+            foreach (var soldier in squad.AbleSoldiers.Where(IsPlaced).OrderBy(s => s.Soldier.Id))
+            {
+                var action = _soldierActions.PlanRootAction(soldier, SquadMovementTier.Stationary, 0, null);
+                var shot = _ranged.SelectBestRangedTarget(soldier, 0f, includeExistingAim: true);
+                records.Add(new BattleDecisionTrace("PURSUIT_FIRE_EVAL",
+                [
+                    BattleDecisionTrace.Field("turn", TraceTurnNumber),
+                    BattleDecisionTrace.Field("side", TraceSideLabel ?? "none"),
+                    BattleDecisionTrace.Field("squad", squad.Id),
+                    BattleDecisionTrace.Field("soldier", soldier.Soldier.Id),
+                    BattleDecisionTrace.Field("quarry", primary?.Id),
+                    BattleDecisionTrace.Field("role", frame.Role),
+                    BattleDecisionTrace.Field("hold_legal", legal.Contains(EngagementOptionKind.Hold)),
+                    BattleDecisionTrace.Field("hold_reason", legal.Contains(EngagementOptionKind.Hold) ? "available" : "excluded_by_role_mask"),
+                    BattleDecisionTrace.Field("hands", soldier.FunctioningHands),
+                    BattleDecisionTrace.Field("weapons", string.Join('|', soldier.RangedWeapons.OrderBy(w => w.Template.Id)
+                        .Select(w => $"{w.Template.Id}:{w.LoadedAmmo}:{w.ReloadProgress}:{soldier.EquippedRangedWeapons.Contains(w)}"))),
+                    BattleDecisionTrace.Field("stationary_action", action.Kind),
+                    BattleDecisionTrace.Field("stationary_target", action.TargetId),
+                    BattleDecisionTrace.Field("stationary_weapon", action.WeaponTemplateId),
+                    BattleDecisionTrace.Field("stationary_enemy_bv", action.ExpectedEnemyBattleValueRemoved),
+                    BattleDecisionTrace.Field("stationary_shots", action.ShotsToFire),
+                    BattleDecisionTrace.Field("conventional_target", shot?.Target.Soldier.Id),
+                    BattleDecisionTrace.Field("conventional_target_squad", shot?.Target.BattleSquad.Id),
+                    BattleDecisionTrace.Field("conventional_weapon", shot?.Weapon.Template.Id),
+                    BattleDecisionTrace.Field("conventional_range", shot?.Range),
+                    BattleDecisionTrace.Field("conventional_score", shot?.Score),
+                    BattleDecisionTrace.Field("conventional_shots", shot?.ShotsToFire),
+                    BattleDecisionTrace.Field("conventional_reason", soldier.EquippedRangedWeapons.Count == 0 ? "no_equipped_weapon"
+                        : !soldier.EquippedRangedWeapons.Any(w => w.LoadedAmmo > 0) ? "no_loaded_equipped_weapon"
+                        : shot == null ? "no_conventional_target_in_search_envelope"
+                        : shot.Score <= 0 ? "nonpositive_exchange" : "positive_exchange")
+                ]).Render());
+            }
+            return records;
         }
 
         internal SquadEngagementDecision ChooseEngagementOption(
@@ -555,7 +600,8 @@ namespace OnlyWar.Battles
                     feasibleSpeed,
                     primary,
                     rootActions,
-                    friendlySquads));
+                    friendlySquads,
+                    ProjectPrimaryCentroid(squad, primary, frame)));
             float discountedNetRate =
                 EngagementPotential.EngagementPotentialDiscount
                 * projectedPotential.NetRateValue;
@@ -711,6 +757,25 @@ namespace OnlyWar.Battles
             return new ValueTuple<int, int>(dx, dy);
         }
 
+        private static ValueTuple<float, float>? ProjectPrimaryCentroid(
+            BattleSquad pursuer,
+            BattleSquad primary,
+            SquadEngagementFrame frame)
+        {
+            if (primary == null || frame == null || !IsPursuitRole(frame.Role)) return null;
+            float distance = Math.Max(0, frame.QuarryRunSpeed);
+            if (distance <= 0) return null;
+            (float targetX, float targetY) = BattleEngagementFrameBuilder.Centroid(primary);
+            (float pursuerX, float pursuerY) = BattleEngagementFrameBuilder.Centroid(pursuer);
+            float headingX = targetX - pursuerX;
+            float headingY = targetY - pursuerY;
+            float length = (float)Math.Sqrt(headingX * headingX + headingY * headingY);
+            return length <= 0.0001f
+                ? (targetX, targetY)
+                : (targetX + headingX / length * distance,
+                    targetY + headingY / length * distance);
+        }
+
         private (float FeasibleSpeed, ValueTuple<float, float> Centroid)
             ProjectFeasibleSquadEndpoint(
                 BattleSquad squad,
@@ -823,7 +888,11 @@ namespace OnlyWar.Battles
                     bulk,
                     direction);
                 rootActions.Add(action);
-                float awardedRemoval = action.ExpectedEnemyBattleValueRemoved;
+                float awardedRemoval = action.Kind is PlannedSoldierActionKind.Shoot
+                        or PlannedSoldierActionKind.AreaAttack
+                        or PlannedSoldierActionKind.BlastAttack
+                    ? action.ExpectedEnemyBattleValueRemoved
+                    : 0;
                 if (action.TargetId.HasValue && awardedRemoval > 0)
                 {
                     int targetId = action.TargetId.Value;
@@ -904,6 +973,7 @@ namespace OnlyWar.Battles
         internal void LogEngagementOptions(SquadEngagementDecision decision)
         {
             if (!BattleLog.IsEnabled) return;
+            foreach (string diagnostic in decision.PursuitDiagnostics ?? []) BattleLog.Write(diagnostic);
             float runnerUp = decision.Candidates
                 .Where(candidate => !ReferenceEquals(candidate, decision.Chosen))
                 .Select(candidate => candidate.Score)

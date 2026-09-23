@@ -80,7 +80,8 @@ namespace OnlyWar.Battles
             float FeasibleSpeed = 0,
             BattleSquad Primary = null,
             IReadOnlyList<PlannedSoldierAction> Actions = null,
-            IReadOnlyCollection<BattleSquad> FriendlySquads = null);
+            IReadOnlyCollection<BattleSquad> FriendlySquads = null,
+            ValueTuple<float, float>? PrimaryCentroid = null);
 
         /// <summary>
         /// The auditable decomposition of Φ. Net-rate value conserves finite casualty pools;
@@ -122,8 +123,7 @@ namespace OnlyWar.Battles
                 finiteExchangeValue,
                 EvaluateReadiness(state),
                 EvaluateScreenRole(state)
-                    + EvaluatePursuitContactProgress(state)
-                    + EvaluatePursuitClosingValue(state),
+                    + EvaluatePursuitContactProgress(state),
                 EvaluateFireWindow(state),
                 EvaluateMorale(state),
                 EvaluateCommandAura(state),
@@ -165,19 +165,28 @@ namespace OnlyWar.Battles
                     0,
                     EngagementExchangeModel.Distance(
                         state.Centroid,
-                        BattleEngagementFrameBuilder.Centroid(enemy)));
+                        EnemyCentroid(state, enemy)));
+                bool firePreservingPursuit = state.Frame != null
+                    && IsFirePreservingPursuitRole(state.Frame.Role)
+                    && !state.Profile.IsContactSeeking;
                 float desiredRange = state.Profile.IsContactSeeking
                     ? 1f
-                    : Math.Max(1f, state.Profile.EffectiveEngagementRange);
+                    : firePreservingPursuit
+                        ? Math.Max(1f, state.Profile.UsefulFireRange)
+                        : Math.Max(1f, state.Profile.EffectiveEngagementRange);
                 float turnsToUsefulRange = TurnsToUsefulRange(state, range, desiredRange);
                 // Pursuit fire-support saturates at the useful band's boundary. Once it is inside
                 // that band, moving still changes the live shot but does not create a new arrival
                 // opportunity worth buying with a whole-battle horizon. Other doctrines retain
                 // the actual-in-band destination rate so contact geometry can still be valued.
-                float destinationRange = state.Frame != null
-                    && IsPursuitRole(state.Frame.Role)
-                    ? Math.Max(1f, desiredRange)
-                    : Math.Min(range, Math.Max(desiredRange, 0));
+                float destinationRange = firePreservingPursuit
+                    // Outside useful fire, price arrival at its boundary. Inside it, retain the
+                    // actual geometry so the exchange curve -- not another shaping bounty --
+                    // decides whether moving closer is worth the shot or aim it costs.
+                    ? Math.Min(range, desiredRange)
+                    : state.Frame != null && IsPursuitRole(state.Frame.Role)
+                        ? Math.Max(1f, desiredRange)
+                        : Math.Min(range, Math.Max(desiredRange, 0));
                 float currentOutgoingRate = _exchange.EvaluateOutgoingExchangeRate(
                     state.Squad,
                     enemy,
@@ -234,7 +243,9 @@ namespace OnlyWar.Battles
                     currentOutgoingRate,
                     destinationOutgoingRate,
                     turnsToUsefulRange,
-                    targetValue);
+                    targetValue,
+                    firePreservingPursuit ? expectedExchangeTurns : float.PositiveInfinity,
+                    firePreservingPursuit);
             }
             float friendlyPool = Math.Max(0, state.Profile.TotalAbleBattleValue);
             float incomingValue = SaturateFinitePool(incomingOpportunity, friendlyPool);
@@ -361,7 +372,9 @@ namespace OnlyWar.Battles
             float currentRate,
             float destinationRate,
             float turnsToUsefulRange,
-            float targetBattleValue)
+            float targetBattleValue,
+            float maximumDelayTurns = float.PositiveInfinity,
+            bool destinationDefinesUsefulFire = false)
         {
             if (!float.IsFinite(currentRate)
                 || !float.IsFinite(destinationRate)
@@ -376,42 +389,49 @@ namespace OnlyWar.Battles
 
             float scale = targetBattleValue / AccessValueTurns;
             float nonNegativeCurrent = Math.Max(0, currentRate);
-            // HELPLESSNESS IS MEASURED AGAINST THE PLINKING FLOOR, NOT AGAINST `scale`.
-            //
-            // `scale` is a tempo MAGNITUDE -- a fifth of the target's battle value, i.e. the rate
-            // that would clear the enemy squad in AccessValueTurns. No real squad removes 20% of
-            // an enemy squad per turn, so using it as the reference for "is my current fire
-            // useful" pinned this factor near 1 for every squad that was shooting perfectly well.
-            // Against a 200-BV mob a squad removing 3 BV a turn still scored 0.93 helpless, and
-            // the summary above this method -- "approaches zero smoothly as current fire becomes
-            // useful" -- was only ever true against a target so weak that a fifth of its worth
-            // was a rate a squad could actually reach.
-            //
-            // The engine already defines the rate below which fire is worth nothing:
-            // RangedEffectivenessCurve.NegligibleRemovalFraction, the share of target battle
-            // value per turn under which a curve is treated as flat zero. That is the honest zero
-            // point for "contributing", and it is a REMOVAL RATE, so it is dimensionally the same
-            // kind of thing as currentRate. A squad exactly at the plinking floor is half
-            // helpless; one an order of magnitude above it is nearly not helpless at all.
-            //
-            // Note this is deliberately NOT a fraction of what the squad could achieve by moving.
-            // A squad at 5% of its best rate is not helpless, it is merely suboptimally placed,
-            // and the loss from that is already priced by the net-rate exchange integral above.
-            // Access exists to price being unable to contribute AT ALL; keying it to the
-            // destination rate would double-count the exchange term and reproduce the same bug.
-            float negligibleRate =
-                targetBattleValue * RangedEffectivenessCurve.NegligibleRemovalFraction;
-            float helplessness = negligibleRate / (negligibleRate + nonNegativeCurrent);
+            float helplessness;
+            if (destinationDefinesUsefulFire)
+            {
+                // The useful-range boundary supplies the rate that ends the access deficit. This
+                // smoothstep is exactly zero at and inside that boundary; improvements after
+                // arrival belong solely to the exchange curve. It therefore cannot pay twice for
+                // closing within useful fire.
+                float deficitFraction = Math.Clamp(
+                    (destinationRate - nonNegativeCurrent) / destinationRate,
+                    0,
+                    1);
+                helplessness = deficitFraction * deficitFraction
+                    * (3f - 2f * deficitFraction);
+            }
+            else
+            {
+                // Preserve the existing non-pursuit definition: access there is the inability to
+                // contribute above the shared plinking floor, not arrival at a pursuit fire band.
+                float negligibleRate =
+                    targetBattleValue * RangedEffectivenessCurve.NegligibleRemovalFraction;
+                helplessness = negligibleRate / (negligibleRate + nonNegativeCurrent);
+            }
             float viability = destinationRate / (scale + destinationRate);
             float tempoRate = scale * helplessness * viability;
-            return -tempoRate * turnsToUsefulRange;
+            float boundedDelay = Math.Min(turnsToUsefulRange, maximumDelayTurns);
+            return -tempoRate * boundedDelay;
         }
 
         private float EvaluateReadiness(State state)
         {
             if (state.Actions != null)
             {
-                return state.Actions.Sum(action => action?.ReadinessValue ?? 0f);
+                float readiness = state.Actions.Sum(action => action?.ReadinessValue ?? 0f);
+                bool pursuitPreparation = state.Frame != null
+                    && IsFirePreservingPursuitRole(state.Frame.Role)
+                    && state.Actions.Any(IsFirePreparation);
+                // Preparation is stored value only while its eventual shot survives the quarry's
+                // intervening movement. EvaluateFireWindow uses the same action descriptor and
+                // projected geometry, so ready/reload/aim cannot retain an abstract readiness
+                // bonus after the actual firing opportunity has closed.
+                return !pursuitPreparation || EvaluateFireWindow(state) > 0
+                    ? readiness
+                    : 0;
             }
 
             // The root has no projected action descriptors. Price the readiness currently stored
@@ -448,30 +468,24 @@ namespace OnlyWar.Battles
                 aim.Item2,
                 range,
                 aim.Item2.Template.Accuracy + aim.Item3 + 1);
-            return ReadinessForPreparedShot(shooter, shot);
-        }
-
-        internal static float ReadinessForPreparedShot(
-            BattleSoldier soldier,
-            RangedTargetEvaluation shot)
-        {
-            if (soldier == null
-                || shot == null
-                || shot.ExpectedEnemyBattleValueRemoved <= 0)
-            {
-                return 0;
-            }
-
-            float targetBattleValue = Math.Max(
-                1,
-                SquadPlanningServices.BattleValueOf(shot.Target));
-            float effectiveRemovalFraction = Math.Clamp(
-                shot.ExpectedEnemyBattleValueRemoved / targetBattleValue,
-                0,
-                1);
-            return SquadPlanningServices.BattleValueOf(soldier)
-                * 0.05f
-                * effectiveRemovalFraction;
+            // A stored aim is worth the best per-turn value it can still be cashed for: fire it now,
+            // or keep aiming at the rate the planner would price that Aim at, both net of the
+            // rounds they spend. This is the same currency as outgoing fire and as the projected
+            // Aim action's readiness (RangedTargetSelector.EvaluateFireTiming), so the potential
+            // telescopes and aiming is never valued below the shot it prepares. Until 2026-09-22
+            // both sides used 5% of the shooter's battle value times the removal fraction, about a
+            // tenth of the shot, which made any squad whose soldiers chose to aim look idle to the
+            // option scorer.
+            return _ranged.EvaluateFireTiming(
+                    shooter,
+                    target,
+                    shot,
+                    aim.Item2,
+                    range,
+                    aim.Item3,
+                    bulkMultiplier: 0,
+                    aimMultiplier: 1f)
+                .StoredReadiness;
         }
 
         private static float EvaluateMorale(State state)
@@ -501,26 +515,8 @@ namespace OnlyWar.Battles
                 BattleEngagementFrameBuilder.Centroid(state.Primary));
             float projectedDistance = EngagementExchangeModel.Distance(
                 state.Centroid,
-                BattleEngagementFrameBuilder.Centroid(state.Primary));
+                EnemyCentroid(state, state.Primary));
             return projectedDistance < currentDistance - 0.001f;
-        }
-
-        private static float EvaluatePursuitClosingValue(State state)
-        {
-            if (state.Frame == null
-                || !IsPursuitRole(state.Frame.Role)
-                || state.FeasibleSpeed <= 0
-                || state.Frame.QuarryRunSpeed <= 0
-                || state.FeasibleSpeed >= state.Frame.QuarryRunSpeed)
-            {
-                return 0;
-            }
-
-            float closingFraction = Math.Clamp(
-                state.FeasibleSpeed / Math.Max(0.1f, state.Frame.QuarryRunSpeed),
-                0,
-                1);
-            return -state.Profile.TotalAbleBattleValue * (1f - closingFraction);
         }
 
         private float EvaluateCommandAura(State state)
@@ -655,9 +651,9 @@ namespace OnlyWar.Battles
         ///
         /// <para>The quarry's speed is deliberately absent. A positional potential answers "how
         /// good is standing here"; how long the ground takes to cover is a question about time,
-        /// and is priced by the access term and by
-        /// <see cref="EvaluatePursuitClosingValue"/>. Splitting them keeps each term telescoping
-        /// on its own.</para>
+        /// and is priced by evaluating both the pursuer and quarry at the same projected instant.
+        /// That geometry makes a hold open the range and an advance close it only by the net
+        /// feasible movement, without a separate speed-ratio penalty.</para>
         ///
         /// <para>The saturating form has no flat region, so there is always a gradient toward the
         /// quarry however far away it is. The old form went flat once the band pressure clamped,
@@ -683,20 +679,21 @@ namespace OnlyWar.Battles
 
             float projectedDistance = EngagementExchangeModel.Distance(
                 state.Centroid,
-                BattleEngagementFrameBuilder.Centroid(state.Primary));
-            // A squad that keeps shooting while it pursues wants the near edge of its band; one
-            // closing to contact, or pressing without fire, wants contact or its reach.
+                EnemyCentroid(state, state.Primary));
+            // A squad that keeps shooting while it pursues seeks the first useful firing
+            // opportunity. One closing to contact, or pressing without fire, retains the prior
+            // contact/reach objective.
             bool holdsFireWhilePursuing = IsFirePreservingPursuitRole(state.Frame.Role)
                 && !state.Profile.IsContactSeeking
                 && state.Profile.PreferredBandUpper > state.Profile.PreferredBandLower;
             float desiredRange = state.Profile.IsContactSeeking
                 ? 1f
                 : holdsFireWhilePursuing
-                    ? state.Profile.PreferredBandLower
+                    ? Math.Max(1f, state.Profile.UsefulFireRange)
                     : Math.Max(1f, state.Profile.PreferredBandUpper);
             float span = Math.Max(
                 holdsFireWhilePursuing
-                    ? state.Profile.PreferredBandUpper - state.Profile.PreferredBandLower
+                    ? state.Profile.PreferredBandUpper - desiredRange
                     : 0f,
                 Math.Max(1f, state.Profile.MoveSpeed) * ContactProgressHalfValueStrides);
             float excess = Math.Max(0, projectedDistance - desiredRange);
@@ -706,8 +703,7 @@ namespace OnlyWar.Battles
         private float EvaluateFireWindow(State state)
         {
             if (state.Actions == null
-                || !state.Actions.Any(action =>
-                    action?.Kind == PlannedSoldierActionKind.Aim)
+                || !state.Actions.Any(IsFirePreparation)
                 || state.Frame == null
                 || !IsFirePreservingPursuitRole(state.Frame.Role)
                 || state.Profile.IsContactSeeking
@@ -727,8 +723,11 @@ namespace OnlyWar.Battles
             foreach (BattleSoldier shooter in state.Squad.AbleSoldiers
                 .OrderBy(soldier => soldier.Soldier.Id))
             {
+                PlannedSoldierAction preparation = state.Actions.FirstOrDefault(
+                    action => action?.SoldierId == shooter.Soldier.Id
+                        && IsFirePreparation(action));
                 if (!_grid.IsSoldierPlaced(shooter.Soldier.Id)
-                    || shooter.EquippedRangedWeapons.Count == 0)
+                    || preparation == null)
                 {
                     continue;
                 }
@@ -740,16 +739,37 @@ namespace OnlyWar.Battles
                     .OrderBy(candidate => candidate.Soldier.Id))
                 {
                     foreach (RangedWeapon weapon in shooter.EquippedRangedWeapons
-                        .Where(candidate => !candidate.Template.IsTemplateWeapon
-                            && candidate.LoadedAmmo > 0)
+                        .Concat(shooter.RangedWeapons)
+                        .Where(candidate => candidate.Template.Id == preparation.WeaponTemplateId
+                            && !candidate.Template.IsTemplateWeapon)
+                        .Distinct()
                         .OrderByDescending(candidate => candidate.Template.DamageMultiplier)
                         .ThenBy(candidate => candidate.Template.Id))
                     {
+                        float currentRange = _grid.GetDistanceBetweenSoldiers(
+                            shooter.Soldier.Id,
+                            target.Soldier.Id);
+                        float rootPairRange = EngagementExchangeModel.Distance(
+                            BattleEngagementFrameBuilder.Centroid(state.Squad),
+                            BattleEngagementFrameBuilder.Centroid(state.Primary));
+                        float projectedPairRange = EngagementExchangeModel.Distance(
+                            state.Centroid,
+                            EnemyCentroid(state, state.Primary));
+                        float rangeAfterThisTurn = Math.Max(
+                            0,
+                            currentRange + projectedPairRange - rootPairRange);
+                        int remainingPreparationTurns = RemainingPreparationTurns(
+                            shooter,
+                            weapon,
+                            preparation);
                         RangedTargetEvaluation evaluation = _ranged.EvaluatePursuitFireWindowShot(
                             shooter,
                             target,
                             weapon,
-                            quarrySpeed);
+                            rangeAfterThisTurn,
+                            quarrySpeed,
+                            remainingPreparationTurns,
+                            allowPendingPreparation: true);
                         if (evaluation == null
                             || evaluation.HitProbability <= RangedTargetSelector.StickyMinimumHitProbability
                             || evaluation.Score <= 0)
@@ -777,7 +797,10 @@ namespace OnlyWar.Battles
                     SquadPlanningServices.BattleValueOf(best.Target) - alreadyAwarded);
                 float contribution = Math.Min(
                     remainingValue,
-                    Math.Max(0, best.Score));
+                    Math.Max(0, best.Score))
+                    * (float)Math.Pow(
+                        EngagementExchangeModel.EngagementFutureDiscount,
+                        1 + RemainingPreparationTurns(shooter, best.Weapon, preparation));
                 if (contribution <= 0)
                 {
                     continue;
@@ -786,10 +809,40 @@ namespace OnlyWar.Battles
                 projectedValue += contribution;
             }
 
-            return projectedValue
-                * (float)Math.Pow(
-                    EngagementExchangeModel.EngagementFutureDiscount,
-                    RangedTargetSelector.PursuitFireWindowTurns);
+            return projectedValue;
         }
+
+        private static bool IsFirePreparation(PlannedSoldierAction action) =>
+            action?.Kind is PlannedSoldierActionKind.Aim
+                or PlannedSoldierActionKind.Ready
+                or PlannedSoldierActionKind.Reload;
+
+        private static int RemainingPreparationTurns(
+            BattleSoldier shooter,
+            RangedWeapon weapon,
+            PlannedSoldierAction action)
+        {
+            if (action.Kind == PlannedSoldierActionKind.Aim)
+            {
+                int resultingAim = shooter.Aim is ValueTuple<int, RangedWeapon, int> aim
+                    && aim.Item1 == action.TargetId
+                    && aim.Item2 == weapon
+                        ? aim.Item3 + 1
+                        : 0;
+                return Math.Max(0, RangedTargetSelector.FullAimBonusTurns - resultingAim);
+            }
+            if (action.Kind == PlannedSoldierActionKind.Reload)
+            {
+                int progressAfterThisTurn = weapon.ReloadProgress + 1;
+                return Math.Max(0, weapon.Template.ReloadTime - progressAfterThisTurn)
+                    + RangedTargetSelector.FullAimBonusTurns;
+            }
+            return RangedTargetSelector.FullAimBonusTurns;
+        }
+
+        private static ValueTuple<float, float> EnemyCentroid(State state, BattleSquad enemy) =>
+            state.PrimaryCentroid.HasValue && enemy?.Id == state.Primary?.Id
+                ? state.PrimaryCentroid.Value
+                : BattleEngagementFrameBuilder.Centroid(enemy);
     }
 }

@@ -264,7 +264,7 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void Pursuit_RunPressureTapersAcrossPreferredBand()
+    public void Pursuit_PositionProgressSaturatesAtUsefulFireRange()
     {
         // Contact progress is a POSITION VALUE, so RoleTerm is the ground a candidate gains,
         // not standing pressure to move. Until 2026-09-20 this asserted the opposite shape --
@@ -277,13 +277,15 @@ public class SquadEngagementPlanningTests
         // further, and a squad outside the band does. What changed: the marginal value of a yard
         // now RISES as the squad approaches, because the potential saturates as it enters the
         // band. The taper the old name described was the bug.
-        float[] distances = [70, 85, 100];
+        float[] distances = [100, 115, 130];
         List<float> runTerms = [];
         foreach (int distance in distances)
         {
             BattleSquad pursuer = Squad("Band Pursuer", 81_250 + distance, 20, 0.05f);
             BattleSquad quarry = Squad("Band Quarry", 82_250 + distance, 10, 0.9f);
             EquipRifle(pursuer.Soldiers[0], 91_250 + distance, range: 100, damage: 20);
+            ((Soldier)pursuer.Soldiers[0].Soldier).Dexterity = 20;
+            ((Soldier)pursuer.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
             EquipMelee(quarry.Soldiers[0], 92_250 + distance);
             ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 8;
             ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = 4;
@@ -571,12 +573,11 @@ public class SquadEngagementPlanningTests
     }
 
     /// <summary>
-    /// A chase closes at the difference of the two speeds. Pricing the delay against the
-    /// pursuer's own move understates it every turn and re-pays the same tempo bonus for an
-    /// arrival that keeps receding.
+    /// An arrival beyond the existing exchange horizon is equally unavailable at ordinary and
+    /// narrow closing rates. Capping it prevents the inverse-closing-rate blow-up.
     /// </summary>
     [Fact]
-    public void AccessPotential_PricesDelayAgainstTheNetClosingRate()
+    public void PursuitAccessDelayBeyondThePlanningHorizon_IsBoundedAtEveryClosingRate()
     {
         // The pursuer moves 6 in both cases; only the quarry's speed changes.
         (float Access, float Quarry) crawling = PursuitAccessValue(1, quarryMoveSpeed: 0.2f);
@@ -584,14 +585,9 @@ public class SquadEngagementPlanningTests
 
         string detail = $"crawling={crawling.Access:F4} (quarry {crawling.Quarry:F2}), "
             + $"running={running.Access:F4} (quarry {running.Quarry:F2})";
-        Assert.True(crawling.Access < 0, detail);
         Assert.True(running.Quarry > crawling.Quarry, detail);
-        // Net closing shrinks from ~6 to ~3, so the same gap takes materially longer and the
-        // penalty for not yet being there is materially larger. Under the raw-move calculation
-        // the two were identical.
-        Assert.True(
-            running.Access < crawling.Access * 1.1f,
-            $"a faster quarry did not lengthen the priced delay: {detail}");
+        Assert.Equal(0, crawling.Access);
+        Assert.Equal(0, running.Access);
     }
 
     /// <summary>
@@ -601,14 +597,9 @@ public class SquadEngagementPlanningTests
     /// speed, scores zero, the potential difference stops telescoping, and the term becomes a
     /// per-turn bounty for moving.
     ///
-    /// <para>SCOPED DELIBERATELY. Both sampled speeds are above the quarry's, because
-    /// EngagementPotential.EvaluatePursuitClosingValue is a KNOWN, REMAINING violation of this
-    /// invariant: it reads the candidate's speed to penalise a half-hearted chase, and it lands
-    /// in the same RoleValue this test reads. It is bounded, it only fires when the pursuer is
-    /// slower than its quarry, and its sign pushes toward standing still rather than toward
-    /// moving, so it is not the treadmill this round removed — but it is not a state function
-    /// either, and whether "am I keeping up" belongs in Φ at all is an open design question.
-    /// Widening this fixture's speeds below the quarry's will fail the test, correctly.</para>
+    /// <para>The former candidate-speed penalty was removed once both endpoints were projected
+    /// over the same interval. Speed now matters through the resulting separation, so two ways of
+    /// reaching the same state have the same potential.</para>
     /// </summary>
     [Fact]
     public void ContactProgressPotential_DoesNotDependOnTheSpeedThatReachedTheState()
@@ -716,9 +707,7 @@ public class SquadEngagementPlanningTests
         // The arrival never happens, so there is no delay to buy out and nothing to gain from
         // closing. The squad should be scored on the fire it can deliver where it stands.
         Assert.Equal(0, uncatchable.Access);
-        Assert.True(
-            catchable.Access < 0,
-            "a pursuer that can still close keeps a finite access penalty");
+        Assert.Equal(0, catchable.Access);
     }
 
     private float AccessValueAtRange(int index, float distance)
@@ -1870,6 +1859,159 @@ public class SquadEngagementPlanningTests
                 + $"({sidearm:0.######}) by orders of magnitude, not by a margin");
         Assert.True(realGun > 0.1f, $"a working rifle scored {realGun:0.######}");
         Assert.True(sidearm < 0.01f, $"a pistol against power armour scored {sidearm:0.######}");
+    }
+
+    [Fact]
+    public void UsefulFireRange_CanBeFarOutsideTheOptimalExchangeRange()
+    {
+        BattleSquad shooters = Squad("Useful Rifle", 71_010, 15, 0.05f);
+        BattleSquad armedTarget = Squad("Armed Target", 72_010, 10, 0.05f);
+        EquipRifle(shooters.Soldiers[0], 75_010, 1_000, 20);
+        EquipRifle(armedTarget.Soldiers[0], 75_011, 1_000, 20);
+        BattleGridManager grid = new();
+        Place(grid, shooters, true, 0, 0);
+        Place(grid, armedTarget, false, 400, 0);
+
+        BattleSquadCapabilityProfile profile = BattleEngagementFrameBuilder
+            .Build([shooters], [armedTarget]).Profiles[shooters.Id];
+
+        Assert.True(profile.UsefulFireRange > 0);
+        Assert.True(
+            profile.EffectiveEngagementRange > profile.UsefulFireRange + 200,
+            $"return fire should put the exchange optimum ({profile.EffectiveEngagementRange:F1}) "
+                + $"substantially beyond useful-fire onset ({profile.UsefulFireRange:F1})");
+    }
+
+    [Fact]
+    public void UsefulFireRange_DistinguishesIneffectiveFireFromAWeaponThatWorksAfterClosing()
+    {
+        BattleSquad ineffective = Squad("Ineffective", 71_020, 10, 0.05f);
+        BattleSquad shortRanged = Squad("Short Ranged", 71_021, 10, 0.05f);
+        BattleSquad impossibleTarget = Squad("Impossible Target", 72_020, 10, 0.05f);
+        BattleSquad flakTarget = Squad("Flak Target", 72_021, 10, 0.05f);
+        EquipPistol(ineffective.Soldiers[0], 75_020, 350, 3);
+        EquipAutogun(shortRanged.Soldiers[0], 75_021);
+        impossibleTarget.Soldiers[0].Armor = new Armor(
+            new ArmorTemplate(74_020, "Heavy Test Armor", 100, 0));
+        flakTarget.Soldiers[0].Armor = new Armor(
+            new ArmorTemplate(74_021, "Flak Test Armor", 10, 0));
+        BattleGridManager grid = new();
+        Place(grid, ineffective, true, 0, 0);
+        Place(grid, shortRanged, true, 0, 10);
+        Place(grid, impossibleTarget, false, 900, 0);
+        Place(grid, flakTarget, false, 900, 10);
+
+        BattleSquadCapabilityProfile useless = BattleEngagementFrameBuilder
+            .Build([ineffective], [impossibleTarget]).Profiles[ineffective.Id];
+        BattleSquadCapabilityProfile closesToWork = BattleEngagementFrameBuilder
+            .Build([shortRanged], [flakTarget]).Profiles[shortRanged.Id];
+
+        Assert.Equal(0, useless.UsefulFireRange);
+        Assert.Equal(0, useless.EffectiveEngagementRange);
+        Assert.InRange(closesToWork.UsefulFireRange, 1, 999);
+        Assert.True(closesToWork.PeakRangedRemovalFraction > 0);
+    }
+
+    [Fact]
+    public void UsefulFireRange_IsZeroWithoutAvailableAmmunition()
+    {
+        BattleSquad shooters = Squad("Empty Rifle", 71_030, 10, 0.05f);
+        BattleSquad target = Squad("Target", 72_030, 10, 0.05f);
+        RangedWeapon rifle = EquipRifle(shooters.Soldiers[0], 75_030, 1_000, 20);
+        rifle.LoadedAmmo = 0;
+        BattleGridManager grid = new();
+        Place(grid, shooters, true, 0, 0);
+        Place(grid, target, false, 100, 0);
+
+        BattleSquadCapabilityProfile profile = BattleEngagementFrameBuilder
+            .Build([shooters], [target]).Profiles[shooters.Id];
+
+        Assert.Equal(0, profile.UsefulFireRange);
+        Assert.Equal(0, profile.UsableRangedBattleValue);
+    }
+
+    [Fact]
+    public void UsefulFireRange_MixedLoadoutUsesActualCombinedRemovalRatherThanLongestReach()
+    {
+        BattleSquad mixed = Squad(
+            "Mixed Fire Team",
+            [(71_031, 10), (71_032, 10)],
+            meleeFraction: 0.05f);
+        BattleSquad target = Squad("Flak Target", 72_031, 10, 0.05f);
+        EquipRifle(mixed.Soldiers[0], 75_031, 2_000, 1);
+        EquipAutogun(mixed.Soldiers[1], 75_032);
+        target.Soldiers[0].Armor = new Armor(
+            new ArmorTemplate(74_031, "Flak Test Armor", 10, 0));
+        BattleGridManager grid = new();
+        Place(grid, mixed, true, 0, 0);
+        mixed.Soldiers[1].TopLeft = (0, 2);
+        grid.PlaceSoldier(mixed.Soldiers[1], true, [(0, 2)]);
+        Place(grid, target, false, 900, 0);
+
+        BattleSquadCapabilityProfile profile = BattleEngagementFrameBuilder
+            .Build([mixed], [target]).Profiles[mixed.Id];
+
+        Assert.Equal(1_500, profile.PreferredBandUpper, 3);
+        Assert.InRange(profile.UsefulFireRange, 1, 999);
+    }
+
+    [Fact]
+    public void UsefulFireRange_IsZeroForMeleeOnlySquad()
+    {
+        BattleSquad melee = Squad("Melee Only", 71_033, 10, 0.95f);
+        BattleSquad target = Squad("Target", 72_033, 10, 0.05f);
+        EquipMelee(melee.Soldiers[0], 75_033);
+        BattleGridManager grid = new();
+        Place(grid, melee, true, 0, 0);
+        Place(grid, target, false, 20, 0);
+
+        BattleSquadCapabilityProfile profile = BattleEngagementFrameBuilder
+            .Build([melee], [target]).Profiles[melee.Id];
+
+        Assert.Equal(0, profile.UsefulFireRange);
+        Assert.Equal(0, profile.EffectiveEngagementRange);
+    }
+
+    [Fact]
+    public void PursuitScoring_UsesUsefulFireRangeForItsPositionTarget()
+    {
+        BattleSquad pursuer = Squad("Pursuer", 71_040, 15, 0.05f);
+        BattleSquad quarry = Squad("Quarry", 72_040, 10, 0.05f);
+        EquipRifle(pursuer.Soldiers[0], 75_040, 1_000, 20);
+        BattleGridManager grid = new();
+        Place(grid, pursuer, true, 0, 0);
+        Place(grid, quarry, false, 400, 0);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [pursuer.Id] = new(
+                EngagementSquadRole.Pursuit,
+                QuarryRunSpeed: 3,
+                RoleTargets: [quarry])
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired = BattleEngagementFrameBuilder
+            .Build([pursuer], [quarry], constraints);
+        BattleSquadPlanner planner = Planner(grid, pursuer, quarry);
+        SquadEngagementDecision baseline = planner.ChooseEngagementOption(
+            pursuer,
+            paired.Frames[pursuer.Id],
+            paired.Profiles,
+            paired.Frames,
+            [quarry]);
+        Dictionary<int, BattleSquadCapabilityProfile> altered = paired.Profiles.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Key == pursuer.Id
+                ? entry.Value with { UsefulFireRange = entry.Value.UsefulFireRange + 10_000 }
+                : entry.Value);
+        SquadEngagementDecision afterCapabilityOnlyChange = planner.ChooseEngagementOption(
+            pursuer,
+            paired.Frames[pursuer.Id],
+            altered,
+            paired.Frames,
+            [quarry]);
+
+        Assert.NotEqual(
+            baseline.Candidates.Select(candidate => candidate.Score),
+            afterCapabilityOnlyChange.Candidates.Select(candidate => candidate.Score));
     }
 
     /// <summary>

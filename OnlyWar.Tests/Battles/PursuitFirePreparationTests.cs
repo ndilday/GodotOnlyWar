@@ -71,6 +71,9 @@ public sealed class PursuitFirePreparationTests
         Assert.True(ready.Succeeded);
         Assert.False(activity.FireCycleProgressedThisTurn);
         Assert.False(activity.FireCommitmentRemainsViable);
+        fixture.Metrics.RecordRound([]);
+        AgeOutStartup(fixture);
+        activity = Assert.Single(fixture.BuildActivities());
         Assert.Equal(ContactBreakResult.OrganizedForceDisengages, EvaluateContact(activity).Decision);
     }
 
@@ -111,6 +114,9 @@ public sealed class PursuitFirePreparationTests
         Assert.True(ready.Succeeded);
         Assert.False(activity.FireCycleProgressedThisTurn);
         Assert.False(activity.FireCommitmentRemainsViable);
+        fixture.Metrics.RecordRound([]);
+        AgeOutStartup(fixture);
+        activity = Assert.Single(fixture.BuildActivities());
         Assert.Equal(ContactBreakResult.OrganizedForceDisengages, EvaluateContact(activity).Decision);
     }
 
@@ -193,6 +199,16 @@ public sealed class PursuitFirePreparationTests
             new KeyValuePair<int, int>(fixture.Pursuer.Id, fixture.Quarry.Id)]);
         preparation.Execute(fixture.State);
         fixture.Metrics.RecordRound([preparation]);
+    }
+
+    private static void AgeOutStartup(Fixture fixture)
+    {
+        for (int turn = 0; turn < PursuitProgressPolicy.StartupGraceTurns; turn++)
+        {
+            fixture.Service.ReplaceCurrentTurnPursuitPairings([
+                new KeyValuePair<int, int>(fixture.Pursuer.Id, fixture.Quarry.Id)]);
+            fixture.Service.LogPursuitProgress();
+        }
     }
 
     private static BattleContactRules.Result EvaluateContact(PursuitPairActivity activity) =>

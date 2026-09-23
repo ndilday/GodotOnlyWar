@@ -59,12 +59,13 @@ namespace OnlyWar.Operations.Missions
             IReadOnlyList<EngagementParticipant> opposingParticipants = opposingSquads
                 .Select(squad => squad.ToEngagementParticipant())
                 .ToArray();
+            // Each squad plans its own part of the fight within its force, not the whole of it.
             double missionRange = missionSquads.Average(
                 squad => resolver.GetPreferredOpeningRange(
-                    squad.ToEngagementParticipant(), opposingParticipants));
+                    squad.ToEngagementParticipant(), opposingParticipants, missionParticipants));
             double opposingRange = opposingSquads.Average(
                 squad => resolver.GetPreferredOpeningRange(
-                    squad.ToEngagementParticipant(), missionParticipants));
+                    squad.ToEngagementParticipant(), missionParticipants, opposingParticipants));
             return (ushort)(opposingRange + (missionRange - opposingRange) * rangeModifier);
         }
     }

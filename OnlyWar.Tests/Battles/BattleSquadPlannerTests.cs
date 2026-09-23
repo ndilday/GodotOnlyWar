@@ -1055,10 +1055,15 @@ public class BattleSquadPlannerTests
     {
         BattleSquad shooters = CreateSquad("Jogging Rifle", 90_017);
         BattleSquad enemies = CreateSquad("Far Enemy", 90_018);
+        // The enemy behind the squad was added (2026-07-16) to prove a JOGGING soldier's shot
+        // ignores targets behind it; the jog firing arc now has its own test. It used to carry
+        // battle value 10,000, which only stayed inert while an aim was priced at 5% of the
+        // shooter's value. Since 2026-09-22 an aim is worth the per-turn value of the shot it
+        // prepares, so a 10,000-value enemy fifteen cells away is correctly worth standing still
+        // for -- that is a different scenario from "a squad beyond its preferred range closes".
         BattleSquad valuableBehindEnemies = CreateSquad(
-            "Valuable Enemy Behind",
-            90_019,
-            battleValue: 10_000);
+            "Enemy Behind",
+            90_019);
         BattleSoldier shooter = shooters.Soldiers[0];
         ((Soldier)shooter.Soldier).Dexterity = 16;
         RangedWeapon rifle = new(new RangedWeaponTemplate(
@@ -2041,6 +2046,48 @@ public class BattleSquadPlannerTests
         Assert.True(shots.Count >= 2, $"expected an opening volley, got {shots.Count} shots");
         Assert.True(shots.Select(shot => shot.TargetId).Distinct().Count() >= 2,
             "expected the opening volley to hit more than one target");
+    }
+
+    [Fact]
+    public void SelectBestRangedTarget_SpreadsAcrossTargetSquadFarFromTheRestOfTheEnemy()
+    {
+        // Grist Nine Epsilon, 2026-09-22: a withdrawal scattered the ork squads hundreds of cells
+        // apart, and the lane frame measured target laterals from the centroid of the WHOLE enemy
+        // force. Every shooter then preferred whichever man lay nearest the line toward that
+        // centroid, and 161 marines aimed at one ork. The lane is now the shooter's place in its
+        // own line mapped onto the target squad's line, so a distant decoy squad cannot collapse
+        // the spread.
+        BattleSquad shooters = CreateSquad(
+            "Line", (72_001, 2), (72_002, 2), (72_003, 2));
+        BattleSquad targets = CreateSquad(
+            "Targets", (72_101, 2), (72_102, 2), (72_103, 2));
+        BattleSquad decoy = CreateSquad("Decoy", (72_201, 2), (72_202, 2));
+        BattleGridManager grid = new();
+        for (int i = 0; i < shooters.Soldiers.Count; i++)
+        {
+            BattleSoldier shooter = shooters.Soldiers[i];
+            ((Soldier)shooter.Soldier).Dexterity = 20;
+            EquipAimTestRifle(shooter, 99_601 + i);
+            Place(grid, shooter, true, 0, i * 2);
+        }
+        for (int i = 0; i < targets.Soldiers.Count; i++)
+        {
+            Place(grid, targets.Soldiers[i], false, 20, i * 2);
+        }
+        // Far down the shooters' flank: under the old frame this dragged the enemy centroid off
+        // to one side and made the three targets near-identical in lateral terms.
+        Place(grid, decoy.Soldiers[0], false, 20, 400);
+        Place(grid, decoy.Soldiers[1], false, 22, 400);
+        BattleSquadPlanner planner = CreatePlanner(grid, shooters, targets, decoy);
+
+        List<int> chosen = shooters.Soldiers
+            .Select(shooter => planner.SelectBestRangedTarget(shooter, useBulk: false)
+                .Target.Soldier.Id)
+            .ToList();
+
+        Assert.Equal(
+            targets.Soldiers.Select(target => target.Soldier.Id),
+            chosen);
     }
 
     [Fact]

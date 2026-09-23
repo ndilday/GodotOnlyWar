@@ -22,8 +22,215 @@ namespace OnlyWar.Tests.Battles;
 /// evidence flags directly. The resolver tests cover the full battle loop; this fixture keeps the
 /// contact lifecycle deterministic and small enough to isolate one round at a time.
 /// </summary>
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public sealed class ActivePursuitContactLifecycleTests
 {
+    [Fact]
+    public void PursuitProgress_DistinguishesSpeedAdvantageFromActualSeparationAndReassignment()
+    {
+        Fixture fixture = CreateFixture(quarryX: 30);
+        List<string> log = [];
+        Action<string> previous = BattleLog.Sink;
+        try
+        {
+            BattleLog.Sink = log.Add;
+            Assign(fixture, fixture.Quarry);
+            fixture.Pursuer.Soldiers[0].CurrentSpeed = 6;
+            fixture.Quarry.Soldiers[0].CurrentSpeed = 5;
+            // A scalar speed advantage need not mean radial progress: leave both positions fixed.
+            fixture.Service.LogPursuitProgress();
+            string record = Assert.Single(log, line => line.StartsWith("PURSUIT_PROGRESS "));
+            Assert.Contains("declared_speed_delta=1 ", record);
+            Assert.Contains("declared_speed_not_evidence=true ", record);
+            Assert.Contains("separation_gain=0 ", record);
+            Assert.Contains("assignment_changed=true ", record);
+            Assert.Contains("history_window=1/4 ", record);
+            Assert.Contains("history_sample_valid=true ", record);
+            Assert.Contains("history_validity_reason=valid ", record);
+            Assert.Contains("history_reset_reason=none ", record);
+            Assert.Contains("startup_status=grace ", record);
+            Assert.Contains("observed_progress_contact_evidence=false ", record);
+            Assert.All(record.Split(' ').Skip(1), field => Assert.Contains("=", field));
+            log.Clear();
+            Assign(fixture, fixture.Quarry);
+            fixture.Service.LogPursuitProgress();
+            Assert.Contains("assignment_changed=false ", Assert.Single(log));
+            log.Clear();
+            Assign(fixture, fixture.OtherQuarry);
+            fixture.Service.LogPursuitProgress();
+            Assert.Contains($"previous_quarry={fixture.Quarry.Id} ", Assert.Single(log));
+            Assert.Contains("assignment_changed=true ", Assert.Single(log));
+            log.Clear();
+            Assign(fixture, fixture.OtherQuarry);
+            var blocked = new MoveAction(fixture.Pursuer.Soldiers[0], fixture.Grid,
+                (0, 0), (30, 0), 0);
+            blocked.Execute(fixture.State);
+            fixture.Service.LogPursuitProgress([blocked]);
+            Assert.Contains("succeeded=false", Assert.Single(log,
+                line => line.StartsWith("PURSUIT_MOVE_RESULT ")));
+        }
+        finally { BattleLog.Sink = previous; }
+    }
+
+    [Fact]
+    public void FollowShotTrace_ExplainsThePairAggregateBranchWithoutChangingPosture()
+    {
+        Fixture fixture = CreateFixture(quarryX: 3000);
+        List<string> log = [];
+        Action<string> previous = BattleLog.Sink;
+        try
+        {
+            BattleLog.Sink = log.Add;
+            fixture.Service.EvaluatePursuitResponse(BattleSide.Opposing, []);
+            string record = Assert.Single(log, line => line.StartsWith("FOLLOW_SHOT_EVAL "));
+            Assert.Contains("scope=pair_aggregate ", record);
+            Assert.Contains("pair_count=2 ", record);
+            Assert.Contains("ranged_pursuer=", record);
+            Assert.Contains("ranged_quarry=", record);
+            Assert.Contains("shot_turns=none ", record);
+            Assert.Contains("useful_attack_turns=none ", record);
+            Assert.Contains("ranged_destination_condition=useful_range ", record);
+            Assert.Contains("ranged_pursuer_move_speed=", record);
+            Assert.Contains("ranged_quarry_move_speed=", record);
+            Assert.Contains("ranged_unreachable_reason=", record);
+            Assert.Contains("reason=", record);
+            Assert.All(record.Split(' ').Skip(1), field => Assert.Contains("=", field));
+            var posture = fixture.Service.GetPursuitPosture(BattleSide.Attacker);
+            BattleLog.Sink = null;
+            Fixture untraced = CreateFixture(quarryX: 3000);
+            untraced.Service.EvaluatePursuitResponse(BattleSide.Opposing, []);
+            Assert.Equal(posture, untraced.Service.GetPursuitPosture(BattleSide.Attacker));
+        }
+        finally { BattleLog.Sink = previous; }
+    }
+
+    [Fact]
+    public void PursuitPosture_IsDecidedPerSquad_AndADrySquadThatCanCatchUpChases()
+    {
+        // Grist Nine Epsilon, 2026-09-22: posture was decided for the whole force, and a few
+        // marines with rounds left held hundreds of dry ones at standoff. Now each squad answers
+        // for itself: the loaded squad follows and shoots, the dry one chases.
+        TwoPursuerFixture fixture = CreateTwoPursuerFixture(drySquadSpeed: 10f);
+
+        fixture.Service.EvaluatePursuitResponse(BattleSide.Opposing, []);
+
+        Assert.Equal(
+            PursuitPosture.Follow,
+            fixture.Service.GetSquadPursuitPosture(BattleSide.Attacker, fixture.Loaded.Id));
+        Assert.Equal(
+            PursuitPosture.Press,
+            fixture.Service.GetSquadPursuitPosture(BattleSide.Attacker, fixture.Dry.Id));
+        Assert.Equal(PursuitPosture.Press, fixture.Service.GetPursuitPosture(BattleSide.Attacker));
+
+        Dictionary<int, EngagementRoleConstraint> constraints = [];
+        fixture.Service.BuildRoleConstraints(
+            BattleSide.Attacker,
+            [fixture.Loaded, fixture.Dry],
+            [fixture.Quarry],
+            constraints,
+            []);
+        Assert.Equal(EngagementSquadRole.Follow, constraints[fixture.Loaded.Id].Role);
+        Assert.Equal(EngagementSquadRole.Press, constraints[fixture.Dry.Id].Role);
+    }
+
+    [Fact]
+    public void DrySquadThatCannotCatchUp_StandsDown_WhileTheForceKeepsPursuing()
+    {
+        // The same dry squad, but the quarry outruns it: it breaks off, and since the loaded squad
+        // keeps pursuing it leaves the field instead of standing idle. Grist Nine Epsilon,
+        // 2026-09-22: 22 of 33 squads broke off and stood still for hundreds of turns.
+        TwoPursuerFixture fixture = CreateTwoPursuerFixture(drySquadSpeed: 4f);
+        int dryBattleValue = fixture.Dry.AbleSoldiers.Sum(soldier => soldier.EffectiveBattleValue);
+        int forceBattleValue = fixture.Metrics.BuildMetrics(BattleSide.Attacker).CurrentBattleValue;
+        List<BattleEvent> events = [];
+
+        BattleTerminalRequest terminal =
+            fixture.Service.EvaluatePursuitResponse(BattleSide.Opposing, events);
+
+        Assert.Null(terminal);
+        Assert.Equal(BattleSquadStatus.Disengaged, fixture.Dry.Status);
+        Assert.Equal(BattleSquadStatus.Active, fixture.Loaded.Status);
+        Assert.Contains(fixture.Dry.Id, fixture.State.AttackerSide.StoodDownSquadIds);
+        Assert.Contains(events, battleEvent =>
+            battleEvent.Type == BattleEventType.SquadDisengaged
+            && battleEvent.PrimarySquadId == fixture.Dry.Id);
+        Assert.Equal(PursuitPosture.Follow, fixture.Service.GetPursuitPosture(BattleSide.Attacker));
+        Assert.Equal(BattleSideIntent.Pursuing, fixture.State.AttackerSide.Intent);
+
+        // Standing down is not a casualty: the side's strength is unchanged.
+        Assert.Equal(dryBattleValue, fixture.State.AttackerSide.StoodDownBattleValue);
+        Assert.Equal(
+            forceBattleValue,
+            fixture.Metrics.BuildMetrics(BattleSide.Attacker).CurrentBattleValue);
+    }
+
+    [Fact]
+    public void PursuitTraceRecordsTheConcretePairSupplyingPressProjection()
+    {
+        Fixture fixture = CreateFixture(quarryX: 30);
+        ((Soldier)fixture.Pursuer.Soldiers[0].Soldier).MoveSpeed = 10;
+        ((Soldier)fixture.Quarry.Soldiers[0].Soldier).MoveSpeed = 6;
+        ((Soldier)fixture.OtherQuarry.Soldiers[0].Soldier).MoveSpeed = 8;
+        List<string> log = [];
+        Action<string> previous = BattleLog.Sink;
+        try
+        {
+            BattleLog.Sink = log.Add;
+            fixture.Service.EvaluatePursuitResponse(BattleSide.Opposing, []);
+            string record = Assert.Single(log, line => line.StartsWith("PURSUIT_EVAL "));
+            Assert.Contains($"press_contact_pursuer={fixture.Pursuer.Id} ", record);
+            Assert.Contains($"press_contact_quarry={fixture.Quarry.Id} ", record);
+            Assert.Contains("press_attack_phase_turns=", record);
+            Assert.Contains("press_contact_turns=", record);
+            Assert.DoesNotContain("press_attack_phase_turns=never", record);
+            string projection = Assert.Single(
+                log,
+                line => line.StartsWith("PRESS_CONTACT_PROJECTION "));
+            Assert.Contains("estimate_kind=hypothetical_press_to_contact", projection);
+            Assert.Contains("press_destination_condition=melee_contact_allowance", projection);
+            Assert.Contains("press_pursuer_move_speed=", projection);
+            Assert.Contains("press_quarry_move_speed=", projection);
+            Assert.Contains("press_unreachable_reason=none", projection);
+        }
+        finally { BattleLog.Sink = previous; }
+    }
+
+    [Fact]
+    public void LoggingDoesNotChangeObservedEvidenceOrContactDecision()
+    {
+        Action<string> previous = BattleLog.Sink;
+        try
+        {
+            BattleLog.Sink = null;
+            Fixture withoutLogging = CreateFixture(quarryX: 30);
+            Assign(withoutLogging, withoutLogging.Quarry);
+            Move(withoutLogging.Pursuer.Soldiers[0], withoutLogging, (0, 0), (4, 0), 4);
+            Move(withoutLogging.Quarry.Soldiers[0], withoutLogging, (30, 0), (32, 0), 2);
+            withoutLogging.Service.LogPursuitProgress();
+            PursuitPairActivity activityWithoutLogging =
+                Assert.Single(withoutLogging.BuildActivities());
+            ContactBreakResult decisionWithoutLogging = EvaluateContact(activityWithoutLogging)
+                .Decision;
+
+            BattleLog.Sink = _ => { };
+            Fixture withLogging = CreateFixture(quarryX: 30);
+            Assign(withLogging, withLogging.Quarry);
+            Move(withLogging.Pursuer.Soldiers[0], withLogging, (0, 0), (4, 0), 4);
+            Move(withLogging.Quarry.Soldiers[0], withLogging, (30, 0), (32, 0), 2);
+            withLogging.Service.LogPursuitProgress();
+            PursuitPairActivity activityWithLogging =
+                Assert.Single(withLogging.BuildActivities());
+            ContactBreakResult decisionWithLogging = EvaluateContact(activityWithLogging).Decision;
+
+            Assert.Equal(activityWithoutLogging, activityWithLogging);
+            Assert.Equal(decisionWithoutLogging, decisionWithLogging);
+        }
+        finally
+        {
+            BattleLog.Sink = previous;
+        }
+    }
+
     [Fact]
     public void TheoreticalProjectedShotWithoutSelectedFireAction_BreaksEqualSpeedContact()
     {
@@ -39,6 +246,8 @@ public sealed class ActivePursuitContactLifecycleTests
         Assert.False(activity.FireCycleProgressedThisTurn);
         Assert.False(activity.FireCommitmentRemainsViable);
 
+        ExhaustStartupGrace(fixture);
+        activity = Assert.Single(fixture.BuildActivities());
         BattleContactRules.Result result = EvaluateContact(activity);
 
         Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
@@ -103,6 +312,8 @@ public sealed class ActivePursuitContactLifecycleTests
 
         Assert.True(activity.FireCommitmentRemainsViable);
         Assert.False(activity.FireCycleProgressedThisTurn);
+        ExhaustStartupGrace(fixture);
+        activity = Assert.Single(fixture.BuildActivities());
         BattleContactRules.Result result = EvaluateContact(activity);
         Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
         Assert.Equal("stalled_pursuit", result.Reason);
@@ -122,8 +333,15 @@ public sealed class ActivePursuitContactLifecycleTests
         Assert.Equal(ContactBreakResult.RemainInContact, EvaluateContact(activity).Decision);
     }
 
+    // REVERSED 2026-09-22, deliberately. These two tests used to assert that an aim or attack at a
+    // withdrawing squad other than the assigned quarry did NOT qualify the pair. Soldiers choose
+    // their own targets, so that rule broke contact while the pursuers were still shooting the
+    // withdrawal: in Grist Nine Epsilon all 33 pursuers were assigned to the Cover squad, ~100 aimed
+    // and ~10 fired at other orks each turn, and the pursuit ended as stalled_pursuit with a third
+    // of the ork force still under fire. Evidence is now credited to the pursuer's pair whichever
+    // withdrawing squad it works on; a projected (theoretical) shot still never counts.
     [Fact]
-    public void AimAgainstUnrelatedQuarry_DoesNotQualifyAssignedPair()
+    public void AimAgainstAnotherWithdrawingSquad_QualifiesThePursuersPair()
     {
         Fixture fixture = CreateFixture();
         Assign(fixture, fixture.Quarry);
@@ -135,24 +353,28 @@ public sealed class ActivePursuitContactLifecycleTests
             log: null);
 
         ExecuteAndRecord(fixture, aim);
+        ExhaustStartupGrace(fixture);
+        fixture.Metrics.RecordExecutedActions([aim]);
+        fixture.Metrics.RecordRound();
 
         PursuitPairActivity activity = Assert.Single(fixture.BuildActivities());
-        Assert.False(activity.FireCycleProgressedThisTurn);
-        Assert.False(activity.FireCommitmentRemainsViable);
-        Assert.Equal("stalled_pursuit", EvaluateContact(activity).Reason);
+        Assert.True(activity.FireCycleProgressedThisTurn);
+        Assert.True(activity.FireCommitmentRemainsViable);
+        Assert.Equal(ContactBreakResult.RemainInContact, EvaluateContact(activity).Decision);
     }
 
     [Fact]
-    public void AttackAgainstUnrelatedQuarry_DoesNotQualifyAssignedPair()
+    public void AttackAgainstAnotherWithdrawingSquad_QualifiesThePursuersPair()
     {
         Fixture fixture = CreateFixture();
         Assign(fixture, fixture.Quarry);
+        ExhaustStartupGrace(fixture);
         ShootAction attack = ExecuteMissedAttack(fixture, fixture.OtherQuarry);
 
         PursuitPairActivity activity = Assert.Single(fixture.BuildActivities());
         Assert.Equal(0, attack.HitCount);
-        Assert.False(activity.PairAttackedRecently);
-        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, EvaluateContact(activity).Decision);
+        Assert.True(activity.PairAttackedRecently);
+        Assert.Equal(ContactBreakResult.RemainInContact, EvaluateContact(activity).Decision);
     }
 
     [Fact]
@@ -168,12 +390,13 @@ public sealed class ActivePursuitContactLifecycleTests
 
         Move(pursuer, fixture, (0, 0), (8, 0), 8);
         Move(quarry, fixture, (30, 0), (37, 0), 7);
+        fixture.Service.LogPursuitProgress();
 
         PursuitPairActivity activity = Assert.Single(fixture.BuildActivities());
         BattleContactRules.Result result = EvaluateContact(activity);
 
         Assert.True(activity.CurrentSeparation < initialSeparation);
-        Assert.True(activity.HasMeaningfulPositiveClosingSpeed);
+        Assert.True(activity.HasObservedClosingProgress);
         Assert.False(activity.CanReachContactThisTurn);
         Assert.Equal(ContactBreakResult.RemainInContact, result.Decision);
         Assert.Equal("pursuit_can_maintain_contact", result.Reason);
@@ -188,6 +411,8 @@ public sealed class ActivePursuitContactLifecycleTests
             new KeyValuePair<int, int>(fixture.FastEqualSpeedPursuer.Id, fixture.FastQuarry.Id),
             new KeyValuePair<int, int>(fixture.SlowEqualSpeedPursuer.Id, fixture.SlowQuarry.Id)
         ]);
+
+        ExhaustStartupGrace(fixture);
 
         IReadOnlyList<PursuitPairActivity> activities = fixture.Service
             .BuildPursuitPairActivities(BattleSide.Attacker, BattleSide.Opposing);
@@ -213,6 +438,51 @@ public sealed class ActivePursuitContactLifecycleTests
     }
 
     [Fact]
+    public void EliminatedQuarry_IsContactEvidenceNotAStalledPursuit()
+    {
+        // Grist Nine Epsilon, 2026-09-22: every pursuer was assigned to one single-soldier Cover
+        // squad, that soldier was shot, and the empty pair list broke contact for the whole
+        // withdrawing force.
+        Fixture fixture = CreateFixture();
+        ExhaustStartupGrace(fixture);
+        fixture.State.RemoveSquad(fixture.Quarry);
+
+        PursuitPairActivity activity = Assert.Single(fixture.BuildActivities());
+        BattleContactRules.Result result = EvaluateContact(activity);
+
+        Assert.True(activity.QuarryEliminated);
+        Assert.Equal(fixture.Quarry.Id, activity.QuarrySquadId);
+        Assert.False(activity.HasStartupGrace);
+        Assert.Contains("eliminated", activity.EvidenceReasonCode);
+        Assert.Equal(ContactBreakResult.RemainInContact, result.Decision);
+        Assert.Contains("quarry_eliminated_pairs=1", result.Trace.Render());
+    }
+
+    [Fact]
+    public void DisengagedQuarry_IsNotContactEvidence()
+    {
+        Fixture fixture = CreateFixture();
+        ExhaustStartupGrace(fixture);
+        fixture.State.DisengageSquad(fixture.Quarry);
+
+        IReadOnlyList<PursuitPairActivity> activities = fixture.BuildActivities();
+        BattleContactRules.Result result = BattleContactRules.Evaluate(new(
+            Turn: 1,
+            IsFirstSide: false,
+            ActivePursuerCount: 1,
+            AllPursuersBreakOff: false,
+            EnemyAlsoWithdrawing: false,
+            PursuitPairs: activities,
+            RearGuardActive: false,
+            MaskedDepartureProgress: 0,
+            WithdrawingSquadRunAllowance: 6));
+
+        Assert.Empty(activities);
+        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
+        Assert.Equal("stalled_pursuit", result.Reason);
+    }
+
+    [Fact]
     public void FollowMovement_PreservesContactThroughGenuineClosing()
     {
         Fixture fixture = CreateFixture(quarryX: 30);
@@ -224,12 +494,13 @@ public sealed class ActivePursuitContactLifecycleTests
         quarry.CurrentSpeed = 6;
         Move(pursuer, fixture, (0, 0), (8, 0), 8);
         Move(quarry, fixture, (30, 0), (36, 0), 6);
+        fixture.Service.LogPursuitProgress();
 
         PursuitPairActivity activity = Assert.Single(fixture.BuildActivities());
         BattleContactRules.Result result = EvaluateContact(activity);
 
         Assert.True(activity.CurrentSeparation < 30);
-        Assert.True(activity.HasMeaningfulPositiveClosingSpeed);
+        Assert.True(activity.HasObservedClosingProgress);
         Assert.False(activity.PairAttackedRecently);
         Assert.False(activity.FireCycleProgressedThisTurn);
         Assert.Equal(ContactBreakResult.RemainInContact, result.Decision);
@@ -253,6 +524,7 @@ public sealed class ActivePursuitContactLifecycleTests
         Assert.Equal(ContactBreakResult.RemainInContact, EvaluateContact(progressed).Decision);
 
         fixture.Metrics.RecordRound(Array.Empty<IAction>());
+        ExhaustStartupGrace(fixture);
         PursuitPairActivity stale = Assert.Single(fixture.BuildActivities());
         BattleContactRules.Result result = EvaluateContact(stale);
 
@@ -300,6 +572,9 @@ public sealed class ActivePursuitContactLifecycleTests
 
         Assert.False(activity.FireCommitmentRemainsViable);
         Assert.False(activity.HasQualifyingFireCycleProgress);
+        ExhaustStartupGrace(fixture);
+        activity = Assert.Single(fixture.BuildActivities());
+        result = EvaluateContact(activity);
         Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
         Assert.Equal("stalled_pursuit", result.Reason);
     }
@@ -321,6 +596,9 @@ public sealed class ActivePursuitContactLifecycleTests
 
         Assert.False(activity.FireCommitmentRemainsViable);
         Assert.False(activity.HasQualifyingFireCycleProgress);
+        ExhaustStartupGrace(fixture);
+        activity = Assert.Single(fixture.BuildActivities());
+        result = EvaluateContact(activity);
         Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
         Assert.Equal("stalled_pursuit", result.Reason);
     }
@@ -339,7 +617,7 @@ public sealed class ActivePursuitContactLifecycleTests
             WithdrawingAbleSoldiers: 1,
             FastestPursuitSpeed: 8,
             SlowestWithdrawalSpeed: 8,
-            ProjectedPressInterceptTurns: 1,
+            ProjectedPressInterceptTurns: float.PositiveInfinity,
             ProjectedFollowPositiveShotTurns: 0,
             WithdrawerReturnsFire: true,
             PursuerCanReachContactThisTurn: false));
@@ -378,6 +656,7 @@ public sealed class ActivePursuitContactLifecycleTests
         fixture.Metrics.RecordRound(Array.Empty<IAction>());
         AssertActiveContact(fixture);
         fixture.Metrics.RecordRound(Array.Empty<IAction>());
+        ExhaustStartupGrace(fixture);
         PursuitPairActivity quiet = Assert.Single(fixture.BuildActivities());
         BattleContactRules.Result result = EvaluateContact(quiet);
         Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
@@ -394,6 +673,7 @@ public sealed class ActivePursuitContactLifecycleTests
     {
         action.Execute(fixture.State);
         fixture.Metrics.RecordRound([action]);
+        fixture.Service.LogPursuitProgress();
     }
 
     private static ShootAction ExecuteMissedAttack(Fixture fixture, BattleSquad targetSquad)
@@ -411,7 +691,34 @@ public sealed class ActivePursuitContactLifecycleTests
             random: new GuaranteedMissRng());
         attack.Execute(fixture.State);
         fixture.Metrics.RecordRound([attack]);
+        fixture.Service.LogPursuitProgress();
         return attack;
+    }
+
+    private static void ExhaustStartupGrace(Fixture fixture)
+    {
+        for (int turn = 0; turn < PursuitProgressPolicy.StartupGraceTurns; turn++)
+        {
+            Assign(fixture, fixture.Quarry);
+            fixture.Service.LogPursuitProgress();
+        }
+    }
+
+    private static void ExhaustStartupGrace(CrossPairFixture fixture)
+    {
+        for (int turn = 0; turn < PursuitProgressPolicy.StartupGraceTurns; turn++)
+        {
+            fixture.Service.ReplaceCurrentTurnPursuitPairings(
+            [
+                new KeyValuePair<int, int>(
+                    fixture.FastEqualSpeedPursuer.Id,
+                    fixture.FastQuarry.Id),
+                new KeyValuePair<int, int>(
+                    fixture.SlowEqualSpeedPursuer.Id,
+                    fixture.SlowQuarry.Id)
+            ]);
+            fixture.Service.LogPursuitProgress();
+        }
     }
 
     private static void Move(
@@ -517,6 +824,63 @@ public sealed class ActivePursuitContactLifecycleTests
             slowQuarry);
     }
 
+    private static TwoPursuerFixture CreateTwoPursuerFixture(float drySquadSpeed)
+    {
+        BattleSquad loadedSeed = CreateSquad("Loaded Pursuer", 95_021);
+        BattleSquad drySeed = CreateSquad("Dry Pursuer", 95_022);
+        BattleSquad quarrySeed = CreateSquad("Quarry", 95_023);
+        BattleState state = new(
+            new Dictionary<int, BattleSquad>
+            {
+                [loadedSeed.Id] = loadedSeed,
+                [drySeed.Id] = drySeed
+            },
+            new Dictionary<int, BattleSquad> { [quarrySeed.Id] = quarrySeed });
+        BattleSquad loaded = state.GetSquad(loadedSeed.Id);
+        BattleSquad dry = state.GetSquad(drySeed.Id);
+        BattleSquad quarry = state.GetSquad(quarrySeed.Id);
+        EquipTypedRifle(loaded.Soldiers[0], 95_121);
+        RangedWeapon empty = EquipTypedRifle(dry.Soldiers[0], 95_122);
+        empty.LoadedAmmo = 0;
+        empty.ReserveAmmo = 0;
+        ((Soldier)loaded.Soldiers[0].Soldier).MoveSpeed = 10;
+        ((Soldier)dry.Soldiers[0].Soldier).MoveSpeed = drySquadSpeed;
+        ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = 6;
+        BattleGridManager grid = new();
+        Place(grid, loaded.Soldiers[0], true, 0, 0);
+        Place(grid, dry.Soldiers[0], true, 0, 4);
+        Place(grid, quarry.Soldiers[0], false, 30, 2);
+        BattleRoundMetrics metrics = new(state);
+        return new(CreateService(state, grid, metrics), loaded, dry, quarry, state, metrics);
+    }
+
+    private static RangedWeapon EquipTypedRifle(BattleSoldier soldier, int templateId)
+    {
+        RangedWeapon rifle = new(new RangedWeaponTemplate(
+            templateId,
+            "Typed rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 3,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 40,
+            maxDistance: 200,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 1,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1,
+            ammunitionType: new AmmunitionType(templateId + 1_000, "Typed rounds")));
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.RangedWeapons.Add(rifle);
+        soldier.ReadyWeapon(rifle);
+        return rifle;
+    }
+
     private static BattleWithdrawalService CreateService(
         BattleState state,
         BattleGridManager grid,
@@ -571,6 +935,14 @@ public sealed class ActivePursuitContactLifecycleTests
         public IReadOnlyList<PursuitPairActivity> BuildActivities() =>
             Service.BuildPursuitPairActivities(BattleSide.Attacker, BattleSide.Opposing);
     }
+
+    private sealed record TwoPursuerFixture(
+        BattleWithdrawalService Service,
+        BattleSquad Loaded,
+        BattleSquad Dry,
+        BattleSquad Quarry,
+        BattleState State,
+        BattleRoundMetrics Metrics);
 
     private sealed record CrossPairFixture(
         BattleWithdrawalService Service,

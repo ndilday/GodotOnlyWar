@@ -252,9 +252,12 @@ public class GradedRemovalCalibrationTests
             .Single(candidate => candidate.Kind == EngagementOptionKind.Hold);
         EngagementOptionEvaluation approach = decision.Candidates
             .Single(candidate => candidate.Kind == EngagementOptionKind.RunToward);
+        // Hold's fire value is its immediate removal plus its readiness: a marine who spends the
+        // turn aiming is paid in readiness at the per-turn value of the shot he is preparing
+        // (RangedTargetSelector.EvaluateFireTiming), in the same currency as firing now.
         return new ScenarioResult(
             decision.Chosen.Kind,
-            hold.ImmediateEnemyRemoval,
+            hold.ImmediateEnemyRemoval + hold.ReadinessValue,
             hold.FutureExchange.Sum(),
             hold.Score,
             approach.Score);

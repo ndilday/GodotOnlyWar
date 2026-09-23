@@ -86,9 +86,10 @@ namespace OnlyWar.Battles
             (int ShooterId, ValueTuple<int, int>? Direction),
             IReadOnlyList<BattleSquad>> NearestInRangeSquads { get; } = new();
 
-        // SquadId -> its firing geometry for the turn (Phase 3 fire distribution). Squad-level and
-        // identical for every member, so computed once per squad.
-        internal ConcurrentDictionary<int, SquadEngagementGeometry> SquadGeometry { get; } = new();
+        // (Shooter squad, target squad) -> the pair's firing-lane frame for the turn (Phase 3 fire
+        // distribution). Identical for every member of the shooter squad, so computed once per pair.
+        internal ConcurrentDictionary<(int ShooterSquadId, int TargetSquadId), SquadLaneFrame>
+            SquadLaneFrames { get; } = new();
 
         // Exact, bounded current-turn response estimate for one enemy squad against one candidate
         // target squad.  Candidate options differ primarily by declared target speed; geometry is
@@ -124,40 +125,53 @@ namespace OnlyWar.Battles
     }
 
     /// <summary>
-    /// A squad's engagement frame for one turn: the axis from the squad's centroid toward the enemy
-    /// centroid, its perpendicular ("lateral") direction, and the spread strength (base coefficient
-    /// scaled by the faction's fire discipline). The lateral direction lets each soldier prefer the
-    /// enemy in its own firing lane, spreading a squad's fire across the frontage. A default
-    /// (Valid = false) instance carries no preference — targeting falls back to pure value.
+    /// One shooter squad's firing-lane frame against one target squad for the turn. The axis runs
+    /// from the shooter squad's centroid to the TARGET squad's centroid, and both frontages are
+    /// measured along its perpendicular, each relative to its own centroid and normalized to 0..1.
+    /// A shooter at fraction f of its own line prefers the target at fraction f of the enemy line,
+    /// so a squad spreads across the squad it is shooting at however far that squad sits from
+    /// the rest of the enemy force. A default (Valid = false) instance carries no preference.
     /// </summary>
-    internal readonly struct SquadEngagementGeometry
+    internal readonly struct SquadLaneFrame
     {
         internal bool Valid { get; }
-        internal float CentroidX { get; }
-        internal float CentroidY { get; }
-        internal float EnemyCentroidX { get; }
-        internal float EnemyCentroidY { get; }
         internal float PerpX { get; }
         internal float PerpY { get; }
-        internal float SpreadCoefficient { get; }
+        internal float ShooterCentroidX { get; }
+        internal float ShooterCentroidY { get; }
+        internal float ShooterMinimum { get; }
+        internal float ShooterMaximum { get; }
+        internal float TargetCentroidX { get; }
+        internal float TargetCentroidY { get; }
+        internal float TargetMinimum { get; }
+        internal float TargetMaximum { get; }
+        internal float SpreadStrength { get; }
 
-        internal SquadEngagementGeometry(
-            float centroidX,
-            float centroidY,
-            float enemyCentroidX,
-            float enemyCentroidY,
+        internal SquadLaneFrame(
             float perpX,
             float perpY,
-            float spreadCoefficient)
+            float shooterCentroidX,
+            float shooterCentroidY,
+            float shooterMinimum,
+            float shooterMaximum,
+            float targetCentroidX,
+            float targetCentroidY,
+            float targetMinimum,
+            float targetMaximum,
+            float spreadStrength)
         {
             Valid = true;
-            CentroidX = centroidX;
-            CentroidY = centroidY;
-            EnemyCentroidX = enemyCentroidX;
-            EnemyCentroidY = enemyCentroidY;
             PerpX = perpX;
             PerpY = perpY;
-            SpreadCoefficient = spreadCoefficient;
+            ShooterCentroidX = shooterCentroidX;
+            ShooterCentroidY = shooterCentroidY;
+            ShooterMinimum = shooterMinimum;
+            ShooterMaximum = shooterMaximum;
+            TargetCentroidX = targetCentroidX;
+            TargetCentroidY = targetCentroidY;
+            TargetMinimum = targetMinimum;
+            TargetMaximum = targetMaximum;
+            SpreadStrength = spreadStrength;
         }
     }
 }

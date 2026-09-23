@@ -44,6 +44,13 @@ public class BattleAbandonedWoundedTests
     // side that reliably ends up standing on the bodies.
     private const int PdfPlatoonCount = 6;
 
+    // The anti-vacuity check below needs a battle that leaves at least one gaunt maimed but not
+    // mortally wounded, and whether a given seed does so moves whenever targeting or aim timing
+    // changes the random stream. It was hand re-seeded twice (75_000 -> 75_001, then broken again
+    // by the 2026-09-22 aim/ammunition changes); now the test takes the first of a few seeds that
+    // produces one. Every seed must still satisfy the real assertions.
+    private static readonly int[] BattleSeeds = [75_001, 75_002, 75_003, 75_004, 75_005];
+
     [Fact]
     public void BattleEnd_SideHoldingFieldFinishesOffTheWoundedTheLoserLeftBehind()
     {
@@ -51,6 +58,22 @@ public class BattleAbandonedWoundedTests
         Faction imperial = blob.Factions.Single(faction => faction.IsDefaultFaction);
         Faction tyranids = blob.Factions.Single(faction => faction.Id == TyranidFactionId);
 
+        foreach (int battleSeed in BattleSeeds)
+        {
+            if (RunAndCheck(imperial, tyranids, battleSeed))
+            {
+                return;
+            }
+        }
+        Assert.Fail(
+            "no battle seed left a maimed-but-not-mortally-wounded gaunt, so the coup-de-grace "
+                + $"assertion would prove nothing; tried {string.Join(", ", BattleSeeds)}");
+    }
+
+    // Runs one seeded battle, asserts the aftermath rules, and reports whether the battle was a
+    // meaningful test of them (at least one gaunt was maimed rather than killed outright).
+    private static bool RunAndCheck(Faction imperial, Faction tyranids, int battleSeed)
+    {
         // Seeded separately from the battle, which CreateResolver re-seeds, so both soldier
         // generation and the fight itself are deterministic.
         RNG.Reset(75_050);
@@ -91,7 +114,8 @@ public class BattleAbandonedWoundedTests
             platoons,
             [brood],
             attackerAggression: Aggression.Aggressive,
-            defenderAggression: Aggression.Aggressive);
+            defenderAggression: Aggression.Aggressive,
+            battleSeed);
         bool completed = false;
         resolver.OnBattleComplete += (_, _) => completed = true;
         for (int turn = 0; turn < 1000 && !completed; turn++)
@@ -117,14 +141,9 @@ public class BattleAbandonedWoundedTests
 
         Assert.NotEmpty(leftOnTheField);
         Assert.All(leftOnTheField, id => Assert.Contains(id, history.KilledSoldierIds));
-        // A wound that never crippled a vital location did not kill anyone by itself, so a gaunt
-        // in that state was maimed and left, not shot dead. At least one must exist, or the
-        // assertion above would hold with or without the coup de grâce and prove nothing.
-        Dictionary<int, ISoldier> bodies = SoldiersByIdAcrossBattle(history);
-        Assert.Contains(leftOnTheField, id => IsMaimedButNotMortallyWounded(bodies[id]));
-
         // The holding side recovers its own wounded: a PDF trooper who went down without a
         // mortal wound is a casualty, not a death, and must stay out of the tally.
+        Dictionary<int, ISoldier> bodies = SoldiersByIdAcrossBattle(history);
         HashSet<int> pdfStillStanding = finalState.AttackerSquads.Values
             .SelectMany(squad => squad.Soldiers)
             .Select(soldier => soldier.Id)
@@ -133,6 +152,11 @@ public class BattleAbandonedWoundedTests
             pdfStartingIds.Where(id =>
                 !pdfStillStanding.Contains(id) && IsMaimedButNotMortallyWounded(bodies[id])),
             id => Assert.DoesNotContain(id, history.KilledSoldierIds));
+
+        // A wound that never crippled a vital location did not kill anyone by itself, so a gaunt
+        // in that state was maimed and left, not shot dead. At least one must exist, or the
+        // assertion above would hold with or without the coup de grâce and prove nothing.
+        return leftOnTheField.Any(id => IsMaimedButNotMortallyWounded(bodies[id]));
     }
 
     // Soldiers removed as casualties drop out of the live state, but every turn snapshot retains
@@ -169,7 +193,8 @@ public class BattleAbandonedWoundedTests
         IList<BattleSquad> attackers,
         IList<BattleSquad> defenders,
         Aggression attackerAggression,
-        Aggression defenderAggression)
+        Aggression defenderAggression,
+        int battleSeed)
     {
         GameRulesData rules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
         Date date = new(1, 1, 1);
@@ -183,10 +208,7 @@ public class BattleAbandonedWoundedTests
             Directory.SetCurrentDirectory(originalDirectory);
         }
 
-        // Re-baselined from 75_000 when engagement potential began conserving finite casualty
-        // pools universally; the old path still produced the right winner and death tally but no
-        // longer happened to leave a non-mortally-maimed enemy for the anti-vacuity assertion.
-        RNG.Reset(75_001);
+        RNG.Reset(battleSeed);
         StaticRNG random = new();
         BattleAftermathDependencies aftermath = new(
             date,

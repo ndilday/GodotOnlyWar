@@ -202,7 +202,12 @@ public interface IEngagementResolver
     EngagementResult Resolve(EngagementInput input);
 
     /// <summary>Returns the tactical opening-range preference without exposing tactical state.</summary>
+    /// <param name="friendlyElements">
+    /// The element's whole force (it may include the element). The element plans only its
+    /// proportional part of the fight; null means it fights alone.
+    /// </param>
     int GetPreferredOpeningRange(
         EngagementParticipant element,
-        IReadOnlyList<EngagementParticipant> opposingElements);
+        IReadOnlyList<EngagementParticipant> opposingElements,
+        IReadOnlyList<EngagementParticipant> friendlyElements = null);
 }

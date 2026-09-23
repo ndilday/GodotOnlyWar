@@ -32,14 +32,22 @@ namespace OnlyWar.Battles
         // makes soldiers abandon marginal targets (and rescan) sooner.
         internal const float StickyMinimumHitProbability = 0.1f;
         // TUNABLE (Phase 3 fire distribution): base strength of the firing-lane preference that
-        // spreads a squad's fire across the enemy frontage instead of piling every rifle onto the
-        // single highest-value target. Each candidate target is penalized by this coefficient times
-        // the lateral gap (in grid cells, perpendicular to the squad's engagement axis) between the
-        // shooter's place in its own line and the target's place in the enemy line, then scaled by
-        // the shooter faction's FireDiscipline. 0 disables the lane term and restores pre-Phase-3
-        // targeting exactly. Retained after the take-out-probability conversion because it biases
-        // target selection only and never changes the returned expected-value score.
-        private const float BaseLaneSpreadCoefficient = 1.0f;
+        // spreads a squad's fire across the target squad instead of piling every rifle onto one
+        // man. The shooter's place in its own line and the target's place in its squad's line are
+        // both normalized to 0..1 (see SquadLaneFrame), and a candidate's selection score is
+        // reduced by this fraction of itself per unit of lane mismatch, scaled by the shooter
+        // faction's FireDiscipline. At 0.5 a fully disciplined shooter needs a target in the
+        // opposite lane to be twice as good before it crosses over, while a near-tie between two
+        // similar men is always settled by lane. 0 disables the lane term. It biases selection
+        // only and never changes the returned expected-value score.
+        //
+        // The penalty is RELATIVE to the shot's own score by design. Until 2026-09-22 it was an
+        // absolute 1 BV per grid cell measured against the centroid of the whole enemy force, and
+        // shot scores are 2-4 BV: once a withdrawal scattered the enemy squads hundreds of cells
+        // apart, the lateral term dwarfed the shot and every shooter picked whichever enemy lay
+        // nearest the one line toward that centroid. Grist Nine Epsilon turn 200: 161 marines
+        // aimed at one ork in a 13-man squad, and every aim was lost each time it died.
+        private const float BaseLaneSpreadFraction = 0.5f;
         // Fire discipline used when a squad has no faction (test fixtures, stray battle squads).
         private const float DefaultFireDiscipline = 0.5f;
         // The planner's "aim can no longer be improved" ceiling. A held aim is judged at this bonus
@@ -167,6 +175,202 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
+        /// Weighs firing now against aiming first. <see cref="FireTiming.PreparedRate"/> is the best
+        /// expected value PER TURN of aiming one or more further turns: max over j of
+        /// Net(shot after j more aim turns, at the range projected j turns ahead) / (j + 1).
+        /// <see cref="FireTiming.ShootNowValue"/> is the net value of firing now, which takes one
+        /// turn. The planner fires when the second is at least the first, and a planned or stored aim
+        /// is priced at the prepared rate (<see cref="FireTiming.Readiness"/>) so the engagement
+        /// potential values aiming in the same currency as shooting. With no further aim possible
+        /// the prepared rate is <see cref="float.MinValue"/>, which always favours firing.
+        ///
+        /// <para>Net value charges each shot for the rounds it spends: Score − scarcity × (value of
+        /// a round) × rounds. A round is worth the best score per round among the shots being
+        /// compared, since that is what the round could buy instead, and scarcity rises from 0
+        /// with plenty of ammunition to 1 on an empty weapon (<see cref="AmmunitionScarcity"/>).
+        /// With plenty the comparison is pure expected value per turn; on the last magazine only
+        /// the most round-efficient shot on offer is worth taking. Without this the rate rule
+        /// treated rounds as free and pursuing marines emptied four magazines each on 7% bursts
+        /// within 80 turns (Grist Nine Epsilon, 2026-09-22, third run).</para>
+        ///
+        /// <para>This replaced two rules that disagreed. A fresh target was shot only when
+        /// P(hit now) × 2 beat P(hit after ONE aim turn), and on the long-range normal tail one aim
+        /// turn always multiplies the hit chance by more than two. An aim already started then fired
+        /// only at the full bonus of 3, so the soldier spent four turns aiming for a shot that one
+        /// aim turn made nearly as good: in Grist Nine Epsilon (2026-09-22) pursuing marines fired
+        /// one burst in ten turns. Comparing rates over the same horizon removes both.</para>
+        ///
+        /// <para>The range projection is what makes a moving target come out right. A target
+        /// closing on the shooter improves with every turn of waiting (more aim AND less range), so
+        /// aiming keeps winning; a target running away gives back range for every turn spent
+        /// aiming, so the shot is taken sooner. At long range the range term is small (the range
+        /// modifier's slope falls off as 1/range) and aim dominates; close in it can decide.</para>
+        /// </summary>
+        internal FireTiming EvaluateFireTiming(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedTargetEvaluation shootNow,
+            RangedWeapon aimWeapon,
+            float range,
+            int? currentAimBonus,
+            float bulkMultiplier,
+            float aimMultiplier)
+        {
+            List<(RangedTargetEvaluation Shot, int Turns)> prepared = [];
+            if (soldier != null && target != null && aimWeapon != null && aimMultiplier > 0)
+            {
+                float rangeChange = ProjectedRangeChangePerTurn(target);
+                // AimAction starts a new aim at bonus 0 and adds 1 per further turn; a shot is
+                // taken with Accuracy + bonus + 1 (the aimed shot is an all-out attack). Waiting j
+                // aim turns and then firing takes j + 1 turns.
+                int firstBonus = currentAimBonus.HasValue ? currentAimBonus.Value + 1 : 0;
+                for (int bonus = firstBonus, aimTurns = 1;
+                    bonus <= FullAimBonusTurns;
+                    bonus++, aimTurns++)
+                {
+                    float projectedRange = Math.Max(1f, range + (rangeChange * aimTurns));
+                    if (projectedRange > aimWeapon.Template.MaximumRange)
+                    {
+                        // Only a receding target leaves range, and it only gets farther.
+                        break;
+                    }
+                    float modifier = -(aimWeapon.Template.Bulk * bulkMultiplier)
+                        + ((aimWeapon.Template.Accuracy + bonus + 1) * aimMultiplier);
+                    prepared.Add((
+                        _shotEvaluator.EvaluateRangedTarget(
+                            soldier,
+                            target,
+                            aimWeapon,
+                            projectedRange,
+                            modifier),
+                        aimTurns + 1));
+                }
+            }
+
+            // What a round could buy instead: the best score per round on offer in this decision.
+            float valuePerRound = 0;
+            if (shootNow != null) valuePerRound = Math.Max(valuePerRound, ScorePerRound(shootNow));
+            foreach ((RangedTargetEvaluation shot, _) in prepared)
+            {
+                valuePerRound = Math.Max(valuePerRound, ScorePerRound(shot));
+            }
+
+            float shootNowValue = shootNow == null
+                ? float.MinValue
+                : NetShotValue(shootNow, valuePerRound);
+            float preparedRate = float.MinValue;
+            foreach ((RangedTargetEvaluation shot, int turns) in prepared)
+            {
+                preparedRate = Math.Max(preparedRate, NetShotValue(shot, valuePerRound) / turns);
+            }
+            return new FireTiming(shootNowValue, preparedRate);
+        }
+
+        /// <summary>
+        /// The two sides of the aim-versus-shoot comparison, both in battle value per turn.
+        /// </summary>
+        internal readonly record struct FireTiming(float ShootNowValue, float PreparedRate)
+        {
+            internal bool ShootNow => ShootNowValue >= PreparedRate;
+
+            /// <summary>
+            /// Readiness (engagement-potential) value of a planned aim: the per-turn value of the
+            /// prepared shot, never negative. Nothing left to aim for, or a shot that removes
+            /// nothing, is worth nothing.
+            /// </summary>
+            internal float Readiness => Math.Max(0f, PreparedRate);
+
+            /// <summary>
+            /// Readiness of an aim already held: the best of cashing it now or continuing it.
+            /// </summary>
+            internal float StoredReadiness => Math.Max(0f, Math.Max(ShootNowValue, PreparedRate));
+        }
+
+        // TUNABLE: the ammunition, in magazines, at which a weapon's rounds count as free. Standard
+        // issue is the loaded magazine plus three spares (BattleSquad weapon allocation), so a
+        // fresh weapon starts at scarcity 1 - 4/6 = 1/3: marginal bursts already cost something,
+        // and the cost grows as the pouches empty. Raise it to make soldiers thriftier.
+        internal const int PlentifulMagazines = 6;
+
+        /// <summary>
+        /// How scarce a weapon's ammunition is, 0 (plentiful) to 1 (empty). Weapons whose supply
+        /// never runs down -- unlimited, self-regenerating, or reloaded from no counted reserve --
+        /// are never scarce.
+        /// </summary>
+        internal static float AmmunitionScarcity(RangedWeapon weapon)
+        {
+            if (weapon == null
+                || weapon.IsUnlimited
+                || weapon.IsSelfRegenerating
+                || (weapon.HasSoldierReload && weapon.Template.AmmunitionType == null))
+            {
+                return 0;
+            }
+            float remaining;
+            float plentiful;
+            if (weapon.IsConsumableItem)
+            {
+                remaining = weapon.ConsumableQuantity;
+                plentiful = PlentifulMagazines;
+            }
+            else
+            {
+                remaining = weapon.LoadedAmmo + weapon.ReserveAmmo;
+                plentiful = PlentifulMagazines * Math.Max(1, (int)weapon.Template.AmmoCapacity);
+            }
+            return Math.Clamp(1f - (remaining / plentiful), 0f, 1f);
+        }
+
+        private static int RoundsUsed(RangedTargetEvaluation shot) =>
+            shot.Weapon.IsUnlimited || shot.Weapon.IsSelfRegenerating
+                ? 0
+                : shot.Weapon.IsConsumableItem
+                    ? 1
+                    : Math.Max(1, shot.ShotsToFire);
+
+        private static float ScorePerRound(RangedTargetEvaluation shot)
+        {
+            int rounds = RoundsUsed(shot);
+            return rounds == 0 ? 0 : Math.Max(0, shot.Score) / rounds;
+        }
+
+        private static float NetShotValue(RangedTargetEvaluation shot, float valuePerRound) =>
+            shot.Score
+            - (AmmunitionScarcity(shot.Weapon) * valuePerRound * RoundsUsed(shot));
+
+        /// <summary>
+        /// Expected change in range to <paramref name="target"/> per turn, from the speed it moved
+        /// at last turn and the direction its squad was going. Fleeing roles and a step back move
+        /// away; the advancing options move closer. "Closer" is toward the squad's own chosen
+        /// counterpart rather than necessarily toward this shooter, which is the right sign for the
+        /// usual case of a squad closing on the force shooting at it and an honest zero for
+        /// anything else.
+        /// </summary>
+        internal static float ProjectedRangeChangePerTurn(BattleSoldier target)
+        {
+            BattleSquad squad = target?.BattleSquad;
+            float speed = Math.Max(0, target?.CurrentSpeed ?? 0);
+            if (squad == null || speed <= 0)
+            {
+                return 0;
+            }
+            if (squad.WithdrawalRole is WithdrawalRole.Bound or WithdrawalRole.Routing
+                || squad.MoraleState == MoraleState.Routing)
+            {
+                return speed;
+            }
+            return squad.LastEngagementOptionKind switch
+            {
+                EngagementOptionKind.StepBack => speed,
+                EngagementOptionKind.StepForward
+                    or EngagementOptionKind.JogToward
+                    or EngagementOptionKind.RunToward
+                    or EngagementOptionKind.CloseToContact => -speed,
+                _ => 0
+            };
+        }
+
+        /// <summary>
         /// Evaluates the same full-aim, projected-range shot used by the pursuit fire window.
         /// Preparation actions may call this before the weapon has ammunition in its magazine:
         /// a successful reload can be the first step of a multi-round reload, so the question is
@@ -203,6 +407,23 @@ namespace OnlyWar.Battles
             RangedWeapon weapon,
             float quarrySpeed,
             bool allowPendingPreparation = false)
+            => EvaluatePursuitFireWindowShot(
+                shooter,
+                target,
+                weapon,
+                _grid.GetDistanceBetweenSoldiers(shooter.Soldier.Id, target.Soldier.Id),
+                quarrySpeed,
+                PursuitFireWindowTurns,
+                allowPendingPreparation);
+
+        internal RangedTargetEvaluation EvaluatePursuitFireWindowShot(
+            BattleSoldier shooter,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float startingRange,
+            float quarrySpeed,
+            int futureMovementTurns,
+            bool allowPendingPreparation = false)
         {
             if (shooter == null
                 || target == null
@@ -231,10 +452,8 @@ namespace OnlyWar.Battles
                 return null;
             }
 
-            float projectedRange = _grid.GetDistanceBetweenSoldiers(
-                    shooter.Soldier.Id,
-                    target.Soldier.Id)
-                + Math.Max(0, quarrySpeed) * PursuitFireWindowTurns;
+            float projectedRange = startingRange
+                + Math.Max(0, quarrySpeed) * Math.Max(0, futureMovementTurns);
             if (projectedRange > weapon.Template.MaximumRange)
             {
                 return null;
@@ -364,79 +583,38 @@ namespace OnlyWar.Battles
                 movementDirection);
         }
 
-        // Phase 3 fire distribution. Returns the shooter squad's engagement frame for the turn,
-        // computing it once and memoizing per squad. The frame is a pure function of the frozen
-        // layout, so every member of the squad shares it.
-        private SquadEngagementGeometry GetSquadEngagementGeometry(BattleSquad squad)
+        // Phase 3 fire distribution. Returns the shooter squad's lane frame against one target
+        // squad, computed once per pair and memoized. The frame is a pure function of the frozen
+        // layout, so every member of the shooter squad shares it.
+        private SquadLaneFrame GetSquadLaneFrame(BattleSquad shooterSquad, BattleSquad targetSquad)
         {
-            if (squad == null)
+            if (shooterSquad == null || targetSquad == null)
             {
                 return default;
             }
-            if (_context.SquadGeometry.TryGetValue(squad.Id, out SquadEngagementGeometry cached))
+            (int, int) key = (shooterSquad.Id, targetSquad.Id);
+            if (_context.SquadLaneFrames.TryGetValue(key, out SquadLaneFrame cached))
             {
                 return cached;
             }
-            SquadEngagementGeometry geometry = ComputeSquadEngagementGeometry(squad);
-            _context.SquadGeometry[squad.Id] = geometry;
-            return geometry;
+            SquadLaneFrame frame = ComputeSquadLaneFrame(shooterSquad, targetSquad);
+            _context.SquadLaneFrames[key] = frame;
+            return frame;
         }
 
-        private SquadEngagementGeometry ComputeSquadEngagementGeometry(BattleSquad squad)
+        private SquadLaneFrame ComputeSquadLaneFrame(BattleSquad shooterSquad, BattleSquad targetSquad)
         {
-            double sumX = 0;
-            double sumY = 0;
-            int count = 0;
-            bool shooterSide = false;
-            bool haveSide = false;
-            foreach (BattleSoldier member in squad.AbleSoldiers)
-            {
-                if (member.TopLeft is not ValueTuple<int, int> position
-                    || !_grid.IsSoldierPlaced(member.Soldier.Id))
-                {
-                    continue;
-                }
-                sumX += position.Item1;
-                sumY += position.Item2;
-                count++;
-                if (!haveSide)
-                {
-                    shooterSide = _grid.GetSoldierSide(member.Soldier.Id);
-                    haveSide = true;
-                }
-            }
-            if (count == 0 || !haveSide)
+            List<(float X, float Y)> shooters = LanePositions(shooterSquad, requireEffective: false);
+            List<(float X, float Y)> targets = LanePositions(targetSquad, requireEffective: true);
+            if (shooters.Count == 0 || targets.Count == 0)
             {
                 return default;
             }
 
-            double enemyX = 0;
-            double enemyY = 0;
-            int enemyCount = 0;
-            foreach (BattleSoldier enemy in _soldierMap.Values)
-            {
-                if (!enemy.IsCombatEffective
-                    || enemy.TopLeft is not ValueTuple<int, int> enemyPosition
-                    || !_grid.IsSoldierPlaced(enemy.Soldier.Id)
-                    || _grid.GetSoldierSide(enemy.Soldier.Id) == shooterSide)
-                {
-                    continue;
-                }
-                enemyX += enemyPosition.Item1;
-                enemyY += enemyPosition.Item2;
-                enemyCount++;
-            }
-            if (enemyCount == 0)
-            {
-                return default;
-            }
-
-            float centroidX = (float)(sumX / count);
-            float centroidY = (float)(sumY / count);
-            float enemyCentroidX = (float)(enemyX / enemyCount);
-            float enemyCentroidY = (float)(enemyY / enemyCount);
-            float axisX = enemyCentroidX - centroidX;
-            float axisY = enemyCentroidY - centroidY;
+            (float shooterX, float shooterY) = Centroid(shooters);
+            (float targetX, float targetY) = Centroid(targets);
+            float axisX = targetX - shooterX;
+            float axisY = targetY - shooterY;
             float axisLength = MathF.Sqrt((axisX * axisX) + (axisY * axisY));
             if (axisLength < 1e-4f)
             {
@@ -444,50 +622,129 @@ namespace OnlyWar.Battles
                 return default;
             }
             // Perpendicular to the engagement axis is the lateral ("along the frontage") direction.
+            // Both lines are measured along the SAME perpendicular, so "left" maps to "left".
             float perpX = -axisY / axisLength;
             float perpY = axisX / axisLength;
+            (float shooterMinimum, float shooterMaximum) =
+                LateralExtent(shooters, shooterX, shooterY, perpX, perpY);
+            (float targetMinimum, float targetMaximum) =
+                LateralExtent(targets, targetX, targetY, perpX, perpY);
 
-            float discipline = squad.Faction?.FireDiscipline ?? DefaultFireDiscipline;
-            return new SquadEngagementGeometry(
-                centroidX,
-                centroidY,
-                enemyCentroidX,
-                enemyCentroidY,
+            float discipline = shooterSquad.Faction?.FireDiscipline ?? DefaultFireDiscipline;
+            return new SquadLaneFrame(
                 perpX,
                 perpY,
-                BaseLaneSpreadCoefficient * discipline);
+                shooterX,
+                shooterY,
+                shooterMinimum,
+                shooterMaximum,
+                targetX,
+                targetY,
+                targetMinimum,
+                targetMaximum,
+                BaseLaneSpreadFraction * discipline);
         }
 
-        // The shooter's own lateral position along its squad frontage — computed once per shooter.
-        private static float ShooterLateralOffset(
-            in SquadEngagementGeometry geometry,
-            BattleSoldier soldier)
+        private List<(float X, float Y)> LanePositions(BattleSquad squad, bool requireEffective)
         {
-            if (!geometry.Valid || soldier.TopLeft is not ValueTuple<int, int> position)
+            List<(float X, float Y)> positions = [];
+            foreach (BattleSoldier member in squad.AbleSoldiers)
             {
-                return 0f;
+                if ((requireEffective && !member.IsCombatEffective)
+                    || member.TopLeft is not ValueTuple<int, int> position
+                    || !_grid.IsSoldierPlaced(member.Soldier.Id))
+                {
+                    continue;
+                }
+                positions.Add((position.Item1, position.Item2));
             }
-            return ((position.Item1 - geometry.CentroidX) * geometry.PerpX)
-                + ((position.Item2 - geometry.CentroidY) * geometry.PerpY);
+            return positions;
         }
 
-        // Penalty applied to a candidate's score so a shooter prefers the enemy in its own lane:
-        // the lateral gap between where the shooter sits in its line and where the target sits in the
-        // enemy line, scaled by the (discipline-weighted) spread coefficient.
-        private static float LaneSpreadPenalty(
-            in SquadEngagementGeometry geometry,
-            float shooterLateral,
+        private static (float X, float Y) Centroid(List<(float X, float Y)> positions)
+        {
+            double sumX = 0;
+            double sumY = 0;
+            foreach ((float x, float y) in positions)
+            {
+                sumX += x;
+                sumY += y;
+            }
+            return ((float)(sumX / positions.Count), (float)(sumY / positions.Count));
+        }
+
+        private static (float Minimum, float Maximum) LateralExtent(
+            List<(float X, float Y)> positions,
+            float centroidX,
+            float centroidY,
+            float perpX,
+            float perpY)
+        {
+            float minimum = float.MaxValue;
+            float maximum = float.MinValue;
+            foreach ((float x, float y) in positions)
+            {
+                float lateral = ((x - centroidX) * perpX) + ((y - centroidY) * perpY);
+                minimum = Math.Min(minimum, lateral);
+                maximum = Math.Max(maximum, lateral);
+            }
+            return (minimum, maximum);
+        }
+
+        // Where a position sits along its line, 0..1. A line with no lateral extent (one man, or
+        // a file straight down the axis) is treated as a single lane at its middle.
+        private static float LaneFraction(
+            float x,
+            float y,
+            float centroidX,
+            float centroidY,
+            float minimum,
+            float maximum,
+            in SquadLaneFrame frame)
+        {
+            float width = maximum - minimum;
+            if (width < 1e-3f)
+            {
+                return 0.5f;
+            }
+            float lateral = ((x - centroidX) * frame.PerpX) + ((y - centroidY) * frame.PerpY);
+            return Math.Clamp((lateral - minimum) / width, 0f, 1f);
+        }
+
+        /// <summary>
+        /// Fraction of a candidate's selection score given up for lane mismatch: 0 for the target
+        /// in the shooter's own lane, up to the frame's spread strength for the opposite end of the
+        /// target squad.
+        /// </summary>
+        private static float LaneSpreadPenaltyFraction(
+            in SquadLaneFrame frame,
+            BattleSoldier shooter,
             BattleSoldier target)
         {
-            if (!geometry.Valid
-                || geometry.SpreadCoefficient <= 0f
-                || target.TopLeft is not ValueTuple<int, int> position)
+            if (!frame.Valid
+                || frame.SpreadStrength <= 0f
+                || shooter.TopLeft is not ValueTuple<int, int> shooterPosition
+                || target.TopLeft is not ValueTuple<int, int> targetPosition)
             {
                 return 0f;
             }
-            float targetLateral = ((position.Item1 - geometry.EnemyCentroidX) * geometry.PerpX)
-                + ((position.Item2 - geometry.EnemyCentroidY) * geometry.PerpY);
-            return geometry.SpreadCoefficient * MathF.Abs(shooterLateral - targetLateral);
+            float shooterLane = LaneFraction(
+                shooterPosition.Item1,
+                shooterPosition.Item2,
+                frame.ShooterCentroidX,
+                frame.ShooterCentroidY,
+                frame.ShooterMinimum,
+                frame.ShooterMaximum,
+                frame);
+            float targetLane = LaneFraction(
+                targetPosition.Item1,
+                targetPosition.Item2,
+                frame.TargetCentroidX,
+                frame.TargetCentroidY,
+                frame.TargetMinimum,
+                frame.TargetMaximum,
+                frame);
+            return frame.SpreadStrength * MathF.Abs(shooterLane - targetLane);
         }
 
         /// <summary>
@@ -532,24 +789,23 @@ namespace OnlyWar.Battles
             // exactly, keeping seeded tie-breaking stable.
             IReadOnlyList<RangedWeapon> sortedWeapons = OrderRangedByTemplateId(equippedRanged);
 
-            // Phase 3: bias selection toward the enemy in the shooter's own firing lane so the squad
-            // spreads its fire. The penalty affects only which target is picked, not the returned
-            // evaluation's value (that still competes at its true score against template/blast options).
-            SquadEngagementGeometry geometry = GetSquadEngagementGeometry(soldier.BattleSquad);
-            float shooterLateral = ShooterLateralOffset(geometry, soldier);
-
+            // Phase 3: bias selection toward the enemy in the shooter's own firing lane of the
+            // target squad so the shooter squad spreads its fire. The penalty affects only which
+            // target is picked, not the returned evaluation's value (that still competes at its
+            // true score against template/blast options).
             RangedTargetEvaluation best = null;
             float bestEffectiveScore = float.MinValue;
             foreach (BattleSquad candidateSquad in GetNearestInRangeEnemySquads(
                 soldier,
                 movementDirection))
             {
+                SquadLaneFrame laneFrame = GetSquadLaneFrame(soldier.BattleSquad, candidateSquad);
                 foreach (BattleSoldier target in candidateSquad.AbleSoldiers
                     .Where(IsPlaced)
                     .OrderBy(candidate => candidate.Soldier.Id))
                 {
                     float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
-                    float lanePenalty = LaneSpreadPenalty(geometry, shooterLateral, target);
+                    float lanePenalty = LaneSpreadPenaltyFraction(laneFrame, soldier, target);
                     for (int weaponIndex = 0; weaponIndex < sortedWeapons.Count; weaponIndex++)
                     {
                         RangedWeapon weapon = sortedWeapons[weaponIndex];
@@ -576,8 +832,9 @@ namespace OnlyWar.Battles
                             toHitModifier);
                         // Candidate squads, soldiers, and weapons are ordered nearest-first and
                         // deterministically, so an exact tie naturally stays on the closer option.
+                        float weightedScore = evaluation.Score * TargetSelectionWeight(target);
                         float effectiveScore =
-                            (evaluation.Score * TargetSelectionWeight(target)) - lanePenalty;
+                            weightedScore - (MathF.Abs(weightedScore) * lanePenalty);
                         if (best == null || effectiveScore > bestEffectiveScore)
                         {
                             best = evaluation;
@@ -706,14 +963,16 @@ namespace OnlyWar.Battles
             RangedWeapon weapon,
             float range,
             float additionalToHitModifier,
-            float? targetSpeed = null)
+            float? targetSpeed = null,
+            int? availableAmmo = null)
             => _shotEvaluator.EvaluateRangedTarget(
                 soldier,
                 target,
                 weapon,
                 range,
                 additionalToHitModifier,
-                targetSpeed);
+                targetSpeed,
+                availableAmmo);
 
         private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(
             BattleSoldier shooter,

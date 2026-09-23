@@ -209,7 +209,10 @@ namespace OnlyWar.Battles
         {
             List<BattleSquad> squads = GetActiveSquads(side).ToList();
             List<BattleSoldier> soldiers = squads.SelectMany(squad => squad.AbleSoldiers).ToList();
-            int current = soldiers.Sum(soldier => soldier.EffectiveBattleValue);
+            // Squads that stood down from a pursuit left the field on their own terms, not as
+            // casualties, so their strength still counts (see BattleSideState.StoodDownSquadIds).
+            int current = soldiers.Sum(soldier => soldier.EffectiveBattleValue)
+                + GetSideState(side).StoodDownBattleValue;
             Queue<int> history = _battleValueHistory[side];
             int prior = history.Count > 0 ? history.Peek() : current;
             float fastest = squads.Select(SafeSquadMove).DefaultIfEmpty(0).Max();
@@ -230,7 +233,7 @@ namespace OnlyWar.Battles
         }
 
         internal int CurrentBattleValue(BattleSide side) => GetActiveSquads(side)
-            .Sum(CurrentBattleValue);
+            .Sum(CurrentBattleValue) + GetSideState(side).StoodDownBattleValue;
 
         private IReadOnlyCollection<BattleSquad> GetActiveSquads(BattleSide side) =>
             side == BattleSide.Attacker

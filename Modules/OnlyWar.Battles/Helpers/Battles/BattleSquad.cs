@@ -516,10 +516,16 @@ namespace OnlyWar.Battles
         /// not a representative draw, because the melee arrival term reads how much of that force
         /// closes and how fast.</para>
         /// </summary>
-        public int GetPreferredOpeningRange(IReadOnlyCollection<BattleSquad> opposingSquads)
+        /// <param name="friendlySquads">
+        /// This squad's whole force. The squad plans only its proportional part of the fight; null
+        /// means it fights alone.
+        /// </param>
+        public int GetPreferredOpeningRange(
+            IReadOnlyCollection<BattleSquad> opposingSquads,
+            IReadOnlyCollection<BattleSquad> friendlySquads = null)
         {
             return (int)BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(
-                this, opposingSquads);
+                this, opposingSquads, friendlySquads);
         }
 
         /// <summary>
@@ -876,10 +882,9 @@ namespace OnlyWar.Battles
                 weapon = new RangedWeapon(template, reservePool, initialReadyOrder);
                 if (!itemized && template.AmmunitionType != null)
                 {
-                    // The legacy WeaponSet bridge has no explicit package rows. Its authored
-                    // kit carries one standard package for each magazine, which is enough for
-                    // one tactical reload while the itemized allocator is adopted by squads.
-                    weapon.ReserveAmmo = template.AmmoCapacity;
+                    // The legacy WeaponSet bridge has no explicit package rows. Supply three
+                    // spare magazines in addition to the weapon's initially loaded magazine.
+                    weapon.ReserveAmmo = template.AmmoCapacity * 3;
                 }
                 _missionRangedWeapons.Add(weapon);
             }
