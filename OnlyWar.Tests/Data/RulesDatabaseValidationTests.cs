@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using OnlyWar.Generation.World;
 using OnlyWar.Domain;
+using OnlyWar.Domain.Equippables;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Squads;
@@ -324,6 +325,72 @@ public class RulesDatabaseValidationTests
 
         Assert.NotEmpty(rules.EquipmentTemplates);
         Assert.NotEmpty(rules.EquipmentKits);
+    }
+
+    [Fact]
+    public void RangedWeaponTemplates_MagazineWeaponsCarryAnAuthoredCaliber()
+    {
+        GameRulesBlob rules = RulesDatabaseFixture.LoadRules();
+
+        Assert.All(
+            rules.RangedWeaponTemplates.Values.Where(template =>
+                template.AmmunitionBehavior == AmmunitionBehavior.Magazine),
+            template => Assert.True(
+                template.AmmunitionType != null,
+                $"{template.Id} {template.Name} has no ammunition type."));
+
+        // Calibers, not one type per weapon: every boltgun and bolt pistol template fires the
+        // same rounds, and the Ork guns that shipped untyped now have counted ammunition.
+        AmmunitionType bolt = rules.RangedWeaponTemplates.Values
+            .Single(template => template.Id == 0)
+            .AmmunitionType;
+        Assert.All(
+            rules.RangedWeaponTemplates.Values.Where(template =>
+                template.Name is "Boltgun" or "Bolt Pistol"),
+            template => Assert.Equal(bolt, template.AmmunitionType));
+        Assert.NotNull(rules.RangedWeaponTemplates.Values
+            .Single(template => template.Name == "Big Shoota")
+            .AmmunitionType);
+    }
+
+    [Fact]
+    public void EquipmentKits_CarryStandardSpareMagazinesForEveryCaliber()
+    {
+        GameRulesBlob rules = RulesDatabaseFixture.LoadRules();
+
+        Assert.NotEmpty(rules.EquipmentCatalog.EquipmentKits);
+        foreach (EquipmentKitTemplate kit in rules.EquipmentCatalog.EquipmentKits.Values)
+        {
+            // Per caliber, because weapons sharing one also share its reserve.
+            IEnumerable<IGrouping<AmmunitionType, EquipmentKitEntry>> weaponsByCaliber = kit.Items
+                .Where(item => item.Equipment.RangedProfile?.AmmunitionType != null
+                    && item.Equipment.RangedProfile.AmmunitionBehavior
+                        is AmmunitionBehavior.Magazine or AmmunitionBehavior.Incremental)
+                .GroupBy(item => item.Equipment.RangedProfile.AmmunitionType);
+            foreach (IGrouping<AmmunitionType, EquipmentKitEntry> caliber in weaponsByCaliber)
+            {
+                int magazineRounds = caliber.Sum(item =>
+                    item.Equipment.RangedProfile.LoadedCapacity * item.Quantity);
+                int packageRounds = kit.Items
+                    .Where(item => Equals(item.Equipment.AmmunitionProfile?.AmmunitionType, caliber.Key))
+                    .Sum(item => item.Equipment.AmmunitionProfile.RoundsPerPackage * item.Quantity);
+                Assert.True(
+                    packageRounds >= EquipmentRulesCatalog.StandardSpareMagazines * magazineRounds,
+                    $"Kit {kit.Id} {kit.Name} carries {packageRounds} spare {caliber.Key.Name} "
+                    + $"for {magazineRounds} loaded.");
+            }
+        }
+    }
+
+    [Fact]
+    public void RulesDatabase_MagazineWeaponWithoutAmmunitionTypeFailsValidation()
+    {
+        InvalidOperationException exception = AssertRulesDatabaseRejects(
+            "untyped-magazine-weapon",
+            "UPDATE RangedWeaponTemplate SET AmmunitionTypeId = NULL WHERE Name = 'Big Shoota';");
+
+        Assert.Contains("Big Shoota", exception.Message);
+        Assert.Contains("AmmunitionTypeId", exception.Message);
     }
 
     [Fact]

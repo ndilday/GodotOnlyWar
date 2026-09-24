@@ -80,6 +80,14 @@ public class InsurrectionistEncounterPresentationTests
         Assert.Equal("scout", mobNode.IconKey);
         Assert.Equal("hq", enemyRoot.Children.Single(node => node.Title == FirebrandName).IconKey);
 
+        // Row hover text describes the replay turn, not the campaign squad after the battle:
+        // no deployment-readiness line (meaningless for an enemy), and the strength shown is
+        // this turn's.
+        Assert.All(enemyRoot.Children, node =>
+            Assert.DoesNotContain("Deployment", node.SquadRow.Tooltip, StringComparison.Ordinal));
+        Assert.Contains($"Strength this turn: {mobStrength}/{mobStrength}",
+            mobNode.SquadRow.Tooltip, StringComparison.Ordinal);
+
         // Formation panel: led by the ringleader, carrying the faction's own autogun set.
         BattleFormationSummary mobSummary = opening.SelectedFormation;
         Assert.Equal(MobName, mobSummary.FormationType);

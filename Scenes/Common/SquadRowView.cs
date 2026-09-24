@@ -277,6 +277,14 @@ public partial class SquadRowView : PanelContainer
         {
             tokens.Add(model.Type);
         }
+        if (model is BattleSquadRowViewModel battle)
+        {
+            // Replay rows carry no campaign location, leader or readiness state: those facts
+            // describe the squad after the battle, not the turn on screen.
+            if (!string.IsNullOrWhiteSpace(battle.MoraleLabel)) tokens.Add(battle.MoraleLabel);
+            if (!string.IsNullOrWhiteSpace(battle.FatigueLabel)) tokens.Add(battle.FatigueLabel);
+            return string.Join(" · ", tokens);
+        }
         if (!string.IsNullOrWhiteSpace(model.Location))
         {
             tokens.Add(model.Location);
@@ -292,16 +300,7 @@ public partial class SquadRowView : PanelContainer
         {
             tokens.Add(model.LeaderLabel);
         }
-        if (model is BattleSquadRowViewModel battle)
-        {
-            tokens.Add("HISTORICAL");
-            if (!string.IsNullOrWhiteSpace(battle.MoraleLabel)) tokens.Add(battle.MoraleLabel);
-            if (!string.IsNullOrWhiteSpace(battle.FatigueLabel)) tokens.Add(battle.FatigueLabel);
-        }
-        else
-        {
-            tokens.Add(model.CommitmentLabel);
-        }
+        tokens.Add(model.CommitmentLabel);
         if (!string.IsNullOrWhiteSpace(model.ContextBadge))
         {
             tokens.Add(model.ContextBadge);

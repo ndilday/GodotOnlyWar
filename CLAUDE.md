@@ -188,7 +188,8 @@ ahead of the path breaks first-token matching.
 - The rest of the 2026-09-19 top five are still untagged and still sector generation:
   `Generation.SectorBuilderTests` (2 tests, 19s), `Domain.FactionCapabilityStateTests`
   (2 tests, 17s),
-  `Battles.BattleMoraleResolverTests.HighEgoSquadsFightingToAnnihilation_NeverRout` (5.1s),
+  `Battles.BattleMoraleResolverTests.HighEgoSquadsFightingToAnnihilation_NeverRoutWhileASquadmateStands`
+  (5.1s),
   `Data.NewGameSaveTests` (2 tests, 4.9s). With the 131s test gone to the slow half these
   are roughly 46s of the fast half's ~84s of test time. **If this filter feels slow, suspect
   one of those or a busy machine — not general growth.**

@@ -66,6 +66,13 @@ namespace OnlyWar.Battles
         public const float ResolveEgoCoefficient = 0.00525f;
         public const float ResolveEgoExponent = 2.5f;
 
+        // --- Check triggers. A squad checks only on a turn when something happened to it
+        // (casualties, its leader lost, its side's command or synapse lost, a friendly squad
+        // routed); otherwise it rolls nothing, except that a Shaken squad rolls to rally. ---
+        // Casualties trigger a check only once the squad's able strength has fallen below this
+        // fraction of its starting strength. 1.0 means every casualty triggers a check.
+        public const float CasualtyCheckStrengthFraction = 1.0f;
+
         // --- §5.2 shock weights (local, per-turn). Phase 7 calibration targets. ---
         // w1: fraction of this-turn's starting able strength lost this turn (sudden shock).
         public const float ShockCasualtyThisTurnWeight = 2.0f;

@@ -13,12 +13,24 @@ namespace OnlyWar.Battles
     /// </summary>
     internal static class MobMoraleSupportEvaluator
     {
+        /// <param name="startingAbleCount">
+        /// Battle-start able strength per squad. A nearby mob's health is measured against it,
+        /// because the dead leave <see cref="BattleSquad.Soldiers"/> at end of turn and a
+        /// current-roster denominator would read a half-dead mob as whole.
+        /// </param>
+        /// <param name="routingAtTurnStart">
+        /// Squads that were Routing at the start of this turn. A squad that breaks during this
+        /// turn's checks only discourages its neighbours next turn, matching the routing-visible
+        /// shock term, so the result does not depend on the order squads are checked in.
+        /// </param>
         internal static float ComputeSupport(
             BattleSquad squad,
             IEnumerable<BattleSquad> activeFriendly,
             IEnumerable<BattleSquad> allFriendly,
             BattleGridManager grid,
             FactionBehaviorRulesProfile rules,
+            Func<BattleSquad, int> startingAbleCount,
+            ISet<int> routingAtTurnStart,
             float genericCommandAuraSupport = 0f)
         {
             if (!FactionCapabilities.HasMobMentality(squad?.Faction)
@@ -34,12 +46,13 @@ namespace OnlyWar.Battles
 
             float support = nearby.Sum(other =>
             {
-                float health = other.Soldiers.Count == 0
+                int starting = startingAbleCount?.Invoke(other) ?? other.AbleSoldiers.Count;
+                float health = starting <= 0
                     ? 0f
-                    : Math.Clamp(other.AbleSoldiers.Count / (float)other.Soldiers.Count, 0f, 1f);
+                    : Math.Clamp(other.AbleSoldiers.Count / (float)starting, 0f, 1f);
                 float value = (float)(rules.MoraleNearbyMobSupport * health)
                     - (float)(rules.MoraleCasualtyPenalty * (1f - health));
-                if (other.WithdrawalRole == WithdrawalRole.Routing)
+                if (routingAtTurnStart?.Contains(other.Id) == true)
                     value -= (float)rules.MoraleRoutPenalty;
                 if (grid.GetMinimumDistanceBetweenSquads(squad, other)
                     > MoraleConstants.VisualRange * 0.5f)
@@ -49,12 +62,31 @@ namespace OnlyWar.Battles
                 return value;
             });
 
-            bool anyCommandProvider = (allFriendly ?? activeFriendly ?? Enumerable.Empty<BattleSquad>())
-                .Any(candidate => candidate?.SquadProvidesCommandAura == true);
-            if (!anyCommandProvider && genericCommandAuraSupport >= 0f)
+            if (CommandWasLost(squad, allFriendly ?? activeFriendly))
                 support -= (float)rules.MoraleCommandLossPenalty;
 
             return Math.Clamp(support, -1f, (float)rules.MoraleMaximumSupport);
+        }
+
+        /// <summary>
+        /// True only when the side fielded a command provider and every one has been destroyed.
+        /// A warband that never had a boss has lost nothing and takes no penalty. The liveness
+        /// rule matches <see cref="CommandAuraEvaluator"/>: a disengaged provider is alive.
+        /// The penalty adds to that evaluator's generic loss term on purpose, because a mob
+        /// leans harder on its bosses than a disciplined force leans on its officers.
+        /// </summary>
+        private static bool CommandWasLost(BattleSquad squad, IEnumerable<BattleSquad> allFriendly)
+        {
+            bool fielded = false;
+            foreach (BattleSquad provider in allFriendly ?? Enumerable.Empty<BattleSquad>())
+            {
+                if (provider == null || provider == squad || !provider.SquadProvidesCommandAura)
+                    continue;
+                fielded = true;
+                if (provider.Status != BattleSquadStatus.Eliminated && provider.AbleSoldiers.Count > 0)
+                    return false;
+            }
+            return fielded;
         }
     }
 }

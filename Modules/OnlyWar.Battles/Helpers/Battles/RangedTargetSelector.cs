@@ -287,9 +287,11 @@ namespace OnlyWar.Battles
         }
 
         // TUNABLE: the ammunition, in magazines, at which a weapon's rounds count as free. Standard
-        // issue is the loaded magazine plus three spares (BattleSquad weapon allocation), so a
-        // fresh weapon starts at scarcity 1 - 4/6 = 1/3: marginal bursts already cost something,
-        // and the cost grows as the pouches empty. Raise it to make soldiers thriftier.
+        // issue is the loaded magazine plus EquipmentRulesCatalog.StandardSpareMagazines (3), so
+        // a fresh weapon starts at scarcity 1 - 4/6 = 1/3: marginal bursts already cost something,
+        // and the cost grows as the pouches empty. Raise it to make soldiers thriftier. It also
+        // sets burst length (RangedShotEvaluator.ChooseShotsToFire): a round is fired only while
+        // its marginal value beats scarcity x the value of a round.
         internal const int PlentifulMagazines = 6;
 
         /// <summary>
@@ -1193,15 +1195,6 @@ namespace OnlyWar.Battles
             }
             return ordered;
         }
-
-        internal int CalculateShotsToFire(
-            RangedWeapon weapon,
-            float toHitAtPlannedRateOfFire,
-            float takeOutProbabilityOnHit)
-            => _shotEvaluator.CalculateShotsToFire(
-                weapon,
-                toHitAtPlannedRateOfFire,
-                takeOutProbabilityOnHit);
 
         // A jogging soldier may only fire into the forward hemisphere of its own movement. Both
         // helpers are pure geometry, shared by the targeting scans and by the planner's move path.

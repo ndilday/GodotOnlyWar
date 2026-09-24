@@ -37,8 +37,9 @@ public class FactionRosterTemplateTests
         AssertEliteMob(mobFaction, "Meganobz", "Mega Armor", "Big Shoota + Power Klaw + Frag Grenade");
         AssertHqVariant(mobFaction, "'Eavy Warboss", "'Eavy Armor", "Slugga + Choppa");
         AssertHqVariant(mobFaction, "Megaboss", "Mega Armor", "Big Shoota + Power Klaw");
-        AssertHeavyMob(mobFaction, "Flash Gitz", 5, 10, "Snazzgun + Frag Grenade");
-        AssertHeavyMob(mobFaction, "Lootas", 5, 15, "Deffgun + Frag Grenade");
+        // Flash Gitz have carried the Nob statline since 7th edition and 'eavy armour since 8th.
+        AssertHeavyMob(mobFaction, "Flash Gitz", 5, 10, "Snazzgun + Frag Grenade", "Ork Nob", "'Eavy Armor");
+        AssertHeavyMob(mobFaction, "Lootas", 5, 15, "Deffgun + Frag Grenade", "Ork Boy", "Orkish Skin");
 
         SquadTemplate gretchin = mobFaction.SquadTemplates.Values.Single(template => template.Name == "Gretchin");
         Assert.Equal("No Armor", gretchin.Armor.Name);
@@ -331,14 +332,16 @@ public class FactionRosterTemplateTests
         string squadName,
         int minimum,
         int maximum,
-        string weaponSetName)
+        string weaponSetName,
+        string soldierName,
+        string armor)
     {
         SquadTemplate squad = faction.SquadTemplates.Values.Single(template => template.Name == squadName);
         Assert.Equal(SquadTypes.Heavy, squad.SquadType);
-        Assert.Equal("Orkish Skin", squad.Armor.Name);
+        Assert.Equal(armor, squad.Armor.Name);
         SquadTemplateElement element = Assert.Single(squad.Elements);
-        Assert.Equal("Ork Boy", element.SoldierTemplate.Name);
-        Assert.Equal("Ork Boy", element.SoldierTemplate.Species.Name);
+        Assert.Equal(soldierName, element.SoldierTemplate.Name);
+        Assert.Equal(soldierName, element.SoldierTemplate.Species.Name);
         Assert.Equal(minimum, element.MinimumNumber);
         Assert.Equal(maximum, element.MaximumNumber);
         // Ork mobs muster at full strength. The range describes what may be fielded when a budget

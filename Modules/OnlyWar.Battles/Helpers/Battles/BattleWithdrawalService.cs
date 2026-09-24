@@ -1323,12 +1323,10 @@ namespace OnlyWar.Battles
                     localOutnumber,
                     commandAuraSupport,
                     forceDisadvantage,
-                    MobMoraleSupportEvaluator.ComputeSupport(
+                    _moraleService.MobSupport(
                         squad,
                         friendly,
-                        GetAllSquads(side),
-                        _grid,
-                        _rules.FactionBehaviorRules,
+                        side,
                         commandAuraSupport))) == MoraleState.Routing;
         }
 

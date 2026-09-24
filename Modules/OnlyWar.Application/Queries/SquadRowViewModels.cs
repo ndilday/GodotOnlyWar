@@ -403,6 +403,12 @@ namespace OnlyWar.Application
             string provisionalKey) =>
             new(source, outgoingDelta, incomingDelta, futureStrength, provisionalKey);
 
+        /// <summary>
+        /// Builds a replay row from the battle snapshot alone. The live campaign squad is read
+        /// only for static facts (template, icon, parent unit): its roster, readiness and location
+        /// describe the campaign after the battle, not the replay turn on screen, and deployment
+        /// readiness has no meaning for an enemy formation.
+        /// </summary>
         public BattleSquadRowViewModel BuildBattleSnapshot(
             BattleSquadSnapshot snapshot,
             int startingStrength = -1,
@@ -413,23 +419,69 @@ namespace OnlyWar.Application
             if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
             int current = currentStrength < 0 ? snapshot.Soldiers?.Count ?? 0 : currentStrength;
             int starting = startingStrength < 0 ? current : startingStrength;
-            SquadRowViewModel source = snapshot.Squad != null
-                ? Build(snapshot.Squad, new SquadRowContext(
-                    SquadRowContextKind.BattleReview,
-                    SquadRowAction.Inspect,
-                    isSelectable: true,
-                    isEnabled: false), null)
-                : BuildSnapshotFallback(snapshot, current);
+            moraleLabel ??= BattleMoraleLabel(snapshot);
+            SquadRowViewModel source = BuildBattleSource(snapshot, starting, current, moraleLabel);
             return new BattleSquadRowViewModel(
                 source, starting, current, moraleLabel, fatigueLabel);
         }
 
-        private static SquadRowViewModel BuildSnapshotFallback(
-            BattleSquadSnapshot snapshot,
-            int currentStrength)
+        private static string BattleMoraleLabel(BattleSquadSnapshot snapshot)
         {
+            if (snapshot.Status != BattleSquadStatus.Active) return null;
+            return snapshot.MoraleState switch
+            {
+                MoraleState.Routing => "ROUTING",
+                MoraleState.Shaken => "SHAKEN",
+                _ => "STEADY"
+            };
+        }
+
+        private static string BattleStatusLabel(BattleSquadSnapshot snapshot)
+        {
+            if (snapshot.Status == BattleSquadStatus.Eliminated) return "Eliminated";
+            if (snapshot.Status == BattleSquadStatus.Disengaged) return "Left the field";
+            if (snapshot.IsInMelee) return "Engaged in melee";
+            return "Fighting";
+        }
+
+        private static string BattleWithdrawalLabel(WithdrawalRole role) => role switch
+        {
+            WithdrawalRole.Cover => "Covering the withdrawal",
+            WithdrawalRole.Bound => "Withdrawing",
+            WithdrawalRole.RearGuard => "Rear guard",
+            _ => string.Empty
+        };
+
+        private static string BuildBattleTooltip(
+            BattleSquadSnapshot snapshot,
+            string type,
+            int startingStrength,
+            int currentStrength,
+            string moraleLabel)
+        {
+            List<string> lines = [snapshot.Name ?? "Unknown formation"];
+            if (!string.IsNullOrWhiteSpace(type)) lines.Add(type);
+            lines.Add($"Strength this turn: {currentStrength}/{startingStrength}");
+            lines.Add($"Status: {BattleStatusLabel(snapshot)}");
+            if (!string.IsNullOrWhiteSpace(moraleLabel))
+            {
+                lines.Add($"Morale: {moraleLabel}");
+            }
+            string withdrawal = BattleWithdrawalLabel(snapshot.WithdrawalRole);
+            if (!string.IsNullOrEmpty(withdrawal)) lines.Add($"Orders: {withdrawal}");
+            return string.Join("\n", lines);
+        }
+
+        private static SquadRowViewModel BuildBattleSource(
+            BattleSquadSnapshot snapshot,
+            int startingStrength,
+            int currentStrength,
+            string moraleLabel)
+        {
+            SquadTemplate template = snapshot.Squad?.SquadTemplate;
+            string type = template?.Name ?? "Battle formation";
             SquadStrengthSnapshot strength = new(
-                currentStrength,
+                Math.Max(startingStrength, currentStrength),
                 currentStrength,
                 currentStrength,
                 currentStrength,
@@ -449,10 +501,10 @@ namespace OnlyWar.Application
             return new SquadRowViewModel(
                 $"battle-squad:{snapshot.Id}",
                 snapshot.Name,
-                "Battle formation",
-                "tactical",
+                type,
+                template != null ? SquadIconKeys.For(template) : "tactical",
+                snapshot.Squad?.ParentUnit?.Name ?? string.Empty,
                 string.Empty,
-                "Historical battle",
                 strength,
                 SquadLeaderStatus.NotRequired,
                 SquadCommitmentKind.Administrative,
@@ -463,7 +515,8 @@ namespace OnlyWar.Application
                 false,
                 "HISTORICAL",
                 null,
-                $"{snapshot.Name}\nHistorical formation; deployment is not applicable.");
+                BuildBattleTooltip(snapshot, template?.Name, startingStrength, currentStrength,
+                    moraleLabel));
         }
 
         private static string CampaignLocationLabel(Squad squad)

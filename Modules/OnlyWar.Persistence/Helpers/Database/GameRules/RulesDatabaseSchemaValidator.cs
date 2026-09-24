@@ -30,6 +30,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             "ScoutTrainingOption",
             "MeleeWeaponTemplate",
             "RangedWeaponTemplate",
+            "AmmunitionType",
             "WeaponSet",
             "SoldierTemplateWeaponOption",
             "ArmorTemplate",
@@ -67,8 +68,10 @@ namespace OnlyWar.Persistence.Database.GameRules
         //   PersonalEquipmentRole / SquadTemplateElementEquipmentRole: legacy role inference;
         //   SquadTemplateElementArmor: unbound elements inherit SquadTemplate armor;
         //   SquadTemplateElementQuotaScaling: absent rows keep quota maxima fixed;
-        //   itemized equipment tables: legacy WeaponSet-derived catalog when unavailable;
-        //   AmmunitionType: legacy weapon templates without ammunition identities.
+        //   itemized equipment tables: legacy WeaponSet-derived catalog when unavailable.
+        //
+        // AmmunitionType is required: RangedWeaponTemplate.AmmunitionTypeId names each magazine
+        // weapon's caliber, and a magazine weapon without one is rejected at load.
         //
         // Do not add a table to RequiredTables merely because a query can read it. First decide
         // whether an absent or empty table has an intentional result for every caller.

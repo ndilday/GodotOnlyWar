@@ -922,9 +922,10 @@ namespace OnlyWar.Battles
                 weapon = new RangedWeapon(template, reservePool, initialReadyOrder);
                 if (!itemized && template.AmmunitionType != null)
                 {
-                    // The legacy WeaponSet bridge has no explicit package rows. Supply three
-                    // spare magazines in addition to the weapon's initially loaded magazine.
-                    weapon.ReserveAmmo = template.AmmoCapacity * 3;
+                    // The legacy WeaponSet bridge has no explicit package rows. Supply the
+                    // standard spare magazines in addition to the weapon's loaded magazine.
+                    weapon.ReserveAmmo = template.AmmoCapacity
+                        * EquipmentRulesCatalog.StandardSpareMagazines;
                 }
                 _missionRangedWeapons.Add(weapon);
             }

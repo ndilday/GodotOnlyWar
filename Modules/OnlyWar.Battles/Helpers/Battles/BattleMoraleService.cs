@@ -31,9 +31,25 @@ namespace OnlyWar.Battles
         private readonly Dictionary<int, int> _ableCountAtTurnStart = [];
         private readonly HashSet<int> _routingAtTurnStart = [];
 
+        // Turn-start facts the check triggers compare against. A squad checks only on a turn
+        // when one of them changed; see MoraleCheckTrigger.
+        private readonly HashSet<int> _leaderAliveAtTurnStart = [];
+        private readonly HashSet<int> _synapseCoveredAtTurnStart = [];
+        private readonly HashSet<BattleSide> _commandAliveAtTurnStart = [];
+
+        // The turn whose morale pass routed each squad. Every other squad on its side checks at
+        // the next pass, so the result never depends on the order squads are checked in.
+        private readonly Dictionary<int, int> _routedOnTurn = [];
+
         // Outcome construction needs routed squads after their live withdrawal role has been
         // cleared by disengagement, so this history remains battle-scoped and monotonic.
         private readonly HashSet<int> _everRoutedSquadIds = [];
+
+        // The turn whose morale check last granted each squad a leader coercion. A leader who
+        // has just spent a round coercing cannot do it again at the very next check: if the mob
+        // still breaks, it routs. This is tracked here, not read from the squad's committed flag,
+        // because the resolver clears that flag in end-of-turn cleanup, before the check runs.
+        private readonly Dictionary<int, int> _coercionGrantedOnTurn = [];
 
         internal BattleMoraleService(
             BattleState state,
@@ -78,16 +94,80 @@ namespace OnlyWar.Battles
         {
             _ableCountAtTurnStart.Clear();
             _routingAtTurnStart.Clear();
-            foreach (BattleSquad squad in GetActiveSquads(BattleSide.Attacker)
-                .Concat(GetActiveSquads(BattleSide.Opposing)))
+            _leaderAliveAtTurnStart.Clear();
+            _synapseCoveredAtTurnStart.Clear();
+            _commandAliveAtTurnStart.Clear();
+            foreach (BattleSide side in new[] { BattleSide.Attacker, BattleSide.Opposing })
             {
-                _ableCountAtTurnStart[squad.Id] = squad.AbleSoldiers.Count;
-                if (squad.WithdrawalRole == WithdrawalRole.Routing)
+                List<BattleSquad> active = GetActiveSquads(side).ToList();
+                if (HasLivingCommand(side))
                 {
-                    _routingAtTurnStart.Add(squad.Id);
+                    _commandAliveAtTurnStart.Add(side);
+                }
+                foreach (BattleSquad squad in active)
+                {
+                    _ableCountAtTurnStart[squad.Id] = squad.AbleSoldiers.Count;
+                    if (squad.WithdrawalRole == WithdrawalRole.Routing)
+                    {
+                        _routingAtTurnStart.Add(squad.Id);
+                    }
+                    if (squad.SquadLeader != null)
+                    {
+                        _leaderAliveAtTurnStart.Add(squad.Id);
+                    }
+                    if (SynapseCoverageEvaluator.IsSynapseCovered(squad, active, _grid))
+                    {
+                        _synapseCoveredAtTurnStart.Add(squad.Id);
+                    }
                 }
             }
         }
+
+        /// <summary>
+        /// The events that make <paramref name="squad"/> check this turn. None means the squad
+        /// rolls nothing, unless it is Shaken, in which case it rolls to rally.
+        /// </summary>
+        private MoraleCheckTrigger TriggersFor(
+            BattleSquad squad,
+            bool commandLostThisTurn,
+            bool friendlySquadRoutedLastTurn)
+        {
+            MoraleCheckTrigger triggers = MoraleCheckTrigger.None;
+            int currentAble = squad.AbleSoldiers.Count;
+            if (currentAble < TurnStartAbleCountFor(squad)
+                && currentAble < MoraleConstants.CasualtyCheckStrengthFraction * StartingAbleCountFor(squad))
+            {
+                triggers |= MoraleCheckTrigger.Casualties;
+            }
+            if (_leaderAliveAtTurnStart.Contains(squad.Id) && squad.SquadLeader == null)
+            {
+                triggers |= MoraleCheckTrigger.SquadLeaderLost;
+            }
+            if (commandLostThisTurn)
+            {
+                triggers |= MoraleCheckTrigger.BattleLeaderLost;
+            }
+            // The caller only asks about squads that are checking, so a squad covered at turn
+            // start that reaches this point has lost its coverage.
+            if (_synapseCoveredAtTurnStart.Contains(squad.Id))
+            {
+                triggers |= MoraleCheckTrigger.SynapseLost;
+            }
+            if (friendlySquadRoutedLastTurn)
+            {
+                triggers |= MoraleCheckTrigger.FriendlySquadRouted;
+            }
+            return triggers;
+        }
+
+        /// <summary>
+        /// True while the side has a command-aura provider that is not destroyed. The liveness
+        /// rule matches <see cref="CommandAuraEvaluator"/>: a disengaged provider is alive.
+        /// </summary>
+        private bool HasLivingCommand(BattleSide side) =>
+            GetAllSquads(side).Any(squad => squad.SquadProvidesCommandAura
+                && squad.Status != BattleSquadStatus.Eliminated
+                && squad.AbleSoldiers.Count > 0);
 
         /// <summary>
         /// Evaluates one side from the force metrics captured before either side's morale effects
@@ -113,6 +193,12 @@ namespace OnlyWar.Battles
                 enemyMetrics.CurrentBattleValue,
                 friendlyMetrics.BattleValueLostPreviousTwoRounds,
                 enemyMetrics.BattleValueLostPreviousTwoRounds);
+            bool commandLostThisTurn = _commandAliveAtTurnStart.Contains(side)
+                && !HasLivingCommand(side);
+            // Any friendly squad, at any range: squads are assumed to share a vox net.
+            bool friendlySquadRoutedLastTurn = GetAllSquads(side).Any(candidate =>
+                _routedOnTurn.TryGetValue(candidate.Id, out int routedOnTurn)
+                && routedOnTurn == _state.TurnNumber - 1);
 
             foreach (BattleSquad squad in friendly)
             {
@@ -126,7 +212,20 @@ namespace OnlyWar.Battles
                     {
                         squad.MoraleState = MoraleState.Steady;
                     }
-                    LogMoraleSkip(side, squad, skip);
+                    LogMoraleSkip(side, squad, RenderSkip(skip));
+                    continue;
+                }
+
+                MoraleCheckTrigger triggers = TriggersFor(
+                    squad, commandLostThisTurn, friendlySquadRoutedLastTurn);
+                // With nothing to react to, a squad rolls nothing unless it is Shaken. A Shaken
+                // squad rolls to rally: the roll can only restore it to Steady, never make it
+                // worse, so a rally never routs a squad and never calls on mob coercion.
+                bool rally = triggers == MoraleCheckTrigger.None
+                    && squad.MoraleState == MoraleState.Shaken;
+                if (triggers == MoraleCheckTrigger.None && !rally)
+                {
+                    LogMoraleSkip(side, squad, "no_trigger");
                     continue;
                 }
 
@@ -144,13 +243,7 @@ namespace OnlyWar.Battles
                 float localOutnumber = BattleMoraleEvaluator.ComputeLocalOutnumberRatio(
                     squad, friendly, enemy, _grid, MoraleConstants.VisualRange);
                 float commandAura = CommandAuraSupport(squad, side);
-                float mobSupport = MobMoraleSupportEvaluator.ComputeSupport(
-                    squad,
-                    friendly,
-                    GetAllSquads(side),
-                    _grid,
-                    _execution.Rules.FactionBehaviorRules,
-                    commandAura);
+                float mobSupport = MobSupport(squad, friendly, side, commandAura);
                 MoraleState moraleBeforeCheck = squad.MoraleState;
 
                 BattleSoldier leader = squad.SquadLeader;
@@ -175,6 +268,29 @@ namespace OnlyWar.Battles
                         mobSupport),
                     _execution.Random);
 
+                if (rally)
+                {
+                    if (result.Outcome == MoraleState.Steady)
+                    {
+                        squad.MoraleState = MoraleState.Steady;
+                    }
+                    LogMoraleEval(
+                        side,
+                        squad,
+                        result,
+                        "rally",
+                        squad.MoraleState,
+                        casualtyThisTurn,
+                        cumulativeCasualty,
+                        leaderDead,
+                        routingVisible,
+                        localOutnumber,
+                        commandAura,
+                        forceDisadvantage,
+                        mobSupport);
+                    continue;
+                }
+
                 squad.MoraleState = result.Outcome;
                 if (FactionCapabilities.HasMobMentality(squad?.Faction)
                     && MathF.Abs(mobSupport) > 0.0001f)
@@ -191,12 +307,16 @@ namespace OnlyWar.Battles
                 if (result.Outcome == MoraleState.Routing)
                 {
                     BattleSoldier leaderForSuppression = squad.SquadLeader;
+                    bool coercedLastTurn = _coercionGrantedOnTurn.TryGetValue(
+                            squad.Id, out int grantedOnTurn)
+                        && grantedOnTurn == _state.TurnNumber - 1;
                     bool canSuppress = FactionCapabilities.HasMobMentality(squad?.Faction)
                         && leaderForSuppression != null
                         && !squad.MobSuppressionPending
-                        && !squad.MobSuppressionCommitted;
+                        && !coercedLastTurn;
                     if (canSuppress)
                     {
+                        _coercionGrantedOnTurn[squad.Id] = _state.TurnNumber;
                         // The Routing result is ignored, not downgraded to Shaken. Preserve the
                         // state that existed before this check; the cost is represented by the
                         // pending full-round coercion commitment and its recorded attack.
@@ -214,6 +334,7 @@ namespace OnlyWar.Battles
                     {
                         squad.WithdrawalRole = WithdrawalRole.Routing;
                         _everRoutedSquadIds.Add(squad.Id);
+                        _routedOnTurn[squad.Id] = _state.TurnNumber;
                         events.Add(new BattleEvent(
                             BattleEventType.SquadRouted,
                             _state.TurnNumber,
@@ -227,6 +348,8 @@ namespace OnlyWar.Battles
                     side,
                     squad,
                     result,
+                    RenderTriggers(triggers),
+                    squad.MoraleState,
                     casualtyThisTurn,
                     cumulativeCasualty,
                     leaderDead,
@@ -276,6 +399,22 @@ namespace OnlyWar.Battles
                 _grid,
                 _execution.Rules.Skills.Tactics);
 
+        /// <summary>Morale-owned mob-support input used by the live check and forecasts.</summary>
+        internal float MobSupport(
+            BattleSquad squad,
+            IEnumerable<BattleSquad> friendly,
+            BattleSide side,
+            float commandAura) =>
+            MobMoraleSupportEvaluator.ComputeSupport(
+                squad,
+                friendly,
+                GetAllSquads(side),
+                _grid,
+                _execution.Rules.FactionBehaviorRules,
+                StartingAbleCountFor,
+                _routingAtTurnStart,
+                commandAura);
+
         internal float RoutingVisibleFriendlyFraction(
             BattleSquad squad,
             IEnumerable<BattleSquad> friendly) =>
@@ -289,7 +428,7 @@ namespace OnlyWar.Battles
         private void LogMoraleSkip(
             BattleSide side,
             BattleSquad squad,
-            BattleMoraleEvaluator.MoraleSkipReason skip)
+            string skip)
         {
             if (!BattleLog.IsEnabled) return;
             BattleDecisionTrace trace = new("MORALE_EVAL", new List<KeyValuePair<string, string>>
@@ -297,7 +436,7 @@ namespace OnlyWar.Battles
                 BattleDecisionTrace.Field("turn", _state.TurnNumber),
                 BattleDecisionTrace.Field("side", side == BattleSide.Attacker ? "first" : "second"),
                 BattleDecisionTrace.Field("squad", squad.Id),
-                BattleDecisionTrace.Field("skip", RenderSkip(skip)),
+                BattleDecisionTrace.Field("skip", skip),
                 BattleDecisionTrace.Field("outcome", squad.MoraleState)
             });
             BattleLog.Write(trace.Render());
@@ -307,6 +446,8 @@ namespace OnlyWar.Battles
             BattleSide side,
             BattleSquad squad,
             BattleMoraleEvaluator.MoraleCheckResult result,
+            string trigger,
+            MoraleState applied,
             float casualtyThisTurn,
             float cumulativeCasualty,
             bool leaderDead,
@@ -323,6 +464,7 @@ namespace OnlyWar.Battles
                 BattleDecisionTrace.Field("side", side == BattleSide.Attacker ? "first" : "second"),
                 BattleDecisionTrace.Field("squad", squad.Id),
                 BattleDecisionTrace.Field("skip", "none"),
+                BattleDecisionTrace.Field("trigger", trigger),
                 BattleDecisionTrace.Field("casualty_this_turn", casualtyThisTurn),
                 BattleDecisionTrace.Field("cumulative_casualty", cumulativeCasualty),
                 BattleDecisionTrace.Field("leader_dead", leaderDead),
@@ -342,10 +484,26 @@ namespace OnlyWar.Battles
                 BattleDecisionTrace.Field("leader_held", result.LeaderHeld),
                 BattleDecisionTrace.Field("rout_threshold", result.RoutThreshold),
                 BattleDecisionTrace.Field("shaken_threshold", result.ShakenThreshold),
-                BattleDecisionTrace.Field("outcome", result.Outcome)
+                BattleDecisionTrace.Field("outcome", result.Outcome),
+                // What the squad actually became: a rally never worsens it, and mob coercion
+                // ignores a Routing roll.
+                BattleDecisionTrace.Field("applied", applied)
             });
             BattleLog.Write(trace.Render());
         }
+
+        private static string RenderTriggers(MoraleCheckTrigger triggers) =>
+            string.Join("+", Enum.GetValues<MoraleCheckTrigger>()
+                .Where(flag => flag != MoraleCheckTrigger.None && triggers.HasFlag(flag))
+                .Select(flag => flag switch
+                {
+                    MoraleCheckTrigger.Casualties => "casualties",
+                    MoraleCheckTrigger.SquadLeaderLost => "squad_leader_lost",
+                    MoraleCheckTrigger.BattleLeaderLost => "battle_leader_lost",
+                    MoraleCheckTrigger.SynapseLost => "synapse_lost",
+                    MoraleCheckTrigger.FriendlySquadRouted => "friendly_squad_routed",
+                    _ => flag.ToString()
+                }));
 
         private static string RenderSkip(BattleMoraleEvaluator.MoraleSkipReason skip) => skip switch
         {
@@ -374,6 +532,27 @@ namespace OnlyWar.Battles
 
         private static string SideName(BattleSide side) =>
             side == BattleSide.Attacker ? "First side" : "Second side";
+    }
+
+    /// <summary>
+    /// The events that make a squad take a morale check at the end of a turn. A squad with none
+    /// of them rolls nothing, except that a Shaken squad rolls to rally.
+    /// </summary>
+    [Flags]
+    internal enum MoraleCheckTrigger
+    {
+        None = 0,
+        /// <summary>The squad lost able soldiers this turn, below
+        /// <see cref="MoraleConstants.CasualtyCheckStrengthFraction"/> of its starting strength.</summary>
+        Casualties = 1,
+        /// <summary>The squad's leader was alive at the start of the turn and is not now.</summary>
+        SquadLeaderLost = 2,
+        /// <summary>The side's last command-aura provider was destroyed this turn.</summary>
+        BattleLeaderLost = 4,
+        /// <summary>The squad was synapse-covered at the start of the turn and is not now.</summary>
+        SynapseLost = 8,
+        /// <summary>A friendly squad, at any range, routed in the previous turn's morale pass.</summary>
+        FriendlySquadRouted = 16
     }
 
     /// <summary>Morale's explicit handoff to the existing withdrawal/pursuit lifecycle.</summary>

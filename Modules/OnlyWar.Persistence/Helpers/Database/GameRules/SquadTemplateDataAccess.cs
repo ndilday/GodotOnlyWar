@@ -304,19 +304,11 @@ namespace OnlyWar.Persistence.Database.GameRules
             {
                 command.CommandText =
                     "SELECT Id, Name FROM AmmunitionType";
-                try
+                var reader = command.ExecuteReader();
+                while (reader.Read())
                 {
-                    var reader = command.ExecuteReader();
-                    while (reader.Read())
-                    {
-                        ammunitionTypes[reader.GetInt32(0)] =
-                            new AmmunitionType(reader.GetInt32(0), reader.GetString(1));
-                    }
-                }
-                catch (DbException)
-                {
-                    // A small rules fixture may predate the itemized tables. Legacy weapon
-                    // templates remain valid with null ammunition identities in that case.
+                    ammunitionTypes[reader.GetInt32(0)] =
+                        new AmmunitionType(reader.GetInt32(0), reader.GetString(1));
                 }
             }
             return ammunitionTypes;
@@ -353,13 +345,27 @@ namespace OnlyWar.Persistence.Database.GameRules
                     ushort reloadTime = (ushort)reader.GetInt16(15);
                     byte templateType = reader.GetByte(16);
                     float areaRadius = Convert.ToSingle(reader[17]);
-                    AmmunitionType ammunitionType = ammunitionTypes.GetValueOrDefault(
-                        EquipmentRulesCatalog.GetAmmunitionTypeId(id));
                     AmmunitionBehavior ammunitionBehavior = templateType == 3
                         ? AmmunitionBehavior.ConsumableItem
                         : IsBiologicalWeaponName(name)
                             ? AmmunitionBehavior.SelfRegenerating
                             : AmmunitionBehavior.Magazine;
+                    // The caliber is authored, not derived from the template id, so weapons that
+                    // fire the same rounds share one AmmunitionType. A magazine weapon without one
+                    // would reload forever from an uncounted reserve -- the Ork weapons shipped
+                    // like that unnoticed -- so it is a data error rather than a fallback.
+                    AmmunitionType ammunitionType = reader.IsDBNull(18)
+                        ? null
+                        : RulesDatabaseLookup.Require(
+                            ammunitionTypes,
+                            reader.GetInt32(18),
+                            $"RangedWeaponTemplate {id}.AmmunitionTypeId");
+                    if (ammunitionType == null && ammunitionBehavior == AmmunitionBehavior.Magazine)
+                    {
+                        throw new InvalidOperationException(
+                            $"Rules database RangedWeaponTemplate {id} ({name}) is a magazine "
+                            + "weapon with no AmmunitionTypeId.");
+                    }
                     AmmunitionConsumptionRule consumptionRule = templateType == 0
                         ? AmmunitionConsumptionRule.PerShot
                         : AmmunitionConsumptionRule.PerAttack;

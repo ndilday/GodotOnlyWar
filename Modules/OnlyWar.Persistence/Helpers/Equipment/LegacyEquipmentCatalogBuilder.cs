@@ -19,6 +19,9 @@ namespace OnlyWar.Persistence.Equipment
             IReadOnlyCollection<SquadTemplate> squadTemplates = null)
         {
             Dictionary<int, AmmunitionType> ammunitionTypes = [];
+            // Rounds in one package of each caliber: the largest magazine that fires it, so a kit's
+            // spare packages cover a full reload of any weapon sharing the caliber.
+            Dictionary<int, ushort> roundsPerPackage = [];
             Dictionary<int, EquipmentTemplate> equipmentTemplates = [];
 
             foreach (RangedWeaponTemplate template in rangedWeapons?.Values ?? Array.Empty<RangedWeaponTemplate>())
@@ -29,10 +32,15 @@ namespace OnlyWar.Persistence.Equipment
                     and not AmmunitionBehavior.SelfRegenerating
                     and not AmmunitionBehavior.ConsumableItem)
                 {
-                    int ammunitionId = GetAmmunitionTypeId(template.Id);
-                    ammunitionType = ammunitionTypes[ammunitionId] = new AmmunitionType(
-                        ammunitionId,
+                    // The rules database authors the caliber; hand-built fixture templates carry
+                    // none, and get one private to the weapon as before.
+                    ammunitionType = template.AmmunitionType ?? new AmmunitionType(
+                        GetAmmunitionTypeId(template.Id),
                         $"{template.Name} ammunition");
+                    ammunitionTypes.TryAdd(ammunitionType.Id, ammunitionType);
+                    roundsPerPackage[ammunitionType.Id] = Math.Max(
+                        roundsPerPackage.GetValueOrDefault(ammunitionType.Id),
+                        template.AmmoCapacity);
                 }
 
                 AmmunitionBehavior behavior = template.AmmunitionBehavior;
@@ -126,7 +134,7 @@ namespace OnlyWar.Persistence.Equipment
                     tags: EquipmentTags.Ammunition | EquipmentTags.AmmunitionCarrier,
                     ammunitionProfile: new AmmunitionPackageProfile(
                         ammunitionType,
-                        rangedWeapons.Values.First(template => GetAmmunitionTypeId(template.Id) == ammunitionType.Id).AmmoCapacity));
+                        roundsPerPackage[ammunitionType.Id]));
             }
 
             Dictionary<int, EquipmentKitTemplate> kits = [];
@@ -149,7 +157,7 @@ namespace OnlyWar.Persistence.Equipment
                         continue;
                     }
                     EquipmentTemplate package = equipmentTemplates[GetAmmunitionPackageId(profile.AmmunitionType.Id)];
-                    entries.Add(new EquipmentKitEntry(package, 1));
+                    entries.Add(new EquipmentKitEntry(package, StandardSpareMagazines));
                 }
 
                 kits[GetKitId(set.Id)] = new EquipmentKitTemplate(

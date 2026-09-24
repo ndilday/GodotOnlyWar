@@ -130,11 +130,15 @@ public class BattleMoraleResolverTests
     }
 
     [Fact]
-    public void HighEgoSquadsFightingToAnnihilation_NeverRout()
+    public void HighEgoSquadsFightingToAnnihilation_NeverRoutWhileASquadmateStands()
     {
         // Evenly matched high-Ego (14) squads grind each other down until one is wiped out:
         // §2 requires that ordinary attrition never breaks marine-grade morale, so neither side
-        // may emit SquadRouted even as the loser is annihilated (§2, §10 Phase 7).
+        // may rout while it still has two or more soldiers (§2, §10 Phase 7). A lone last
+        // survivor who has just seen his squad cut down in one turn MAY break: at 4 of 5 lost,
+        // 3 of them in that turn, his stress (~3.6) sits just under an Ego-14 resolve (~3.85)
+        // and he runs about 15% of the time. That is accepted behaviour (2026-09-24), not
+        // attrition breaking marines, so the assertion allows it.
         //
         // These squads are built from the hand-rolled player-side MarineTemplate, which has no
         // MosTraining — so nobody can shoot and the casualties all come from melee. That is
@@ -166,10 +170,20 @@ public class BattleMoraleResolverTests
         }
 
         Assert.True(completed);
-        Assert.DoesNotContain(
-            resolver.BattleHistory.Turns.SelectMany(turn => turn.Events),
-            e => e.Type == BattleEventType.SquadRouted);
-        Assert.Empty(resolver.BattleHistory.Outcome.RoutingSquadIds);
+        // Both squads carry Id 0, so the event's side picks the roster. The turn snapshot is
+        // taken after that turn's casualties, so it shows who was left when the squad broke.
+        foreach (BattleTurn turn in resolver.BattleHistory.Turns)
+        {
+            foreach (BattleEvent routed in turn.Events.Where(e => e.Type == BattleEventType.SquadRouted))
+            {
+                BattleSquadSnapshot squad = routed.Side == BattleSide.Attacker
+                    ? turn.State.AttackerSquads[routed.PrimarySquadId.Value]
+                    : turn.State.OpposingSquads[routed.PrimarySquadId.Value];
+                Assert.True(
+                    squad.Soldiers.Count <= 1,
+                    $"{squad.Name} routed on turn {turn.TurnNumber} with {squad.Soldiers.Count} soldiers.");
+            }
+        }
     }
 
     /// <summary>

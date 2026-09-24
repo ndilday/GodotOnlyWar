@@ -30,6 +30,14 @@ namespace OnlyWar.Domain.Equippables
             PersonalEquipmentRoles = new ReadOnlyDictionary<int, PersonalEquipmentRole>(personalEquipmentRoles);
         }
 
+        /// <summary>
+        /// Spare magazines issued with every counted-ammunition weapon, on top of the one loaded.
+        /// The legacy WeaponSet path gives each weapon this many magazines of reserve; itemized
+        /// kits carry this many packages per weapon (authored in EquipmentKitItem, and pinned by
+        /// a rules-database test).
+        /// </summary>
+        public const int StandardSpareMagazines = 3;
+
         public static int GetRangedEquipmentId(int rangedTemplateId) => 1_000_000 + rangedTemplateId;
         public static int GetMeleeEquipmentId(int meleeTemplateId) => 2_000_000 + meleeTemplateId;
         public static int GetArmorEquipmentId(int armorTemplateId) => 3_000_000 + armorTemplateId;

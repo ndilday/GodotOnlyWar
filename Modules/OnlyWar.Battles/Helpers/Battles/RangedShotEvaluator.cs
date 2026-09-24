@@ -17,8 +17,6 @@ namespace OnlyWar.Battles
     /// </summary>
     internal sealed class RangedShotEvaluator
     {
-        private const float TargetTakeOutConfidenceThreshold = MeleeMath.TakeOutConfidenceTarget;
-
         private readonly RangedTargetingServices _services;
         private readonly BattleGridManager _grid;
         private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
@@ -105,46 +103,113 @@ namespace OnlyWar.Battles
             return result;
         }
 
-        internal int CalculateShotsToFire(
+        /// <summary>
+        /// The burst to fire: the round count with the best net value, where net value is the
+        /// burst's expected battle value removed, less friendly strays, less the rounds it spends
+        /// at <c>scarcity × (value of a round)</c> each.
+        ///
+        /// <para>WHY. This used to fire enough rounds to reach 75% take-out confidence, treating
+        /// each round as an independent chance to kill. <see cref="Actions.ShootAction"/> does
+        /// not resolve a burst that way: it makes ONE roll, and hit k needs the margin to clear
+        /// <c>1 + (k-1) × recoil</c>. For a boltgun the fifth hit needs a margin above 7 against a
+        /// deviation of 3, so rounds five to nine almost never land; all they buy is the
+        /// <c>log2(n)</c> to-hit bonus on the first round. The old rule could not see that, and
+        /// marines emptied their magazines on nine-round bursts. The score below is the one
+        /// <see cref="RemovalMath.ExpectedBurstRemovalFraction"/> already gives every consumer.</para>
+        ///
+        /// <para>Without a price on rounds the answer is always the full rate of fire -- another
+        /// round never lowers the expected removal -- so the round cost is what shortens a burst.
+        /// It is priced exactly as <see cref="RangedTargetSelector.EvaluateFireTiming"/> prices a
+        /// shot: scarcity 0 (free rounds) fires everything, and on the last magazine only the
+        /// most round-efficient burst is worth firing.</para>
+        ///
+        /// <para>SEARCH. Climb from the minimum and stop at the first round whose marginal value
+        /// does not cover its cost. That is exact when the score is concave in the round count --
+        /// the bonus step <c>log2((n+1)/n)</c> shrinks and each later hit needs a higher margin --
+        /// and then the best value per round is the first burst's, so the price is known before
+        /// the climb starts. It is only approximate in the deep tail of the hit roll, where the
+        /// score is convex and the climb can stop early on a shot hardly worth taking. A short
+        /// burst costs a few CDF calls, fewer than the fixed-point iteration this replaced.</para>
+        /// </summary>
+        private int ChooseShotsToFire(
+            BattleSoldier shooter,
+            BattleSoldier target,
             RangedWeapon weapon,
-            float toHitAtPlannedRateOfFire,
-            float takeOutProbabilityOnHit,
-            int? availableAmmo = null)
+            float range,
+            in RangedHitEstimateContext hitContext,
+            bool firingIntoMelee,
+            float removalFractionPerHit,
+            int ammunitionAvailable)
         {
-            int minRoF = 1;
-            int maxRof = Math.Max(
+            int maxShots = Math.Max(
                 1,
-                Math.Min(
-                    (int)weapon.Template.RateOfFire,
-                    Math.Max(0, availableAmmo ?? weapon.LoadedAmmo)));
+                Math.Min((int)weapon.Template.RateOfFire, Math.Max(0, ammunitionAvailable)));
+            int minShots = 1;
             // Assume all machine guns have to fire at least one quarter of their maximum.
             if (weapon.Template.RateOfFire > 10)
             {
-                minRoF = Math.Min(weapon.Template.RateOfFire / 4, maxRof);
+                minShots = Math.Min(weapon.Template.RateOfFire / 4, maxShots);
             }
-
-            if (toHitAtPlannedRateOfFire < .1f || takeOutProbabilityOnHit <= 0)
+            if (maxShots <= minShots)
             {
-                return minRoF;
+                return minShots;
             }
 
-            // Fire enough independent shots to reach the same take-out confidence used by melee
-            // strike planning. This is a kill probability, not a graded wound fraction.
-            float perShotTakeOut = Math.Clamp(
-                toHitAtPlannedRateOfFire * takeOutProbabilityOnHit,
-                0f,
-                1f);
-            if (perShotTakeOut <= 0f)
+            float scarcity = RangedTargetSelector.AmmunitionScarcity(weapon);
+            if (scarcity <= 0f && !firingIntoMelee)
             {
-                return minRoF;
+                // Free rounds and no friend in the line of fire: every round adds, none costs.
+                // Checked before the zero-removal case on purpose. PairRemovalRateTable keeps this
+                // count and rescales the shot to other ranges, so a far-range capture that removes
+                // nothing must still report the burst the weapon fires once it can penetrate;
+                // otherwise the stored count jumps from the minimum to the full rate at the
+                // penetration range, and the engagement potential shows a cliff there.
+                return maxShots;
+            }
+            if (removalFractionPerHit <= 0f)
+            {
+                return minShots;
             }
 
-            int killRof = perShotTakeOut >= 1f
-                ? 1
-                : (int)Math.Ceiling(
-                    Math.Log(1f - TargetTakeOutConfidenceThreshold)
-                    / Math.Log(1f - perShotTakeOut));
-            return Math.Clamp(killRof, minRoF, maxRof);
+            float targetValue = RangedTargetingServices.BattleValueOf(target);
+            float friendlyLossOnStray = firingIntoMelee
+                ? CalculateExpectedFriendlyLossOnStray(shooter, target, weapon, range)
+                : 0f;
+            float recoil = weapon.Template.Recoil;
+            RangedHitEstimateContext context = hitContext;
+            float Score(int shots)
+            {
+                float preRollHitTotal = context.CalculatePreRollHitTotal(shots);
+                float removed = targetValue * RemovalMath.ExpectedBurstRemovalFraction(
+                    preRollHitTotal, shots, recoil, removalFractionPerHit);
+                return friendlyLossOnStray > 0f
+                    ? removed - (RangedFriendlyFireRules.CalculateNearMissProbability(preRollHitTotal)
+                        * friendlyLossOnStray)
+                    : removed;
+            }
+
+            int chosen = minShots;
+            float score = Score(minShots);
+            float valuePerRound = Math.Max(0f, score)
+                / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(minShots));
+            while (chosen < maxShots)
+            {
+                int nextShots = chosen + 1;
+                float nextScore = Score(nextShots);
+                float roundCost = scarcity * valuePerRound
+                    * (weapon.GetAmmunitionUnitsForAttack(nextShots)
+                        - weapon.GetAmmunitionUnitsForAttack(chosen));
+                if (nextScore - score <= roundCost)
+                {
+                    break;
+                }
+                chosen = nextShots;
+                score = nextScore;
+                valuePerRound = Math.Max(
+                    valuePerRound,
+                    Math.Max(0f, score) / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(chosen)));
+            }
+            return chosen;
         }
 
         // (HitProbability, TakeOutProbabilityOnHit, ShotsToFire, PreRollHitTotal, WoundProgressOnHit)
@@ -159,9 +224,6 @@ namespace OnlyWar.Battles
             int? availableAmmo = null)
         {
             int ammunitionAvailable = availableAmmo ?? weapon.LoadedAmmo;
-            int shotsToFire = Math.Max(
-                1,
-                Math.Min((int)weapon.Template.RateOfFire, Math.Max(0, ammunitionAvailable)));
             float armor = target.Armor?.Template.ArmorProvided ?? 0;
             (float takeOutProbability, float woundProgress) = CalculateRangedHitRemoval(
                 target,
@@ -174,42 +236,24 @@ namespace OnlyWar.Battles
             RangedHitEstimateContext hitContext = new(
                 soldier,
                 target,
-                    weapon,
-                    range,
-                    moveAndAimMod,
-                    firingIntoMelee,
-                    targetSpeed);
-            (float HitProbability, float TakeOutProbabilityOnHit, float PreRollHitTotal) estimate =
-                new(0, 0, 0);
-            for (int iteration = 0; iteration < 4; iteration++)
-            {
-                estimate = EstimateHitAndDamage(
-                    hitContext,
-                    takeOutProbability,
-                    shotsToFire);
-                int revisedShots = CalculateShotsToFire(
-                    weapon,
-                    estimate.HitProbability,
-                    estimate.TakeOutProbabilityOnHit,
-                    ammunitionAvailable);
-                if (revisedShots == shotsToFire)
-                {
-                    return (
-                        estimate.HitProbability,
-                        estimate.TakeOutProbabilityOnHit,
-                        shotsToFire,
-                        estimate.PreRollHitTotal,
-                        woundProgress);
-                }
-                shotsToFire = revisedShots;
-            }
-
-            // Recalculate with the final count so the returned probability is exactly the one the
-            // ShootAction will resolve, even if a future rule introduces oscillation.
-            estimate = EstimateHitAndDamage(
+                weapon,
+                range,
+                moveAndAimMod,
+                firingIntoMelee,
+                targetSpeed);
+            int shotsToFire = ChooseShotsToFire(
+                soldier,
+                target,
+                weapon,
+                range,
                 hitContext,
-                takeOutProbability,
-                shotsToFire);
+                firingIntoMelee,
+                RemovalMath.CombineRemovalFraction(
+                    Math.Clamp(takeOutProbability, 0f, 1f),
+                    woundProgress),
+                ammunitionAvailable);
+            (float HitProbability, float TakeOutProbabilityOnHit, float PreRollHitTotal) estimate =
+                EstimateHitAndDamage(hitContext, takeOutProbability, shotsToFire);
             return (
                 estimate.HitProbability,
                 estimate.TakeOutProbabilityOnHit,
@@ -233,13 +277,36 @@ namespace OnlyWar.Battles
                 return 0;
             }
 
+            float preRollHitTotal = CalculateRangedPreRollHitTotal(
+                shooter,
+                nominalTarget,
+                weapon,
+                range,
+                additionalToHitModifier,
+                numberOfShots,
+                firingIntoMelee: true);
+            return RangedFriendlyFireRules.CalculateNearMissProbability(preRollHitTotal)
+                * CalculateExpectedFriendlyLossOnStray(shooter, nominalTarget, weapon, range);
+        }
+
+        /// <summary>
+        /// Expected friendly battle value lost if a shot at a target in a melee scrum strays: the
+        /// stray-victim lottery over the scrum's friendly members, times what one hit removes.
+        /// Independent of the burst, so burst selection prices every round count against it once.
+        /// </summary>
+        private float CalculateExpectedFriendlyLossOnStray(
+            BattleSoldier shooter,
+            BattleSoldier nominalTarget,
+            RangedWeapon weapon,
+            float range)
+        {
             List<BattleSoldier> scrumParticipants = _grid
                 .GetMeleeScrumParticipants(nominalTarget.Soldier.Id)
                 .Where(_soldierMap.ContainsKey)
                 .Select(id => _soldierMap[id])
                 .ToList();
             bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
-            float expectedFriendlyLossOnStray = scrumParticipants
+            return scrumParticipants
                 .Where(participant => _grid.GetSoldierSide(participant.Soldier.Id) == shooterSide)
                 .Sum(participant =>
                 {
@@ -256,17 +323,6 @@ namespace OnlyWar.Battles
                         * removalFraction
                         * RangedTargetingServices.BattleValueOf(participant);
                 });
-
-            float preRollHitTotal = CalculateRangedPreRollHitTotal(
-                shooter,
-                nominalTarget,
-                weapon,
-                range,
-                additionalToHitModifier,
-                numberOfShots,
-                firingIntoMelee: true);
-            return RangedFriendlyFireRules.CalculateNearMissProbability(preRollHitTotal)
-                * expectedFriendlyLossOnStray;
         }
 
         private readonly struct RangedHitEstimateContext
@@ -346,8 +402,9 @@ namespace OnlyWar.Battles
             return hitContext.CalculatePreRollHitTotal(numberOfShots);
         }
 
-        // The graded fraction is used when a landed hit is translated into expected battle value.
-        // Shot-count selection and the Phase 4 table continue to use the raw take-out probability.
+        // The graded fraction is used when a landed hit is translated into expected battle value,
+        // including by shot-count selection. The Phase 4 table still carries the raw take-out
+        // probability alongside it.
         internal static float CalculateRangedRemovalFraction(
             BattleSoldier target,
             RangedWeapon weapon,

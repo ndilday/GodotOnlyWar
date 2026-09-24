@@ -1462,7 +1462,10 @@ survivor without refilling its magazine; reassignment preserves the weapon's cur
 The physical `RangedWeapon` and `MeleeWeapon` objects retained by `BattleSquad` are the sole mutable
 mission equipment state. All itemized weapons from one resolved loadout reference one
 `AmmunitionReservePool`, so compatible weapons draw from the same package count and a loadout with no
-package has no reserve. Magazine weapons reload from that pool, incremental weapons load partial
+package has no reserve. `AmmunitionType` is a caliber, not a per-weapon identity: every boltgun and
+bolt pistol fires Bolt rounds, lasguns and laspistols share Las charges, and so on. Legacy
+`RangedWeaponTemplate` rows name their caliber in `AmmunitionTypeId`, and the loader rejects a
+magazine weapon without one, because it would otherwise reload forever from an uncounted reserve. Magazine weapons reload from that pool, incremental weapons load partial
 amounts, consumable grenades decrement their carried quantity, unlimited weapons spend nothing, and
 self-regenerating profiles advance recovery at turn boundaries without a reload action. Initial-ready
 orders are copied onto the physical weapons and applied by `BattleSoldier`; lower numbers have higher
@@ -1502,8 +1505,16 @@ Strength after armor reduction is compared against wound thresholds to determine
 - **Take-out probability is the per-hit quantity.** Ranged, cone, blast, melee, and friendly-fire
   scoring use `CalculateTakeOutProbabilityOnHit`, which follows the resolver's hit-location, armor,
   wound-threshold, motive/vital, and functioning-hand rules over the real damage distribution. It
-  reads live wound state, so concentrated and finishing damage are valued naturally. Burst sizing
-  (`CalculateShotsToFire`) targets take-out confidence in the same currency.
+  reads live wound state, so concentrated and finishing damage are valued naturally.
+- **Burst size (`RangedShotEvaluator.ChooseShotsToFire`, 2026-09-24)** picks the round count with
+  the best net value: the burst's expected removal (`RemovalMath.ExpectedBurstRemovalFraction`,
+  which models the single roll and the recoil loop), less friendly strays, less
+  `scarcity × value per round` for each round spent. It climbs from the minimum and stops at the
+  first round that does not pay for itself. Free rounds (scarcity 0) fire the full rate; a
+  standard-issue boltgun at short range fires about 3; on the last magazine a burst shrinks to its
+  most round-efficient length. This replaced a rule that fired to 75% take-out confidence while
+  treating each round as an independent kill chance, which fired 6–9 round bursts whose later
+  rounds almost never hit.
 - **Aim, ammunition, and lanes (`RangedTargetSelector`, 2026-09-22).** Aim versus shoot compares
   value per turn: firing now against the prepared shot's value over the turns it takes, with the
   target's range projected along its direction of travel (`EvaluateFireTiming`,
@@ -1640,7 +1651,7 @@ not become multi-turn pursuit evidence. `Standoff` satisfies the fire branch thr
 fire constraint, while `Follow` may instead satisfy it by genuinely closing. Force-level capability
 does not replace pair-local observed progress.
 
-After each combat round, `BattleMoraleEvaluator` computes local shock from current/cumulative casualties, leader loss, nearby routing allies, and local outnumbering, then multiplies it by force-wide disadvantage. Per-soldier resolve is a convex Ego function. Synapse coverage skips the check; command auras reduce shock without granting immunity. Squads aggregate to `Steady`, `Shaken`, or sticky `Routing`; routing preempts the normal plan and enters the same pursuit, outcome, aftermath, and replay pipeline as voluntary withdrawal. Morale and withdrawal tunables live in code (`MoraleConstants` and the withdrawal planners) and are calibration surfaces rather than rules-data facts.
+After each combat round, `BattleMoraleService` checks only the squads that have a `MoraleCheckTrigger`: casualties this turn (below `MoraleConstants.CasualtyCheckStrengthFraction` of starting strength, 1.0 today), squad leader lost, the side's last command-aura provider destroyed, synapse coverage lost, or a friendly squad routed in the previous turn's pass (any range). The triggers compare against facts taken in `SnapshotTurnStart`. A squad with no trigger rolls nothing unless it is Shaken; then it rolls to rally, and the rally can only restore `Steady`, so it never routs and never invokes mob coercion. `BattleMoraleEvaluator` computes local shock from current/cumulative casualties, leader loss, nearby routing allies, and local outnumbering, then multiplies it by force-wide disadvantage. Per-soldier resolve is a convex Ego function. Synapse coverage skips the check; command auras reduce shock without granting immunity. Squads aggregate to `Steady`, `Shaken`, or sticky `Routing`; routing preempts the normal plan and enters the same pursuit, outcome, aftermath, and replay pipeline as voluntary withdrawal. Morale and withdrawal tunables live in code (`MoraleConstants` and the withdrawal planners) and are calibration surfaces rather than rules-data facts.
 
 Battle completion produces a typed `BattleOutcome` with end reason, field holder, and disengaged/eliminated/routing/rear-guard squad ids. Stood-down pursuers are not listed as disengaged: they left the field but did not withdraw, and the mission layer reads a disengaged mission squad as the mission side withdrawing. Typed `BattleEvent`s record withdrawal, cover, rear guard, pursuit, rout, and disengagement transitions for replay and narrative consumers.
 
