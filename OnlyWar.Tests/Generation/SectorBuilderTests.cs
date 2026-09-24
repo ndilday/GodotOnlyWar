@@ -123,9 +123,7 @@ public class SectorBuilderTests
         double spawnProbability,
         int maxSubsectorDiameter)
     {
-        string databasePath = Path.Combine(
-            Path.GetTempPath(), $"onlywar-sector-builder-{suffix}-{Guid.NewGuid():N}.s3db");
-        File.Copy(RulesDatabaseFixture.DatabasePath, databasePath);
+        string databasePath = RulesDatabaseFixture.CreateTemporaryCopy($"onlywar-sector-builder-{suffix}");
 
         try
         {
@@ -153,11 +151,7 @@ public class SectorBuilderTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-            if (File.Exists(databasePath))
-            {
-                File.Delete(databasePath);
-            }
+            RulesDatabaseFixture.DeleteTemporaryCopy(databasePath);
         }
     }
 }

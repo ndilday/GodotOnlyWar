@@ -20,17 +20,15 @@ public class RulesDatabaseValidationTests
     [Fact]
     public void HydratedCatalogRetainsTemplateIdentityAndIsIndependentOfItsSourceFile()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"onlywar-catalog-{Guid.NewGuid():N}.s3db");
+        string path = RulesDatabaseFixture.CreateTemporaryCopy("onlywar-catalog");
         GameRulesBlob values;
         try
         {
-            File.Copy(RulesDatabaseFixture.DatabasePath, path);
             values = new OnlyWar.Persistence.Database.GameRules.GameRulesDataAccess().GetData(path);
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-            File.Delete(path);
+            RulesDatabaseFixture.DeleteTemporaryCopy(path);
         }
 
         GameRulesData catalog = new(values);
@@ -396,9 +394,7 @@ public class RulesDatabaseValidationTests
     [Fact]
     public void ChapterDoctrine_ResolvesRenamedTemplatesThroughStableAssignments()
     {
-        string temporaryDatabasePath = Path.Combine(
-            Path.GetTempPath(), $"onlywar-chapter-doctrine-{Guid.NewGuid():N}.s3db");
-        File.Copy(RulesDatabaseFixture.DatabasePath, temporaryDatabasePath);
+        string temporaryDatabasePath = RulesDatabaseFixture.CreateTemporaryCopy("onlywar-chapter-doctrine");
 
         try
         {
@@ -447,11 +443,7 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-            if (File.Exists(temporaryDatabasePath))
-            {
-                File.Delete(temporaryDatabasePath);
-            }
+            RulesDatabaseFixture.DeleteTemporaryCopy(temporaryDatabasePath);
         }
     }
 
@@ -466,11 +458,7 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-            if (File.Exists(databasePath))
-            {
-                File.Delete(databasePath);
-            }
+            RulesDatabaseFixture.DeleteTemporaryCopy(databasePath);
         }
     }
 
@@ -483,19 +471,13 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-            if (File.Exists(databasePath))
-            {
-                File.Delete(databasePath);
-            }
+            RulesDatabaseFixture.DeleteTemporaryCopy(databasePath);
         }
     }
 
     private static string CreateMutatedRulesDatabase(string suffix, string mutationSql)
     {
-        string databasePath = Path.Combine(
-            Path.GetTempPath(), $"onlywar-rules-validation-{suffix}-{Guid.NewGuid():N}.s3db");
-        File.Copy(RulesDatabaseFixture.DatabasePath, databasePath);
+        string databasePath = RulesDatabaseFixture.CreateTemporaryCopy($"onlywar-rules-validation-{suffix}");
 
         using (SqliteConnection connection = new(new SqliteConnectionStringBuilder
         {

@@ -32,18 +32,7 @@ internal sealed class GameStateRoundTripFixture
 
     public static void CleanupDb(string dbPath)
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        try
-        {
-            if (File.Exists(dbPath))
-            {
-                File.Delete(dbPath);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of a temp file; ignore if still locked.
-        }
+        RulesDatabaseFixture.DeleteTemporaryCopy(dbPath);
     }
 
     public static long CountRows(string dbPath, string table)
