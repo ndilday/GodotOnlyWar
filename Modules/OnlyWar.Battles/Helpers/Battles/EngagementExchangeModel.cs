@@ -24,7 +24,9 @@ namespace OnlyWar.Battles
     /// </summary>
     internal sealed class EngagementExchangeModel
     {
-        // Plies of policy rollout. Each ply re-chooses, so this is a depth, not a fixed script.
+        // Originally the depth of the bounded policy rollout, which has since been removed in
+        // favour of EngagementPotential. The value survives as the retargeting horizon
+        // (BattleEscapeRules.RetargetingHorizonTurns, via BattleSquadPlanner).
         internal const int EngagementLookaheadHorizon = 2;
         internal const float EngagementFutureDiscount = 0.65f;
         private const float WalkBulkMultiplier = SoldierMovementPlanner.WalkBulkMultiplier;
@@ -36,12 +38,6 @@ namespace OnlyWar.Battles
         private readonly PairRemovalRateTable _removalRates;
         private readonly BattleGridManager _grid;
         private readonly BattlePlanningContext _context;
-
-        // Kept for the legacy bounded-rollout helpers below. The live posture scorer uses the
-        // state-only potential, whose horizon is the same frozen turn-level memo.
-        private float ExpectedExchangeTurnsFor(BattleSquad squad) =>
-            _context?.ExpectedExchangeTurnsFor(squad?.Id ?? 0)
-                ?? EngagementHorizonModel.MaximumExchangeTurns;
 
         internal EngagementExchangeModel(
             SquadPlanningServices services,
@@ -232,300 +228,6 @@ namespace OnlyWar.Battles
             MeleeRemovalRate(attacker, target, 1f);
 
         /// <summary>
-        /// Values the root option's change in time-to-useful-exchange using the same present-value
-        /// currency as the lookahead terminal. A short rollout can make Walk, Jog and Run look
-        /// nearly identical when the useful range is many turns away; this term exposes the root
-        /// transition directly without assigning movement a unit-specific bonus.
-        ///
-        /// The value is positive when the candidate reaches a useful exchange sooner and negative
-        /// when the exchange at that range is unfavorable. The latter is intentional: movement
-        /// should not be rewarded merely because it is movement. A ranged squad uses its derived
-        /// effective band; a contact-seeking squad uses the contact boundary.
-        /// </summary>
-        internal float EvaluateArrivalTimeValue(
-            BattleSquad squad,
-            ValueTuple<float, float> projectedCentroid,
-            BattleSquadCapabilityProfile profile,
-            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
-            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
-            IReadOnlyCollection<BattleSquad> enemies,
-            SquadEngagementFrame frame)
-        {
-            // A squad already inside its ordinary ranged band should not be pulled toward the
-            // sharper derived range merely because that range exists. The baseline posture is the
-            // existing generic statement of whether approach is currently warranted; this term
-            // adds value to the speed of that approach rather than replacing the band policy.
-            if (profile.MoveSpeed <= 0
-                || enemies.Count == 0
-                || frame.BaselinePosture is not (
-                    EngagementOptionKind.CloseToContact
-                    or EngagementOptionKind.JogToward
-                    or EngagementOptionKind.RunToward))
-            {
-                return 0;
-            }
-
-            ValueTuple<float, float> currentCentroid =
-                BattleEngagementFrameBuilder.Centroid(squad);
-            float desiredRange = profile.IsContactSeeking
-                ? 1f
-                : Math.Max(1f, profile.EffectiveEngagementRange);
-            float value = 0;
-            foreach (BattleSquad enemy in enemies.OrderBy(candidate => candidate.Id))
-            {
-                if (!profiles.TryGetValue(enemy.Id, out BattleSquadCapabilityProfile opposing)
-                    || !frames.ContainsKey(enemy.Id))
-                {
-                    continue;
-                }
-
-                ValueTuple<float, float> enemyCentroid =
-                    BattleEngagementFrameBuilder.Centroid(enemy);
-                float before = Distance(currentCentroid, enemyCentroid);
-                float after = Distance(projectedCentroid, enemyCentroid);
-
-                // Both distances are measured to where the quarry is standing NOW, so against a
-                // withdrawing enemy the gross closing this option shows is not what the squad
-                // keeps: the quarry spends the same turn opening the range again. Netting it out
-                // is what stops a stern chase from being repriced as progress every turn. Without
-                // it a pursuer at matched speed scored the full value of closing 6 yards, took
-                // none of it, and scored the identical 6 yards again next turn — arrival_value
-                // 65.8 per turn for an arrival that never came (Xibarrus Theta, 2026-08-04).
-                float quarrySpeed = QuarryWithdrawalRate(
-                    frame, frames[enemy.Id].Role);
-                after = before - Math.Max(0, before - after - quarrySpeed);
-                if (before <= desiredRange || after >= before - 0.0001f) continue;
-
-                // The discount has to run on the same net rate: at matched speed the useful range
-                // is not profile.MoveSpeed turns away, it is unreachable, and the floor makes that
-                // read as "so far off it is worth nothing" rather than "arrives next turn".
-                float speed = Math.Max(0.1f, profile.MoveSpeed - quarrySpeed);
-                float turnsBefore = Math.Max(0, before - desiredRange) / speed;
-                float turnsAfter = Math.Max(0, after - desiredRange) / speed;
-                float arrivalDiscountDelta =
-                    1f / (1f + turnsAfter) - 1f / (1f + turnsBefore);
-                if (arrivalDiscountDelta <= 0) continue;
-
-                // Arrival value is the offensive opportunity unlocked by reaching the useful
-                // range. Incoming exposure remains in EvaluateIncomingNow and the continuation
-                // exchange, so using the net rate here would count that risk twice and could make
-                // every necessary approach look worse simply because the enemy can shoot back.
-                //
-                // It is the MARGINAL rate, not the gross one. The gross rate at the destination
-                // prices arrival as though the squad were doing nothing where it stands, so a
-                // squad already delivering fire is paid the full post-arrival rate for abandoning
-                // it. Measured 2026-08-07: a flamer bearer standing 10 yards from its target --
-                // inside a 30-yard weapon, burning it for 0.775 battle value this turn -- scored
-                // arrival 0.971 for running to contact and taking 0.000, so CloseToContact beat
-                // Hold 1.705 to 1.310 and the cone was never fired.
-                //
-                // What closing actually buys is the IMPROVEMENT in the per-turn rate. A squad
-                // whose rate is already what it will be at the destination gains nothing by
-                // arriving sooner; a melee squad out of reach still scores 0 where it stands and
-                // closes exactly as it did before, as does any squad outside its weapon's reach.
-                // This is the same invariant the BaselinePosture guard above reaches for -- do not
-                // pull a squad toward a sharper range merely because that range exists -- which
-                // that guard cannot enforce for a contact-seeking profile, since a contact seeker
-                // is precisely the case whose baseline posture is always a closing one.
-                float exchangeRate = EvaluateOutgoingExchangeRate(
-                    squad,
-                    enemy,
-                    profile,
-                    opposing,
-                    frames,
-                    desiredRange);
-                float currentRate = EvaluateOutgoingExchangeRate(
-                    squad,
-                    enemy,
-                    profile,
-                    opposing,
-                    frames,
-                    before);
-                // Keep the rate difference signed.  Clipping this per enemy turns the sum into
-                // "only improvements against enemies whose rate improves" rather than the
-                // potential difference for the whole state.  That makes the supposedly common
-                // root-state offset depend on the option's projected geometry: an option can
-                // discard every enemy it makes worse while retaining every enemy it makes
-                // better.  Negative gains are real positional costs and must cancel positive
-                // gains in the same state.
-                float rateGain = exchangeRate - currentRate;
-                value += rateGain * ExpectedExchangeTurnsFor(squad) * arrivalDiscountDelta;
-            }
-            return value;
-        }
-
-        private float EvaluateBestContinuation(
-            BattleSquad squad,
-            BattleSquadCapabilityProfile profile,
-            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
-            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
-            IReadOnlyCollection<BattleSquad> enemies,
-            IReadOnlyDictionary<int, float> ranges,
-            int depth)
-        {
-            if (depth <= 0)
-            {
-                // PHASE 5d (Design/Reference/BattleLogic.md). The terminal used to be
-                // `attainable * 0.25 / (1 + turnsToAct)` -- 41% of `future` (9.312 of 22.84) built
-                // from the squad's OWN battle value, with no per-turn semantics and no reference to
-                // what it was shooting at. It remains the same per-turn net exchange as the
-                // plies, but arrival is scaled separately from the short-ply discount:
-                //
-                //     terminal = exchange(rangeWhenActing) * ExpectedExchangeTurns
-                //         / (1 + turnsToAct)
-                //
-                // Read literally: "once I am standing where I want to stand, this is what each
-                // further turn is worth after arrival, scaled by the expected remaining battle
-                // length. A short rollout discount must not make a battle that starts 400 yards
-                // away effectively end before the charge can pay off.
-                //
-                // The closing gradient survives the switch to the honest rate table: a squad out of
-                // weapon reach scores 0 exchange AT its current range, but the terminal is
-                // evaluated at rangeWhenActing -- where it will be standing -- so closing still pays.
-                // `desired` remains EffectiveEngagementRange (Phase 2), not PreferredBandUpper.
-                float terminal = 0;
-                foreach (BattleSquad enemy in enemies.OrderBy(candidate => candidate.Id))
-                {
-                    float range = Math.Max(0, ranges[enemy.Id]);
-                    float desired = profile.IsContactSeeking
-                        ? 1f
-                        : Math.Max(1f, profile.EffectiveEngagementRange);
-                    // TurnsUntilWeReachTarget: own speed, own preferred band.
-                    float turnsToAct = Math.Max(0, range - desired)
-                        / Math.Max(0.1f, profile.MoveSpeed);
-                    float rangeWhenActing = Math.Min(range, Math.Max(desired, 0f));
-                    float exchangeRate = EvaluateExchangeRate(
-                        squad,
-                        enemy,
-                        profile,
-                        profiles[enemy.Id],
-                        frames,
-                        rangeWhenActing,
-                        // A squad that has taken position stands and shoots, so the terminal is
-                        // priced at the Hold retention rather than at a moving policy's.
-                        outgoingRetention: 1f,
-                        targetSpeed: 0f);
-                    terminal += exchangeRate * ExpectedExchangeTurnsFor(squad)
-                        / (1f + turnsToAct);
-                    // Terminal value represents attainable action opportunity, not generic distance:
-                    // a squad with no usable offense receives no reward merely for closing.
-                }
-                return terminal;
-            }
-            float best = float.MinValue;
-            // A future state chooses again.  This is the bounded policy comparison the previous
-            // fixed baseline rollout lacked: root Hold may continue with Run, root Run may continue
-            // with Hold/fire, and Jog is valued only at its aggregate moving-fire retention.
-            foreach (EngagementOptionKind policy in new[]
-            {
-                EngagementOptionKind.Hold,
-                EngagementOptionKind.JogToward,
-                EngagementOptionKind.RunToward
-            })
-            {
-                float exchange = 0;
-                Dictionary<int, float> nextRanges = [];
-                foreach (BattleSquad enemy in enemies.OrderBy(candidate => candidate.Id))
-                {
-                    BattleSquadCapabilityProfile opposing = profiles[enemy.Id];
-                    float range = Math.Max(0, ranges[enemy.Id]);
-                    float outgoingRetention = policy switch
-                    {
-                        EngagementOptionKind.Hold => 1f,
-                        EngagementOptionKind.JogToward => 0.65f,
-                        _ => 0f
-                    };
-                    float ourMotion = PolicyRangeDelta(profile, range, policy);
-                    exchange += EvaluateExchangeRate(
-                        squad,
-                        enemy,
-                        profile,
-                        opposing,
-                        frames,
-                        range,
-                        outgoingRetention,
-                        targetSpeed: Math.Max(0, -ourMotion));
-                    float theirMotion = (frames[squad.Id].Role
-                        is EngagementSquadRole.Pursuit
-                            or EngagementSquadRole.Follow
-                            or EngagementSquadRole.Press
-                            or EngagementSquadRole.Standoff)
-                        ? Math.Max(0, frames[squad.Id].QuarryRunSpeed)
-                        : BaselineRangeDelta(opposing, frames[enemy.Id].Role, range);
-                    nextRanges[enemy.Id] = Math.Max(0, range + ourMotion + theirMotion);
-                }
-                float value = exchange + EngagementFutureDiscount * EvaluateBestContinuation(
-                    squad, profile, profiles, frames, enemies, nextRanges, depth - 1);
-                if (value > best) best = value;
-            }
-            return best == float.MinValue ? 0 : best;
-        }
-
-        // Projected own motion for one lookahead policy. Phase 2
-        // (Design/Reference/BattleLogic.md): `desired` is the effectiveness-derived
-        // EffectiveEngagementRange, not PreferredBandUpper. PreferredBandUpper is the weapon's
-        // MAXIMUM range, so any range already inside reach yielded `range > desired == false` and
-        // this returned 0 own-motion for EVERY policy -- the lookahead could not see its own
-        // movement at all.
-        private static float PolicyRangeDelta(
-            BattleSquadCapabilityProfile profile,
-            float range,
-            EngagementOptionKind policy)
-        {
-            if (policy == EngagementOptionKind.Hold) return 0;
-            bool jogs = policy == EngagementOptionKind.JogToward
-                || policy == EngagementOptionKind.RunToward && !profile.CanRun;
-            float speed = profile.MoveSpeed * (jogs
-                ? SoldierMovementPlanner.JogSpeedMultiplier
-                : 1f);
-            float desired = profile.IsContactSeeking
-                ? 1f
-                : Math.Max(1f, profile.EffectiveEngagementRange);
-            return range > desired ? -Math.Min(speed, range - desired) : 0;
-        }
-
-        // `opposingRole` is the target's SquadEngagementFrame.Role for the CURRENT turn (Layer 1's
-        // frozen withdrawal declaration -- see BattleEngagementFrameBuilder.BuildSide), not morale.
-        // Bound and Routing squads have been ordered to run at full MoveSpeed away from the fight
-        // (see BuildSide's quarryRunSpeed switch, which uses exactly these two roles); that takes
-        // precedence over IsContactSeeking, so a melee-only profile does not get projected as
-        // charging while its own side has it fleeing. Cover/RearGuard hold position to screen the
-        // withdrawal (quarryRunSpeed 0 for those) and fall through to the normal band logic below --
-        // Phase 1, Design/Reference/BattleLogic.md.
-        private static float BaselineRangeDelta(
-            BattleSquadCapabilityProfile profile,
-            EngagementSquadRole opposingRole,
-            float range)
-        {
-            if (opposingRole is EngagementSquadRole.Bound or EngagementSquadRole.Routing)
-            {
-                return profile.MoveSpeed * (profile.CanRun
-                    ? 1f
-                    : SoldierMovementPlanner.JogSpeedMultiplier);
-            }
-            if (profile.IsContactSeeking) return range > 1
-                ? -Math.Min(profile.MoveSpeed, range - 1)
-                : 0;
-            // Phase 2 audit: kept on the PreferredBand pair rather than EffectiveEngagementRange.
-            // This is a hysteresis BAND with a matched lower edge (PreferredBandLower is derived
-            // from the same reach), and it must agree with
-            // BattleEngagementFrameBuilder.Baseline's posture choice, which uses the same pair.
-            // Substituting only the upper edge could invert the band whenever the effectiveness-
-            // derived range falls below PreferredBandLower.
-            if (range > profile.PreferredBandUpper + 1)
-            {
-                return -Math.Min(profile.MoveSpeed * SoldierMovementPlanner.JogSpeedMultiplier,
-                    range - profile.PreferredBandUpper);
-            }
-            if (range < profile.PreferredBandLower - 1)
-            {
-                return Math.Min(profile.MoveSpeed * SoldierMovementPlanner.WalkSpeedMultiplier,
-                    profile.PreferredBandLower - range);
-            }
-            return 0;
-        }
-
-        /// <summary>
         /// How fast the quarry is opening the range, when this squad is the one chasing.
         /// </summary>
         /// <remarks>
@@ -543,10 +245,15 @@ namespace OnlyWar.Battles
                     : 0;
 
         /// <summary>
-        /// PHASE 5c (Design/Reference/BattleLogic.md). One ply's net battle-value
-        /// exchange between <paramref name="squad"/> and <paramref name="enemy"/> at a projected
-        /// centroid separation. This is what makes `outgoing` and `future` commensurable: both are
-        /// now <c>hit * (takeOut + lambda * woundProgress) * targetBV</c>, summed per-soldier.
+        /// PHASE 5c (Design/Reference/BattleLogic.md). The outgoing half of the per-turn
+        /// battle-value exchange between <paramref name="squad"/> and <paramref name="enemy"/> at a
+        /// projected centroid separation; <see cref="EvaluateIncomingExchangeRate"/> is the other
+        /// half. <see cref="EngagementPotential"/> reads both directions at the current and projected
+        /// separations, which keeps immediate fire and future position value commensurable: both
+        /// are <c>hit * (takeOut + lambda * woundProgress) * targetBV</c>, summed per-soldier.
+        /// (Phase 5c originally built this for one ply of the bounded policy rollout, which has
+        /// since been removed; the two directions used to be netted in a signed
+        /// <c>EvaluateExchangeRate</c> that went with it.)
         ///
         /// <para>The predecessor, <c>AggregateRemovalRate</c>, was a CAPABILITY PROXY: a flat 10%
         /// of the ATTACKER'S OWN <c>UsableRangedBattleValue</c> per turn, with the defender read
@@ -564,7 +271,7 @@ namespace OnlyWar.Battles
         /// squad's true whole-squad removal per turn -- the same quantity, computed the same way,
         /// as `outgoing`. <c>PairWeights</c> is a normalized allocation (it sums to 1 across enemy
         /// squads); multiplying an already-allocated rate by it would divide the squad's fire
-        /// twice and systematically understate every shooting option. The lookahead does not go
+        /// twice and systematically understate every shooting option. The potential does not go
         /// blind to a flank threat by this: the threat still appears in the INCOMING half below,
         /// which is where a distant enemy squad actually costs us something.</para>
         ///
@@ -600,31 +307,29 @@ namespace OnlyWar.Battles
                     outgoingAllocation * MeleeRemovalRate(squad, enemy, range)));
         }
 
-        internal float EvaluateExchangeRate(
+        /// <summary>
+        /// <see cref="EvaluateOutgoingExchangeRate"/> for a squad that stands and may aim. For the
+        /// access potential only -- see <see cref="SquadPairRemovalRate.SustainedRateAtRange"/>
+        /// for why the exchange forecast does not read it.
+        /// </summary>
+        internal float EvaluateSustainedOutgoingRate(
             BattleSquad squad,
             BattleSquad enemy,
-            BattleSquadCapabilityProfile profile,
             BattleSquadCapabilityProfile opposing,
             IReadOnlyDictionary<int, SquadEngagementFrame> frames,
-            float range,
-            float outgoingRetention,
-            float targetSpeed)
+            float range)
         {
-            float outgoing = EvaluateOutgoingExchangeRate(
-                squad,
-                enemy,
-                profile,
-                opposing,
-                frames,
-                range);
-            float incoming = EvaluateIncomingExchangeRate(
-                squad,
-                enemy,
-                profile,
-                frames,
-                range,
-                targetSpeed);
-            return (outgoing * outgoingRetention) - incoming;
+            float outgoingAllocation = frames.TryGetValue(
+                squad.Id, out SquadEngagementFrame ourFrame)
+                    ? ourFrame.PairWeights.GetValueOrDefault(enemy.Id)
+                    : 0f;
+            float ranged = _removalRates.GetPairRemovalRates(squad)
+                .TryGetValue(enemy.Id, out SquadPairRemovalRate rate)
+                    ? rate.SustainedRateAtRange(range)
+                    : 0f;
+            return Math.Min(
+                opposing.TotalAbleBattleValue,
+                Math.Max(ranged, outgoingAllocation * MeleeRemovalRate(squad, enemy, range)));
         }
 
         /// <summary>

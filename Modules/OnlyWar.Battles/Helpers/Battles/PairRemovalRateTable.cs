@@ -10,8 +10,10 @@ namespace OnlyWar.Battles
     /// shooter squad, the expected enemy battle value it removes per turn against each enemy squad,
     /// captured once at a reference posture and rescalable to any projected range in closed form.
     ///
-    /// <para>WHY IT IS ITS OWN THING. The lookahead prices a posture by asking "what would both
-    /// sides remove per turn, N turns from now, at the range this option leads to?" Answering that
+    /// <para>WHY IT IS ITS OWN THING. The engagement potential (<see cref="EngagementPotential"/>)
+    /// prices a posture by asking "what would both sides remove per turn at the range this option
+    /// leads to?" (the bounded policy rollout this was first built for asked the same question N
+    /// turns ahead; that rollout has since been removed). Answering that
     /// by re-running target selection at every projected range would be ruinous, so each shooter's
     /// best shot is evaluated ONCE at a stationary, un-aimed, no-bulk reference posture, and
     /// <see cref="PairRemovalTerm"/> carries enough of that shot (pre-roll to-hit total, shot count,
@@ -21,7 +23,8 @@ namespace OnlyWar.Battles
     ///
     /// <para>Scoring only -- services and ranged selection in, no <see cref="ActionSink"/>. Results
     /// are memoized per shooter squad in the shared <see cref="BattlePlanningContext"/>, which is
-    /// what makes it affordable for every option, ply and parallel squad job to consult.</para>
+    /// what makes it affordable for every option, projected state and parallel squad job to
+    /// consult.</para>
     /// </summary>
     internal sealed class PairRemovalRateTable
     {
@@ -60,14 +63,16 @@ namespace OnlyWar.Battles
         /// Returns, for one shooter squad, the per-enemy-squad removal rates -- expected enemy
         /// battle value removed per turn, in the SAME currency as `outgoing`, rescalable to any
         /// projected range in closed form. Memoized for the turn in the shared
-        /// <see cref="BattlePlanningContext"/>, so repeated requests across options, plies and
-        /// worker planners cost one build.
+        /// <see cref="BattlePlanningContext"/>, so repeated requests across options, projected
+        /// states and worker planners cost one build.
         ///
         /// <para>PHASE 5 WIRED THIS INTO PLANNING. <c>AggregateRemovalRate</c> is gone; the
-        /// engagement evaluator's exchange-rate model reads this table for both halves of every
-        /// lookahead ply and for the depth-0 terminal, which is what finally puts `outgoing` and
-        /// `future` in one currency. See <see cref="SquadPairRemovalRate"/> for the aggregation
-        /// semantics.</para>
+        /// exchange-rate model (<see cref="EngagementExchangeModel"/>) reads this table for both
+        /// the outgoing and incoming halves, and <see cref="EngagementPotential"/> evaluates those
+        /// rates at the current and projected separations. That is what puts immediate fire and
+        /// future position value in one currency. (Phase 5 originally fed the plies and depth-0
+        /// terminal of a bounded policy rollout, since removed.) See
+        /// <see cref="SquadPairRemovalRate"/> for the aggregation semantics.</para>
         /// </summary>
         internal IReadOnlyDictionary<int, SquadPairRemovalRate> GetPairRemovalRates(
             BattleSquad shooterSquad)
@@ -107,20 +112,21 @@ namespace OnlyWar.Battles
                     soldier, bulkMultiplier: 0f)
                     // PHASE 5. SelectBestRangedTarget only considers enemies inside weapon reach,
                     // so a squad that is currently out of range would get an EMPTY row and the
-                    // lookahead would price every future turn at 0 -- no reason to ever close, at
+                    // potential would price every future turn at 0 -- no reason to ever close, at
                     // any distance. The old capability proxy did not have that hole: it recomputed
                     // its range factor at the PROJECTED range and became positive as soon as the
                     // squads came inside reach. Capturing a term against the nearest enemy anyway
                     // restores exactly that gradient honestly -- PairRemovalTerm gates the rate to
                     // 0 beyond MaximumEffectiveRange, so this contributes nothing until the
-                    // lookahead projects the squads into range, and then contributes the real
+                    // potential projects the squads into range, and then contributes the real
                     // hit x removal x BV at that projected range.
                     ?? EvaluateNearestOutOfReachTarget(soldier);
                 // A CONE BEARER IS A SHOOTER. Both target selectors above skip
                 // IsTemplateWeapon, so a soldier whose only weapon is a flamer used to
                 // contribute NO term and his squad's whole row read rate 0 at every range --
                 // the squad was modelled as unarmed. Everything downstream then followed from
-                // that: EvaluateArrivalTimeValue saw an outgoing rate of 0 where the squad
+                // that: the arrival-time term (EvaluateArrivalTimeValue, since removed with the
+                // rollout) saw an outgoing rate of 0 where the squad
                 // stood and paid it to run to contact, so a flamer bearer burning a target for
                 // 0.775 battle value at 10 yards abandoned the burst to charge (both
                 // template-weapon planner tests, 2026-08-07).
@@ -165,7 +171,7 @@ namespace OnlyWar.Battles
         /// PHASE 5. The reference shot a soldier with no enemy inside reach WOULD take against the
         /// nearest enemy, evaluated at the current (out-of-reach) separation. Its rate is 0 today
         /// -- <see cref="PairRemovalTerm.MaximumEffectiveRange"/> sees to that -- and becomes real
-        /// the moment the lookahead projects the squads inside reach. Longest-reaching loaded
+        /// the moment the potential projects the squads inside reach. Longest-reaching loaded
         /// weapon, because that is the one that decides when the squad can start shooting.
         /// </summary>
         private RangedTargetEvaluation EvaluateNearestOutOfReachTarget(BattleSoldier soldier)
@@ -325,7 +331,8 @@ namespace OnlyWar.Battles
                 Math.Clamp(evaluation.WoundProgressOnHit, 0f, 1f),
                 GetBattleValue(evaluation.Target),
                 BattleModifiersUtil.GetEffectiveMaxRange(shooter.Soldier, template),
-                takeOutTerms);
+                takeOutTerms,
+                template.IsTemplateWeapon ? null : template.Accuracy);
         }
     }
 }

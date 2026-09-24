@@ -26,9 +26,10 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// The smallest score difference worth acting on when every option is worth about
-        /// nothing. Below this the baseline posture and the previous turn's choice carry the
-        /// decision, which is what keeps a squad with no shot and nowhere useful to be from
-        /// twitching between Hold and a step.
+        /// nothing, for a squad planning at the full <see cref="EngagementHorizonModel"/> cap; it
+        /// scales down in proportion to a shorter horizon. Below this the baseline posture and the
+        /// previous turn's choice carry the decision, which is what keeps a squad with no shot and
+        /// nowhere useful to be from twitching between Hold and a step.
         /// </summary>
         private const float EngagementIndifferenceFloor = 0.1f;
         private const float ContactSeekerRangedRelevanceFraction = 0.02f;
@@ -131,11 +132,28 @@ namespace OnlyWar.Battles
             // outside any band; removing them exposed it.
             //
             // A fraction of the best score compares like with like: ignore differences that are
-            // small RELATIVE TO WHAT IS BEING DECIDED. The absolute floor still covers the case
-            // where every option is worth about nothing, which is exactly when the baseline and
-            // the previous posture should carry the decision.
+            // small RELATIVE TO WHAT IS BEING DECIDED. The floor still covers the case where every
+            // option is worth about nothing, which is exactly when the baseline and the previous
+            // posture should carry the decision.
+            //
+            // The floor scales with the squad's horizon (2026-09-23). "About nothing" is not a
+            // fixed number: the Φ terms that separate options are exchange rates integrated over
+            // the horizon, so a squad expecting a three-turn fight sees every difference shrunk
+            // roughly sixtyfold against one planning at the 183-turn cap. The fixed 0.1 floor was
+            // set when horizons sat near that cap. Left fixed once horizons began ending at the
+            // first withdrawal point, it swallowed real decisions: a lone rifleman facing a
+            // better-armed enemy at 14 yards (BattleSquadPlannerTests
+            // .PlanSquadForTesting_ClosingSquadSelectsAForwardPosture) had all five options inside
+            // 0.109 of each other, and the baseline posture stepped him back from a RunToward that
+            // scored best. At the cap the floor is unchanged.
+            float indifferenceFloor = EngagementIndifferenceFloor
+                * Math.Clamp(
+                    ExpectedExchangeTurnsFor(squad.Id)
+                        / EngagementHorizonModel.MaximumExchangeTurns,
+                    0f,
+                    1f);
             float indifference = Math.Max(
-                EngagementIndifferenceFloor,
+                indifferenceFloor,
                 Math.Abs(bestScore) * EngagementIndifferenceFraction);
             EngagementOptionEvaluation chosen = evaluations
                 .Where(candidate => bestScore - candidate.Score <= indifference)
@@ -274,8 +292,32 @@ namespace OnlyWar.Battles
                     .GroupBy(candidate => sideBySquad[candidate.Id])
                     .ToDictionary(group => group.Key, group => group.ToList());
                 Dictionary<int, float> expectedExchangeTurnsBySquad = [];
+                Dictionary<int, EngagementHorizonDiagnostics> horizonDiagnostics = [];
                 float totalBattleValueAtRisk = 0;
                 float totalRemovalRate = 0;
+                float BattleValueOf(BattleSquad candidate) =>
+                    profiles.TryGetValue(
+                        candidate.Id,
+                        out BattleSquadCapabilityProfile candidateProfile)
+                            ? candidateProfile.TotalAbleBattleValue
+                            : candidate.AbleSoldiers.Sum(GetBattleValue);
+                // Battle value a squad can lose before it stops continuing its mission -- the
+                // withdrawal point, not annihilation. See EngagementHorizonModel.
+                float BattleValueBeforeWithdrawal(BattleSquad candidate) =>
+                    BattleValueOf(candidate) * candidate.RemainingLossTolerance;
+                // The same for an ENEMY squad. A squad knows its own orders but not the enemy's,
+                // so it plans as though every enemy is Attritional: the stubborn end of the scale
+                // short of fighting to the last, which errs toward a longer fight rather than
+                // counting on the enemy breaking early.
+                float EnemyBattleValueBeforeWithdrawal(BattleSquad candidate) =>
+                    BattleValueOf(candidate)
+                        * candidate.RemainingLossToleranceAssuming(
+                            OnlyWar.Domain.Orders.Aggression.Attritional);
+
+                // Pass 1: every attacker's removal rate against every enemy squad, kept per pair
+                // because pass 2 needs the fire landing on each squad, not only each side's total.
+                Dictionary<int, Dictionary<int, float>> pairRates = [];
+                Dictionary<bool, List<BattleSquad>> targetsBySide = [];
                 foreach ((bool side, List<BattleSquad> attackers) in sides)
                 {
                     List<BattleSquad> targets = sides
@@ -283,15 +325,11 @@ namespace OnlyWar.Battles
                         .SelectMany(entry => entry.Value)
                         .OrderBy(candidate => candidate.Id)
                         .ToList();
-                    float battleValueAtRisk = targets.Sum(candidate =>
-                        profiles.TryGetValue(
-                            candidate.Id,
-                            out BattleSquadCapabilityProfile candidateProfile)
-                                ? candidateProfile.TotalAbleBattleValue
-                                : candidate.AbleSoldiers.Sum(GetBattleValue));
-                    float[] attackerRates = new float[attackers.Count];
+                    targetsBySide[side] = targets;
+                    Dictionary<int, float>[] attackerRates = new Dictionary<int, float>[attackers.Count];
                     void AccumulateAttackerRate(int attackerIndex)
                     {
+                        attackerRates[attackerIndex] = [];
                         BattleSquad attacker = attackers[attackerIndex];
                         if (!frames.TryGetValue(
                                 attacker.Id,
@@ -310,7 +348,6 @@ namespace OnlyWar.Battles
                             return;
                         }
 
-                        float attackerRate = 0;
                         foreach (BattleSquad target in targets)
                         {
                             if (!profiles.TryGetValue(
@@ -324,7 +361,7 @@ namespace OnlyWar.Battles
                             float range = EngagementExchangeModel.Distance(
                                 BattleEngagementFrameBuilder.Centroid(attacker),
                                 BattleEngagementFrameBuilder.Centroid(target));
-                            attackerRate += Math.Max(
+                            attackerRates[attackerIndex][target.Id] = Math.Max(
                                 0,
                                 _exchange.EvaluateOutgoingExchangeRate(
                                     attacker,
@@ -334,7 +371,6 @@ namespace OnlyWar.Battles
                                     frames,
                                     range));
                         }
-                        attackerRates[attackerIndex] = attackerRate;
                     }
 
                     if (maxDegreeOfParallelism <= 1 || attackers.Count <= 1)
@@ -356,19 +392,70 @@ namespace OnlyWar.Battles
                             AccumulateAttackerRate);
                     }
 
-                    float currentRemovalRate = 0;
-                    for (int index = 0; index < attackerRates.Length; index++)
+                    for (int index = 0; index < attackers.Count; index++)
                     {
-                        currentRemovalRate += attackerRates[index];
+                        pairRates[attackers[index].Id] = attackerRates[index];
                     }
+                }
 
-                    float expectedExchangeTurns =
-                        EngagementHorizonModel.DeriveExpectedExchangeTurns(
-                            battleValueAtRisk,
-                            currentRemovalRate);
+                // The fire an enemy squad lands on one of our squads. Its rate against each of
+                // our squads assumes that squad is its only target; the enemy cannot fire all of
+                // those at once, so each rate is scaled by the share of the enemy's total it
+                // represents -- an enemy splits its fire in proportion to where it does most.
+                float IncomingRemovalRate(BattleSquad squad, IEnumerable<BattleSquad> enemies)
+                {
+                    float incoming = 0;
+                    foreach (BattleSquad enemy in enemies)
+                    {
+                        if (!pairRates.TryGetValue(enemy.Id, out Dictionary<int, float> row)
+                            || !row.TryGetValue(squad.Id, out float rate)
+                            || rate <= 0)
+                        {
+                            continue;
+                        }
+                        float enemyTotal = row.Values.Sum();
+                        incoming += rate * rate / enemyTotal;
+                    }
+                    return incoming;
+                }
+
+                // Pass 2: each squad's horizon is the shorter of its side stripping the enemy to
+                // the enemy's withdrawal point and the enemy stripping this squad to its own.
+                foreach ((bool side, List<BattleSquad> attackers) in sides)
+                {
+                    List<BattleSquad> targets = targetsBySide[side];
+                    float battleValueAtRisk = targets.Sum(BattleValueOf);
+                    float enemyBattleValueBeforeWithdrawal =
+                        targets.Sum(EnemyBattleValueBeforeWithdrawal);
+                    float currentRemovalRate = attackers.Sum(attacker =>
+                        pairRates.TryGetValue(attacker.Id, out Dictionary<int, float> row)
+                            ? row.Values.Sum()
+                            : 0);
+
                     foreach (BattleSquad attacker in attackers)
                     {
-                        expectedExchangeTurnsBySquad[attacker.Id] = expectedExchangeTurns;
+                        // No enemy at all: nothing to extrapolate, as before.
+                        if (targets.Count == 0)
+                        {
+                            expectedExchangeTurnsBySquad[attacker.Id] = 0;
+                            continue;
+                        }
+                        float ownBattleValueBeforeWithdrawal = BattleValueBeforeWithdrawal(attacker);
+                        float incomingRemovalRate = IncomingRemovalRate(attacker, targets);
+                        (float enemyTurns, float ownTurns) =
+                            EngagementHorizonModel.DeriveSquadExchangeClocks(
+                                enemyBattleValueBeforeWithdrawal,
+                                currentRemovalRate,
+                                ownBattleValueBeforeWithdrawal,
+                                incomingRemovalRate);
+                        expectedExchangeTurnsBySquad[attacker.Id] = Math.Min(enemyTurns, ownTurns);
+                        horizonDiagnostics[attacker.Id] = new EngagementHorizonDiagnostics(
+                            enemyBattleValueBeforeWithdrawal,
+                            currentRemovalRate,
+                            ownBattleValueBeforeWithdrawal,
+                            incomingRemovalRate,
+                            enemyTurns,
+                            ownTurns);
                     }
                     totalBattleValueAtRisk += battleValueAtRisk;
                     totalRemovalRate += currentRemovalRate;
@@ -377,7 +464,8 @@ namespace OnlyWar.Battles
                 _context.SetEngagementHorizon(
                     expectedExchangeTurnsBySquad,
                     totalBattleValueAtRisk,
-                    totalRemovalRate);
+                    totalRemovalRate,
+                    horizonDiagnostics);
             }
         }
 

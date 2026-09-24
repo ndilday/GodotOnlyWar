@@ -9,6 +9,7 @@ using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Recruitment;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Squads;
+using OnlyWar.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,15 +26,18 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
     private readonly BattleExecutionContext _execution;
     private readonly IBattleEquipmentSource _equipment;
     private readonly Func<int, Region> _regionResolver;
+    private readonly TurnProgress _progress;
 
     public BattleEngagementResolver(
         BattleExecutionContext execution,
         IBattleEquipmentSource equipment = null,
-        Func<int, Region> regionResolver = null)
+        Func<int, Region> regionResolver = null,
+        TurnProgress progress = null)
     {
         _execution = execution ?? throw new ArgumentNullException(nameof(execution));
         _equipment = equipment;
         _regionResolver = regionResolver;
+        _progress = progress;
     }
 
     public IRNG Random => _execution.Random;
@@ -144,8 +148,11 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
 
         bool battleDone = false;
         resolver.OnBattleComplete += (_, _) => battleDone = true;
+        int battleTurn = 0;
         while (!battleDone)
         {
+            battleTurn++;
+            _progress?.Report($"Resolving Battle in {region.Name}: Turn {battleTurn}");
             resolver.ProcessNextTurn();
         }
 

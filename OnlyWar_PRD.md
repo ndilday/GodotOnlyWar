@@ -47,8 +47,9 @@
    - 5.3 [Alpha 0.7.2 — Committed](#53-alpha-072--committed)
    - 5.4 [Alpha 0.7.3 — To-Do](#54-alpha-073--to-do)
    - 5.5 [Alpha 0.8 — Command, Narrative & Cross-Faction Simulation](#55-alpha-08--command-narrative--cross-faction-simulation)
-   - 5.6 [Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat](#56-alpha-08--tyranid-invasion--large-scale-npc-combat)
-   - 5.7 [Post-0.8 Backlog](#57-post-08-backlog)
+   - 5.6 [Alpha 0.8.1](#56-alpha-081)
+   - 5.7 [Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat](#57-alpha-08--tyranid-invasion--large-scale-npc-combat)
+   - 5.8 [Post-0.8 Backlog](#58-post-08-backlog)
 6. [Open Design Questions](#6-open-design-questions)
    - 6.1 [Aggression Axis Split — DEFERRED](#61-aggression-axis-split--deferred)
    - 6.2 [Morale](#62-morale)
@@ -272,7 +273,7 @@ than two functioning arm/hand groups remain unconditional exclusions under every
 - Displays all skills and their current values.
 - Displays the marine's personal history log: recruitment, training, promotions, notable actions, wounds received, and awards. The history event vocabulary and its narration follow the Narrative Voice specification (4.19).
 - Displays confirmed kill counts by faction and weapon type.
-- Displays any awards or commendations. For an award type with multiple tiers, only the most recent / highest level the marine has earned is displayed. *(Post-0.7: surface these as icons in the top panel of the screen — see §5.7.)*
+- Displays any awards or commendations. For an award type with multiple tiers, only the most recent / highest level the marine has earned is displayed. *(Post-0.7: surface these as icons in the top panel of the screen — see §5.8.)*
 - Displays geneseed implant date and maturity status.
 - Displays estimated weeks to recovery if the marine is currently injured.
 - The player can initiate a squad transfer from this screen (selecting a destination squad).
@@ -414,7 +415,7 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 - All four panels render from view models rather than formatted UI strings, remain readable and scrollable with many units, and the casualty table caps to the most recent rounds. Legibility at scale takes precedence over visual richness.
 - Battle log entries name their actors and follow the Narrative Voice specification (§4.19), adding flavor on critical hits, kills, and last stands.
 
-**Known limitations (deferred to Battle Visuals Phase 3, §5.7):**
+**Known limitations (deferred to Battle Visuals Phase 3, §5.8):**
 - Playback advances **discretely** — each round's end-state is redrawn, with no position interpolation between rounds, and callouts are static annotations rather than animated motion. Smooth tweening, in-flight projectile and charge-path animation, and timed reveal of casualty/rout overlays are Phase 3 work.
 - Fatigue, morale, and ammunition on the formation panel are heuristic labels derived from available data, not first-class simulation values.
 
@@ -696,7 +697,7 @@ Blast templates extend the cone-template machinery with a second delivery mode: 
 - **Strength-scaled throw range.** A thrown grenade's maximum range scales with the thrower's Strength (the template stores range-per-Strength-point), so a marine out-throws a PDF trooper without separate weapon rows. Launched blasts use the weapon's normal `MaximumRange`.
 - **Grenades use the ordinary loaded-ammo/reload action economy** and occupy the weapon set's third ranged slot; they have no separate inventory-count path. Throwing forfeits the primary ranged action that round, so opportunity cost and target density govern use.
 - **Ubiquitous via weapon sets, no UI.** Weapon sets gain a third ranged slot for the grenade; all Space Marine sets, the Imperial/PDF sets, and the human-tier Genestealer Cult sets carry frag grenades. No squad-screen changes.
-- **Frag only.** Krak grenades (thrown single-target anti-armor, not a blast template) are deferred to the Vehicles backlog item (§5.7), where they matter.
+- **Frag only.** Krak grenades (thrown single-target anti-armor, not a blast template) are deferred to the Vehicles backlog item (§5.8), where they matter.
 - **Decision logic.** The planner scores a throw exactly like a flamer firing line — expected enemy BV removed (falloff-scaled) minus expected friendly BV lost, with the thrower's own expected loss included — and throws only when that beats the soldier's best conventional action, keeping lone targets on the rifle and clusters on the grenade.
 - **Battle Value.** Blast weapons are valued by a sibling of the cone-template branch: auto-hit density-scaled victims per blast (same bodies-per-template panel densities as the flamer — the 6m circle's area roughly matches the cone's, and centered placement offsets the cone's raking reach), an average quadratic-falloff factor (`BlastAverageFalloffFactor` 0.5, splitting the range between the uniform-disc average of 1/6 and a centered hit at 1.0 — placement quality and the throw's skill roll fold into this one tunable), the shots-per-magazine/reload duty cycle (frag ½, launcher ⅘), and Strength-scaled thrown reach in the standoff term. The grenade is valued as a *sidearm*: per panel profile the ranged rate is max(primary, grenade), never the sum, matching the planner's throw-or-shoot choice. Regeneration confirmed the model's verdict that a frag grenade on a soldier with a working gun adds real but sub-rounding value — **no shipped `SoldierTemplate.BattleValue` changed** (the Grenade Launcher's new nonzero valuation landed the Brood Brother exactly on its already-stored 7), and the `StrategicCombatRules` anchors are untouched (PDF Trooper regenerates to exactly 5).
 
@@ -1011,7 +1012,7 @@ This behavioral specification is **implemented for Alpha 0.7.1** (see §5.3) on 
 
 These are specified together because they share the same per-faction-pair shape and the same consumers (offensive planning, garrison sizing, the fog-of-war/intelligence UI, governor requests).
 
-This is the implemented Alpha 0.8 substrate for Orks (§4.22) and the later Tyranid line (§5.6). It
+This is the implemented Alpha 0.8 substrate for Orks (§4.22) and the later Tyranid line (§5.7). It
 is shared by the Revolt and governor systems, so those systems use the same relationship and
 observer-belief contracts without faction-specific hostility shortcuts.
 
@@ -1133,7 +1134,7 @@ outside this feature.
 
 **Description.** A Space Marine chapter produces almost none of its own materiel: it sustains itself on the tithes and gifts of the worlds and institutions it serves. This section specifies the supply economy that closes the loop between the request systems (governors §4.16; post-0.7 the Imperial Guard/PDF §6.4 and the Inquisition §6.5) and the chapter's standing need to replace losses and upgrade its forces. Fulfilling a request earns not only opinion but a **pledge** of material support; pledges deliver resources over time along supply lines the Living Galaxy can interdict; and resources are spent to rebuild and improve the chapter.
 
-This is a behavioral specification, delivered in phases. **Phase 1** (0.7 — §5.2) is a minimal Requisition currency: an instant grant on request fulfillment, spent on medical procedures, backing the costs already assumed in §4.8. **Phase 2** (0.7.1 — §5.3) adds pledges that deliver Requisition over time along source-bound supply lines. The remaining **typed-materiel** layer (world-type-driven wargear / vehicles / ships), the Armory wargear inventory (§6.9), pledge interdiction (§6.10), and Inquisition negative-requisition are **post-0.7** (§5.7), as each depends on a system not present in 0.7.
+This is a behavioral specification, delivered in phases. **Phase 1** (0.7 — §5.2) is a minimal Requisition currency: an instant grant on request fulfillment, spent on medical procedures, backing the costs already assumed in §4.8. **Phase 2** (0.7.1 — §5.3) adds pledges that deliver Requisition over time along source-bound supply lines. The remaining **typed-materiel** layer (world-type-driven wargear / vehicles / ships), the Armory wargear inventory (§6.9), pledge interdiction (§6.10), and Inquisition negative-requisition are **post-0.7** (§5.8), as each depends on a system not present in 0.7.
 
 This is deliberately **not** a survival economy. Consistent with the relevance/legacy stakes framing (§4.19), resources gate the *rate* at which the chapter recovers and upgrades — they never produce a starvation or game-over state. A poorly-supplied chapter rebuilds slowly and fights with what it has.
 
@@ -1157,13 +1158,13 @@ This is deliberately **not** a survival economy. Consistent with the relevance/l
 - *Standing tithe* — a recurring delivery on a fixed cadence (e.g. a forge world supplying a pattern of bolters each year). Persists until its source is lost or the relationship lapses.
 - *One-off* — a single promised delivery (a frigate; a Land Raider squadron).
 - *Rights* — unlocks an ongoing capability rather than delivering goods (recruitment rights on a world; folds in §6.3).
-- *Intelligence / hook* — a narrative lead that surfaces a mission opportunity (feeding the Mission System Expansion §5.7 and the Inquisition §6.5) rather than crediting a resource.
+- *Intelligence / hook* — a narrative lead that surfaces a mission opportunity (feeding the Mission System Expansion §5.8 and the Inquisition §6.5) rather than crediting a resource.
 
 **Delivery & Supply Lines (hybrid)**
 - Requisition earned from a fulfillment credits immediately.
 - Materiel pledges deliver over subsequent turns: a delivery is scheduled from the pledging world and arrives after a transit interval.
 - A pledge is bound to its source. If the pledging world revolts (§4.20), is overrun, or its governor turns hostile, standing tithes suspend and undelivered one-offs default. Holding a world's loyalty therefore protects its supply, wiring the economy into the Living Galaxy.
-- *(Open — §6.10):* whether in-transit deliveries can be interdicted by hostile factional fleets is gated on factional fleet movement existing (§5.7).
+- *(Open — §6.10):* whether in-transit deliveries can be interdicted by hostile factional fleets is gated on factional fleet movement existing (§5.8).
 
 **Expenditure (sinks)**
 - **Medical procedures** — cybernetic and vat-grown replacements consume Requisition (the cost model already assumed in §4.8 and the §5.2 Apothecary second pass).
@@ -1184,7 +1185,7 @@ This is deliberately **not** a survival economy. Consistent with the relevance/l
 
 **Description.** A Tyranid incursion is not a rival civilization contesting a world; it is an ecological catastrophe that eats the world itself. A splinter of a hive fleet, called down by a Genestealer Cult's psychic beacon, makes planetfall, strips the biomass of every region it reaches, and grows *only* by that consumption. This section specifies the Tyranid faction's growth and behavior, the Imperial population's collapse into hiding beneath it, the Genestealer Cult's doomed uprising, and the opening-scenario sequencing that produces the "Promised World" the chapter is pledged to retake. It builds on the cross-faction substrate (§4.21) and most resembles the Ork growth-faction structure (§4.22).
 
-This is a behavioral specification. It depends on §4.21 (behavior flags, growth types, intelligence-as-belief), which now ships in 0.8, and is scheduled in §5.6. The current `ScenarioBuilder.StampPromisedWorld` static stamp (§4.1) is the shipped subset this enhances.
+This is a behavioral specification. It depends on §4.21 (behavior flags, growth types, intelligence-as-belief), which now ships in 0.8, and is scheduled in §5.7. The current `ScenarioBuilder.StampPromisedWorld` static stamp (§4.1) is the shipped subset this enhances.
 
 Implementation review (2026-09-03): the Phase 2–5 strategy extraction was reviewed against the
 single-budget, defensive-actor, construction, expansion, feeding, recon, patrol, intelligence, and
@@ -1320,7 +1321,7 @@ behavior changed.
 
 ### 4.28 Techmarines & the Mars Pipeline
 
-**Description.** Techmarines are trained by the Adeptus Mechanicus on Mars, not by the chapter, and the round trip is measured in decades. Today this is a placeholder: identified aspirants leave for roughly two years and return immediately. Replacing it with a genuine deferred-cohort pipeline gives the young chapter a long capability arc — its first two decades are spent as a relationship-building infantry force — and supplies the gate on machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (§5.7): armor cannot be fielded until the chapter has Techmarines to wake and maintain its machine spirits.
+**Description.** Techmarines are trained by the Adeptus Mechanicus on Mars, not by the chapter, and the round trip is measured in decades. Today this is a placeholder: identified aspirants leave for roughly two years and return immediately. Replacing it with a genuine deferred-cohort pipeline gives the young chapter a long capability arc — its first two decades are spent as a relationship-building infantry force — and supplies the gate on machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (§5.8): armor cannot be fielded until the chapter has Techmarines to wake and maintain its machine spirits.
 
 **Acceptance Criteria (Planned — 0.8):**
 - **The chapter starts with none.** At founding, a cohort of marines and aspirants is identified for the Adeptus Mechanicus and sent to Mars. The chapter begins its Techmarine era empty, and the first cohort returns only after a long delay — canonically ~18 in-game years, long enough to be felt rather than to be a formality. Equipment promises maturing around the cohort's return is a deliberate convergence to tune toward.
@@ -1368,7 +1369,7 @@ Shipped in full. This is a scope record, not a description of the work: each lin
 
 - ✅ **Training for non-deployed forces** — non-deployed marines accumulate training skill points each turn. §4.12.
 - ✅ **Recruiter Screen Phase 2** — deployed scouts excluded from training; squad-specific training focus. §4.9.
-- ✅ **Game Start Phase 1** — new game setup screen and flow: chapter naming, seed entry or randomization, validation, and a confirm/summary step. §4.1. *(Deeper chapter customization remains post-0.7 — §5.7.)*
+- ✅ **Game Start Phase 1** — new game setup screen and flow: chapter naming, seed entry or randomization, validation, and a confirm/summary step. §4.1. *(Deeper chapter customization remains post-0.7 — §5.8.)*
 - ✅ **Planet View Phase 4 completion** — governor aging and replacement; opinion visible on the Planet Screen; request fulfillment requiring meaningful engagement. §4.3, §4.16.
 - ✅ **Diplomacy/Requests display** — a Sector Requests screen listing every active governor request. §4.16.
 - ✅ **Fleet movement** — plot-course / divide / merge, phased warp travel with estimated arrival range, warp-lane routing, in-warp fleets hidden and out of contact. §4.17; TDD §5.5. *("Chart Direct Route (Risky)" deferred post-0.7 — §4.17.)*
@@ -1393,17 +1394,17 @@ Alpha 0.7.2 is deliberately limited to protecting and operating the released cam
 - ✅ **Conditional End Turn preflight** — warns only for combat-capable idle squads that can deploy now, actionable in-orbit task forces without destinations, and unassigned special missions at their real independent 25% per-turn disappearance risk; allows immediate override and has global per-category preferences. Routine turns advance without confirmation; governor-request expiry is outside this body of work. §4.27.
 - ✅ **Scene-wiring release tests** — the Godot 4.7 headless smoke instantiates the campaign/title release controls and exercises the real System Options, Save, Load, Resume, Diagnostics, End Turn, title Load, and title Options buttons plus Escape/X input behavior. Visible-but-inert controls or broken scene paths fail the smoke. TDD §9.
 - ✅ **Living Universe Phase 3B — Revolt** — per-region Contentment driving a sector-wide Insurrectionist faction (reusing the converting-faction machinery), governor Severity-driven response, garrison defection, intra- and inter-planet spread, and evidence-gated requests. Built on the faction-presence model as a forward-compatible subset of the Pop-model question (§6.7); Chaos radicalization is specified but gated on Chaos content. §4.20.
-- ✅ **Supply & Requisition Phase 2 — pledges & delivery** — fulfilling a request now generates a tracked **pledge** (standing tithe or one-off) delivering Requisition over subsequent turns along a supply line bound to its source world, so a world that revolts or falls suspends or defaults its pledges. Sinks broadened beyond the Apothecary. §4.23; TDD §5.7. *(Typed materiel, the Armory inventory §6.9, pledge interdiction §6.10, and Inquisition negative-requisition §6.5 remain post-0.7 — §5.7.)*
-- ✅ **Grenades / blast templates** — frag grenades and the Grenade Launcher as blast-template weapons: margin-driven scatter, Strength-scaled throw range, quadratic damage falloff, thrower-included danger-close, and a third weapon-set ranged slot. §4.14 (*Template Weapons — Grenades*); geometry, action economy, planner tie-breaks, and BV valuation in TDD §6.6. *(Krak grenades wait on Vehicles — §5.7.)*
+- ✅ **Supply & Requisition Phase 2 — pledges & delivery** — fulfilling a request now generates a tracked **pledge** (standing tithe or one-off) delivering Requisition over subsequent turns along a supply line bound to its source world, so a world that revolts or falls suspends or defaults its pledges. Sinks broadened beyond the Apothecary. §4.23; TDD §5.7. *(Typed materiel, the Armory inventory §6.9, pledge interdiction §6.10, and Inquisition negative-requisition §6.5 remain post-0.7 — §5.8.)*
+- ✅ **Grenades / blast templates** — frag grenades and the Grenade Launcher as blast-template weapons: margin-driven scatter, Strength-scaled throw range, quadratic damage falloff, thrower-included danger-close, and a third weapon-set ranged slot. §4.14 (*Template Weapons — Grenades*); geometry, action economy, planner tie-breaks, and BV valuation in TDD §6.6. *(Krak grenades wait on Vehicles — §5.8.)*
 - ✅ **Detection as search effort** — stealth difficulty no longer scales with how many enemies *live* in a region but with how hard they are *looking*, summing a per-faction WatchScore over every detecting faction. `Region.SelectSpotter` draws the interceptor by the same score, so the faction that made the crossing hard and the faction that catches you can no longer disagree. §4.11 (*Mission Execution*); formula, rationale, and calibration in TDD §6.4.
-- ✅ **Battle Logic Phase 4A — Movement tiers and sprint/fire tradeoff** — five squad-level tactical tiers (Stationary, Walk, Jog, Run, In Melee) governing movement allowance, legal actions, aim retention, weapon `Bulk` penalties, defensive speed, charging, and banked fractional movement. §4.14 (*Movement Tiers*). *(Graded leg-wound impairment shipped in 0.7.3 — §5.4; true stance remains deferred to §5.7.)*
+- ✅ **Battle Logic Phase 4A — Movement tiers and sprint/fire tradeoff** — five squad-level tactical tiers (Stationary, Walk, Jog, Run, In Melee) governing movement allowance, legal actions, aim retention, weapon `Bulk` penalties, defensive speed, charging, and banked fractional movement. §4.14 (*Movement Tiers*). *(Graded leg-wound impairment shipped in 0.7.3 — §5.4; true stance remains deferred to §5.8.)*
 
 ### 5.4 Alpha 0.7.3 — Released
 
 As with the earlier release records, this section marks scope only. Behavioral detail is in §4 and implementation detail is in `OnlyWar_TDD.md`.
 
 - ✅ **Recruitment v1 (pulled forward from 0.8)** — the first continuous, capacity-limited recruitment path, unlocked by the Promised World. §4.9; TDD §5.9. The remaining source-world-rights gap is the planned v1.1 increment.
-- ✅ **Battle Logic Phase 4B** — morale/rout, organized withdrawal and pursuit, and battle-start loadout reallocation shipped. §4.14; TDD §6.6. On-fire damage/panic was rejected; stance/prone and terrain/line-of-sight remain in §5.7.
+- ✅ **Battle Logic Phase 4B** — morale/rout, organized withdrawal and pursuit, and battle-start loadout reallocation shipped. §4.14; TDD §6.6. On-fire damage/panic was rejected; stance/prone and terrain/line-of-sight remain in §5.8.
 - ✅ **Wound and casualty model** — corrected healing cadence, graded motive impairment, foot-hit survivability, and player incapacitation. §4.12; TDD §5.3.
 - ✅ **Apothecary field care and specialist attachment** — operation-level attachment and recovery acceleration shipped; HQ and chapter-office squads are personnel pools rather than deployable units. §4.8, §4.13; TDD §§5.6, 6.6.1.
 - ✅ **UX Improvement Phase 1** — scoped drag-and-drop fleet transfer and zoom-adaptive map labels shipped. §4.2, §4.17. Squad-row redesign moved to the 0.8 map/legibility work in §5.5.
@@ -1422,7 +1423,7 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 - ✅ **Narrator / voice pass** — distinct factual Service Record, operational Turn Report/Command Brief, restrained Chapter annal, settled eulogy, voiced governor petition, and named Battle Review paths replace enum fallbacks. Chronicle prose, variants, callback contributors, and linked archival corrections are frozen records. TDD §§4.3, 6.6. *(Inquisition, Battlefleet, and Astartes-authority sources have reserved narrator keys but produce no placeholder content.)*
 - ✅ **Command Brief & Chapter Chronicle** — the persistent two-lens Command workspace replaces Archive: a live, non-persisted Brief with deep links and shared End Turn attention facts; a curated, frozen, paged Chronicle; retained Last Turn Report access; and the first-turn Founding Directive/checklist. Implemented in `Scenes/CommandScreen` with passive Chronicle persistence, typed navigation targets, and ChapterFounded compatibility projection. §4.19.
 - ✅ **Faction Relationships & Inter-Faction Intelligence** — the cross-faction substrate, sequenced first because Orks cannot be built without it and because Revolt (§4.20) and future Chaos content benefit independently: the binary enemy rule is replaced by a persisted symmetric stance ledger (default Hostile; player↔Imperial seeded Allied), `Faction` behavior is authored through `[Flags] FactionBehavior`, regional awareness is target-agnostic, and sparse observer/target/region beliefs provide graded intelligence, estimates, false positives, Allied sharing, belief-backed planning, governor evidence, and no-contact searches. §4.21; TDD §§5.2.1, 6.1–6.3.
-- ✅ **Equipment & Ammunition Foundation / bespoke character loadouts** — itemized rules catalog, globally identified kits, explicit personal-equipment roles, complete armor/item/ready-order loadouts, capacity and restriction validation, shared chapter-role/live-soldier editor, format-10 doctrine persistence, mission-lifetime equipment instances, and casualty reallocation. Delivered within it: **live ammunition tracking and reloads** (bursts spend the full commitment, finite authored mission reserves, weapon-owned loaded/reserve state and reload progress, no reload creating ammunition, scarcity-aware planner behavior) and **equipment-aware tactical Battle Value** (signature-cached effective value after allocation drives target selection, expected friendly-value loss, and threat math, while strategic force generation, mission sizing, and casualty accounting retain intrinsic value). §§4.5, 4.14; TDD §§4.1.2, 4.2–4.3, 6.6. *(The pooled standard-issue/specialist-count menu survives behind a narrow `WeaponSet` compatibility surface pending migration; it is not the authoritative model. Armory inventory and strategic ammunition remain deferred — §5.7.)*
+- ✅ **Equipment & Ammunition Foundation / bespoke character loadouts** — itemized rules catalog, globally identified kits, explicit personal-equipment roles, complete armor/item/ready-order loadouts, capacity and restriction validation, shared chapter-role/live-soldier editor, format-10 doctrine persistence, mission-lifetime equipment instances, and casualty reallocation. Delivered within it: **live ammunition tracking and reloads** (bursts spend the full commitment, finite authored mission reserves, weapon-owned loaded/reserve state and reload progress, no reload creating ammunition, scarcity-aware planner behavior) and **equipment-aware tactical Battle Value** (signature-cached effective value after allocation drives target selection, expected friendly-value loss, and threat math, while strategic force generation, mission sizing, and casualty accounting retain intrinsic value). §§4.5, 4.14; TDD §§4.1.2, 4.2–4.3, 6.6. *(The pooled standard-issue/specialist-count menu survives behind a narrow `WeaponSet` compatibility surface pending migration; it is not the authoritative model. Armory inventory and strategic ammunition remain deferred — §5.8.)*
 - ✅ **Force Legibility — planet tactical map and squad rows** — canonical effective/full strength, typed unavailable reasons, leadership/readiness/commitment facts, mutation-level leaderless deployment gates, shared live/projected/historical squad-row presentation, cross-screen consumer migration, and map aggregation from the same snapshots. §4.26; TDD §7.6.
 - ✅ **Chapter Operational Doctrine — Unfit for Duty** — persisted Chapter injury threshold,
   required-leader and minimum-strength policy; canonical typed duty-readiness enforcement across
@@ -1434,20 +1435,19 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
   persistent-ID compatibility is low-priority technical debt in TDD §8.7, not an Alpha 0.8
   player-facing requirement.
 
-**Remaining in 0.8.**
+The items that remained open at the end of 0.8 moved to Alpha 0.8.1 (§5.6). Residual follow-through for the Tyranid line and Large-Scale NPC Combat stays in §5.7; the completed behavior is specified in §4.24 and the TDD rather than repeated in release scope.
+
+### 5.6 Alpha 0.8.1
+
+The work that remained open at the end of 0.8, together with the connective items that were deferred out of the active 0.8 sequence.
 
 - ⬜ **Founding myth** — a short generated chapter history at new-game start. §4.19.
 - ⬜ **Wider-Imperium dispatches (initial)** — voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing. §4.19.
-- ⬜ **Techmarines & the Mars pipeline** — replace the placeholder (aspirants leave for ~2 years and return immediately) with a deferred-cohort pipeline: the chapter starts with no Techmarines, the founding cohort returns after ~18 in-game years, and the player sends further drafts on an ongoing basis. Adds between-mission vehicle maintenance and a Techmarine **Cybernetic Repair** procedure. **Prerequisite for Vehicles** (§5.7). §4.28; open questions §§6.15–6.17.
+- ⬜ **Techmarines & the Mars pipeline** — replace the placeholder (aspirants leave for ~2 years and return immediately) with a deferred-cohort pipeline: the chapter starts with no Techmarines, the founding cohort returns after ~18 in-game years, and the player sends further drafts on an ongoing basis. Adds between-mission vehicle maintenance and a Techmarine **Cybernetic Repair** procedure. **Prerequisite for Vehicles** (§5.8). §4.28; open questions §§6.15–6.17.
+- ⬜ **Chapter Mandates** — Command Brief-backed mandates per the §4.25 design; independent follow-through after the equipment foundation, not a prerequisite for it.
+- ⬜ **Display mode and UI/text scaling** — the §4.27 requirement.
 
-**Deferred out of the active 0.8 sequence.**
-
-- ↷ **Chapter Mandates** — the §4.25 design remains valid, but Command Brief-backed mandates are independent follow-through after the equipment foundation, not a prerequisite for it.
-- ↷ **Display mode and UI/text scaling** — the §4.27 requirement remains in backlog; no UI Scale plumbing is part of the equipment work.
-
-Residual follow-through for the Tyranid line and Large-Scale NPC Combat stays in §5.6; the completed behavior is specified in §4.24 and the TDD rather than repeated in release scope.
-
-### 5.6 Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat
+### 5.7 Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat
 
 The core Tyranid invasion, biomass consumption, Genestealer Cult behavior, PDF defensive posture,
 opening-scenario sequencing, and large-scale NPC combat now ship in 0.8. Their behavior belongs in
@@ -1481,9 +1481,9 @@ opening-scenario sequencing, and large-scale NPC combat now ship in 0.8. Their b
 - **Add NPC-versus-player feint deception.** Resolve the player-facing half of enemy diversions as a
   one-turn-lagged intelligence deception: define the effect channel, persistence, displayed estimate,
   resolution timing, and the AI's cross-turn feint-plus-assault planning horizon. This supersedes the
-  "Enemy-generated diversions" backlog entry in §5.7.
+  "Enemy-generated diversions" backlog entry in §5.8.
 
-### 5.7 Post-0.8 Backlog
+### 5.8 Post-0.8 Backlog
 
 Documented for planning purposes; not scheduled:
 
@@ -1492,10 +1492,6 @@ beacon-driven discovery of new visible Ork planets, and actual Ork fleet reinfor
 Promised-World opening, belief-gated feral culling, population-gated emergence, Ork-only morale
 support, and deterministic invader selection are shipped in §4.22; persisted threat scopes,
 beacons, and non-player fleets remain backlog items.
-
-**Deferred 0.8 connective work.** Chapter Mandates (§4.25) and display/UI/text scaling (§4.27) remain
-specified but are no longer in the active 0.8 sequence. Revisit them after the equipment/ammunition
-foundation rather than treating either as a prerequisite for it.
 
 **Equipment compatibility cleanup.** The itemized catalog, complete personal/role loadouts, mission
 equipment state, ammunition behaviors, and effective tactical Battle Value are delivered. The pooled
@@ -1539,7 +1535,7 @@ support dynamic unit membership and new effect channels. Design record:
 
 **Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Ork Phase 1 is shipped in §5.5; its sector-level escalation remains in the Ork follow-through backlog. **Vehicles depend on the 0.8 Techmarine pipeline (§4.28, scheduled in §5.5)** — armor cannot be fielded until the chapter has Techmarines to maintain and wake its machine spirits, so that pipeline must land first. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
 
-**Enemy-generated diversions.** *(Now scheduled as part of "Next-level NPC mission planning" — see §5.6. The scoping analysis below is retained because it is the governing design note for the NPC-vs-player half, which is the genuinely hard part.)* Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
+**Enemy-generated diversions.** *(Now scheduled as part of "Next-level NPC mission planning" — see §5.7. The scoping analysis below is retained because it is the governing design note for the NPC-vs-player half, which is the genuinely hard part.)* Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
 
 - *NPC-vs-NPC feints* fit the existing turn loop with no changes: both the feinter and the fooled defender resolve within the same turn (shaping phase → faction planning), so this is purely a generation-heuristic addition to `FactionStrategyController`.
 - *NPC-vs-player feints do not fit the current flow.* The diversion mechanic only fools a decision-maker who plans *after* the shaping phase; the player commits orders *before* `ProcessTurn` runs, and nothing consumes `PerceivedThreatBonus` on a player region (the player allocates garrisons by hand). A feint against the player therefore cannot reuse the AI's same-turn planning bonus — it must become a **one-turn-lagged intelligence deception**: the feint inflates the *displayed* enemy-strength estimate in the player's intel layer, persists past `ClearDiversionEffects` (unlike the transient AI bonus), and is acted on by the player the following turn, with the real attack landing then. This also implies an AI planning horizon that pairs a feint with a follow-up assault across turns — beyond the current per-region greedy `GenerateFactionOrders`. Resolve these (effect channel, persistence, what the player sees and when the deception resolves, AI feint+follow-through planning) before implementation.
@@ -1663,7 +1659,7 @@ fleets. See §4.22 and `OnlyWar_TDD.md` §6.12.
 
 ### 6.10 Pledge Interdiction in Transit (raised by Supply, §4.23)
 
-**Question:** Once factional fleets move independently (§5.7), can a materiel delivery in transit from a pledging world to the chapter be **interdicted** — delayed, reduced, or lost — by a hostile fleet along the route?
+**Question:** Once factional fleets move independently (§5.8), can a materiel delivery in transit from a pledging world to the chapter be **interdicted** — delayed, reduced, or lost — by a hostile fleet along the route?
 
 **Why it comes up.** §4.23 already binds a pledge to the *fate of its source world* (a world that falls stops paying). Interdiction extends that to the *route*, making supply lines themselves contestable terrain and giving raiders/blockades a strategic purpose. It is gated on factional fleet movement existing and on whether deliveries are modeled as discrete moving objects (like fleet task forces) rather than abstract scheduled credits. Until then, deliveries are treated as guaranteed-on-schedule once pledged.
 

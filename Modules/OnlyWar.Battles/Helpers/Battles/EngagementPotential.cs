@@ -142,8 +142,10 @@ namespace OnlyWar.Battles
 
         // Φ is already a value function over the expected exchange horizon. The transition is a
         // potential difference, not a one-ply rollout, so applying the old 0.65 rollout discount
-        // here would discount the same time preference twice. Genuine bounded rollouts elsewhere
-        // continue to use EngagementExchangeModel.EngagementFutureDiscount.
+        // here would discount the same time preference twice. (The bounded rollout that discount
+        // was tuned for has been removed.) EngagementExchangeModel.EngagementFutureDiscount is
+        // still used per turn of delay in the fire-window projection below, where a shot genuinely
+        // lands one or more turns in the future.
         internal const float EngagementPotentialDiscount = 1f;
 
         private (float FiniteExchangeValue, float AccessValue) EvaluateExchangePotential(State state)
@@ -239,9 +241,20 @@ namespace OnlyWar.Battles
                     opposing,
                     range,
                     expectedExchangeTurns);
+                // A shooting squad's access reads the rate WITH aiming: one that can aim and then
+                // fire from here is not waiting for access. See
+                // SquadPairRemovalRate.SustainedRateAtRange. A contact seeker's access is the
+                // time to contact, and it closes on the move, un-aimed, so it keeps the plain rate.
+                bool standsToShoot = !state.Profile.IsContactSeeking;
                 accessValue += EvaluateContinuousAccessValue(
-                    currentOutgoingRate,
-                    destinationOutgoingRate,
+                    standsToShoot
+                        ? _exchange.EvaluateSustainedOutgoingRate(
+                            state.Squad, enemy, opposing, state.Frames, range)
+                        : currentOutgoingRate,
+                    standsToShoot
+                        ? _exchange.EvaluateSustainedOutgoingRate(
+                            state.Squad, enemy, opposing, state.Frames, destinationRange)
+                        : destinationOutgoingRate,
                     turnsToUsefulRange,
                     targetValue,
                     firePreservingPursuit ? expectedExchangeTurns : float.PositiveInfinity,

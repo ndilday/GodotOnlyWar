@@ -22,7 +22,7 @@ Founding assignment follows `score → derive demand → consume`:
 |---|---|---|
 | Chapter Master | Any non-psyker | Leadership |
 | Librarius ranks | Psyker; handled outside `RoleSuitabilityService` | Ego, then template seat ratio |
-| Techmarine | Tech > 75 | Tech |
+| Techmarine | Tech > 60 | Tech |
 | Master of the Forge | Tech > 100 and Leadership > 60 | Tech |
 | Apothecary | Medical > 95 | Medical |
 | Master of the Apothecarion | Medical > 115 and Leadership > 60 | Medical |

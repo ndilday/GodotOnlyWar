@@ -1054,12 +1054,10 @@ public partial class MainGameScene : Control
 		_planetaryOperationsScreen.DisplayGovernorRequest(planetId);
 	}
 
-	private bool ProcessTurnCore()
+	// Resolution, the turn report and its persistence are one application command, run by the
+	// caller (off the main thread); the scene only refreshes what it shows and opens the dialogs.
+	private bool ApplyResolvedTurn(ResolveTurnView turn)
 	{
-		// Resolution, the turn report and its persistence are one application command; the scene
-		// only refreshes what it shows and opens the dialogs.
-		ResolveTurnView turn = _campaignApplication.ResolveTurn(
-			_campaignApplication.SessionToken);
 		if (!turn.Succeeded)
 		{
 			_feedbackOverlay.ShowError(turn.Message);

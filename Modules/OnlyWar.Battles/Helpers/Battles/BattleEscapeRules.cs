@@ -11,7 +11,8 @@ namespace OnlyWar.Battles;
 public static class BattleEscapeRules
 {
     // Keep a squad in the simulation while an enemy could still reconsider and attack it within
-    // the engagement planner's existing two-turn lookahead.
+    // a two-turn retargeting horizon. The constant is inherited from the engagement planner's
+    // former two-ply policy rollout; the rollout is gone, but the horizon is still this rule's.
     public const float RetargetingHorizonTurns = BattleSquadPlanner.EngagementLookaheadHorizon;
 
     public sealed record Threat(

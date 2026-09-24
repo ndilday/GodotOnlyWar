@@ -891,24 +891,30 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void ChooseEngagementOption_LookaheadSeesOwnMovementInsideWeaponReach()
+    public void ChooseEngagementOption_ScoreSeesOwnMovementInsideWeaponReach()
     {
         // Phase 2 (Design/Reference/BattleLogic.md). Reference scenario: a squad with a
         // non-degrading 1000-range rifle standing 200 yards from a melee-only enemy.
         //
-        // Before: PolicyRangeDelta and the depth-0 terminal both used `desired =
-        // PreferredBandUpper`, i.e. the weapon's MAXIMUM range. At 200 < 1000, `range > desired` is
-        // false for every policy, so projected own motion was 0 and `turnsToAct` was 0 identically
-        // across all five options -- the lookahead could not see its own movement.
+        // Before: the bounded policy rollout's own-motion projection (PolicyRangeDelta) and its
+        // depth-0 terminal both used `desired = PreferredBandUpper`, i.e. the weapon's MAXIMUM
+        // range. At 200 < 1000, `range > desired` is false for every policy, so projected own
+        // motion was 0 and `turnsToAct` was 0 identically across all five options -- the rollout
+        // could not see its own movement.
         //
-        // After: both sites use EffectiveEngagementRange, which is well inside reach here, so
-        // closing policies project real motion and the terminal differentiates. (Phase 6 changed
+        // After: both sites used EffectiveEngagementRange, which is well inside reach here, so
+        // closing policies projected real motion and the terminal differentiated. (Phase 6 changed
         // how that range is DERIVED -- it is now the argmax of removal(r) - incoming(r) rather than
         // an accuracy/penetration limit -- but not that it is inside reach, which is all this test
         // needs.)
         //
+        // The rollout has since been removed. The future is now valued by EngagementPotential,
+        // which reads the same EffectiveEngagementRange as its useful range, and the test now
+        // measures the potential's future exchange plus access value (see Continuation below). The
+        // property is unchanged: the score must see the squad's own movement.
+        //
         // The "before" arm is reconstructed exactly by forcing EffectiveEngagementRange back onto
-        // PreferredBandUpper, so this test fails if either changed site regresses.
+        // PreferredBandUpper, so this test fails if the score goes back to reading reach.
         BattleSquad shooters = CreateSquad("Reference Bolters", 90_130);
         BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 90_131);
         EquipLongReachRifle(shooters.Soldiers[0], 99_262);
@@ -982,7 +988,7 @@ public class BattleSquadPlannerTests
         // the old terminal's formula, not of Phase 2, so asserting it would now pin the shape
         // Phase 5d deliberately removed.
         //
-        // The Phase 2 property itself -- the lookahead can SEE its own movement -- is entirely
+        // The Phase 2 property itself -- the score can SEE its own movement -- is entirely
         // carried by the two assertions below, which are unchanged and still discriminate: under
         // the conflated range every policy projects zero own-motion, so closing and holding are
         // indistinguishable.
@@ -1000,17 +1006,17 @@ public class BattleSquadPlannerTests
         // melee-only enemy threatens 0.234 BV/turn at contact. A rifleman who cannot hit at 200
         // yards should close, and the model says so. But CloseToContact is scored with zero
         // outgoing retention (you do not shoot while running) against melee incoming that switches
-        // on the moment you are inside 1.5, so the LOOKAHEAD still prices closing below holding --
+        // on the moment you are inside 1.5, so the (then) rollout still priced closing below holding --
         // and both arms are now on the order of 1e-7, because the terminal is discounted across the
         // ~50 turns it takes to cross 200 yards at this speed. Asserting the sign of a difference
         // between two numbers that are both effectively zero pins fixture noise.
         //
-        // The property this test is named for -- the lookahead can SEE its own movement -- is
+        // The property this test is named for -- the score can SEE its own movement -- is
         // carried entirely by the two surviving assertions, and they still discriminate sharply:
         // the spread widened from 2.15e-9 (conflated) to 1.22e-7 (derived), a factor of ~57.
         Assert.True(
             afterSpread > beforeSpread,
-            $"expected movement to be more visible to the lookahead: "
+            $"expected movement to be more visible to the engagement score: "
                 + $"before={beforeSpread}, after={afterSpread}");
     }
 
@@ -1110,13 +1116,20 @@ public class BattleSquadPlannerTests
         enemy.ClearReadiedRangedWeapons();
         enemy.RangedWeapons.Add(longRifle);
         enemy.ReadyWeapon(longRifle);
-        float preferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
-            shooter,
-            enemies.GetAverageSize(),
-            enemies.GetAverageArmor(),
-            enemies.GetAverageConstitution(),
-            enemies.GetAverageRangedEvasion());
-        int enemyX = (int)System.Math.Ceiling(preferredDistance * 1.5f);
+        // "Beyond its preferred range" means beyond the band the engagement planner itself steers
+        // toward. Until 2026-09-23 this fixture measured it with
+        // BattleModifiersUtil.CalculateOptimalDistance, which the planner no longer reads: that put
+        // the enemy at 14 yards, deep INSIDE this rifle's 700-1000 yard band, and the test only
+        // passed while a long horizon let the moving options outscore the baseline's step back.
+        // The profile is built against the opposing squad's capability, not the geometry, so a
+        // throwaway placement is enough to read it.
+        BattleGridManager probeGrid = new();
+        Place(probeGrid, shooter, true, 0, 0);
+        Place(probeGrid, enemy, false, 100, 0);
+        float bandUpper = BattleEngagementFrameBuilder.Build([shooters], [enemies])
+            .Profiles[shooters.Id]
+            .PreferredBandUpper;
+        int enemyX = (int)System.Math.Ceiling(bandUpper * 1.5f);
         BattleGridManager grid = new();
         Place(grid, shooter, true, 0, 0);
         Place(grid, enemies.Soldiers[0], false, enemyX, 0);
@@ -1134,6 +1147,13 @@ public class BattleSquadPlannerTests
 
         planner.PlanSquadForTesting(shooters);
 
+        Assert.True(bandUpper > 0, "fixture: the rifle must give the squad a preferred band");
+        Assert.True(
+            shooters.LastEngagementOptionKind is EngagementOptionKind.JogToward
+                or EngagementOptionKind.RunToward
+                or EngagementOptionKind.CloseToContact,
+            $"a squad {enemyX} yards from an enemy, beyond its {bandUpper:F0}-yard band, chose "
+                + $"{shooters.LastEngagementOptionKind} at tier {shooters.MovementTier}");
         Assert.Contains(shooters.MovementTier, new[] { SquadMovementTier.Jog, SquadMovementTier.Run, SquadMovementTier.InMelee });
         Assert.True(shooter.CurrentSpeed > 0);
         IAction movement = Assert.Single(moveActions);

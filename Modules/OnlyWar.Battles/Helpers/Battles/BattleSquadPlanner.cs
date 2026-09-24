@@ -94,6 +94,10 @@ namespace OnlyWar.Battles
         internal float ExpectedExchangeTurnsFor(int squadId) =>
             _context.ExpectedExchangeTurnsFor(squadId);
 
+        // How that horizon was reached. Test and trace visibility only.
+        internal EngagementHorizonDiagnostics EngagementHorizonDiagnosticsFor(int squadId) =>
+            _context.EngagementHorizonDiagnosticsFor(squadId);
+
         internal EngagementPotential.Breakdown EvaluatePotential(
             EngagementPotential.State state) =>
             _potential.Evaluate(state);
@@ -281,7 +285,9 @@ namespace OnlyWar.Battles
         /// <summary>
         /// Layer 2: scores whole-squad semantic movement options without mutating movement state,
         /// aim, reservations or action collections. Current-turn fire may use the exact memoized
-        /// per-soldier target evaluators; rollout steps below are capability-group aggregates only.
+        /// per-soldier target evaluators; the future is valued by <see cref="EngagementPotential"/>
+        /// (immediate + Φ(s′) − Φ(s) − contact commitment) from the squad-pair removal-rate table,
+        /// not by re-running per-soldier targeting at projected positions.
         /// </summary>
         internal SquadEngagementDecision ChooseEngagementOption(
             BattleSquad squad,

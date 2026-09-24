@@ -181,7 +181,7 @@ Disposition at battle end keys on `BattleHistory.Outcome.SideHoldingField`, whic
 - **Player did not hold the field** → presumed dead, gene-seed lost, via the existing death path.
   This is the current agreed rule and gives losing a fight teeth beyond the casualty count.
   Contesting that outcome is deferred to the **battlefield recovery missions** item now recorded in
-  PRD §5.7 — a later mission type that returns for the brother, his gene-seed, or at minimum his
+  PRD §5.8 — a later mission type that returns for the brother, his gene-seed, or at minimum his
   armor and wargear, gated on wargear inventory and transport existing.
 
 ### 2.4 How natural healing actually works today
@@ -639,7 +639,7 @@ Chaplain, and Techmarine remain deliberately deferred; those are the planner-fac
 multiplier with the foot floor. Expect battle-balance churn and BV recalibration pressure.
 
 **Phase 4 — Stance and prone combat. Not scheduled.** Revisit only after terrain and cover land
-(PRD §5.7 Battle Visuals Phase 3), since stance's real payoff is prone *behind* something, and
+(PRD §5.8 Battle Visuals Phase 3), since stance's real payoff is prone *behind* something, and
 after the engagement-scoring work in `Design/Reference/BattleLogic.md` has stabilized. See §5.
 
 Every phase this plan scopes is now built. The implementation and player-facing behavior are

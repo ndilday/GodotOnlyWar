@@ -462,35 +462,75 @@ namespace OnlyWar.Battles
             {
                 return false;
             }
-            Aggression aggression = (CampaignCharacter?.CurrentOrder ?? Squad?.CurrentOrders)
-                ?.LevelOfAggression ?? Aggression.Normal;
-            if (aggression == Aggression.Aggressive)
+            float? threshold = MissionStrengthThreshold(MissionAggression);
+            if (!threshold.HasValue)
             {
                 return true;
             }
-            else
-            {
-                // Aggression measures the losses this particular mission element will tolerate.
-                // Under-strength squads must not abort merely because their template has empty
-                // positions, so compare against the combat-capable roster captured when this
-                // BattleSquad was created rather than the template's theoretical maximum.
-                // TODO: adjust based on whether the squad leader is still around?
-                float ratio = (float)ableSoldierCount / _missionStartingAbleSoldierCount;
-                switch (aggression)
-                {
-                    case Aggression.Avoid:
-                        return ratio >= 0.9f;
-                    case Aggression.Cautious:
-                        return ratio >= 0.75f;
-                    case Aggression.Normal:
-                        return ratio >= 0.5f;
-                    case Aggression.Attritional:
-                        return ratio >= 0.25f;
-                    default:
-                        return false;
-                }
-            }
+            // Aggression measures the losses this particular mission element will tolerate.
+            // Under-strength squads must not abort merely because their template has empty
+            // positions, so compare against the combat-capable roster captured when this
+            // BattleSquad was created rather than the template's theoretical maximum.
+            // TODO: adjust based on whether the squad leader is still around?
+            float ratio = (float)ableSoldierCount / _missionStartingAbleSoldierCount;
+            return ratio >= threshold.Value;
         }
+
+        /// <summary>
+        /// The fraction of this squad's CURRENT able strength that must fall before
+        /// <see cref="ShouldContinueMission"/> turns false: 1 for an Aggressive squad, which never
+        /// stops for casualties, and 0 for one already past its threshold.
+        ///
+        /// <para>Counted in whole soldiers, including the loss that crosses the threshold, because
+        /// that is what ShouldContinueMission counts. A continuous version understates small
+        /// squads badly: at Normal it gives a lone soldier half a soldier to lose, when in fact
+        /// only his death ends the squad's part in the fight; ten soldiers withdraw on the sixth
+        /// loss, not the fifth.</para>
+        /// </summary>
+        internal float RemainingLossTolerance => RemainingLossToleranceAssuming(MissionAggression);
+
+        /// <summary>
+        /// <see cref="RemainingLossTolerance"/> as it would be under
+        /// <paramref name="aggression"/> rather than the squad's own orders. For reasoning about a
+        /// squad whose orders the reasoner should not know -- an enemy's.
+        /// </summary>
+        internal float RemainingLossToleranceAssuming(Aggression aggression)
+        {
+            int ableSoldierCount = AbleSoldiers.Count;
+            if (ableSoldierCount == 0 || _missionStartingAbleSoldierCount == 0)
+            {
+                return 0;
+            }
+            float? threshold = MissionStrengthThreshold(aggression);
+            if (!threshold.HasValue)
+            {
+                return 1;
+            }
+            // The smallest strength that still continues; one fewer is the withdrawal.
+            int lowestContinuing = (int)Math.Ceiling(
+                threshold.Value * _missionStartingAbleSoldierCount);
+            int lossesToWithdraw = ableSoldierCount - lowestContinuing + 1;
+            return Math.Clamp((float)lossesToWithdraw / ableSoldierCount, 0f, 1f);
+        }
+
+        private Aggression MissionAggression =>
+            (CampaignCharacter?.CurrentOrder ?? Squad?.CurrentOrders)?.LevelOfAggression
+                ?? Aggression.Normal;
+
+        /// <summary>
+        /// The fraction of its starting able strength below which a squad stops continuing its
+        /// mission, or null for Aggressive, which has no such floor.
+        /// </summary>
+        private static float? MissionStrengthThreshold(Aggression aggression) => aggression switch
+        {
+            Aggression.Aggressive => null,
+            Aggression.Avoid => 0.9f,
+            Aggression.Cautious => 0.75f,
+            Aggression.Normal => 0.5f,
+            Aggression.Attritional => 0.25f,
+            // Unchanged from the switch this replaced: an unknown aggression never continues.
+            _ => 1.01f
+        };
 
         public override string ToString()
         {

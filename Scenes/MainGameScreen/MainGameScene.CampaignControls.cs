@@ -139,6 +139,14 @@ public partial class MainGameScene
 
 	private bool HandleGlobalCampaignInput(InputEvent inputEvent)
 	{
+		// The activity overlay stops the mouse, but not the keyboard: a focused button would still
+		// take Enter or Space. While a turn resolves on a worker thread the main thread is free to
+		// dispatch input, so nothing may reach a control that reads or changes campaign state.
+		if (_isProcessingTurn && inputEvent is InputEventKey)
+		{
+			return true;
+		}
+
 		if (inputEvent.IsActionPressed("ui_cancel"))
 		{
 			if (_isProcessingTurn)
@@ -612,13 +620,23 @@ public partial class MainGameScene
 		_lastSaveStatus = $"Protected before turn at {protectedSave.WrittenLocal:t}.";
 
 		_campaignApplication.MarkChanged();
-		ShowActivity("RESOLVING TURN", "Processing orders, movement, and the wider war...");
+		ShowActivity(
+			"RESOLVING TURN",
+			"Processing orders, movement, and the wider war...",
+			() => _campaignApplication.TurnProgressStatus);
 		await YieldForActivityOverlay();
 
 		bool turnCompleted = false;
 		try
 		{
-			turnCompleted = ProcessTurnCore();
+			// Resolution runs off the main thread so the overlay can redraw its progress line and
+			// spinner. Nothing on the main thread touches campaign state until the await returns:
+			// the overlay stops the mouse, HandleGlobalCampaignInput swallows keys, and the scene
+			// only refreshes its views in ApplyResolvedTurn, after resolution has finished.
+			Guid sessionToken = _campaignApplication.SessionToken;
+			ResolveTurnView turn = await System.Threading.Tasks.Task.Run(
+				() => _campaignApplication.ResolveTurn(sessionToken));
+			turnCompleted = ApplyResolvedTurn(turn);
 		}
 		catch (Exception exception)
 		{
@@ -779,10 +797,10 @@ public partial class MainGameScene
 		return configured.AsString();
 	}
 
-	private void ShowActivity(string title, string detail)
+	private void ShowActivity(string title, string detail, Func<string> status = null)
 	{
 		_mainUILayer.MoveChild(_activityOverlay, _mainUILayer.GetChildCount() - 1);
-		_activityOverlay.ShowBusy(title, detail);
+		_activityOverlay.ShowBusy(title, detail, status);
 	}
 
 	private async System.Threading.Tasks.Task YieldForActivityOverlay()

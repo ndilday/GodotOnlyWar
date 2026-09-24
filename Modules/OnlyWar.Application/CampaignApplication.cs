@@ -82,6 +82,11 @@ public sealed class CampaignApplication :
     public GameStorage Storage => _context.Services.Persistence.Storage;
     public SaveGameManager SaveManager => _context.Services.Persistence.SaveManager;
     public Guid SessionToken => _context.SessionToken;
+    /// <summary>
+    /// What end-of-turn work is running now, or empty between turns. Safe to read from any thread
+    /// while <see cref="ResolveTurn"/> runs on another.
+    /// </summary>
+    public string TurnProgressStatus => _context.TurnProgress.Current;
 
     public event EventHandler SessionChanged
     {

@@ -15,6 +15,7 @@ using OnlyWar.Medical.Abstractions;
 using OnlyWar.Operations.Abstractions;
 using OnlyWar.Operations.Orders;
 using OnlyWar.Domain;
+using OnlyWar.Runtime;
 using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Application;
@@ -100,7 +101,9 @@ public sealed class OperationsServices
 /// </summary>
 public sealed class BattleServices
 {
-    public BattleEngagementResolver CreateEngagementResolver(GameSession session)
+    public BattleEngagementResolver CreateEngagementResolver(
+        GameSession session,
+        TurnProgress progress = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         CampaignBattleEquipmentSource equipment =
@@ -118,7 +121,8 @@ public sealed class BattleServices
             equipment,
             regionId => session.Sector.Planets.Values
                 .SelectMany(planet => planet.Regions)
-                .FirstOrDefault(region => region?.Id == regionId));
+                .FirstOrDefault(region => region?.Id == regionId),
+            progress);
     }
 }
 

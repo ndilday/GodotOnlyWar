@@ -51,11 +51,22 @@ namespace OnlyWar.Battles
         internal float EngagementRemovalRate =>
             Volatile.Read(ref _engagementRemovalRate);
 
+        private IReadOnlyDictionary<int, EngagementHorizonDiagnostics> _engagementHorizonDiagnostics =
+            new Dictionary<int, EngagementHorizonDiagnostics>();
+
+        /// <summary>How one squad's horizon was reached. Diagnostic only; nothing plans from it.</summary>
+        internal EngagementHorizonDiagnostics EngagementHorizonDiagnosticsFor(int squadId) =>
+            Volatile.Read(ref _engagementHorizonDiagnostics).GetValueOrDefault(squadId);
+
         internal void SetEngagementHorizon(
             IReadOnlyDictionary<int, float> expectedExchangeTurnsBySquad,
             float battleValueAtRisk,
-            float removalRate)
+            float removalRate,
+            IReadOnlyDictionary<int, EngagementHorizonDiagnostics> diagnostics = null)
         {
+            Volatile.Write(
+                ref _engagementHorizonDiagnostics,
+                diagnostics ?? new Dictionary<int, EngagementHorizonDiagnostics>());
             Volatile.Write(
                 ref _expectedExchangeTurnsBySquad,
                 expectedExchangeTurnsBySquad);
@@ -101,7 +112,7 @@ namespace OnlyWar.Battles
 
         // Phase 4 removal-rate table (Design/Reference/BattleLogic.md): one
         // SquadPairRemovalRate per (shooter squad, target squad) pair, holding the closed-form
-        // rescalable removal terms the lookahead will use to price its exchanges in the same
+        // rescalable removal terms the engagement scorer uses to price exchanges in the same
         // currency as immediate fire. Stored shooter-squad-major -- ShooterSquadId -> TargetSquadId
         // -> rate -- because the whole row is produced by one pass over the shooter squad's
         // soldiers (each soldier's best target lands in exactly one column), so building a row
@@ -109,20 +120,35 @@ namespace OnlyWar.Battles
         // for a shooter squad are therefore present or absent together; an ABSENT column means no
         // soldier is aimed into that enemy squad, i.e. rate 0.
         //
-        // PHASE 5 CONSUMES THIS. BattleSquadPlanner.EvaluateExchangeRate reads it for both halves
-        // of every lookahead ply and for the depth-0 terminal, replacing the AggregateRemovalRate
-        // capability proxy. Rows are therefore built for a squad's own table AND for its enemies'
-        // (the incoming half), all memoized here for the turn.
+        // PHASE 5 CONSUMES THIS. EngagementExchangeModel's outgoing and incoming exchange rates
+        // read it, replacing the AggregateRemovalRate capability proxy. Phase 5 wired it into the
+        // bounded policy rollout; that rollout has since been removed, and today the readers are
+        // EngagementPotential (the state potential at the current and projected separations) and
+        // SquadEngagementPolicy. Rows are built for a squad's own table AND for its enemies' (the
+        // incoming half), all memoized here for the turn.
         internal ConcurrentDictionary<
             int,
             IReadOnlyDictionary<int, SquadPairRemovalRate>> PairRemovalRates { get; } = new();
 
         // Contact melee removal rate, keyed by the attacker/target squad pair. Like the ranged
         // table this is pure for the frozen planning pass, and the exchange model can ask for the
-        // same contact rate repeatedly across candidates and rollout plies.
+        // same contact rate repeatedly across candidates and across the current and projected
+        // states the potential compares.
         internal ConcurrentDictionary<(int AttackerSquadId, int TargetSquadId), float>
             MeleeContactRemovalRates { get; } = new();
     }
+
+    /// <summary>
+    /// The inputs and both clocks behind one squad's engagement horizon. See
+    /// <see cref="EngagementHorizonModel.DeriveSquadExchangeTurns"/>.
+    /// </summary>
+    internal readonly record struct EngagementHorizonDiagnostics(
+        float EnemyBattleValueBeforeWithdrawal,
+        float OutgoingRemovalRate,
+        float OwnBattleValueBeforeWithdrawal,
+        float IncomingRemovalRate,
+        float EnemyWithdrawalTurns,
+        float OwnWithdrawalTurns);
 
     /// <summary>
     /// One shooter squad's firing-lane frame against one target squad for the turn. The axis runs

@@ -4,7 +4,7 @@ The implemented ranged-combat architecture is documented in TDD §6.6 and the pl
 
 ## Template weapons
 
-- Add krak grenades with the vehicle/anti-armor work. They are single-target anti-armor weapons, not blast templates. Tracked as part of Vehicles in PRD §5.7.
+- Add krak grenades with the vehicle/anti-armor work. They are single-target anti-armor weapons, not blast templates. Tracked as part of Vehicles in PRD §5.8.
 - Add Space Marine grenade launchers and a dedicated launcher skill if they become player equipment.
 - Apply cover, terrain, and line-of-sight interaction to cones and blasts when Battle Visuals Phase 3 supplies those systems.
 

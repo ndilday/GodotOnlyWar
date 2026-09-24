@@ -191,6 +191,36 @@ public class SquadEngagementPlanningTests
             3);
     }
 
+    [Theory]
+    // Enemy reaches its withdrawal point first: 50 BV to strip at 5/turn.
+    [InlineData(50f, 5f, 40f, 1f, 10f)]
+    // This squad reaches its own first: 8 BV to lose at 2/turn, though the enemy lasts 20.
+    [InlineData(100f, 5f, 8f, 2f, 4f)]
+    // Nobody is shooting this squad: the enemy clock alone decides.
+    [InlineData(30f, 3f, 8f, 0f, 10f)]
+    // Nobody can hurt anybody: both clocks sit at the cap.
+    [InlineData(30f, 0f, 8f, 0f, 183f)]
+    // This squad is already at its withdrawal point: the one-turn minimum, never zero.
+    [InlineData(30f, 3f, 0f, 2f, 1f)]
+    // Enemy already at its withdrawal point: likewise.
+    [InlineData(0f, 3f, 8f, 2f, 1f)]
+    public void SquadEngagementHorizon_EndsAtTheFirstWithdrawalPoint(
+        float enemyBattleValueBeforeWithdrawal,
+        float outgoingRate,
+        float ownBattleValueBeforeWithdrawal,
+        float incomingRate,
+        float expectedTurns)
+    {
+        Assert.Equal(
+            expectedTurns,
+            EngagementHorizonModel.DeriveSquadExchangeTurns(
+                enemyBattleValueBeforeWithdrawal,
+                outgoingRate,
+                ownBattleValueBeforeWithdrawal,
+                incomingRate),
+            3);
+    }
+
     [Fact]
     public void MeleeContactRemovalRate_RespondsToTargetDurability()
     {

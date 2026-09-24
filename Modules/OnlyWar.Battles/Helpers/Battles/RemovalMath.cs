@@ -378,7 +378,8 @@ namespace OnlyWar.Battles
         /// </summary>
         /// <summary>
         /// PHASE 5. Both halves of the graded fraction from ONE pass over the location vector. The
-        /// lookahead calls this for every (policy, ply, enemy) triple, and running
+        /// engagement scorer calls this for every (option, enemy, separation) it projects (the
+        /// original caller was a (policy, ply, enemy) rollout, since removed), and running
         /// <see cref="EvaluateTakeOutProbability"/> and <see cref="EvaluateWoundProgress"/> back to
         /// back walked the vector twice and cost ~3x on the degrading-weapon path.
         /// </summary>

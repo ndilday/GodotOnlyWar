@@ -56,7 +56,7 @@ distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is
 
 Audited 2026-08-16 against the code. The equipment/ammunition foundation is implemented and its
 active plan was removed under the promotion rule; the narrow pooled `WeaponSet` compatibility
-cleanup is tracked in PRD §5.7 rather than in an active design. The subsystem-boundary architecture
+cleanup is tracked in PRD §5.8 rather than in an active design. The subsystem-boundary architecture
 work through integrated verification was distilled into `OnlyWar_TDD.md` and its active plan was
 removed on 2026-09-07 under the same rule. `Reference/BattleLogic.md` owns the
 engagement-scoring derivations, tactical combat decisions, and strategic NPC-combat equations that
@@ -69,7 +69,7 @@ narrow:
 - Calibration/measurement debt that is not a new player-facing rules plan — real transition
   telescoping and a few named scoring seams. **The former pointer to "TDD §8.16" was stale:** no such
   section exists (§8 stops at 8.4) and §8 explicitly disclaims being a backlog. Residual calibration
-  items belong in PRD §5.7 with the other tracked residuals.
+  items belong in PRD §5.8 with the other tracked residuals.
 
 The former engagement-scoring trackers and large-scale NPC-combat record were distilled into
 `Reference/BattleLogic.md` and removed. Their phase history, test counts, and open-work lists do not
@@ -83,7 +83,7 @@ the architecture in TDD §6.6. It was **not** promoted to `Reference/`: the only
 to retain was its four rejected turn orders, and four bullets fold into TDD §6.6 without making it
 unreadable — so under the citation test a `Reference/` file holding them would have earned no place.
 Its one residual, recalibrating `MeleeClosingFactor` now that closing costs an extra turn, moved to
-PRD §5.7 before the file was deleted. Everything else in it was scoping, corrections to that scoping,
+PRD §5.8 before the file was deleted. Everything else in it was scoping, corrections to that scoping,
 and test counts, which the rule names explicitly as delete-on-promotion.
 
 `UnifiedForceAllocation.md` was implemented, verified in play, and **promoted and deleted on
@@ -114,8 +114,8 @@ rather than deleted because their decision tables remain useful — the wound-ba
 motive-speed curve in the first, and the resolved detachment sub-questions plus the save load-ordering
 trap in the second. The administrative-formation and character-as-battle-element architecture that
 superseded the organizational half of the second is now distilled into `OnlyWar_TDD.md`; its open
-join/leave governance question remains in PRD §5.7. Their other residual items did **not** move with
-them: stance/prone combat is in PRD §5.7, and the active ranged backlog remains in
+join/leave governance question remains in PRD §5.8. Their other residual items did **not** move with
+them: stance/prone combat is in PRD §5.8, and the active ranged backlog remains in
 `RangedCombatFollowUps.md`.
 
 Implemented mission scheduling, engagement range and posture, squad engagement planning, take-out-probability combat scoring,

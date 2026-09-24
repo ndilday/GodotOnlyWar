@@ -5,6 +5,7 @@ using OnlyWar.Campaign.Recruitment;
 using OnlyWar.Campaign.Simulation;
 using OnlyWar.Persistence.Storage;
 using OnlyWar.Campaign.Turns;
+using OnlyWar.Runtime;
 
 namespace OnlyWar.Application;
 
@@ -37,6 +38,9 @@ public sealed class CampaignApplicationContext
     internal MusterScreenContext Muster { get; private set; }
     internal LoadoutScreenContext Loadout { get; private set; }
     public Guid SessionToken { get; private set; } = Guid.NewGuid();
+    // What the turn in progress is doing now. A host resolving the turn off its UI thread polls
+    // this to tell the player where a long end of turn has got to.
+    public TurnProgress TurnProgress { get; } = new();
 
     public event EventHandler SessionChanged;
 
@@ -155,15 +159,25 @@ public sealed class CampaignApplicationContext
     {
         GameSession target = session ?? ActiveSession
             ?? throw new InvalidOperationException("No campaign session is active.");
-        BattleEngagementResolver engagement = Services.Battle.CreateEngagementResolver(target);
-        return new TurnController(
-            target,
-            Services.Readiness.Decisions,
-            Services.Operations.Personnel,
-            Services.Operations.Commitments,
-            engagement,
-            engagement,
-            nameGenerator: Services.NameGenerator).ProcessTurn(target.Sector);
+        TurnProgress.Report(string.Empty);
+        BattleEngagementResolver engagement =
+            Services.Battle.CreateEngagementResolver(target, TurnProgress);
+        try
+        {
+            return new TurnController(
+                target,
+                Services.Readiness.Decisions,
+                Services.Operations.Personnel,
+                Services.Operations.Commitments,
+                engagement,
+                engagement,
+                nameGenerator: Services.NameGenerator,
+                progress: TurnProgress).ProcessTurn(target.Sector);
+        }
+        finally
+        {
+            TurnProgress.Report(string.Empty);
+        }
     }
 
     public void Save(string filePath, GameSession session = null)

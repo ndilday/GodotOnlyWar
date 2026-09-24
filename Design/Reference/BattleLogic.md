@@ -310,8 +310,22 @@ turnsToUsefulRange = (range - desiredRange) / (ownMoveSpeed - quarrySpeed)
 
 The tempo rate fades as current contribution becomes useful and is zero when the destination cannot
 produce removal. There is no activation branch at the old half-pool/four-pool boundary. `T` is
-derived once per planning turn from Battle Value at risk and current removal rate, capped by the
-implementation's maximum exchange horizon, and is shared by every candidate on both sides.
+derived once per planning turn for each squad and is shared by every candidate in that squad's
+decision. It is the shorter of two clocks, each Battle Value above a withdrawal threshold divided
+by a removal rate, clamped to 1–183 turns:
+
+```text
+T          = min(enemyClock, ownClock)
+enemyClock = enemy BV above an Attritional (25%) withdrawal threshold / side's removal rate on it
+ownClock   = squad BV above its own orders' threshold / Σ_e rate(e→squad) × share(e→squad)
+share      = rate(e→squad) / Σ_s rate(e→s)
+```
+
+The enemy's orders are not the planner's to know, hence the assumed Attritional enemy; the squad's
+own threshold is the one `BattleSquad.ShouldContinueMission` applies, counted in whole soldiers.
+Until 2026-09-23 `T` was one side-wide value, enemy BV over the side's removal rate, and ignored
+how fast the squad itself was being worn down. The architecture summary is in `OnlyWar_TDD.md`
+§6.6 (*Engagement horizon*).
 
 Two properties of that decomposition are load-bearing and were both wrong until 2026-09-20.
 
@@ -386,9 +400,12 @@ best score, not of the squad's Battle Value.** Battle Value is a stock and these
 per-turn rates, so sizing the band from the stock made it unescapable for any squad whose
 shooting was worth less than that fraction of its own worth per turn: every option read as
 indifferent and the tie-break decided in place of the score. A 191-value marine squad carried a
-3.82 band while its whole shooting was worth 1.3 a turn. An absolute floor still applies, for the
+3.82 band while its whole shooting was worth 1.3 a turn. A floor still applies, for the
 case where every option really is worth about nothing — which is when the baseline and the
-previous posture should carry the decision.
+previous posture should carry the decision. Since 2026-09-23 the floor scales with the squad's
+horizon, `0.1 × T / 183`: `Phi` differences are rates integrated over `T`, so a fixed floor set
+when horizons sat near the cap swallowed real decisions once `T` began ending at the first
+withdrawal point.
 
 This was the last of the three defects behind the Grist Nine Epsilon turn-cap battles, and the
 only one of them that was not itself a scoring error. It stayed invisible while the pursuit
@@ -760,10 +777,15 @@ own value models and are not replacements for either estimate:
 - `EngagementPotential.EvaluateProjectedMeleeOpportunity` estimates the incoming contact threat
   from the opposing squad's centroid-range and `opposing.MoveSpeed`. It is an expected incoming
   value over the exchange horizon, not a promise that the threat will reach a particular soldier.
-- `EngagementExchangeModel.EvaluateArrivalTimeValue` and its continuation terminal use projected
-  squad-centroid range, a preferred/useful band, the candidate profile move speed, and (in the
-  root transition) the quarry's withdrawal rate. These are potential differences and present-value
-  terms; the `arrival_value` trace must not be read as an observed travel time.
+- `EngagementPotential.TurnsToUsefulRange`, which feeds the potential's access value, uses
+  projected squad-centroid range, the useful band (`EffectiveEngagementRange`, or
+  `UsefulFireRange` for fire-preserving pursuit), the candidate profile move speed, and, for a
+  pursuit role, the quarry's run speed. It replaced `EngagementExchangeModel.EvaluateArrivalTimeValue`
+  and the continuation terminal of the bounded policy rollout, both since removed, which read the
+  same inputs. These are potential differences and present-value terms. The `arrival_value` trace
+  column now holds the root-state offset of the potential transition (the negated net-rate
+  component of Φ(s)); it must not be read
+  as an observed travel time.
 - `EngagementPotential.EvaluateScreenRole`, `BattleEngagementFrameBuilder.AssignScreens`, and
   `SCREEN_EVAL.intercept_point` use threat-to-protected-centroid distance, threat profile speed,
   and a projected interpose point to score a screen. This is a screening/force-protection clock,

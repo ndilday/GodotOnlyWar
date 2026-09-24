@@ -45,8 +45,8 @@ public class RoleSuitabilityServiceTests
     }
 
     [Theory]
-    [InlineData(75f, false)]
-    [InlineData(76f, true)]
+    [InlineData(60f, false)]
+    [InlineData(61f, true)]
     public void Techmarine_RequiresTechAboveThreshold(float techRating, bool eligible)
     {
         PlayerSoldier soldier = CreateSoldier(tech: techRating);

@@ -200,6 +200,93 @@ public class FactionRosterTemplateTests
             weaponSet => weaponSet.Name == "Big Shoota + Choppa + Frag Grenade");
     }
 
+    [Fact]
+    public void InsurrectionistRosterUsesItsOwnSpeciesWeaponsAndFormations()
+    {
+        Faction insurrectionists = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+            .Single(faction => faction.Name == "Insurrectionists");
+        Faction imperium = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+            .Single(faction => faction.IsDefaultFaction);
+
+        Assert.Equal(
+            ["Insurrectionist Firebrand", "Insurrectionist Mob", "Insurrectionist Weapon Team"],
+            insurrectionists.SquadTemplates.Values.Select(template => template.Name).OrderBy(name => name));
+
+        // The irregulars replaced a PDF clone: every soldier is of the faction's own species, and
+        // no template, species or weapon set is shared with the Imperial PDF.
+        string[] pdfSpecies = imperium.SoldierTemplates.Values
+            .Select(template => template.Species.Name)
+            .Distinct()
+            .ToArray();
+        foreach (SquadTemplate squad in insurrectionists.SquadTemplates.Values)
+        {
+            Assert.Equal("Light Armor", squad.Armor.Name);
+            Assert.Equal("Autogun (Insurrectionist)", squad.DefaultWeapons.Name);
+            Assert.Equal("Autogun", squad.DefaultWeapons.PrimaryRangedWeapon.Name);
+            Assert.All(squad.Elements, element =>
+            {
+                Assert.Equal("Insurrectionist", element.SoldierTemplate.Species.Name);
+                Assert.DoesNotContain(element.SoldierTemplate.Species.Name, pdfSpecies);
+                Assert.Same(insurrectionists, squad.Faction);
+            });
+        }
+
+        SquadTemplate mob = insurrectionists.SquadTemplates.Values
+            .Single(template => template.Name == "Insurrectionist Mob");
+        SquadTemplateElement ringleader = mob.Elements.Single(element => element.SoldierTemplate.IsSquadLeader);
+        Assert.Equal("Insurrectionist Ringleader", ringleader.SoldierTemplate.Name);
+        Assert.False(ringleader.RollsStrength);
+        SquadTemplateElement rank = mob.Elements.Single(element => !element.SoldierTemplate.IsSquadLeader);
+        Assert.Equal("Insurrectionist", rank.SoldierTemplate.Name);
+        Assert.Equal(9, rank.MinimumNumber);
+        Assert.Equal(29, rank.MaximumNumber);
+        Assert.True(rank.RollsStrength);
+
+        SquadTemplate team = insurrectionists.SquadTemplates.Values
+            .Single(template => template.Name == "Insurrectionist Weapon Team");
+        SquadTemplateElement crew = Assert.Single(team.Elements);
+        Assert.Equal(2, crew.MinimumNumber);
+        Assert.Equal(2, crew.MaximumNumber);
+        Assert.False(crew.RollsStrength);
+        Assert.Equal(
+            "Heavy Stubber (Insurrectionist)",
+            Assert.Single(crew.GetMenu("Insurrectionist Heavy Weapon")).Name);
+
+        SquadTemplate firebrand = insurrectionists.SquadTemplates.Values
+            .Single(template => template.Name == "Insurrectionist Firebrand");
+        Assert.Equal(SquadTypes.HQ, firebrand.SquadType);
+        SquadTemplateElement agitator = Assert.Single(firebrand.Elements);
+        Assert.Equal("Insurrectionist Firebrand", agitator.SoldierTemplate.Name);
+        Assert.True(agitator.SoldierTemplate.IsSquadLeader);
+    }
+
+    [Fact]
+    public void GeneratedInsurrectionistMobRollsItsStrengthAndTheWeaponTeamCarriesItsStubber()
+    {
+        Faction insurrectionists = Fixtures.RulesDatabaseFixture.LoadRules().Factions
+            .Single(faction => faction.Name == "Insurrectionists");
+        SquadTemplate mob = insurrectionists.SquadTemplates.Values
+            .Single(template => template.Name == "Insurrectionist Mob");
+        SquadTemplate team = insurrectionists.SquadTemplates.Values
+            .Single(template => template.Name == "Insurrectionist Weapon Team");
+
+        int[] strengths = Enumerable.Range(0, 20)
+            .Select(seed => SquadFactory.GenerateSquad(mob, new SeededRNG(77_000 + seed)).Members.Count)
+            .ToArray();
+
+        // Ringleader plus 9-29 insurrectionists, and an irregular mob really does vary.
+        Assert.All(strengths, strength => Assert.InRange(strength, 10, 30));
+        Assert.True(
+            strengths.Distinct().Count() > 1,
+            $"twenty mobs all mustered at {strengths[0]}");
+
+        Squad generatedTeam = SquadFactory.GenerateSquad(team, new SeededRNG(77_100));
+        Assert.Equal(2, generatedTeam.Members.Count);
+        Assert.Equal(
+            "Heavy Stubber (Insurrectionist)",
+            Assert.Single(generatedTeam.Loadout).Name);
+    }
+
     private static void AssertMob(
         Faction faction,
         string squadName,

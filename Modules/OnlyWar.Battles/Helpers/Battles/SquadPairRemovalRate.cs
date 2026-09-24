@@ -74,7 +74,8 @@ namespace OnlyWar.Battles
     /// the rate-of-fire modifier) is held fixed under rescaling. The live path re-derives shots
     /// from the hit probability, so a rescaled rate can differ from a full re-evaluation for a
     /// burst weapon whose chosen rate of fire would change with range. Rerunning that fixed point
-    /// would mean calling the targeting stack, which is exactly what the lookahead must not do.</para>
+    /// would mean calling the targeting stack, which is exactly what the engagement potential's
+    /// per-option projections must not do.</para>
     /// </summary>
     internal sealed class PairRemovalTerm
     {
@@ -105,12 +106,18 @@ namespace OnlyWar.Battles
         /// PHASE 5. Reach for THIS shooter with THIS weapon (a thrown weapon's reach scales with
         /// the thrower's Strength). Beyond it the shooter cannot fire at all, so the rescaled rate
         /// must be exactly 0 rather than the smooth Gaussian tail -- and it must become positive
-        /// again once the lookahead projects the squads inside reach, which is the gradient that
+        /// again once the potential projects the squads inside reach, which is the gradient that
         /// tells an out-of-range squad closing is worth something.
         /// </summary>
         internal float MaximumEffectiveRange { get; }
         /// <summary>Null for a non-degrading weapon, where take-out does not vary with range.</summary>
         internal IReadOnlyList<TakeOutLocationTerm> TakeOutTerms { get; }
+        /// <summary>
+        /// The weapon's Accuracy, which an aimed shot adds to the to-hit total; null when the
+        /// weapon cannot be aimed (a cone or other template weapon). Read only by
+        /// <see cref="SustainedRateAt"/>.
+        /// </summary>
+        internal float? AimAccuracy { get; }
 
         internal PairRemovalTerm(
             int shooterId,
@@ -124,7 +131,8 @@ namespace OnlyWar.Battles
             float referenceWoundProgress,
             float targetBattleValue,
             float maximumEffectiveRange,
-            IReadOnlyList<TakeOutLocationTerm> takeOutTerms)
+            IReadOnlyList<TakeOutLocationTerm> takeOutTerms,
+            float? aimAccuracy = null)
         {
             ShooterId = shooterId;
             TargetId = targetId;
@@ -138,6 +146,7 @@ namespace OnlyWar.Battles
             TargetBattleValue = targetBattleValue;
             MaximumEffectiveRange = maximumEffectiveRange;
             TakeOutTerms = takeOutTerms;
+            AimAccuracy = aimAccuracy;
         }
 
         /// <summary>
@@ -195,9 +204,34 @@ namespace OnlyWar.Battles
         /// <c>hit * (takeOut + lambda * woundProgress) * targetBV</c> currency
         /// <see cref="BattleSquadPlanner.EvaluateRangedTarget"/> reports, so it is directly
         /// commensurable with `outgoing`. Zero beyond <see cref="MaximumEffectiveRange"/>: the
-        /// shooter cannot fire at all there.
+        /// shooter cannot fire at all there. This is the UN-AIMED shot; see
+        /// <see cref="SustainedRateAt"/> for the rate that includes aiming.
         /// </summary>
-        internal float RemovalAt(float range, float targetSpeed, float shooterBulkMultiplier)
+        internal float RemovalAt(float range, float targetSpeed, float shooterBulkMultiplier) =>
+            RemovalAtCore(range, targetSpeed, shooterBulkMultiplier, includeAimCycle: false);
+
+        internal float RemovalAt(float range, float targetSpeed) =>
+            RemovalAt(range, targetSpeed, 0f);
+
+        internal float RemovalAt(float range) => RemovalAt(range, ReferenceTargetSpeed);
+
+        /// <summary>
+        /// Expected battle value a STATIONARY shooter removes per turn, sustained: the better of
+        /// firing every turn and the aim-then-fire cycle, priced exactly as
+        /// <see cref="RangedTargetSelector.EvaluateFireTiming"/> prices it -- after b + 1 turns
+        /// of aim the shot adds Accuracy + b + 1, and the cycle takes b + 2 turns. The burst size
+        /// is held at the reference shot count, the same approximation as
+        /// <see cref="ReferenceHitTotal"/>. See <see cref="SquadPairRemovalRate.SustainedRateAtRange"/>
+        /// for what reads it and why the exchange forecast does not.
+        /// </summary>
+        internal float SustainedRateAt(float range) =>
+            RemovalAtCore(range, ReferenceTargetSpeed, 0f, includeAimCycle: true);
+
+        private float RemovalAtCore(
+            float range,
+            float targetSpeed,
+            float shooterBulkMultiplier,
+            bool includeAimCycle)
         {
             if (MaximumEffectiveRange > 0f && range > MaximumEffectiveRange)
             {
@@ -211,21 +245,40 @@ namespace OnlyWar.Battles
                 : RemovalMath.EvaluateRemovalFraction(
                     TakeOutTerms,
                     BattleModifiersUtil.CalculateDamageAtRange(WeaponTemplate, range));
+            float hitTotal = HitTotalAt(range, targetSpeed)
+                - (WeaponTemplate.Bulk * Math.Max(0f, shooterBulkMultiplier));
             // Same burst model as EvaluateRangedTarget -- the doc comment above promises this is
             // the identical currency, so the two must integrate the recoil loop the same way.
-            return RemovalMath.ExpectedBurstRemovalFraction(
-                HitTotalAt(range, targetSpeed)
-                    - (WeaponTemplate.Bulk * Math.Max(0f, shooterBulkMultiplier)),
+            float perTurn = RemovalMath.ExpectedBurstRemovalFraction(
+                hitTotal,
                 ReferenceShotsToFire,
                 WeaponTemplate.Recoil,
-                removalFraction)
-                * TargetBattleValue;
+                removalFraction);
+            if (includeAimCycle && AimAccuracy is float accuracy)
+            {
+                // No burst removes more than every round landing, so once that ceiling spread over
+                // a cycle cannot beat the best rate found, no longer aim can either.
+                float ceiling = 1f - (float)Math.Pow(
+                    1f - Math.Clamp(removalFraction, 0f, 1f),
+                    Math.Max(1, ReferenceShotsToFire));
+                for (int bonus = 0; bonus <= RangedTargetSelector.FullAimBonusTurns; bonus++)
+                {
+                    int cycleTurns = bonus + 2;
+                    if (ceiling / cycleTurns <= perTurn)
+                    {
+                        break;
+                    }
+                    perTurn = Math.Max(
+                        perTurn,
+                        RemovalMath.ExpectedBurstRemovalFraction(
+                            hitTotal + accuracy + bonus + 1,
+                            ReferenceShotsToFire,
+                            WeaponTemplate.Recoil,
+                            removalFraction) / cycleTurns);
+                }
+            }
+            return perTurn * TargetBattleValue;
         }
-
-        internal float RemovalAt(float range, float targetSpeed) =>
-            RemovalAt(range, targetSpeed, 0f);
-
-        internal float RemovalAt(float range) => RemovalAt(range, ReferenceTargetSpeed);
     }
 
     /// <summary>
@@ -235,25 +288,27 @@ namespace OnlyWar.Battles
     /// <para>SEMANTICS. The rate is the SUM over the shooter squad's able, placed, ranged-armed
     /// soldiers of each soldier's single best target's expected removal -- the same
     /// per-soldier-argmax aggregation `outgoing` uses in <c>EvaluateImmediateActionValue</c>, and
-    /// deliberately NOT an average, because the lookahead wants a squad-level battle value per
-    /// turn. A soldier contributes to exactly one cell: the one containing the enemy squad its best
-    /// target belongs to. A pair with no shooter aimed into it is absent from the table, meaning
-    /// rate 0.</para>
+    /// deliberately NOT an average, because the engagement scorer wants a squad-level battle value
+    /// per turn. A soldier contributes to exactly one cell: the one containing the enemy squad its
+    /// best target belongs to. A pair with no shooter aimed into it is absent from the table,
+    /// meaning rate 0.</para>
     ///
     /// <para>The rate is captured for the STATIONARY, un-aimed, no-bulk reference posture. The
-    /// lookahead consumer applies its own explicit per-policy outgoing retention and can rescale
-    /// the cached terms for target motion and the enemy's projected bulk.</para>
+    /// consumer rescales the cached terms for target motion and the enemy's projected bulk. (The
+    /// removed bounded policy rollout also applied an explicit per-policy outgoing retention
+    /// here.) <see cref="SustainedRateAtRange"/> is the one reading that includes aiming.</para>
     ///
-    /// <para>No cap is applied. <c>BattleSquadPlanner.EvaluateExchangeRate</c> clamps to the
+    /// <para>No cap is applied. <c>EngagementExchangeModel.EvaluateOutgoingExchangeRate</c>,
+    /// <c>EvaluateSustainedOutgoingRate</c> and <c>EvaluateIncomingExchangeRate</c> clamp to the
     /// defender's <c>TotalAbleBattleValue</c>, and `outgoing` caps per target soldier; leaving the
     /// raw sum here keeps the choice with the consumer.</para>
     ///
-    /// <para>PHASE 5 RESOLVED the pair-weights question, asymmetrically. The OUTGOING half of the
-    /// lookahead reads a cell directly with NO <c>PairWeights</c> factor, because this table is
+    /// <para>PHASE 5 RESOLVED the pair-weights question, asymmetrically. The OUTGOING exchange
+    /// rate reads a cell directly with NO <c>PairWeights</c> factor, because this table is
     /// already target-selected and multiplying by a normalized allocation would divide the squad's
-    /// fire twice; the INCOMING half keeps <c>PairWeights</c>, applied to the enemy's whole-squad
+    /// fire twice; the INCOMING rate keeps <c>PairWeights</c>, applied to the enemy's whole-squad
     /// rate, because there the allocation is the real question. See
-    /// <c>BattleSquadPlanner.EvaluateExchangeRate</c>.</para>
+    /// <c>EngagementExchangeModel.EvaluateOutgoingExchangeRate</c>.</para>
     /// </summary>
     internal sealed class SquadPairRemovalRate
     {
@@ -293,7 +348,9 @@ namespace OnlyWar.Battles
         /// centroid separation. Closed-form arithmetic over the cached terms: per term one
         /// <c>ln</c>, one normal CDF, and (degrading weapons only) a fixed-size CDF sum. Nothing
         /// here touches the grid, the targeting stack, or wound state, which is what lets the
-        /// 3-policy x 2-ply x N-squad lookahead call it.
+        /// engagement potential call it for every option x enemy squad x (current, projected)
+        /// separation. (It was first sized for a 3-policy x 2-ply x N-squad lookahead, since
+        /// removed.)
         /// </summary>
         internal float RateAtRange(float range)
         {
@@ -327,6 +384,38 @@ namespace OnlyWar.Battles
                     Math.Max(0f, term.ReferenceRange + shift),
                     useReferenceTargetSpeed ? term.ReferenceTargetSpeed : targetSpeed,
                     shooterBulkMultiplier);
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// <see cref="RateAtRange(float)"/> for a squad that stands and may aim: each term at
+        /// <see cref="PairRemovalTerm.SustainedRateAt"/>.
+        ///
+        /// <para>ACCESS ONLY. The access potential asks whether a squad can contribute from where
+        /// it stands, and a squad that can aim and then fire can. Read at the un-aimed rate, a
+        /// sniper rifle (Accuracy 9) scores almost nothing at long range, so the access term
+        /// priced sniper scouts as helpless and ran them at 'Eavy Nobz for 39 turns without a shot
+        /// (Grist Nine Epsilon, 2026-09-23).</para>
+        ///
+        /// <para>The exchange forecast keeps <see cref="RateAtRange(float)"/>. It prices a moving
+        /// option at the rate it will have on arrival and does not charge for the aim that moving
+        /// throws away, so feeding it the aimed rate made every step toward the enemy look like a
+        /// gain (a rifle squad in its band left Hold to run at an approaching melee squad). Move
+        /// the forecast to this rate only once it charges for that lost aim.</para>
+        /// </summary>
+        internal float SustainedRateAtRange(float range)
+        {
+            if (Terms.Count == 0)
+            {
+                return 0f;
+            }
+            float shift = range - ReferencePairRange;
+            float total = 0f;
+            for (int index = 0; index < Terms.Count; index++)
+            {
+                PairRemovalTerm term = Terms[index];
+                total += term.SustainedRateAt(Math.Max(0f, term.ReferenceRange + shift));
             }
             return total;
         }

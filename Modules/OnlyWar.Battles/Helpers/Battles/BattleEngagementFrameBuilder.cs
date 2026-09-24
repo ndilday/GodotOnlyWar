@@ -8,8 +8,9 @@ namespace OnlyWar.Battles;
 
 /// <summary>
 /// Builds both sides of the immutable Layer-1 engagement frame from the same turn-start state.
-/// Every calculation here is deterministic and RNG-free.  Future rollout consumes capability
-/// groups only; per-soldier target selection belongs exclusively to current-turn action parity.
+/// Every calculation here is deterministic and RNG-free.  The engagement potential that values
+/// future position reads these frames and squad-level capability/removal-rate aggregates only;
+/// per-soldier target selection belongs exclusively to current-turn action parity.
 /// </summary>
 internal static class BattleEngagementFrameBuilder
 {
@@ -994,7 +995,7 @@ internal static class BattleEngagementFrameBuilder
     /// containment question with a wide hysteresis band, and it is the fallback the scored options
     /// are compared against -- feeding it the sharply-derived
     /// <see cref="BattleSquadCapabilityProfile.EffectiveEngagementRange"/> would make the FALLBACK
-    /// carry the derivation and then have the lookahead score movement relative to it, double
+    /// carry the derivation and then have the engagement score rate movement relative to it, double
     /// counting the same judgement. The derived band belongs in the score, not in the default.
     /// </summary>
     private static EngagementOptionKind Baseline(

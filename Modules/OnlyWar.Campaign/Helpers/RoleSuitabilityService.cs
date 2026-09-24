@@ -64,7 +64,7 @@ namespace OnlyWar.Campaign
                 FoundingRole.ChapterMaster => true,
                 FoundingRole.MasterOfTheForge => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 100
                     && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
-                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 75,
+                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 60,
                 FoundingRole.MasterOfTheApothecarion => Rating(ratings, e, RatingConsumerRole.MedicalCapacity) > 115
                     && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
                 FoundingRole.Apothecary => Rating(ratings, e, RatingConsumerRole.MedicalCapacity) > 95,

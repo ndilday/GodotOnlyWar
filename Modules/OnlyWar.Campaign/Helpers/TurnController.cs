@@ -15,6 +15,7 @@ using OnlyWar.Domain.Events;
 using OnlyWar.Domain.Extensions;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Runtime;
 using OnlyWar.Runtime.Naming;
 
 namespace OnlyWar.Campaign
@@ -42,6 +43,7 @@ namespace OnlyWar.Campaign
         private readonly IOrderCommitmentSurface _commitments;
         private readonly IEngagementResolver _engagements;
         private readonly IEngagementElementFactory _engagementElements;
+        private readonly TurnProgress _progress;
 
         public TurnController(
             ICampaignSimulationSession session,
@@ -51,8 +53,10 @@ namespace OnlyWar.Campaign
             IEngagementResolver engagements,
             IEngagementElementFactory engagementElements,
             ISoldierTrainingService trainingService = null,
-            NameGenerator nameGenerator = null)
+            NameGenerator nameGenerator = null,
+            TurnProgress progress = null)
         {
+            _progress = progress;
             _turn = CampaignTurnContext.From(session, nameGenerator);
             _readiness = readiness ?? throw new System.ArgumentNullException(nameof(readiness));
             _personnel = personnel ?? throw new System.ArgumentNullException(nameof(personnel));
@@ -163,6 +167,7 @@ namespace OnlyWar.Campaign
             HashSet<(int PlanetId, int FactionId)> hiddenCults = SnapshotHiddenCults(sector);
             // Ghost sources and already-active strategic invasion forces resolve before NPC planning, so a newly
             // consolidated force can act in the same week it announces itself.
+            _progress?.Report("Processing Faction Forces");
             _factionCapabilityCampaignProcessor.ProcessWeeklyState(sector);
 
             // There is no longer a pre-planning shaping phase. Diversions used to resolve here, before
@@ -181,9 +186,12 @@ namespace OnlyWar.Campaign
 
             // --- 1. Strategic Planning Phase ---
             // Let each NPC faction generate its orders
+            _progress?.Report("Processing Faction Plans");
             _orderPlanner.AppendNpcOrders(allOrdersThisTurn, sector);
 
             // --- 2. Mission Execution Phase ---
+            // Battles inside mission execution report their own region and turn over this line.
+            _progress?.Report("Resolving Missions");
             var strategicCombatOrders = allOrdersThisTurn.Where(o => o.Mission is StrategicCombatMission);
             _missionTurnProcessor.ProcessStrategicCombatMissions(
                 strategicCombatOrders, _lastResult.StrategicCombatResults);
@@ -214,6 +222,7 @@ namespace OnlyWar.Campaign
             MissionAftermathProcessor.RemoveConsumedSpecialMissions(playerOrdersThisTurn);
 
             // --- 3. Planetary Simulation & Resolution Phase ---
+            _progress?.Report("Updating Worlds and Chapter Upkeep");
             _missionAftermathProcessor.ApplyMissionResults(_lastResult.MissionContexts);
             _factionCapabilityCampaignProcessor.AffiliateTacticalCaptures(
                 sector, _lastResult.MissionContexts);
