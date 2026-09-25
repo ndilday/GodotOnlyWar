@@ -186,14 +186,6 @@ namespace OnlyWar.Host.Presentation.UI
 				? key[5..]
 				: key);
 
-		public static void RegisterModIconManifest(string manifestPath, string modId) =>
-			IconAssetRegistry.RegisterManifest(manifestPath, modId);
-
-		public static void ClearRegisteredModIcons() => IconAssetRegistry.ClearRegisteredMods();
-
-		public static void ClearModIconManifest(string modId) =>
-			IconAssetRegistry.ClearPackage(modId);
-
 		public static bool HasPlanetaryOperationsFactionIcon(string key) =>
 			PlanetaryOperationsFactionRegions.ContainsKey(key);
 

@@ -33,16 +33,6 @@ namespace OnlyWar.Battles
             _objectCellsMap[objectId] = cells;
         }
 
-        public void OccupyCell(ValueTuple<int, int> cell, int objectId)
-        {
-            if (_cellObjectMap.ContainsKey((cell.Item1, cell.Item2)))
-            {
-                throw new InvalidOperationException($"Cell {cell} is already occupied.");
-            }
-            _cellObjectMap[(cell.Item1, cell.Item2)] = objectId;
-            _objectCellsMap[objectId] = [cell];
-        }
-
         public void FreeCells(IEnumerable<ValueTuple<int, int>> cells)
         {
             foreach (ValueTuple<int, int> cell in cells)
@@ -61,15 +51,6 @@ namespace OnlyWar.Battles
             return _cellObjectMap.TryGetValue((x, y), out int objectId)
                 ? objectId
                 : null;
-        }
-
-        public IList<ValueTuple<int, int>> GetObjectCells(int objectId)
-        {
-            if (!_objectCellsMap.ContainsKey(objectId))
-            {
-                return null;
-            }
-            return _objectCellsMap[objectId];
         }
 
         /// <summary>
@@ -113,11 +94,6 @@ namespace OnlyWar.Battles
         public void ReserveCell(ValueTuple<int, int> cell)
         {
             _reservedCells.Add(cell);
-        }
-
-        public void UnreserveCell(ValueTuple<int, int> cell)
-        {
-            _reservedCells.Remove(cell);
         }
 
         public void ClearReservedCells()

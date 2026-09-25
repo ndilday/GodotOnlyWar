@@ -679,13 +679,6 @@ public partial class PlanetRegionMapView : PanelContainer
         };
     }
 
-    private static Label LegendLabel(string text)
-    {
-        Label label = LegendText(text);
-        label.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
-        return label;
-    }
-
     private static Label LegendText(string text)
     {
         Label label = new() { Text = text };

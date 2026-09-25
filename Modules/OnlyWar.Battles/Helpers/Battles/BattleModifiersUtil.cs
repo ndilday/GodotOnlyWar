@@ -15,11 +15,6 @@ namespace OnlyWar.Battles
         /// </summary>
         public const float RangeModifierCoefficient = 2.4663f;
 
-        public static float GetRangeForModifier(float modifier)
-        {
-            return (float)(2 * Math.Exp(-modifier / RangeModifierCoefficient));
-        }
-
         public static float CalculateRangeModifier(float range, float relativeTargetSpeed)
         {
             //

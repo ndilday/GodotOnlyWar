@@ -671,9 +671,6 @@ namespace OnlyWar.Battles
             return bestTarget;
         }
 
-        internal float EstimateTakeOutProbability(BattleSoldier attacker, BattleSoldier target, MeleeWeapon weapon, bool didMove)
-            => EstimateTakeOutProbabilityCore(attacker, target, weapon, didMove);
-
         private static float EstimateTakeOutProbabilityCore(
             BattleSoldier attacker,
             BattleSoldier target,

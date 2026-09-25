@@ -341,13 +341,6 @@ public partial class RecoveryOperationsView : Control
         return stack;
     }
 
-    private static Control Card(string title, string body)
-    {
-        VBoxContainer stack = CardStack(title);
-        stack.AddChild(Info(body));
-        return (Control)stack.GetParent();
-    }
-
     private static VBoxContainer CardStack(string title)
     {
         PanelContainer panel = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };

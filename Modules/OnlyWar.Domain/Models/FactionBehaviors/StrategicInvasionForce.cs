@@ -60,8 +60,6 @@ namespace OnlyWar.Domain.FactionBehaviors
             if (regionFaction != null && !_knownRegions.Contains(regionFaction)) _knownRegions.Add(regionFaction);
         }
 
-        public void ForgetRegion(RegionFaction regionFaction) => _knownRegions.Remove(regionFaction);
-
         private static long SquadBattleValue(Squad squad) => squad?.Members
             .Sum(member => (long)(member.Template?.BattleValue ?? 0)) ?? 0L;
     }

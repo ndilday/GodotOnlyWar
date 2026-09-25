@@ -114,11 +114,6 @@ namespace OnlyWar.Domain.Fleets
             _loadedSquads.Remove(squad);
         }
 
-        public void UnloadAllSquads()
-        {
-            _loadedSquads.Clear();
-        }
-
         public void StationAdministrativeFormation(Squad squad)
         {
             if (squad?.PermitsIndividualDeployment != true)

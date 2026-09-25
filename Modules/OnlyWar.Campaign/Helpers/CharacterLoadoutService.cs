@@ -84,12 +84,6 @@ namespace OnlyWar.Campaign
         }
 
         /// <summary>
-        /// The set this soldier carries, or null if pooled squad allocation should equip him.
-        /// </summary>
-        public static WeaponSet GetEffectiveWeaponSet(ISoldier soldier, PlayerForce playerForce) =>
-            Resolve(soldier, playerForce)?.WeaponSet;
-
-        /// <summary>
         /// Resolves the chapter-wide kit for an element's role with no individual in mind — used
         /// by the doctrine editor, where the player is setting the default rather than equipping
         /// a man. Takes the element (not just the SoldierTemplate) because the default and the

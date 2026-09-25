@@ -12,8 +12,6 @@ namespace OnlyWar.Domain.Soldiers
         private static readonly IReadOnlyList<WeaponSet> EmptyMenu = Array.Empty<WeaponSet>();
         private static readonly IReadOnlyDictionary<string, IReadOnlyList<EquipmentKitTemplate>> EmptyEquipmentOptions =
             new Dictionary<string, IReadOnlyList<EquipmentKitTemplate>>();
-        private static readonly IReadOnlyList<EquipmentKitTemplate> EmptyEquipmentMenu =
-            Array.Empty<EquipmentKitTemplate>();
 
         public int Id { get; }
         public string Name { get; }
@@ -78,11 +76,5 @@ namespace OnlyWar.Domain.Soldiers
             WeaponOptionsByGroup.TryGetValue(optionGroup, out IReadOnlyList<WeaponSet> options)
                 ? options
                 : EmptyMenu;
-
-        /// <summary>The itemized-kit menu for one contextual personal-equipment role.</summary>
-        public IReadOnlyList<EquipmentKitTemplate> GetEquipmentKitOptions(string optionGroup) =>
-            EquipmentKitOptionsByGroup.TryGetValue(optionGroup, out IReadOnlyList<EquipmentKitTemplate> options)
-                ? options
-                : EmptyEquipmentMenu;
     }
 }

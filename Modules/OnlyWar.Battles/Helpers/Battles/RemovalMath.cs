@@ -108,36 +108,6 @@ namespace OnlyWar.Battles
         // sweep could re-run in one process, and said so plainly; Phase 7 removed that. There is no
         // writable surface on this constant at all.
         internal const float WoundProgressCreditWeight = 0.5f;
-
-        // TEST SEAM (internal; the assembly grants InternalsVisibleTo("OnlyWar.Tests") in
-        // Properties/AssemblyInfo.cs). The sweep genuinely needs lambda to vary in one process --
-        // ten planner runs, otherwise ten rebuilds -- but nothing else does, and Phase 5's settable
-        // property let any caller leave the whole battle engine mis-tuned. This is the narrowest
-        // shape that keeps the capability: no setter, one scoped override that always restores, so
-        // the value cannot be left changed even by a test that throws. Shipping code never calls it
-        // (grep OverrideWoundProgressCreditWeight -- the only caller is
-        // OnlyWar.Tests/Battles/GradedRemovalCalibrationTests.cs).
-        private static float _woundProgressCreditWeight = WoundProgressCreditWeight;
-
-        /// <summary>Lambda as the scoring stack actually reads it: the shipped constant unless a
-        /// calibration sweep currently holds an override scope.</summary>
-        internal static float EffectiveWoundProgressCreditWeight => _woundProgressCreditWeight;
-
-        internal static IDisposable OverrideWoundProgressCreditWeight(float value) =>
-            new WoundProgressCreditWeightScope(value);
-
-        private sealed class WoundProgressCreditWeightScope : IDisposable
-        {
-            private readonly float _previous;
-
-            internal WoundProgressCreditWeightScope(float value)
-            {
-                _previous = _woundProgressCreditWeight;
-                _woundProgressCreditWeight = value;
-            }
-
-            public void Dispose() => _woundProgressCreditWeight = _previous;
-        }
         // ===================================================================================
 
         /// <summary>
@@ -227,7 +197,7 @@ namespace OnlyWar.Battles
 
         internal static float CombineRemovalFraction(float takeOut, float woundProgress)
         {
-            float lambda = EffectiveWoundProgressCreditWeight;
+            float lambda = WoundProgressCreditWeight;
             return lambda <= 0f
                 ? Math.Clamp(takeOut, 0f, 1f)
                 : Math.Clamp(takeOut + (lambda * woundProgress), 0f, 1f);
@@ -391,7 +361,7 @@ namespace OnlyWar.Battles
             {
                 return 0f;
             }
-            bool graded = EffectiveWoundProgressCreditWeight > 0f;
+            bool graded = WoundProgressCreditWeight > 0f;
             float takeOut = 0f;
             float progress = 0f;
             for (int index = 0; index < terms.Count; index++)
@@ -664,7 +634,7 @@ namespace OnlyWar.Battles
             // Only computed when lambda can actually use it; at lambda = 0 this evaluation is
             // bitwise identical to the pre-Phase-5 one. Hoisted out of the loop -- the override
             // scope that can move it is test-only and never runs concurrently with scoring.
-            bool graded = EffectiveWoundProgressCreditWeight > 0f;
+            bool graded = WoundProgressCreditWeight > 0f;
             float probability = 0f;
             float woundProgress = 0f;
             for (int index = 0; index < unitTerms.Count; index++)

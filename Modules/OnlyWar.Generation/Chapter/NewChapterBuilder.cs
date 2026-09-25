@@ -154,19 +154,7 @@ namespace OnlyWar.Generation.Chapter
                 trainingService.EvaluateSoldier(soldier, trainingEndDate);
                 soldier.ProgenoidImplantDate = new Date(date.Millenium, date.Year - 2, RNG.GetIntBelowMax(1, 53));
             }
-            //string csv = GetSoldierRatingCsv(soldiers);
             return soldiers;
-        }
-
-        private static string GetSoldierRatingCsv(List<PlayerSoldier> soldiers)
-        {
-            string csv = "";
-            foreach (PlayerSoldier soldier in soldiers)
-            {
-                SoldierEvaluation eval = soldier.SoldierEvaluationHistory[soldier.SoldierEvaluationHistory.Count - 1];
-                csv += $"{soldier.Id},{eval.LeadershipRating},{eval.MeleeRating},{eval.RangedRating},{eval.TechRating},{eval.MedicalRating},{eval.AncientRating},{eval.PietyRating}\n";
-            }
-            return csv;
         }
 
         private static void PopulateOrderOfBattle(Date year,

@@ -217,15 +217,6 @@ namespace OnlyWar.Operations.Orders
                 ? "None"
                 : evaluation.Reason ?? "Unavailable";
         }
-
-        /// <summary>
-        /// Specialists already attached to a given order, for the "release both" half of the
-        /// Unassign action and for re-selecting an order from the inbound dossier.
-        /// </summary>
-        public static IReadOnlyList<PlayerSoldier> AttachedTo(Order order)
-        {
-            return order?.AssignedCharacters.ToList() ?? [];
-        }
     }
 
     sealed record SpecialistAvailabilityEvaluation(

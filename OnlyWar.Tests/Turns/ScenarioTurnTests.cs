@@ -370,15 +370,6 @@ public class ScenarioTurnTests
         return playerRegionFaction;
     }
 
-    private static void DepleteSquad(Squad squad)
-    {
-        foreach (ISoldier member in squad.Members)
-        {
-            HitLocation vital = member.Body.HitLocations.First(hl => hl.Template.IsVital);
-            vital.Wounds = new Wounds(vital.Template.SeverWound, 0);
-        }
-    }
-
     private const int TurnsToSimulate = 3;
 
     // The win path surfaces a notification; ProcessTurn clears any stale notification each turn.

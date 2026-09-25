@@ -142,13 +142,6 @@ public partial class PlanetaryOperationsScreenController : DialogController
         RefreshWorkspace();
     }
 
-    public void FocusRegion(int regionId)
-    {
-        _regionId = regionId;
-        ResetContext();
-        RefreshWorkspace();
-    }
-
     public void RefreshFromExternalChange() => RefreshWorkspace();
 
     public void ShowWorldDossierOverlay() =>

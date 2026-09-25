@@ -84,20 +84,6 @@ namespace OnlyWar.Application
             bool isSelectable = true) =>
             new(SquadRowContextKind.PlanetaryOperations, SquadRowAction.BeginOrder,
                 target: target, isSelected: isSelected, isSelectable: isSelectable);
-
-        public static SquadRowContext ForLanding(
-            Region target = null,
-            bool isSelected = false,
-            bool isSelectable = true) =>
-            new(SquadRowContextKind.PlanetaryOperations, SquadRowAction.Land,
-                target: target, isSelected: isSelected, isSelectable: isSelectable);
-
-        public static SquadRowContext ForEmbark(
-            Region origin = null,
-            bool isSelected = false,
-            bool isSelectable = true) =>
-            new(SquadRowContextKind.PlanetaryOperations, SquadRowAction.Embark,
-                origin: origin, isSelected: isSelected, isSelectable: isSelectable);
     }
 
     /// <summary>

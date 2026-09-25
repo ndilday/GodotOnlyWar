@@ -707,12 +707,6 @@ namespace OnlyWar.Battles
             _meleeWeaponDropWorklist.Clear();
         }
 
-        public void ClearReadiedWeapons()
-        {
-            ClearReadiedRangedWeapons();
-            ClearReadiedMeleeWeapons();
-        }
-
         public void ClearReadiedRangedWeapons()
         {
             _equippedRangedWeapons.Clear();

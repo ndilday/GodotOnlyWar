@@ -22,9 +22,6 @@ namespace OnlyWar.Domain
         public static CampaignLocation ForSoldier(PlayerSoldier soldier) =>
             soldier?.IndividualPosting?.Location ?? ForSquad(soldier?.AssignedSquad);
 
-        public static CampaignLocation ForPlayerSoldier(PlayerSoldier soldier) =>
-            ForSoldier(soldier);
-
         public static bool AreCoLocated(PlayerSoldier soldier, Squad squad) =>
             ForSoldier(soldier)?.IsSamePlace(ForSquad(squad)) == true;
 

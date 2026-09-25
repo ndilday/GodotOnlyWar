@@ -48,16 +48,6 @@ public partial class WeaponSetSelectionView : PanelContainer
 		UpdateHeaderText();
 	}
 
-	public List<ValueTuple<string, int>> GetWeaponSetCounts()
-	{
-		List<ValueTuple<string, int>> weaponSetCounts = new List<ValueTuple<string, int>>();
-		foreach (WeaponSetRowView row in _weaponSetRows)
-		{
-			weaponSetCounts.Add(new ValueTuple<string, int>(row.WeaponSetName, row.Count));
-		}
-		return weaponSetCounts;
-	}
-
 	public void DisableIncrease(bool disable)
 	{
 		int total = _weaponSetRows.Sum(row => row.Count);

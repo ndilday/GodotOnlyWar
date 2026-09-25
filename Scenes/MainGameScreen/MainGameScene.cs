@@ -128,21 +128,6 @@ public partial class MainGameScene : Control
 			GetViewport().SetInputAsHandled();
 			return;
 		}
-
-	   /* if (@event is InputEventMouseButton emb)
-		{
-			if (emb.ButtonIndex == MouseButton.Left && emb.IsPressed() && _sectorMap.Visible)
-			{
-				Vector2 gmpos = GetGlobalMousePosition();
-				Vector2I mousePosition = new((int)(gmpos.X), (int)(gmpos.Y));
-				GD.Print($"Left click at {mousePosition.X},{mousePosition.Y}");
-				Vector2I gridPosition = _sectorMap.CalculateGridCoordinates(mousePosition);
-				int index = _sectorMap.GridPositionToIndex(gridPosition);
-				string text = $"({gridPosition.X},{gridPosition.Y})\n{mousePosition.X},{mousePosition.Y}";
-				_topMenu.SetDebugText(text);
-				GetViewport().SetInputAsHandled();
-			}
-		}*/
 	}
 
 	private void SetMapWorkspaceVisibility(bool isVisible)

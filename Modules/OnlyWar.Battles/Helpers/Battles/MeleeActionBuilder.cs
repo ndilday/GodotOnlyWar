@@ -115,7 +115,7 @@ namespace OnlyWar.Battles
                 plannedMeleeWeapons,
                 didMove: isCharge);
 
-            if (TryAddGunAndBladeActions(soldier, projectedStrikePlans))
+            if (TryAddGunAndBladeActions(soldier, projectedStrikePlans, adjacentEnemies))
             {
                 return;
             }
@@ -181,15 +181,25 @@ namespace OnlyWar.Battles
             }
             else if (projectedStrikePlans.Count > 0)
             {
-                _actions.Melee.Add(new MeleeAttackAction(
-                    soldier,
-                    projectedStrikePlans,
-                    didMove: isCharge,
-                    log: _log,
-                    random: _random,
-                    meleeWeaponTemplates: _meleeWeaponTemplates,
-                    isCharge: isCharge));
+                AddMeleeAttack(soldier, projectedStrikePlans, adjacentEnemies, isCharge);
             }
+        }
+
+        private void AddMeleeAttack(
+            BattleSoldier soldier,
+            List<PlannedMeleeStrike> strikePlans,
+            IReadOnlyList<BattleSoldier> candidateTargets,
+            bool isCharge)
+        {
+            LogMeleeAttack(soldier, strikePlans, candidateTargets, isCharge, isCharge);
+            _actions.Melee.Add(new MeleeAttackAction(
+                soldier,
+                strikePlans,
+                didMove: isCharge,
+                log: _log,
+                random: _random,
+                meleeWeaponTemplates: _meleeWeaponTemplates,
+                isCharge: isCharge));
         }
 
         // A soldier gripping both a one-handed gun and a one-handed melee weapon does not choose
@@ -200,7 +210,8 @@ namespace OnlyWar.Battles
         // more than it removes from the enemy.
         private bool TryAddGunAndBladeActions(
             BattleSoldier soldier,
-            List<PlannedMeleeStrike> strikePlans)
+            List<PlannedMeleeStrike> strikePlans,
+            IReadOnlyList<BattleSoldier> adjacentEnemies)
         {
             if (strikePlans.Count == 0
                 || !soldier.EquippedMeleeWeapons.Any(
@@ -219,15 +230,7 @@ namespace OnlyWar.Battles
                 return false;
             }
 
-            bool isCharge = soldier.ChargedIntoContactLastTurn;
-            _actions.Melee.Add(new MeleeAttackAction(
-                soldier,
-                strikePlans,
-                didMove: isCharge,
-                log: _log,
-                random: _random,
-                meleeWeaponTemplates: _meleeWeaponTemplates,
-                isCharge: isCharge));
+            AddMeleeAttack(soldier, strikePlans, adjacentEnemies, soldier.ChargedIntoContactLastTurn);
 
             BattleSoldier strikeTarget = _soldierMap[strikePlans[0].TargetId];
             float range = _grid.GetDistanceBetweenSoldiers(
@@ -427,50 +430,6 @@ namespace OnlyWar.Battles
             soldier.CurrentSpeed = 0;
             soldier.LeftoverMovement = 0;
             soldier.IsRunning = false;
-        }
-
-        private MeleeAttackAction CreateMeleeAttackAction(
-            BattleSoldier soldier,
-            IEnumerable<BattleSoldier> candidateTargets,
-            bool didMove,
-            bool isCharge = false)
-        {
-            List<BattleSoldier> targets = candidateTargets
-                .Where(target => target != null && target.IsCombatEffective)
-                .GroupBy(target => target.Soldier.Id)
-                .Select(group => group.First())
-                .OrderBy(target => target.Soldier.Id)
-                .ToList();
-            if (targets.Count == 0)
-            {
-                return null;
-            }
-
-            MeleeWeapon primaryWeapon = soldier.GetPrimaryMeleeWeapon(
-                MeleeAttackAction.GetUnarmedWeapon(soldier));
-            MeleeWeapon secondaryWeapon = soldier.GetSecondaryMeleeWeapon();
-            List<MeleeWeapon> plannedWeapons = BuildPlannedWeaponSequence(soldier, primaryWeapon, secondaryWeapon);
-            if (plannedWeapons.Count == 0)
-            {
-                return null;
-            }
-
-            List<PlannedMeleeStrike> strikePlans = _melee.BuildStrikePlan(
-                soldier, targets, plannedWeapons, didMove);
-            if (strikePlans.Count == 0)
-            {
-                return null;
-            }
-
-            LogMeleeAttack(soldier, strikePlans, targets, didMove, isCharge);
-            return new MeleeAttackAction(
-                soldier,
-                strikePlans,
-                didMove,
-                _log,
-                _random,
-                _meleeWeaponTemplates,
-                isCharge);
         }
 
         /// <summary>

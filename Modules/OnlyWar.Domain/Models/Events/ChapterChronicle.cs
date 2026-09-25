@@ -188,20 +188,6 @@ namespace OnlyWar.Domain.Events
             return annotation;
         }
 
-        public ChapterChronicleAnnotation Annotate(
-            long chronicleEntryId,
-            CampaignEvent evidence,
-            int recordedWeek,
-            string body,
-            string dedupeKey,
-            bool isCorrection = true)
-        {
-            if (evidence == null) throw new ArgumentNullException(nameof(evidence));
-            return AppendAnnotation(new ChapterChronicleAnnotation(
-                _nextAnnotationId, chronicleEntryId, evidence.Id, recordedWeek,
-                body, dedupeKey, isCorrection));
-        }
-
         public IReadOnlyList<ChapterChronicleAnnotation> GetAnnotations(long entryId) =>
             _annotations.Where(item => item.ChronicleEntryId == entryId)
                 .OrderBy(item => item.RecordedWeek).ThenBy(item => item.Id).ToList();

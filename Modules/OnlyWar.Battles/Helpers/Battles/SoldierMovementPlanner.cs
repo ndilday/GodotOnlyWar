@@ -127,31 +127,6 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// Commits the fixed adjacency destination used by the pre-movement charge declaration.
-        /// This retains that path's historical one-cell reservation and declared InMelee speed;
-        /// the projection itself still comes from SoldierMovementProjector.
-        /// </summary>
-        internal MoveAction CommitChargeDestination(
-            BattleSoldier soldier,
-            ValueTuple<int, int> currentPosition,
-            ValueTuple<int, int> destination,
-            ushort orientation,
-            float movementBudget)
-        {
-            _grid.ReserveSpace(destination);
-            MoveAction action = new(
-                soldier,
-                _grid,
-                currentPosition,
-                destination,
-                orientation,
-                movementBudget);
-            _actions.Move.Add(action);
-            soldier.CurrentSpeed = GetTierSpeed(soldier, SquadMovementTier.InMelee);
-            return action;
-        }
-
-        /// <summary>
         /// Creates the immediate charge move used after ordinary movement reservations are cleared.
         /// The MoveAction itself performs the live-grid placement immediately; reserving a stale
         /// endpoint here would change which later charger sees the target squad's live position.

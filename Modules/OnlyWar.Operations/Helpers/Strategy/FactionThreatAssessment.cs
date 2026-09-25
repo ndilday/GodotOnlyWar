@@ -42,25 +42,6 @@ public static class FactionThreatAssessment
                                       faction, regionFaction.PlanetFaction.Faction, planet));
     }
 
-    public static bool HasLocalEnemyCiviliansButNoMilitary(Faction faction, Region region)
-    {
-        if (region?.Planet?.RelationshipLedger != null)
-        {
-            List<StrategicTarget> believedTargets = GetBelievedTargets(faction, region.Planet)
-                .Where(target => target.Region == region && target.CurrentPresence?.IsPublic == true)
-                .ToList();
-            return believedTargets.Any(target =>
-                target.Belief?.EstimatedPopulation > 0
-                && (target.Belief?.EstimatedMilitaryStrength ?? 0) <= 0);
-        }
-
-        List<RegionFaction> enemies = region.RegionFactionMap.Values
-            .Where(rf => rf.IsPublic && FactionRelationshipService.AreHostile(
-                faction, rf.PlanetFaction.Faction, region.Planet))
-            .ToList();
-        return enemies.Any(rf => rf.Population > 0)
-               && enemies.All(rf => CalculateDefenderBattleValue(rf) <= 0);
-    }
 
     public static bool HasLocalEnemyMilitary(Faction faction, Region region)
     {

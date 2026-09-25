@@ -164,20 +164,9 @@ namespace OnlyWar.Domain
             return GetSectorCapital()?.Governor;
         }
 
-        // The governor seated on a subsector's seat of government.
-        public Character GetSubsectorGovernor(Subsector subsector)
-        {
-            return subsector?.GovernanceSeat?.Governor;
-        }
-
         public Planet GetPlanetByPosition(Coordinate worldPosition)
         {
             return Planets.Values.Where(p => p.Position.Equals(worldPosition)).SingleOrDefault();
-        }
-
-        public IEnumerable<TaskForce> GetFleetsByPosition(Coordinate worldPosition)
-        {
-            return Fleets.Values.Where(f => f.Position != null && f.Position.Value.Equals(worldPosition));
         }
 
         public void AddNewFleet(TaskForce newFleet)
@@ -203,9 +192,6 @@ namespace OnlyWar.Domain
             _ghostPopulationSources.Add(source);
         }
 
-        public bool RemoveGhostPopulationSource(GhostPopulationSource source) =>
-            source != null && _ghostPopulationSources.Remove(source);
-
         public long GetNextStrategicInvasionForceId() => _nextStrategicInvasionForceId++;
 
         public void AddStrategicInvasionForce(StrategicInvasionForce force)
@@ -215,12 +201,6 @@ namespace OnlyWar.Domain
                 throw new InvalidOperationException($"Strategic invasion force id {force.Id} already exists.");
             _strategicInvasionForces.Add(force);
             _nextStrategicInvasionForceId = System.Math.Max(_nextStrategicInvasionForceId, force.Id + 1);
-        }
-
-        public bool RemoveStrategicInvasionForce(StrategicInvasionForce force)
-        {
-            if (force == null || !_strategicInvasionForces.Remove(force)) return false;
-            return true;
         }
 
         public void RemoveOrder(Order existingOrder)

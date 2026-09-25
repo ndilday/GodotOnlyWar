@@ -158,21 +158,5 @@ namespace OnlyWar.Domain.Soldiers
             }
             return 1f;
         }
-
-        /// <summary>
-        /// Diagnostic helper: every motive location paired with what it currently costs. Not used
-        /// by the engine; it exists so tests and any future UI can explain a speed number.
-        /// </summary>
-        public static IEnumerable<KeyValuePair<HitLocation, float>> DescribeLocations(Body body)
-        {
-            if (body == null) yield break;
-            uint principalThreshold = GetPrincipalCrippleThreshold(body);
-            foreach (HitLocation location in body.HitLocations)
-            {
-                if (!location.Template.IsMotive) continue;
-                yield return new KeyValuePair<HitLocation, float>(
-                    location, CalculateLocationMultiplier(location, principalThreshold));
-            }
-        }
     }
 }

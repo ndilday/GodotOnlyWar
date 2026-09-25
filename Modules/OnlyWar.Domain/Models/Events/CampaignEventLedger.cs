@@ -46,7 +46,6 @@ namespace OnlyWar.Domain.Events
             new(StringComparer.Ordinal);
         private readonly Dictionary<(CampaignEntityKind Kind, int EntityId), List<long>> _byEntity = new();
         private readonly SortedDictionary<int, List<long>> _byOccurredWeek = new();
-        private readonly Dictionary<CampaignEventSurfaceFlags, List<long>> _bySurface = new();
         private readonly Dictionary<int, OpenNearDeathEpisode> _openNearDeathBySoldier = new();
         private readonly Dictionary<string, List<long>> _byCorrelation =
             new(StringComparer.Ordinal);
@@ -116,12 +115,6 @@ namespace OnlyWar.Domain.Events
             return ids.Select(id => _byId[id]).OrderBy(@event => @event.OccurredWeek).ThenBy(@event => @event.Id).ToList();
         }
 
-        public IReadOnlyList<CampaignEvent> GetPublished(CampaignEventSurfaceFlags surface)
-        {
-            if (!_bySurface.TryGetValue(surface, out List<long> ids)) return Array.Empty<CampaignEvent>();
-            return ids.Select(id => _byId[id]).OrderBy(@event => @event.OccurredWeek).ThenBy(@event => @event.Id).ToList();
-        }
-
         public CampaignEvent Append(CampaignEvent @event)
         {
             if (@event == null) throw new ArgumentNullException(nameof(@event));
@@ -160,17 +153,6 @@ namespace OnlyWar.Domain.Events
                 }
                 entityIds.Add(@event.Id);
             }
-
-            foreach (CampaignEventSurfaceFlags surface in Enum.GetValues<CampaignEventSurfaceFlags>())
-            {
-                if (surface == CampaignEventSurfaceFlags.None || !@event.Publication.SurfaceFlags.HasFlag(surface)) continue;
-                if (!_bySurface.TryGetValue(surface, out List<long> surfaceIds))
-                {
-                    surfaceIds = new List<long>();
-                    _bySurface.Add(surface, surfaceIds);
-                }
-                surfaceIds.Add(@event.Id);
-            }
             UpdateNearDeathProjection(@event);
             return @event;
         }
@@ -207,7 +189,6 @@ namespace OnlyWar.Domain.Events
             _byEntity.Clear();
             _byOccurredWeek.Clear();
             _byCorrelation.Clear();
-            _bySurface.Clear();
             _openNearDeathBySoldier.Clear();
             _nextEventId = 1;
         }

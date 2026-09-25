@@ -105,30 +105,6 @@ namespace OnlyWar.Operations.Extensions
                 : "Unknown";
         }
 
-        // A world dossier may contain several disclosed regions for the same faction. Summarize
-        // the faction by its largest intel-gated estimate so a stronger disclosed concentration
-        // is not hidden by smaller regional bands.
-        public static string GetMaximumForceMagnitudeDescription(
-            this IEnumerable<RegionFaction> regionFactions)
-        {
-            if (regionFactions == null) return "None";
-
-            List<string> descriptions = regionFactions
-                .Where(regionFaction => regionFaction != null)
-                .Select(regionFaction => regionFaction.GetForceMagnitudeDescription())
-                .Distinct()
-                .ToList();
-            if (descriptions.Count == 0) return "None";
-
-            List<string> magnitudes = descriptions
-                .Where(IsMagnitudeWord)
-                .OrderByDescending(GetMagnitudeWordIndex)
-                .ToList();
-            return magnitudes.Count > 0
-                ? magnitudes[0]
-                : descriptions.Count == 1 ? descriptions[0] : "Unknown";
-        }
-
         private static string FormatBelievedPopulation(FactionIntelBelief belief)
         {
             if (belief == null) return "None";
@@ -156,18 +132,5 @@ namespace OnlyWar.Operations.Extensions
                 return "Millions";
             return "Billions";
         }
-
-        private static bool IsMagnitudeWord(string value) => GetMagnitudeWordIndex(value) >= 0;
-
-        private static int GetMagnitudeWordIndex(string value) => value switch
-        {
-            "Handful" => 0,
-            "Dozens" => 1,
-            "Hundreds" => 2,
-            "Thousands" => 3,
-            "Millions" => 4,
-            "Billions" => 5,
-            _ => -1
-        };
     }
 }

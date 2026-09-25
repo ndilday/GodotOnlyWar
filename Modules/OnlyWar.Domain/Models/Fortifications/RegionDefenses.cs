@@ -43,18 +43,6 @@ namespace OnlyWar.Domain.Fortifications
         }
 
         /// <summary>
-        /// The shared works an arbitrary faction would find in a region, for callers that hold a
-        /// region and a faction rather than a RegionFaction (0 when it has no presence there).
-        /// </summary>
-        public static double GetSharedFor(Region region, Faction faction, DefenseType defenseType)
-        {
-            if (region == null || faction == null) return 0.0;
-            return region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction regionFaction)
-                ? GetShared(regionFaction, defenseType)
-                : 0.0;
-        }
-
-        /// <summary>
         /// Records construction against the building faction's own stock. Effort arrives as
         /// construction points, so a fixed weekly output climbs fast at first and then flattens -
         /// the same diminishing return the AI pays for through its escalating build cost.

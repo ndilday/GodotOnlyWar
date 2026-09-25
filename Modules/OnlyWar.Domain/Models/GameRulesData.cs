@@ -730,10 +730,5 @@ namespace OnlyWar.Domain
                 }
             }
         }
-
-        public IReadOnlyList<Faction> GetNonPlayerFactions()
-        {
-            return _factions.Where(f => !f.IsPlayerFaction).ToList();
-        }
     }
 }

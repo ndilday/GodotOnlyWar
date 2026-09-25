@@ -97,20 +97,6 @@ namespace OnlyWar.Host.Presentation.UI
         }
 
         /// <summary>
-        /// Applies the quiet, recessed treatment intended for read-only information.
-        /// Unlike a button, this surface does not advertise hover or press affordance.
-        /// </summary>
-        public static void ApplyDataPanel(PanelContainer panel)
-        {
-            panel.AddThemeStyleboxOverride("panel", GetDataPanelStyle());
-        }
-
-        public static void ApplyDataPanel(Panel panel)
-        {
-            panel.AddThemeStyleboxOverride("panel", GetDataPanelStyle());
-        }
-
-        /// <summary>
         /// Applies the raised, responsive treatment intended for an action control.
         /// The hover and pressed states carry most of the visual affordance.
         /// </summary>
@@ -134,38 +120,6 @@ namespace OnlyWar.Host.Presentation.UI
                 new Color(0.025f, 0.028f, 0.029f, 0.68f),
                 WithAlpha(MutedText, 0.30f),
                 6));
-        }
-
-        /// <summary>
-        /// A deliberately obvious, skeuomorphic action control for high-priority commands.
-        /// The rounded silhouette and shadow separate it from every read-only surface.
-        /// </summary>
-        public static void ApplyRaisedButton(Button button, Color accent)
-        {
-            button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
-            button.AddThemeStyleboxOverride("normal", CreateRaisedButtonStyle(
-                accent.Darkened(0.68f),
-                accent.Darkened(0.08f),
-                8,
-                7));
-            button.AddThemeStyleboxOverride("hover", CreateRaisedButtonStyle(
-                accent.Darkened(0.48f),
-                accent.Lightened(0.04f),
-                8,
-                8));
-            button.AddThemeStyleboxOverride("pressed", CreateRaisedButtonStyle(
-                accent.Darkened(0.78f),
-                accent,
-                8,
-                11));
-            button.AddThemeStyleboxOverride("disabled", CreateRaisedButtonStyle(
-                new Color(0.07f, 0.075f, 0.075f, 0.78f),
-                WithAlpha(MutedText, 0.35f),
-                8,
-                7));
-            button.AddThemeColorOverride("font_color", Colors.White.Lightened(0.04f));
-            button.AddThemeColorOverride("font_hover_color", Colors.White);
-            button.AddThemeColorOverride("font_pressed_color", Colors.White);
         }
 
         public static void ApplyListRow(PanelContainer panel, bool selected)
@@ -318,27 +272,6 @@ namespace OnlyWar.Host.Presentation.UI
             };
         }
 
-        private static StyleBoxFlat GetDataPanelStyle()
-        {
-            return new StyleBoxFlat
-            {
-                BgColor = new Color(0.010f, 0.014f, 0.016f, 0.94f),
-                BorderColor = new Color(0.33f, 0.28f, 0.18f, 0.60f),
-                BorderWidthLeft = 1,
-                BorderWidthTop = 1,
-                BorderWidthRight = 1,
-                BorderWidthBottom = 1,
-                CornerRadiusTopLeft = 2,
-                CornerRadiusTopRight = 2,
-                CornerRadiusBottomLeft = 2,
-                CornerRadiusBottomRight = 2,
-                ContentMarginLeft = 14,
-                ContentMarginTop = 12,
-                ContentMarginRight = 14,
-                ContentMarginBottom = 12
-            };
-        }
-
         private static StyleBoxFlat CreateActionButtonStyle(Color background, Color border, int topMargin)
         {
             return new StyleBoxFlat
@@ -359,29 +292,6 @@ namespace OnlyWar.Host.Presentation.UI
                 ContentMarginBottom = 10,
                 ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.28f),
                 ShadowSize = 3
-            };
-        }
-
-        private static StyleBoxFlat CreateRaisedButtonStyle(Color background, Color border, int radius, int shadowSize)
-        {
-            return new StyleBoxFlat
-            {
-                BgColor = WithAlpha(background, 0.98f),
-                BorderColor = WithAlpha(border, 0.98f),
-                BorderWidthLeft = 1,
-                BorderWidthTop = 1,
-                BorderWidthRight = 1,
-                BorderWidthBottom = 2,
-                CornerRadiusTopLeft = radius,
-                CornerRadiusTopRight = radius,
-                CornerRadiusBottomLeft = radius,
-                CornerRadiusBottomRight = radius,
-                ContentMarginLeft = 16,
-                ContentMarginTop = 9,
-                ContentMarginRight = 16,
-                ContentMarginBottom = 9,
-                ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.62f),
-                ShadowSize = shadowSize
             };
         }
 

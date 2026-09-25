@@ -1367,21 +1367,9 @@ public partial class SectorMap : Node2D
         return gridPosition * CellSize + HalfCellSize;
     }
 
-    public Vector2I CalculateGridCoordinates(Vector2I mapPosition)
-    {
-        return (mapPosition / CellSize);
-    }
-
     public int GridPositionToIndex(Vector2I cell)
     {
         return (GridDimensions.X * cell.Y + cell.X);
-    }
-
-    public Vector2I IndexToGridPosition(int index)
-    {
-        int x = index % GridDimensions.X;
-        int y = index / GridDimensions.X;
-        return new Vector2I(x, y);
     }
 
     private void PlacePlanets(IReadOnlyList<SectorMapPlanetMarker> markers)

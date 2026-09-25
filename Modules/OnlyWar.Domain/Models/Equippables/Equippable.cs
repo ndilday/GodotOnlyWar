@@ -122,30 +122,6 @@ namespace OnlyWar.Domain.Equippables
             TemplateType = templateType;
             AreaRadius = areaRadius;
         }
-
-        public RangedWeaponProfile ToProfile() => new(
-            RelatedSkill,
-            Accuracy,
-            ArmorMultiplier,
-            WoundMultiplier,
-            RequiredStrength,
-            DamageMultiplier,
-            MaximumRange,
-            RateOfFire,
-            AmmoCapacity,
-            Recoil,
-            Bulk,
-            DoesDamageDegradeWithRange,
-            Location,
-            AmmunitionType,
-            AmmunitionBehavior,
-            ConsumptionRule,
-            ReloadTime,
-            ReloadAmount,
-            RecoveryDuration,
-            RecoveryAmount,
-            TemplateType,
-            AreaRadius);
     }
 
     public class MeleeWeaponTemplate: WeaponTemplate
@@ -171,12 +147,6 @@ namespace OnlyWar.Domain.Equippables
                 ? DefaultAttackSpeedMultiplier
                 : attackSpeedMultiplier;
         }
-    }
-
-    public class Equippable
-    {
-        public EquippableTemplate Template { get; private set; }
-        public Equippable(EquippableTemplate template) { Template = template; }
     }
 
     public class Armor

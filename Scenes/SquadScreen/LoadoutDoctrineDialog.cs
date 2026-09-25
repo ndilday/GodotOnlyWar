@@ -214,8 +214,6 @@ public partial class LoadoutDoctrineDialog : Control
 
     public void OpenChapter() => Open(null);
 
-    public void OpenPlanet(int planetId) => Open(planetId);
-
     private void Open(int? planetId)
     {
         _planetId = planetId;

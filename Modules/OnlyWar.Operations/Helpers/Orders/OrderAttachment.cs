@@ -113,13 +113,6 @@ namespace OnlyWar.Operations.Orders
                 && !ReferenceEquals(member.CurrentOrder, excludingOrder)) == true;
         }
 
-        // The reverse guard: is any member of this squad committed to an order other than the
-        // target one?
-        public static bool IsAttachedElsewhere(Squad squad, Order target)
-        {
-            return HasAttachedMembers(squad, target);
-        }
-
         /// <summary>
         /// May this brother be attached to this operation? Runs before any mutation; the caller
         /// creates nothing on a false result. See the design doc §3.2 for the six guards.

@@ -903,31 +903,6 @@ namespace OnlyWar.Campaign
                 && element.MaximumNumber > 0;
         }
 
-        // A squad is cleaned up when its last member leaves unless it must always
-        // exist: HQ squads and squads whose unit template requires at least one
-        // (MinCount > 0, e.g. the chapter's command squads) are kept. Line squads
-        // (MinCount 0) and ad-hoc squads with no slot are removed so none linger empty.
-        private static bool IsRemovableWhenEmpty(Squad squad)
-        {
-            if ((squad.SquadTemplate.SquadType & SquadTypes.HQ) != 0)
-            {
-                return false;
-            }
-            Unit parent = squad.ParentUnit;
-            if (parent?.UnitTemplate == null)
-            {
-                return true;
-            }
-            foreach (SquadTemplateSlot slot in parent.UnitTemplate.GetChildSquadSlots())
-            {
-                if (slot.Template == squad.SquadTemplate)
-                {
-                    return slot.MinCount == 0;
-                }
-            }
-            return true;
-        }
-
         private IEnumerable<SoldierTemplate> GetOpeningsInSquad(
             SoldierTransferContext.SquadContext squadContext,
             Squad currentSquad,

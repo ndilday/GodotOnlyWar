@@ -27,7 +27,6 @@ internal sealed class FactionOffensiveEvaluator
     // Share of a believed population an attacker assumes is under arms on ground it has not
     // scouted. A PDF actually fields about 3%, so this errs against the attacker by design.
     internal const double PessimisticMobilizationFraction = 0.05;
-    internal const double RaidForceRatioThreshold = 0.25;
     internal const double RaidCommitFraction = 0.35;
     internal const long MinimumRaidBattleValue = 100;
 
@@ -102,9 +101,6 @@ internal sealed class FactionOffensiveEvaluator
     // ForceTaskBuilder - so "cannot take it but can still hurt it" became a real option instead of a
     // branch that a frozen region never reached.
 
-    internal static string MissionTargetKey(PotentialOffensive offensive) =>
-        $"{offensive.TargetRegion.Id}:{offensive.TargetFaction.PlanetFaction.Faction.Id}";
-
     internal static PotentialOffensive ChooseReconTarget(IEnumerable<PotentialOffensive> underKnown) =>
         underKnown.OrderByDescending(o => o.Reward).FirstOrDefault();
 
@@ -123,14 +119,6 @@ internal sealed class FactionOffensiveEvaluator
         offensive.TargetRegion.GetFactionRegionAwareness(attackerFactionId)
             >= FactionStrategyPlanningConstants.ReconIntelThreshold;
 
-    internal static bool IsRaidViable(PotentialOffensive offensive, long attackingForce)
-    {
-        if (offensive.DefenderBattleValue <= 0) return false;
-        long minimum = Math.Max(MinimumRaidBattleValue,
-            (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * RaidForceRatioThreshold));
-        return attackingForce >= minimum;
-    }
-
     internal static double RewardRiskScore(PotentialOffensive offensive)
     {
         // Risk scales with the estimated defender strength and how dug-in it is: a fortified
@@ -147,8 +135,7 @@ internal sealed class FactionOffensiveEvaluator
     /// <remarks>
     /// The trailing <c>* availableAttackingForce / defenderForce</c> is gone. It made a target score
     /// higher because of an accident of who was standing next to it, so the planner's ranking moved
-    /// whenever troops moved - the same coupling the ReconUtility comment already had to fight off
-    /// once. Under marginal allocation it is worse than untidy: force-dependence belongs in the value
+    /// whenever troops moved. Under marginal allocation it is worse than untidy: force-dependence belongs in the value
     /// curve, and leaving it in the importance too makes the auction count it twice.
     /// </remarks>
     internal static double CalculateOffensiveReward(
@@ -234,21 +221,6 @@ internal sealed class FactionOffensiveEvaluator
         }
     }
 
-    private static bool IsLocalOffensive(Faction faction, PotentialOffensive offensive) =>
-        offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id);
-
-    // Scouting a region is worth what it would unlock, scaled by how much is still unknown about
-    // it. It is deliberately NOT divided by the force available to stage it: that made a candidate
-    // look better the less able the faction was to act on it, so the planner consistently ranked
-    // the offensives it could not afford above the ones it could.
-    internal static double ReconUtility(Faction faction, PotentialOffensive offensive)
-    {
-        double intelGap = Math.Max(0.25,
-            FactionStrategyPlanningConstants.ReconIntelThreshold
-            - offensive.TargetRegion.GetFactionRegionAwareness(faction.Id));
-        return offensive.Reward * intelGap;
-    }
-
     /// <summary>
     /// What a raid of this size is worth against this target.
     /// </summary>
@@ -301,8 +273,8 @@ internal sealed class FactionOffensiveEvaluator
         // floor cannot silently buy precision it did not pay for.
         float observedAwareness = intel;
         // Ground the attacker is already standing on needs no scouting - it can see whoever shares
-        // the region with it. This mirrors IsLocalOffensive, which likewise treats a local target as
-        // well known; without it a faction would refuse to engage an enemy in its own streets
+        // the region with it, so a local target counts as well known; without this a faction would
+        // refuse to engage an enemy in its own streets
         // because it assumed the neighbours might be armed.
         if (targetFaction.Region.RegionFactionMap.ContainsKey(attackingFaction.Id))
         {

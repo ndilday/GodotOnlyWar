@@ -1778,9 +1778,10 @@ do not enter the near-death/recovery event path.
 
 ### 6.7 Force Generation
 
-The lower-level runtime construction API lives in `OnlyWar.Runtime`. `RuntimeSoldierFactory`,
-`RuntimeSquadFactory`, and `RuntimeForceGenerator` receive detached templates, an `IRNG`, and an
-`IEntityIdAllocator`, and return portable runtime values. The Runtime assembly has no reference
+The lower-level runtime construction API lives in `OnlyWar.Runtime`. `RuntimeSoldierFactory`
+receives a detached template, an `IRNG`, and an `IEntityIdAllocator`, and returns a portable
+`RuntimeSoldier`; `SoldierFactory` materializes it, and `SquadFactory` and `ForceGenerator`
+build squads and forces from those soldiers. The Runtime assembly has no reference
 to Generation, Engine, Godot, SQLite, or campaign/session state. Name pools and the negative
 tactical allocator are Runtime-owned; the positive allocator is supplied by the caller.
 

@@ -120,8 +120,6 @@ namespace OnlyWar.Domain.Soldiers.Ratings
             return evaluation.Ratings.TryGetValue(ratingKey, out value);
         }
 
-        public IReadOnlyDictionary<RatingConsumerRole, string> AsDictionary() => _ratingKeys;
-
         public static RatingConsumerBindings CreateDefault() => new(
             CreateDefaultAssignments());
 

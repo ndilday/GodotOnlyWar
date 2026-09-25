@@ -64,11 +64,6 @@ namespace OnlyWar.Domain
             return Week.ToString() + "." + Year.ToString() + ".M" + Millenium.ToString();
         }
 
-        public bool IsBetweenInclusive(Date earlierDate, Date laterDate)
-        {
-            return IsAfterOrEqual(earlierDate) && IsBeforeOrEqual(laterDate);
-        }
-
         public bool IsBeforeOrEqual(Date otherDate)
         {
             if(Millenium > otherDate.Millenium

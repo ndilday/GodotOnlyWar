@@ -374,19 +374,6 @@ namespace OnlyWar.Campaign.Events
             return variants[index];
         }
 
-        public static int GetAuthoredVariantCount(CampaignEventType type, string surface) =>
-            (type, surface) switch
-            {
-                (CampaignEventType.FirstBlood, "service") => FirstBloodVariants.Length,
-                (CampaignEventType.KillMilestone, "service") => MilestoneVariants.Length,
-                (CampaignEventType.WorldSaved, "chronicle") => WorldSavedChronicleVariants.Length,
-                (CampaignEventType.WorldLost, "chronicle") => WorldLostChronicleVariants.Length,
-                (CampaignEventType.ChapterFounded, "chronicle") => FoundingChronicleVariants.Length,
-                (CampaignEventType.HiddenCultRevealed, "chronicle") => CultChronicleVariants.Length,
-                (CampaignEventType.Death, "eulogy") => 2,
-                _ => 1
-            };
-
         private static string SubjectName(CampaignEvent @event) =>
             @event.Entities.FirstOrDefault(entity => entity.Role == CampaignEventEntityRole.Subject)
                 ?.DisplayNameSnapshot ?? "A battle-brother";

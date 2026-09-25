@@ -64,9 +64,9 @@ manifest and image/atlas beside its database:
 ```
 
 The mod loader should register that manifest with
-`IconAtlas.RegisterModIconManifest(manifestPath, "iron_halo")` before any
+`IconAssetRegistry.RegisterManifest(manifestPath, "iron_halo")` before any
 award-bearing view is built, and unregister it with
-`IconAtlas.ClearModIconManifest("iron_halo")` when the package is unloaded.
+`IconAssetRegistry.ClearPackage("iron_halo")` when the package is unloaded.
 Missing or unavailable content falls back to the generic `award` icon.
 
 ## Planetary Operations

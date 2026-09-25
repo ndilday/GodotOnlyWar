@@ -100,13 +100,6 @@ namespace OnlyWar.Domain
             }
         }
 
-        public void RegisterSquad(Squad squad)
-        {
-            if (squad == null) return;
-            PopulateSquadMap();
-            SquadMap[squad.Id] = squad;
-        }
-
         public void UnregisterSquad(Squad squad)
         {
             if (squad == null) return;

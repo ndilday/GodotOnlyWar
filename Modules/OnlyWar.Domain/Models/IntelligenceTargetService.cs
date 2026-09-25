@@ -103,13 +103,5 @@ namespace OnlyWar.Domain
                 .OrderByDescending(belief => belief.Evidence)
                 .FirstOrDefault();
         }
-
-        public static FactionIntelBelief GetBestBelief(
-            PlanetFaction observer,
-            Region region,
-            Faction targetFaction)
-        {
-            return observer?.GetTargetBelief(region, targetFaction);
-        }
     }
 }

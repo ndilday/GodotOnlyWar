@@ -35,17 +35,6 @@ namespace OnlyWar.Host.Presentation.UI
             };
         }
 
-        public static int SeverityTicks(MedicalWoundLevel level) => level switch
-        {
-            MedicalWoundLevel.Negligible => 1,
-            MedicalWoundLevel.Minor => 2,
-            MedicalWoundLevel.Moderate => 3,
-            MedicalWoundLevel.Major => 4,
-            MedicalWoundLevel.Critical or MedicalWoundLevel.Massive or MedicalWoundLevel.Mortal
-                or MedicalWoundLevel.Unsurvivable => 5,
-            _ => 0
-        };
-
         private static Color FromRgb(byte red, byte green, byte blue) =>
             new(red / 255f, green / 255f, blue / 255f);
     }

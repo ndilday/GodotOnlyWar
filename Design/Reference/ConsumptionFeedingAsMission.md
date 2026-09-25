@@ -8,15 +8,29 @@ The mechanism itself is summarized in `OnlyWar_TDD.md` §6.2 and `OnlyWar_PRD.md
 What shipped, against the plan below:
 
 - `MissionType.Feed` + `FeedMission` (committed battle value), appended to the enum (§1, §3).
-- `FactionConsumptionPlanner` (composed by `FactionStrategyController`) owns PRIORITY 5/6:
-  `PlanConsumptionExpansionOnPlanet` then `PlanFeedMissionsOnPlanet`, both after patrols and both
-  drawing down the same `SpareTroops` (§2).
 - `MissionTurnProcessor.ProcessFeedOrders`, dispatched beside squad-less construction from both
   `TurnController.ProcessTurn` and `PlanetForwardSimulator.Simulate` (§3).
 - Consumption expansion and feeding dropped from `UpdatePlanet` in favour of hidden-consumer
   fallbacks (§4 resolved, §5 resolved — see those sections).
 - References below use the current policy owners where this design discusses code ownership; the
   historical reasoning remains here, while live formulas stay in the implementation and TDD.
+
+**How planning works now.** The plan below was first built as two ordered planner steps,
+PRIORITY 5 and 6, that ran after patrols and spent whatever `SpareTroops` was left. The
+force-allocation auction has since replaced that ordering, and both steps are gone. The goal did
+not change: spreading and feeding compete for the same budget as defence, offence, development and
+patrols. What changed is how they compete. They are now bids, not leftovers:
+
+- `ForceTaskBuilder.AddConsumptionTasks` adds two tasks for each public Consumption region:
+  - a `ForceTaskKind.ConsumptionSpread` task, sized by `ConsumptionTurnProcessor.PlanExpansion`;
+  - a `ForceTaskKind.Feed` task, saturated at the region's deployed strength.
+
+  Their importance comes from the faction's `ForceDoctrineWeights` (`Spread`, `Feed`).
+- `ForceAllocationAuction` ranks every task by marginal value per battle value. `BidReach` gives
+  Feed and ConsumptionSpread no outside bids, so only a region's own troops can fund them.
+- `ForceTaskCommitter` turns the awards into effects. A ConsumptionSpread award calls
+  `ConsumptionTurnProcessor.ApplyExpansion` directly. A Feed award calls
+  `FactionConsumptionPlanner.IssueAllocatedFeed`, which issues the squad-less `FeedMission` order.
 
 One thing the change surfaced rather than caused: `ClearStalePatrolSquads` swept only Patrol squads,
 so every NPC recon party that survived its week — landed home by `ExfiltrateMissionStep` — stayed in
@@ -42,9 +56,11 @@ requiredDefensiveBattleValue = CalculateRequiredDefensiveBattleValue(...)   // >
 spareTroops               = max(0, organizedTroops - requiredDefensiveBattleValue)
 ```
 
-`spareTroops` is then drawn down by offensives in `FactionOffensiveOrderBuilder`, and
-`PlanPatrolMissionsOnPlanet` takes another
-`PatrolForceFraction = 0.1` of the remainder.
+`spareTroops` was then drawn down by offensives, and the patrol step took another
+`PatrolForceFraction = 0.1` of the remainder. (This is the planner as it was on 2026-08-07. The
+defensive reserve is no longer subtracted up front. Defence is now a task in the force-allocation
+auction, and the patrol fraction lives on `FactionReconPatrolPlanner`. See "How planning works now"
+above.)
 
 Two things break the link to feeding:
 
@@ -58,8 +74,8 @@ Two things break the link to feeding:
    `Population × Organization/100`, which is the
    *same quantity* as `GetDeployedStrength()` — not the residual after commitments.
 
-Timing is not the obstacle: planning is Phase 1 of `TurnController.ProcessTurn`
-(`Helpers/TurnController.cs:108`) and `UpdatePlanets` is Phase 3 (`:129`), so the turn's assignments
+Timing is not the obstacle: planning is Phase 1 of `TurnController.ProcessTurn` and
+`UpdatePlanets` is Phase 3, so the turn's assignments
 are current and persisted when feeding runs. There is simply no field carrying the leftover.
 
 There was a **third** independent accounting of the same troops: consumption expansion
@@ -76,7 +92,7 @@ case function."
 ## Useful property
 
 For a `PopulationIsMilitary` faction, `MilitaryStrength == Population`
-(`Models/Planets/RegionFaction.cs:87`), so the swarm's BV pool and its headcount are the same number.
+(`Models/Planets/RegionFaction.cs`), so the swarm's BV pool and its headcount are the same number.
 The planner's units and the feeding pass's units already agree — no conversion needed.
 
 ## Design
@@ -95,31 +111,36 @@ discard that for no gain. The allocator decides the prey/land split internally; 
 decides how many troops to hand it.
 
 A `FeedMission : Mission` subclass carrying the committed battle value is the likely shape (compare
-`ConstructionMission.BuildAmount` in `Models/Missions/Mission.cs:70`).
+`ConstructionMission.BuildAmount` in `Models/Missions/Mission.cs`). This is what shipped:
+`FeedMission.CommittedBattleValue`.
 
 ### 2. Planning
 
-New step in `GeneratePlanetOrders`, running **after** `PlanPatrolMissionsOnPlanet` (the facade's
-patrol phase) so feeding receives the true residual: what
-survives the defensive reserve, offensives, development, and the patrol screen.
+*As first built:* a new step in `FactionStrategyController.GeneratePlanetOrders`, running **after**
+the patrol step so that feeding received the true residual. That residual was whatever survived the
+defensive reserve, offensives, development, and the patrol screen.
 
 - Gate to `faction.GrowthType == GrowthType.Consumption`.
 - Per `RegionForceState`, commit whatever `SpareTroops` remains; skip if `<= 0`.
+
+*Now:* feeding is a `ForceTaskKind.Feed` bid in the force-allocation auction, not a residual step
+(see "How planning works now" at the top). The other rule is unchanged:
+
 - No `ForceGenerator.GenerateForce` call. Feeding is squad-less — materialising squads for a
   million-strong swarm would be absurd, and unlike a patrol screen there is nothing for them to do
   tactically.
 
 ### 3. Execution
 
-Squad-less, on the `ConstructionMission` precedent
-(`MissionTurnProcessor.ProcessConstructionOrders`, `Helpers/Turns/MissionTurnProcessor.cs:360`) —
-those orders resolve instantly and create no `MissionContext`. Feed orders are dispatched the same
-way from Phase 2 of `TurnController.ProcessTurn` (they have no `AssignedSquads`, so note the
-existing Phase 2 filter at `Helpers/TurnController.cs:118` selects squad-less
-`ConstructionMission`s — the Feed filter goes alongside it).
+Squad-less, on the `ConstructionMission` precedent (`MissionTurnProcessor.ProcessConstructionOrders`)
+— those orders resolve instantly and create no `MissionContext`. Feed orders are dispatched the same
+way from Phase 2 of `TurnController.ProcessTurn`: they have no squads, so the Phase 2 filter that
+selects squad-less `ConstructionMission`s has a Feed filter beside it, and both call into
+`MissionTurnProcessor` (`ProcessConstructionOrders`, `ProcessFeedOrders`).
 
-The execution body is the existing `ResolveBiomassConsumption` loop with one substitution: `troops`
-comes from the mission's committed BV instead of `consumer.Population * (consumer.Organization /
+The execution body is `ConsumptionTurnProcessor.ResolveFeeding(RegionFaction consumer, double
+troops)`, the old consumption loop with one substitution: `ProcessFeedOrders` passes the mission's
+`CommittedBattleValue` as `troops`, instead of `consumer.Population * (consumer.Organization /
 100.0)`. Everything downstream (`ApplyPredationKills`, the carrying-capacity strip,
 `RecordScenarioBlighting`, `BiomassFeedEfficiency = 0.5` conversion, the `GameLog.Debug` line) is
 unchanged.
@@ -146,17 +167,22 @@ a high carrying capacity and **no enemy `RegionFaction` in it at all** — nothi
 factions. Routing expansion through the offensive path would have silently deleted exactly the moves
 that make the tide spread. The double-count needed a shared *budget*, not a shared *code path*.
 
-So the move now happens in `PlanConsumptionExpansionOnPlanet`, at PRIORITY 5, sized from `SpareTroops`
-rather than from the whole deployed strength, and applied directly rather than issued as an order —
-the same shape `PlanGarrisonReinforcement` and `PlanFrontReinforcement` already use for relocating
-strength between regions. Spreading precedes feeding in the planner because a swarm on the move is
-not grazing. The behaviours that survived unchanged:
+So the move was first built as a planner step at PRIORITY 5. It was sized from `SpareTroops`, not
+from the whole deployed strength, and it was applied directly, not issued as an order. That was the
+same shape the hand-written garrison and front reinforcement passes then used to move strength
+between regions. Spreading came before feeding because a swarm on the move is not grazing.
+
+*Now:* the move is a `ForceTaskKind.ConsumptionSpread` bid. `ForceTaskBuilder.AddConsumptionTasks`
+sizes it with `ConsumptionTurnProcessor.PlanExpansion`. `ForceTaskCommitter` then applies the award
+directly with `ConsumptionTurnProcessor.ApplyExpansion`, and still issues no order. Spread and Feed
+share the region's budget in the auction, so the old ordering no longer decides between them. The
+behaviours that survived unchanged:
 
 - Move target is the adjacent region of highest `RegionBiomass` (prey population + carrying
   capacity), and only when strictly richer than home, as implemented by
-  `FactionConsumptionPlanner`.
+  `ConsumptionTurnProcessor.PlanExpansion`.
 - Movers scale by `RegionDepletion(region)` — home gets emptier as it is stripped — times
-  `ConsumptionExpansionShare = 0.5`. The base is now `SpareTroops` instead of `organized`.
+  `ConsumptionExpansionShare = 0.5`. The base is the troops the planner offers, not `organized`.
 - Movers arrive via `EstablishInvaderPresence`. They no longer feed the destination the same turn:
   the budget is committed before they leave, and an advancing force is not eating.
 
@@ -196,7 +222,7 @@ the opening scenario than either scenario tunable.
   been re-run after the edit.
 - **Failing test this is aimed at:**
   `OnlyWar.Tests.Generation.ScenarioBuilderTests.GenerateSector_Seed1ProducesPlayablePromisedWorldInvariants`
-  (`OnlyWar.Tests/Generation/ScenarioBuilderTests.cs:79`), failing with
+  (`OnlyWar.Tests/Generation/ScenarioBuilderTests.cs`), failing with
   `expected Imperial population 753958 to exceed the largest invader's 1027513`. Roughly 2 min for
   that test alone; ~8.5 min for the whole `ScenarioBuilderTests` class. The other two tests in the
   class pass, including the determinism test.
@@ -207,20 +233,20 @@ the opening scenario than either scenario tunable.
   slow the swarm.
 - **Unrelated, being handled in a separate conversation:** two failing flamer cone tests,
   `BattleSquadPlannerTests.TemplateWeaponBearer_EmitsAreaAttackWithoutAimingOrShooting`
-  (`OnlyWar.Tests/Battles/BattleSquadPlannerTests.cs:1651`) and
+  (`OnlyWar.Tests/Battles/BattleSquadPlannerTests.cs`) and
   `GrenadePlannerTests.FlamerBearerWithABeltGrenade_StillFiresTheConeOnAnEvenTrade`
-  (`OnlyWar.Tests/Battles/GrenadePlannerTests.cs:354`), both `Assert.Single() Failure: The collection
+  (`OnlyWar.Tests/Battles/GrenadePlannerTests.cs`), both `Assert.Single() Failure: The collection
   was empty`. Not related to this plan.
 
 ## Other levers on the same problem, for reference
 
 If the opening scenario still hands off badly after this change, in rough order of strength:
 
-1. `BiomassAppetitePerTroop = 0.5` (`Helpers/Turns/ConsumptionTurnProcessor.cs`) — the base of the
+1. `BiomassAppetitePerTroop = 0.5` (`Modules/OnlyWar.Operations/Helpers/Turns/ConsumptionTurnProcessor.cs`) — the base of the
    growth exponential.
 2. `ScenarioProfile.PostLandingTurnsMean = 4.0` — weeks the swarm feeds unopposed before the player
    arrives. Drawn as `max(0, round(mean + z))`, `z ~ N(0,1)`, deterministic per seed
-   (`Builders/ScenarioBuilder.cs:81`). Worth checking what `z` seed 1 actually rolled before
+   (`Modules/OnlyWar.Generation/Scenarios/ScenarioBuilder.cs`). Worth checking what `z` seed 1 actually rolled before
    assuming a typical 4 weeks.
 3. `ScenarioProfile.InvaderGarrisonStrengthMultiple = 1.0f` — the landing stamp, sized as the planet's
    whole pre-stamp Imperial *garrison* split across 2–3 regions. A linear knob sitting under an

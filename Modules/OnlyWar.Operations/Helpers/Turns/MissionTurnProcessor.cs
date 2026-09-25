@@ -687,9 +687,10 @@ namespace OnlyWar.Operations.Turns
         /// <remarks>
         /// Dispatched alongside squad-less construction and for the same reason - the order resolves
         /// instantly and creates no MissionContext. What makes it a mission rather than the planet
-        /// update's old side effect is the budget: the troops here are the residual left after
-        /// defence, offensives, development, patrols and spreading, not the whole force re-derived
-        /// from scratch (Design/Reference/ConsumptionFeedingAsMission.md).
+        /// update's old side effect is the budget: the troops here are what the force-allocation
+        /// auction awarded the Feed task against defence, offensives, development, patrols and
+        /// spreading, not the whole force re-derived from scratch
+        /// (Design/Reference/ConsumptionFeedingAsMission.md).
         /// </remarks>
         public static void ProcessFeedOrders(IEnumerable<Order> feedOrders)
         {

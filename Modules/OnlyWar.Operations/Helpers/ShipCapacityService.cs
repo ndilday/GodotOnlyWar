@@ -36,13 +36,6 @@ namespace OnlyWar.Operations.Fleets
             IPersonnelAvailabilityQueries personnel) =>
             ship != null && passengers >= 0 && AvailableCapacity(ship, personnel) >= passengers;
 
-        public static bool CanLoadSquad(
-            Ship ship,
-            Squad squad,
-            IPersonnelAvailabilityQueries personnel) =>
-            CanBoard(ship, Require(personnel).PresentCount(
-                PersonnelAvailabilityProjection.ForFormation(squad)), personnel);
-
         private static IPersonnelAvailabilityQueries Require(
             IPersonnelAvailabilityQueries personnel) =>
             personnel ?? throw new System.ArgumentNullException(nameof(personnel));

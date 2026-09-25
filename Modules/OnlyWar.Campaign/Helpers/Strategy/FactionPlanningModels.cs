@@ -113,28 +113,12 @@ internal class PotentialOffensive
     /// <remarks>
     /// This deliberately no longer scales with the force the attacker happens to have spare beside it.
     /// The old expression ended `reward * availableAttackingForce / defenderForce`, so a target scored
-    /// higher because of an accident of who was standing next to it - the same coupling the
-    /// ReconUtility comment already had to fight off once ("deliberately NOT divided by the force
-    /// available to stage it"). Under marginal allocation importance must be a property of the target
+    /// higher because of an accident of who was standing next to it. Under marginal allocation
+    /// importance must be a property of the target
     /// and ALL force-dependence must live in the value curve, or the auction double-counts it.
     /// </remarks>
     public double Reward { get; set; }
 
     public long DefenderBattleValue { get; set; }
     public long EstimatedDefenderBattleValue { get; set; }
-}
-
-internal enum OffensivePlan
-{
-    None,
-    Assault,
-    Recon,
-    Raid
-}
-
-internal sealed class MissionCandidate
-{
-    public OffensivePlan Plan { get; set; }
-    public PotentialOffensive Offensive { get; set; }
-    public double Score { get; set; }
 }

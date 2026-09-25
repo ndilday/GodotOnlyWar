@@ -38,8 +38,6 @@ namespace OnlyWar.Battles
             return Math.Max(1, value);
         }
 
-        public static void ClearCache() => Cache.Clear();
-
         private static int CalculateUncached(SoldierTemplate template, EquipmentLoadout loadout)
         {
             int value = Math.Max(1, template.BattleValue);

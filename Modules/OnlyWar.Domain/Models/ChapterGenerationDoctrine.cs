@@ -370,9 +370,6 @@ namespace OnlyWar.Domain
         public SquadTemplate GetSquad(ChapterSquadRole role) => _squads[role];
         public UnitTemplate GetUnit(ChapterUnitRole role) => _units[role];
 
-        public bool IsUnitRole(UnitTemplate template, ChapterUnitRole role) =>
-            template != null && GetUnit(role).Id == template.Id;
-
         public bool IsCompanyUnit(UnitTemplate template) =>
             template != null && _companyUnitTemplateIds.Contains(template.Id);
 

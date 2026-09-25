@@ -171,23 +171,6 @@ public class PatrolAndReconPlanningTests
 
     // --- fixtures ---
 
-    // A region held by an enemy, with the scouting faction holding `intel` about it. Region intel is
-    // per-PlanetFaction, so the scouting faction needs a PlanetFaction on the same planet to hold it.
-    private static (Faction scout, Region target) ReconTarget(float intel)
-    {
-        Faction scout = CreateFaction(2, "Test Cult");
-        Faction defender = CreateFaction(3, "Test Defender");
-        Planet planet = CreatePlanet();
-        Region region = planet.Regions[0];
-        AddRegionFaction(planet, region, defender, population: 10_000);
-
-        PlanetFaction scoutPlanetFaction = new(scout) { IsPublic = true };
-        planet.PlanetFactionMap[scout.Id] = scoutPlanetFaction;
-        scoutPlanetFaction.SetRegionAwareness(region, intel);
-
-        return (scout, region);
-    }
-
     private static RegionForceState State(RegionFaction rf) =>
         new(rf, requiredDefensiveBattleValue: 0, assignedDefensiveBattleValue: 0,
             spareTroops: 10_000, defensiveShortfall: 0);

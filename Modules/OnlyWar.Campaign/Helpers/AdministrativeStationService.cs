@@ -27,7 +27,6 @@ namespace OnlyWar.Campaign
     /// </summary>
     public sealed class AdministrativeStationService
     {
-        private readonly FlagshipService _flagships = new();
         private readonly IOperationsPersonnelSurface _personnel;
         private readonly IndividualPostingService _postings;
 
@@ -120,43 +119,6 @@ namespace OnlyWar.Campaign
                 chapter.GetAllSquads().Where(squad => squad.PermitsIndividualDeployment)
                     .OrderBy(squad => squad.Id).ToList(),
                 CampaignLocation.Aboard(flagship));
-        }
-
-        public AdministrativeStationResult RelocateAfterFlagshipDestruction(
-            Unit chapter,
-            Ship destroyedShip,
-            IEnumerable<Ship> survivingShips)
-        {
-            if (chapter == null || destroyedShip == null)
-            {
-                return AdministrativeStationResult.Failure("A chapter and destroyed ship are required.");
-            }
-            Ship successor;
-            try
-            {
-                successor = _flagships.FindSuccessor(
-                    chapter.Faction,
-                    (survivingShips ?? Enumerable.Empty<Ship>())
-                        .Where(ship => ship != null && ship != destroyedShip));
-            }
-            catch (InvalidOperationException exception)
-            {
-                return AdministrativeStationResult.Failure(exception.Message);
-            }
-            List<Squad> stranded = destroyedShip.AdministrativeStations
-                .Where(squad => squad.PermitsIndividualDeployment)
-                .ToList();
-            int incoming = stranded.Sum(SoldierPresenceService.PresentCount);
-            if (ShipCapacityService.AvailableCapacity(successor, _personnel) < incoming)
-            {
-                return AdministrativeStationResult.Failure(
-                    $"{successor.Name} cannot seat all administrative survivors atomically.");
-            }
-            _flagships.SetFlagship(
-                chapter.Faction,
-                (survivingShips ?? Enumerable.Empty<Ship>()).Append(destroyedShip),
-                successor);
-            return SeatFormations(stranded, CampaignLocation.Aboard(successor));
         }
 
         private AdministrativeStationResult SeatFormations(

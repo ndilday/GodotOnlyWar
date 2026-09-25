@@ -382,17 +382,6 @@ internal static class ForceValueCurves
         return carried * carryShare + surplus * (1.0 - carryShare);
     }
 
-    /// <summary>
-    /// Best-of-n: each added observer is an independent draw, and is worth the chance it beats every
-    /// observer already assigned. Steeply concave, which is why reconnaissance groups rather than
-    /// either going alone or scaling indefinitely.
-    /// </summary>
-    internal static double BestOfN(double squads, double residualPerSquad)
-    {
-        if (squads <= 0.0) return 0.0;
-        return 1.0 - Math.Pow(residualPerSquad, squads);
-    }
-
     /// <summary>Value accrues evenly up to saturation. Used where a resolver spends what it is given.</summary>
     internal static double Linear(double fraction) => Math.Clamp(fraction, 0.0, 1.0);
 

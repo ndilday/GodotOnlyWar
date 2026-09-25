@@ -41,40 +41,6 @@ namespace OnlyWar.Campaign
             return SelectInitialFlagship(playerFaction, candidates);
         }
 
-        public Ship SelectSuccessor(Faction playerFaction, IEnumerable<Ship> survivingShips)
-        {
-            Ship successor = FindSuccessor(playerFaction, survivingShips);
-            SetFlagship(playerFaction, survivingShips, successor);
-            return successor;
-        }
-
-        public Ship FindSuccessor(Faction playerFaction, IEnumerable<Ship> survivingShips)
-        {
-            Ship successor = CandidateShips(playerFaction, survivingShips)
-                .OrderByDescending(ship => ship.Template?.FlagshipPrecedence ?? 0)
-                .ThenByDescending(ship => ship.Template?.HullSize ?? 0)
-                .ThenByDescending(ship => ship.Template?.SoldierCapacity ?? 0)
-                .ThenBy(ship => ship.Id)
-                .FirstOrDefault();
-            if (successor == null)
-            {
-                throw new InvalidOperationException("No surviving player ship can become flagship.");
-            }
-            return successor;
-        }
-
-        public void ValidateSinglePlayerFlagship(Faction playerFaction, IEnumerable<Ship> ships)
-        {
-            List<Ship> marked = CandidateShips(playerFaction, ships)
-                .Where(ship => ship.IsFlagship)
-                .ToList();
-            if (marked.Count != 1)
-            {
-                throw new InvalidDataException(
-                    $"Expected exactly one player flagship, found {marked.Count}.");
-            }
-        }
-
         public void SetFlagship(Faction playerFaction, IEnumerable<Ship> ships, Ship flagship)
         {
             if (flagship == null || !CandidateShips(playerFaction, ships).Contains(flagship))

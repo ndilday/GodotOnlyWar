@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using OnlyWar.Abstractions;
 using OnlyWar.Domain.Equippables;
@@ -22,51 +21,6 @@ public sealed record RuntimeSoldier(
     float Size,
     float PsychicPower,
     IReadOnlyList<Skill> Skills);
-
-/// <summary>Only the template data required for a runtime squad construction.</summary>
-public sealed record RuntimeSquadElement(
-    SoldierTemplate SoldierTemplate,
-    int MinimumNumber,
-    int MaximumNumber,
-    bool RollsStrength = false);
-
-public sealed record RuntimeSquadTemplate(
-    int Id,
-    string Name,
-    int BattleValue,
-    IReadOnlyList<RuntimeSquadElement> Elements,
-    SquadTypesForRuntime SquadType = SquadTypesForRuntime.None);
-
-public enum RuntimeForceCompositionProfile
-{
-    Generic,
-    ScoutPatrol,
-    SpecialHqTarget
-}
-
-[Flags]
-public enum SquadTypesForRuntime
-{
-    None = 0,
-    Hq = 1,
-    Scout = 2,
-    Elite = 4,
-    Fast = 8,
-    Heavy = 16,
-    Bodyguard = 32
-}
-
-public sealed record RuntimeSquad(
-    int Id,
-    string Name,
-    RuntimeSquadTemplate Template,
-    IReadOnlyList<RuntimeSoldier> Members);
-
-public sealed record RuntimeForceGenerationRequest(
-    IReadOnlyList<RuntimeSquadTemplate> Templates,
-    long TargetBattleValue,
-    RuntimeForceCompositionProfile Profile = RuntimeForceCompositionProfile.Generic,
-    int Tier = 0);
 
 public interface IRuntimeSoldierFactory
 {
