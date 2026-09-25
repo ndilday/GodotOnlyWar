@@ -666,6 +666,10 @@ internal sealed class ForceTaskBuilder
                 1L, Math.Max(faction.MinimumForceRequest, faction.MinimumFullSquadRequest));
             // What carries the region. It is the LAUNCH threshold and nothing beyond it: a fraction of
             // this is a defeat, and the committer refuses one.
+            //
+            // The launch threshold used to be AssaultKnee (0.7) of this, which let an assault go at
+            // 1.05x the believed defender - parity, before entrenchment. The force ratio IS the minimum:
+            // AssaultKnee now shapes the value curve only.
             long carryPoint = Math.Max(
                 squadFloor,
                 (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * ratio));
@@ -685,9 +689,6 @@ internal sealed class ForceTaskBuilder
                     * StrategicCombatRules.EntrenchmentMultiplier(
                         RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment))
                     * StrategicCombatRules.OverrunForceRatio));
-            long launchThreshold = Math.Max(
-                squadFloor,
-                (long)Math.Ceiling(carryPoint * ForceAllocationConstants.AssaultKnee));
             // Storming a region and raiding it are alternatives for the same week, not a pair.
             TaskExclusionGroup exclusion = new();
             tasks.Add(new ForceTask
@@ -714,12 +715,12 @@ internal sealed class ForceTaskBuilder
                 // Grist Nine, 2026-09-17: the Orks awarded 2,376 to an assault needing 7,000, the commit
                 // refused it, and half the army evaporated. They issued ONE order that week.
                 //
-                // Priced off the CARRY POINT, not the saturation. The saturation now runs on to the
-                // overrun ratio, and gating the launch on a fraction of THAT would refuse every attack
-                // a faction could not also finish - the opposite of the intent, and it would have made
-                // poor factions stop attacking altogether.
-                MinimumViableAward = launchThreshold,
-                ValueBreakPoints = new[] { launchThreshold, carryPoint },
+                // The CARRY POINT, not the saturation. The saturation runs on to the overrun ratio,
+                // and gating the launch on THAT would refuse every attack a faction could not also
+                // finish - the opposite of the intent, and it would have made poor factions stop
+                // attacking altogether.
+                MinimumViableAward = carryPoint,
+                ValueBreakPoints = new[] { carryPoint },
                 // An assault is an all-or-nothing commitment: half the force needed to carry a region
                 // does not half-take it. The knee is what batch bidding exists to find. Above it the
                 // curve keeps climbing to the ratio that annihilates the defence rather than going

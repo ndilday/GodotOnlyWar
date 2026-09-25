@@ -1,6 +1,7 @@
 using OnlyWar.Application;
 using OnlyWar.Campaign.Turns;
 using OnlyWar.Domain;
+using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Reports;
 using OnlyWar.Tests.Fixtures;
@@ -128,6 +129,68 @@ public class LastTurnReportSnapshotBuilderTests
         Assert.Equal(
             build.Snapshot.Entries.Select(entry => entry.Title),
             build.PresentationEntries.Select(entry => entry.Title));
+    }
+
+    [Fact]
+    public void Build_NewOpportunityCarriesItsPlanetSoTheReportCanGoThere()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction cult = fixture.AddPublicCult(0, population: 1000, organization: 100);
+        TurnResolutionResult result = new();
+        result.SpecialMissions.Add(new Mission(1, MissionType.Ambush, cult, 1));
+
+        LastTurnReportBuildResult build = LastTurnReportSnapshotBuilder.Build(
+            new Date(1, 1, 2),
+            result);
+
+        EndOfTurnReportEntry entry = Assert.Single(build.PresentationEntries);
+        Assert.Equal("New Opportunity", entry.Title);
+        Assert.Equal(cult.Region.Planet.Id, entry.PlanetId);
+        Assert.Equal(cult.Region.Planet.Id, Assert.Single(build.Snapshot.Entries).PlanetId);
+    }
+
+    [Fact]
+    public void Build_CardsWithoutAWorldOfferNoPlanet()
+    {
+        LastTurnReportBuildResult build = LastTurnReportSnapshotBuilder.Build(
+            new Date(1, 1, 1),
+            new TurnResolutionResult());
+
+        Assert.Null(Assert.Single(build.PresentationEntries).PlanetId);
+    }
+
+    [Fact]
+    public void BuildPresentationEntries_RestoresThePlanetWithAndWithoutADebrief()
+    {
+        LastTurnReportSnapshot snapshot = LastTurnReportSnapshotBuilder.BuildSnapshot(
+            null,
+            [
+                new EndOfTurnReportEntry("Opportunity", "Somewhere", "Found.", false, planetId: 91),
+                new EndOfTurnReportEntry(
+                    "Mission", "A mission", "Outcome", true, "COMPLETE",
+                    [new MissionDebriefLineView("Day 1")], planetId: 12)
+            ]);
+
+        IReadOnlyList<EndOfTurnReportEntry> restored =
+            LastTurnReportSnapshotBuilder.BuildPresentationEntries(snapshot);
+
+        Assert.Equal([91, 12], restored.Select(entry => entry.PlanetId));
+    }
+
+    [Fact]
+    public void SnapshotDto_PlanetRoundTripsAndOlderPayloadsLoadWithoutOne()
+    {
+        LastTurnReportSnapshot snapshot = new(
+            5,
+            [new LastTurnReportEntrySnapshot("Opportunity", "Somewhere", "Found.", "", false, planetId: 91)]);
+
+        LastTurnReportSnapshot restored = JsonSerializer.Deserialize<LastTurnReportSnapshot>(
+            JsonSerializer.Serialize(snapshot));
+        LastTurnReportSnapshot legacy = JsonSerializer.Deserialize<LastTurnReportSnapshot>(
+            """{"ResolvedDate":5,"Entries":[{"Title":"Opportunity","Subtitle":"Somewhere","Summary":"Found.","OutcomeStatus":"","IsEnemyActivity":false,"Debrief":null}]}""");
+
+        Assert.Equal(91, Assert.Single(restored.Entries).PlanetId);
+        Assert.Null(Assert.Single(legacy.Entries).PlanetId);
     }
 
     [Fact]

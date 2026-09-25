@@ -1122,8 +1122,25 @@ public partial class MainGameScene : Control
 		PackedScene endOfTurnScene = GD.Load<PackedScene>("res://Scenes/EndOfTurnDialog.tscn");
 		_endOfTurnDialog = (EndOfTurnDialogController)endOfTurnScene.Instantiate();
 		_endOfTurnDialog.CloseButtonPressed += OnDialogClosed;
+		_endOfTurnDialog.PlanetGoToRequested += OnReportPlanetGoToRequested;
 		_modalLayer.AddChild(_endOfTurnDialog);
 		_endOfTurnDialog.Configure(_campaignApplication);
+	}
+
+	// A report card's GO TO: clear everything in front of the map, then select and centre the
+	// world. If a surface refuses to close, it stays up with its own reason and nothing moves.
+	private void OnReportPlanetGoToRequested(object sender, int planetId)
+	{
+		if (!CloseAllGameplaySurfaces())
+		{
+			return;
+		}
+
+		_topMenu.SetScreenText("Sector Map");
+		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
+		SetMapWorkspaceVisibility(true);
+		SelectPlanet(planetId);
+		_sectorMap.CenterOnSelectedPlanet();
 	}
 
 	private void OnSoldierSelectedForDisplay(object sender, int soldierId)

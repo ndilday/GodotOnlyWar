@@ -18,10 +18,9 @@ namespace OnlyWar.Campaign.Strategy;
 /// Turns one evaluated offensive into either a strategic or tactical order.
 /// </summary>
 /// <remarks>
-/// Target selection remains in <see cref="FactionOffensiveEvaluator"/> and the regional mission
-/// loop remains in the facade. This owner is deliberately concerned only with the issuance boundary:
-/// sizing, staging, live-pool/planning-budget mutations, routing, and the existing tactical return
-/// paths.
+/// Target selection remains in <see cref="FactionOffensiveEvaluator"/>, and sizing and staging are
+/// decided by the allocation auction. This owner is deliberately concerned only with the issuance
+/// boundary: live-pool mutations, routing, and the tactical return paths.
 /// </remarks>
 internal sealed class FactionOffensiveOrderBuilder
 {
@@ -83,37 +82,12 @@ internal sealed class FactionOffensiveOrderBuilder
             missionType, aggression, allOrders, random, opensWithAmbush);
     }
 
-    internal bool IssueAssault(
-        Faction faction,
-        PotentialOffensive chosenOffensive,
-        List<RegionForceState> regionalForceStates,
-        List<Order> allOrders,
-        IRNG random)
-    {
-        // Sized off what the attacker BELIEVES it faces, not the truth. The two used to disagree:
-        // the force was sized from the real defender while the decision to attack at all was taken
-        // from the estimate, so a faction committed as though it knew the ground exactly and chose
-        // as though it did not. Now a blind attack is overwhelming, because the attacker fears the
-        // worst, and a scouted one is efficient.
-        long intendedBattleValue = (long)(chosenOffensive.EstimatedDefenderBattleValue * 2);
-        // Surprise opens the advance; it no longer replaces it. This used to select
-        // MissionType.Ambush, which swapped in the whole ambush chain - including its
-        // MissionReturnPolicy.Return - so a force sized at twice the defender expressly to TAKE the
-        // region struck once and withdrew from it. The mission stays an Advance and holds what it
-        // takes; the first day is fought from ambush (MissionStepOrchestrator's opening-ambush chain).
-        bool opensWithAmbush = HasEmergenceAdvantage(faction, chosenOffensive);
-        return IssueOffensive(
-            faction,
-            chosenOffensive,
-            regionalForceStates,
-            allOrders,
-            intendedBattleValue,
-            MissionType.Advance,
-            Aggression.Normal,
-            random,
-            opensWithAmbush);
-    }
-
+    // Surprise opens the advance; it does not replace it. Selecting MissionType.Ambush instead would
+    // swap in the whole ambush chain - including its MissionReturnPolicy.Return - so a force sized to
+    // TAKE the region would strike once and withdraw from it. The mission stays an Advance and holds
+    // what it takes; the first day is fought from ambush (MissionStepOrchestrator's opening-ambush
+    // chain).
+    //
     // Surprise belongs to a region that went public this week (FactionRevealService). It is not spent
     // by using it: FactionStrategyController clears every advantage at the end of the planning pass, so
     // it lasts exactly the one turn whether or not anything was launched with it.
@@ -122,91 +96,13 @@ internal sealed class FactionOffensiveOrderBuilder
             .Select(region => region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction rf) ? rf : null)
             .Any(rf => rf?.HasEmergenceAdvantage == true);
 
-    internal bool IssueLightningRaid(
-        Faction faction,
-        PotentialOffensive chosenOffensive,
-        List<RegionForceState> regionalForceStates,
-        List<Order> allOrders,
-        IRNG random)
-    {
-        long minimum = Math.Max(
-            FactionOffensiveEvaluator.MinimumRaidBattleValue,
-            (long)Math.Ceiling(
-                chosenOffensive.EstimatedDefenderBattleValue
-                * FactionOffensiveEvaluator.RaidForceRatioThreshold));
-        long budget = StagingBudget(chosenOffensive, regionalForceStates);
-        long intendedBattleValue = Math.Min(
-            budget,
-            Math.Max(minimum, (long)(budget * FactionOffensiveEvaluator.RaidCommitFraction)));
-        // A raid already exists to strike and withdraw, so surprise needs no special chain here - the
-        // standalone ambush IS a raid made from concealment, and it carries the same Return policy.
-        MissionType missionType = HasEmergenceAdvantage(faction, chosenOffensive)
-            ? MissionType.Ambush
-            : MissionType.LightningRaid;
-        return IssueOffensive(
-            faction,
-            chosenOffensive,
-            regionalForceStates,
-            allOrders,
-            intendedBattleValue,
-            missionType,
-            Aggression.Cautious,
-            random);
-    }
-
-    internal bool IssueOffensive(
-        Faction faction,
-        PotentialOffensive chosenOffensive,
-        List<RegionForceState> regionalForceStates,
-        List<Order> allOrders,
-        long intendedBattleValue,
-        MissionType missionType,
-        Aggression aggression,
-        IRNG random,
-        bool opensWithAmbush = false)
-    {
-        long totalAvailableForAttack = StagingBudget(chosenOffensive, regionalForceStates);
-        if (intendedBattleValue <= 0
-            || totalAvailableForAttack <= 0
-            || totalAvailableForAttack < faction.MinimumForceRequest)
-        {
-            GameLog.Debug(() =>
-                $"AI {missionType} {faction.Name}: target={DescribeOffensive(chosenOffensive)}, "
-                + $"available={totalAvailableForAttack}, intended={intendedBattleValue}, "
-                + $"minimum={faction.MinimumForceRequest}; no order created");
-            return false;
-        }
-
-        // Never budget less than the faction's smallest full squad: the force generator cannot
-        // honor a smaller request, so an offensive sized off a near-dead defender (2x a tiny
-        // garrison) would silently produce no force and the target would never be attacked.
-        intendedBattleValue = Math.Max(intendedBattleValue, faction.MinimumForceRequest);
-
-        // Commit the force and draw it from each staging region's military pool (Population for a
-        // horde, Garrison otherwise), split in the existing opportunity-cost order.
-        List<StrategicCombatContribution> contributions = CommitAttackingForce(
-            chosenOffensive, regionalForceStates, intendedBattleValue);
-        long committedBattleValue = contributions.Sum(c => c.BattleValue);
-        if (committedBattleValue <= 0)
-        {
-            GameLog.Debug(() =>
-                $"AI {missionType} {faction.Name}: target={DescribeOffensive(chosenOffensive)}, "
-                + $"available={totalAvailableForAttack}, intended={intendedBattleValue}; no force could be committed");
-            return false;
-        }
-
-        return FinishOffensive(
-            faction, chosenOffensive, contributions, committedBattleValue,
-            missionType, aggression, allOrders, random, opensWithAmbush);
-    }
-
     /// <summary>
     /// Everything after the force has been committed: choose strategic or tactical resolution, build
     /// the mission, and record the staging region survivors withdraw to.
     /// </summary>
     /// <remarks>
-    /// Shared by the legacy sizing path and by the allocation auction, which arrives here with its
-    /// contributions already decided and its regional budgets already debited.
+    /// The allocation auction arrives here with its contributions already decided and its regional
+    /// budgets already debited.
     /// </remarks>
     private bool FinishOffensive(
         Faction faction,
@@ -343,46 +239,6 @@ internal sealed class FactionOffensiveOrderBuilder
         int estimatedActors = EstimateGeneratedActorCount(attacker, committedBattleValue);
         return estimatedAttackerSquads > StrategicCombatRules.MaxGeneratedSquads
             || estimatedActors > StrategicCombatRules.MaxTacticalActors;
-    }
-
-    private static List<StrategicCombatContribution> CommitAttackingForce(
-        PotentialOffensive chosenOffensive,
-        List<RegionForceState> regionalForceStates,
-        long committedBattleValue)
-    {
-        List<StrategicCombatContribution> contributions = new();
-        long remaining = committedBattleValue;
-        List<RegionForceState> contributingStates = FactionStagingPlanner
-            .ChooseStagingRegionsByOpportunityCost(chosenOffensive, regionalForceStates)
-            .Select(region => regionalForceStates.FirstOrDefault(s => s.RegionFaction.Region == region))
-            .Where(state => state != null && state.SpareTroops > 0)
-            .ToList();
-
-        for (int i = 0; i < contributingStates.Count && remaining > 0; i++)
-        {
-            RegionForceState state = contributingStates[i];
-            long contribution = Math.Min(state.SpareTroops, remaining);
-            if (contribution <= 0) continue;
-
-            state.SpareTroops -= contribution;
-            state.RegionFaction.RemoveMilitaryStrength(contribution);
-            contributions.Add(new StrategicCombatContribution(state.RegionFaction, contribution));
-            remaining -= contribution;
-        }
-
-        return contributions;
-    }
-
-    /// <summary>Planning budget the staging regions have between them.</summary>
-    private static long StagingBudget(
-        PotentialOffensive offensive,
-        List<RegionForceState> regionalForceStates)
-    {
-        if (regionalForceStates == null) return 0L;
-        return offensive.AttackingRegions
-            .Select(region => regionalForceStates
-                .FirstOrDefault(state => state.RegionFaction.Region == region)?.SpareTroops ?? 0L)
-            .Sum();
     }
 
     private static void ReturnCommittedForce(IEnumerable<StrategicCombatContribution> contributions)

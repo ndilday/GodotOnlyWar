@@ -112,7 +112,8 @@ namespace OnlyWar.Application
                 entry.Summary,
                 entry.OutcomeStatus,
                 entry.IsEnemyActivity,
-                debrief);
+                debrief,
+                entry.PlanetId);
         }
 
         private static LastTurnDebriefLineSnapshot ToSnapshot(MissionDebriefLineView line)
@@ -153,7 +154,8 @@ namespace OnlyWar.Application
                     entry.Summary,
                     false,
                     entry.OutcomeStatus,
-                    isEnemyActivity: entry.IsEnemyActivity);
+                    isEnemyActivity: entry.IsEnemyActivity,
+                    planetId: entry.PlanetId);
             }
 
             return new EndOfTurnReportEntry(
@@ -163,7 +165,8 @@ namespace OnlyWar.Application
                 true,
                 entry.OutcomeStatus,
                 entry.Debrief.Lines.Select(ToPresentationLine).ToList(),
-                entry.IsEnemyActivity);
+                entry.IsEnemyActivity,
+                entry.PlanetId);
         }
 
         private static MissionDebriefLineView ToPresentationLine(LastTurnDebriefLineSnapshot line)

@@ -20,50 +20,45 @@ namespace OnlyWar.Tests.Domain;
 public sealed class FactionOffensiveOrderBuilderTests
 {
     [Fact]
-    public void IssueOffensive_WhenTacticalGenerationFails_ReturnsLiveForceButKeepsBudgetDebit()
+    public void IssueAllocatedOffensive_WhenTacticalGenerationFails_ReturnsLiveForce()
     {
         (Faction attacker, RegionFaction source, PotentialOffensive offensive) = CreateScenario();
-        RegionForceState state = new(source, 0, 0, 100, 0);
         List<Order> orders = [];
         FactionOffensiveOrderBuilder builder = new((request, random) => []);
 
-        bool issued = builder.IssueOffensive(
+        bool issued = builder.IssueAllocatedOffensive(
             attacker,
             offensive,
-            [state],
-            orders,
-            intendedBattleValue: 50,
+            [(source, 50L)],
+            totalBattleValue: 50,
             MissionType.Advance,
             Aggression.Normal,
+            orders,
             new FixedRNG());
 
         Assert.False(issued);
         Assert.Empty(orders);
         Assert.Equal(100, source.MilitaryStrength);
-        // This asymmetry is deliberate legacy behavior: the live-pool refund does not rewrite the
-        // already-consumed planning budget.
-        Assert.Equal(50, state.SpareTroops);
     }
 
     [Fact]
-    public void IssueOffensive_WhenTacticalGenerationFallsShort_ReturnsExcessToLargestContributor()
+    public void IssueAllocatedOffensive_WhenTacticalGenerationFallsShort_ReturnsExcessToLargestContributor()
     {
         (Faction attacker, RegionFaction source, PotentialOffensive offensive) = CreateScenario();
-        RegionForceState state = new(source, 0, 0, 100, 0);
         Squad partialSquad = TestModelFactory.CreateSquad(
             "Partial assault",
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate));
         FactionOffensiveOrderBuilder builder = new((request, random) => [partialSquad]);
         List<Order> orders = [];
 
-        bool issued = builder.IssueOffensive(
+        bool issued = builder.IssueAllocatedOffensive(
             attacker,
             offensive,
-            [state],
-            orders,
-            intendedBattleValue: 50,
+            [(source, 50L)],
+            totalBattleValue: 50,
             MissionType.Advance,
             Aggression.Normal,
+            orders,
             new FixedRNG());
 
         Order order = Assert.Single(orders);
@@ -73,7 +68,6 @@ public sealed class FactionOffensiveOrderBuilderTests
         Assert.Same(source.Region, partialSquad.CurrentRegion);
         Assert.Equal(2, partialSquad.Members.Sum(member => member.Template.BattleValue));
         Assert.Equal(98, source.MilitaryStrength);
-        Assert.Equal(50, state.SpareTroops);
     }
 
     private static (Faction attacker, RegionFaction source, PotentialOffensive offensive) CreateScenario()

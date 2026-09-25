@@ -11,6 +11,7 @@ public partial class EndOfTurnDialogView : DialogView
     private Label _emptyHintLabel;
 
     public event EventHandler<int> EntrySelected;
+    public event EventHandler<int> EntryGoToRequested;
 
     public override void _Ready()
     {
@@ -89,6 +90,19 @@ public partial class EndOfTurnDialogView : DialogView
         };
         title.AddThemeColorOverride("font_color", entry.CanOpenDebrief ? OnlyWarStyle.Gold : OnlyWarStyle.MutedText);
         titleRow.AddChild(title);
+
+        if (entry.PlanetId.HasValue)
+        {
+            Button goToButton = new()
+            {
+                Text = "GO TO",
+                CustomMinimumSize = new Vector2(96, 32),
+                TooltipText = "Close the report and centre the sector map on this world"
+            };
+            int goToIndex = index;
+            goToButton.Pressed += () => EntryGoToRequested?.Invoke(this, goToIndex);
+            titleRow.AddChild(goToButton);
+        }
 
         if (entry.CanOpenDebrief)
         {

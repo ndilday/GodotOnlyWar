@@ -17,11 +17,16 @@ public partial class EndOfTurnDialogController : DialogController
     private List<EndOfTurnReportEntry> _reportEntries = [];
     private IMainScreenApplication _application;
 
+    // Raised with a planet id when the player asks to be taken to a card's world. The host owns
+    // closing the report and every other open surface, then centring the map.
+    public event EventHandler<int> PlanetGoToRequested;
+
     public override void _Ready()
     {
         base._Ready();
         _view = GetNode<EndOfTurnDialogView>("DialogView");
         _view.EntrySelected += OnEntrySelected;
+        _view.EntryGoToRequested += OnEntryGoToRequested;
     }
 
     public override void _ExitTree()
@@ -29,6 +34,21 @@ public partial class EndOfTurnDialogController : DialogController
         if (_view != null)
         {
             _view.EntrySelected -= OnEntrySelected;
+            _view.EntryGoToRequested -= OnEntryGoToRequested;
+        }
+    }
+
+    private void OnEntryGoToRequested(object sender, int entryIndex)
+    {
+        if (entryIndex < 0 || entryIndex >= _reportEntries.Count)
+        {
+            return;
+        }
+
+        int? planetId = _reportEntries[entryIndex].PlanetId;
+        if (planetId.HasValue)
+        {
+            PlanetGoToRequested?.Invoke(this, planetId.Value);
         }
     }
 

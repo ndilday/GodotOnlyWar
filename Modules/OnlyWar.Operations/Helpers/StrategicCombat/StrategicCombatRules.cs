@@ -24,12 +24,14 @@ namespace OnlyWar.Operations.StrategicCombat
         // clamped at 0.75 while HideBrokenCivilianDefender needs exactly zero. So every point of this
         // floor is mop-up that the game can actually conclude.
         //
-        // At the 2:1 commitment the offensive planner uses, `committed + defender` is about three
-        // times the defender, so 1500 put the crossover at a defender of ~500 and 3000 puts it at
-        // ~1000 - roughly ten attacking squads against fewer than ten defending ones, which is well
-        // inside what the tactical resolver handles. Measured on Monody Prime, the smallest strategic
-        // battle in a five-week run was 1753 against a defender of 553; under this floor it resolves
-        // tactically and can end.
+        // Sized in 2026-09 against a 2:1 commitment, where `committed + defender` is about three times
+        // the defender: 1500 put the crossover at a defender of ~500 and 3000 puts it at ~1000 -
+        // roughly ten attacking squads against fewer than ten defending ones, which is well inside
+        // what the tactical resolver handles. The allocator's minimum is now the 1.5:1 carry point
+        // (ForceTaskBuilder), which moves the crossover up to a defender of ~1200 at the least
+        // commitment and down as the auction adds force above it. Measured on Monody Prime, the
+        // smallest strategic battle in a five-week run was 1753 against a defender of 553; under this
+        // floor it resolves tactically and can end.
         public const long MassCombatBattleValueFloor = 3000;
 
         // Force ratio at which an attack stops being a battle and becomes an overrun: the defence is

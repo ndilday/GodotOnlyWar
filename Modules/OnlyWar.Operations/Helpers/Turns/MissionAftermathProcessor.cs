@@ -321,8 +321,12 @@ namespace OnlyWar.Operations.Turns
 
             PlanetFaction observer = GetAttachedPlanetFaction(region.Planet, observerPresence.PlanetFaction);
             float evidence = Math.Max(0.25f, context.Impact);
+            // A routine patrol sees only what is operating openly. Hidden presences are found by
+            // deliberate searches (Recon, governor investigations), never by walking the beat - a
+            // patrol that confirmed hidden cells fed straight into intelligence-led ambush offers.
             foreach (RegionFaction target in region.RegionFactionMap.Values
                 .Where(candidate => candidate?.PlanetFaction?.Faction != null
+                    && candidate.IsPublic
                     && candidate.PlanetFaction.Faction.Id != observerFaction.Id
                     && FactionRelationshipService.AreHostile(
                         observerFaction,

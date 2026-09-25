@@ -79,6 +79,11 @@ internal static class ForceAllocationConstants
     internal const double DefenceHoldKnee = 0.6;
 
     /// <summary>Fraction of its CARRY POINT at which an assault becomes likely to take the region.</summary>
+    /// <remarks>
+    /// Shapes the value curve only. It is NOT the launch threshold: an assault launches at the full
+    /// carry point (ForceTaskBuilder.AddOffensiveTasks), and the curve below that is never realised
+    /// because ForceTask.TotalValue is zero under MinimumViableAward.
+    /// </remarks>
     internal const double AssaultKnee = 0.7;
 
     /// <summary>

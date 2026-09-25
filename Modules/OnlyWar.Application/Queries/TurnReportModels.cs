@@ -65,6 +65,9 @@ public sealed class EndOfTurnReportEntry
     // NPC entries can open a redacted debrief without ever exposing the underlying mission.
     public string OutcomeStatus { get; }
     public IReadOnlyList<MissionDebriefLineView> DebriefLines { get; }
+    // The world the card is about, so the report can offer to take the player there. Null for
+    // cards that are not tied to one planet (recruitment, service-record events, "No Reports").
+    public int? PlanetId { get; }
 
     public EndOfTurnReportEntry(
         string title,
@@ -73,7 +76,8 @@ public sealed class EndOfTurnReportEntry
         bool canOpenDebrief,
         string outcomeStatus = "",
         IReadOnlyList<MissionDebriefLineView> debriefLines = null,
-        bool isEnemyActivity = false)
+        bool isEnemyActivity = false,
+        int? planetId = null)
     {
         Title = title ?? "";
         Subtitle = subtitle ?? "";
@@ -82,6 +86,7 @@ public sealed class EndOfTurnReportEntry
         IsEnemyActivity = isEnemyActivity;
         OutcomeStatus = outcomeStatus ?? "";
         DebriefLines = debriefLines ?? Array.Empty<MissionDebriefLineView>();
+        PlanetId = planetId;
     }
 }
 

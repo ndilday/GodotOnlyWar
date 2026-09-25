@@ -99,7 +99,8 @@ internal static class TurnReportProjector
                 $"{missionName} in {location}",
                 $"Intelligence has identified a {missionName} opportunity.",
                 false,
-                null));
+                null,
+                planetId: region?.Planet?.Id));
         }
 
         // Governor requests previously arrived, were met, and lapsed in complete silence - the
@@ -179,6 +180,7 @@ internal static class TurnReportProjector
         string governor = request?.Requester?.Name ?? "An unnamed governor";
         string planet = request?.TargetPlanet?.Name ?? "an unknown world";
         string subtitle = $"{governor}, Governor of {planet}";
+        int? planetId = request?.TargetPlanet?.Id;
 
         switch (report.Kind)
         {
@@ -193,7 +195,8 @@ internal static class TurnReportProjector
                         : ".")
                     + " Their regard for the Chapter has risen.",
                     false,
-                    null);
+                    null,
+                    planetId: planetId);
 
             case GovernorRequestReportKind.Failed:
                 return new EndOfTurnReportEntry(
@@ -203,7 +206,8 @@ internal static class TurnReportProjector
                     + $"{request.OfferedRequisition:N0} Requisition is forfeit, and "
                     + $"{governor}'s regard for the Chapter has fallen.",
                     false,
-                    null);
+                    null,
+                    planetId: planetId);
 
             default:
                 return new EndOfTurnReportEntry(
@@ -211,7 +215,8 @@ internal static class TurnReportProjector
                     subtitle,
                     BuildRequestArrivalSummary(request),
                     false,
-                    null);
+                    null,
+                    planetId: planetId);
         }
     }
 
@@ -261,7 +266,8 @@ internal static class TurnReportProjector
             report.Summary,
             true,
             report.OutcomeStatus,
-            lines);
+            lines,
+            planetId: region?.Planet?.Id);
     }
 
     private static EndOfTurnReportEntry BuildMissionEntry(
@@ -302,7 +308,8 @@ internal static class TurnReportProjector
                 .ToList();
 
             return new EndOfTurnReportEntry(
-                missionTypeName, subtitle, summary, true, outcomeStatus, lines);
+                missionTypeName, subtitle, summary, true, outcomeStatus, lines,
+                planetId: region?.Planet?.Id);
         }
 
         // NPC-run mission: never surface the ground-truth mission type or the full debrief log - only
@@ -344,7 +351,8 @@ internal static class TurnReportProjector
 
         return new EndOfTurnReportEntry(
             report.Title, report.Subtitle, report.Summary, canOpenDebrief, engagementStatus, debriefLines,
-            isEnemyActivity: true);
+            isEnemyActivity: true,
+            planetId: region?.Planet?.Id);
     }
 
     private static MissionDebriefLineView ProjectDebriefLine(
@@ -398,7 +406,8 @@ internal static class TurnReportProjector
             ConstructionReportBuilder.BuildSubtitle(report, location),
             ConstructionReportBuilder.BuildSummary(report, location, sharedLevelNow),
             false,
-            ConstructionReportBuilder.BuildOutcomeStatus(report, sharedLevelNow));
+            ConstructionReportBuilder.BuildOutcomeStatus(report, sharedLevelNow),
+            planetId: region?.Planet?.Id);
     }
 
     private static EndOfTurnReportEntry BuildFortificationTransferEntry(FortificationTransferReport transfer)
@@ -414,7 +423,8 @@ internal static class TurnReportProjector
             $"With no Chapter forces left to man them, your works in {location} passed to {inheritor}. "
                 + $"The position still stands at {rating}.",
             false,
-            "HANDED OVER");
+            "HANDED OVER",
+            planetId: region?.Planet?.Id);
     }
 
     private static EndOfTurnReportEntry BuildStrategicCombatEntry(StrategicCombatResult result)
@@ -435,7 +445,8 @@ internal static class TurnReportProjector
                 $"Enemy activity - {location}",
                 $"Reports of fighting in {location} have reached command.",
                 false,
-                isEnemyActivity: true);
+                isEnemyActivity: true,
+                planetId: region?.Planet?.Id);
         }
 
         string outcome = result.Outcome switch
@@ -460,6 +471,7 @@ internal static class TurnReportProjector
             $"{attacker} vs {defender} - {location}",
             summary,
             false,
-            isEnemyActivity: true);
+            isEnemyActivity: true,
+            planetId: region?.Planet?.Id);
     }
 }

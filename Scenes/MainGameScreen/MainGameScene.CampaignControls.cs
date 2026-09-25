@@ -200,6 +200,44 @@ public partial class MainGameScene
 
 	private bool CloseTopmostGameplaySurface()
 	{
+		Control surface = FindTopmostGameplaySurface();
+		if (surface == null)
+		{
+			return false;
+		}
+
+		RequestSurfaceClose(surface);
+		return true;
+	}
+
+	// Unwinds every open dialog and screen through each one's own close path, so stacks pop and
+	// titles restore exactly as if the player had pressed X repeatedly. Returns false when a surface
+	// refused to close (mandatory recruitment setup, a Muster with staged changes): it stays in
+	// front with its own explanation and the caller must not navigate past it.
+	private bool CloseAllGameplaySurfaces()
+	{
+		// Each pass closes one surface; the bound only guards against a surface that reports
+		// closed yet reopens itself.
+		for (int pass = 0; pass < 32; pass++)
+		{
+			Control surface = FindTopmostGameplaySurface();
+			if (surface == null)
+			{
+				return true;
+			}
+
+			RequestSurfaceClose(surface);
+			if (surface.IsVisibleInTree())
+			{
+				return false;
+			}
+		}
+
+		return FindTopmostGameplaySurface() == null;
+	}
+
+	private Control FindTopmostGameplaySurface()
+	{
 		IReadOnlyList<Node> blockers = GetTree()
 			.GetNodesInGroup(DialogController.DialogInputBlockerGroup)
 			.Where(node => node is CanvasItem item && item.IsVisibleInTree())
@@ -208,8 +246,7 @@ public partial class MainGameScene
 			blockers.OfType<DialogController>());
 		if (topDialog != null)
 		{
-			topDialog.RequestClose();
-			return true;
+			return topDialog;
 		}
 
 		if (_primaryContentHost != null)
@@ -219,13 +256,25 @@ public partial class MainGameScene
 				if (_primaryContentHost.GetChild(index) is MainScreenController screen
 					&& screen.IsVisibleInTree())
 				{
-					screen.RequestClose();
-					return true;
+					return screen;
 				}
 			}
 		}
 
-		return false;
+		return null;
+	}
+
+	private static void RequestSurfaceClose(Control surface)
+	{
+		switch (surface)
+		{
+			case DialogController dialog:
+				dialog.RequestClose();
+				break;
+			case MainScreenController screen:
+				screen.RequestClose();
+				break;
+		}
 	}
 
 	private void OnSystemMenuResumeRequested(object sender, EventArgs e)
