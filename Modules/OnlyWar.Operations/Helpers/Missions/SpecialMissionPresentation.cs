@@ -97,7 +97,7 @@ namespace OnlyWar.Operations.Missions
 
             string type = GetMissionTypeLabel(mission.MissionType);
             RegionFaction target = mission.RegionFaction;
-            string targetName = target?.IsPublic == true
+            string targetName = IsTargetIdentified(target)
                 ? target.PlanetFaction?.Faction?.Name ?? "Unknown target"
                 : "Unknown cell";
             string label = $"{type} — {targetName}";
@@ -108,6 +108,19 @@ namespace OnlyWar.Operations.Missions
             }
 
             return label;
+        }
+
+        // A hidden cell is still attributable when the player already knows who is behind it:
+        // the faction is openly active elsewhere on the planet (a cult cell that went to ground
+        // after a revolt), or player intel on this region already names the faction.
+        private static bool IsTargetIdentified(RegionFaction target)
+        {
+            if (target?.PlanetFaction?.Faction == null) return false;
+            if (target.IsPublic || target.PlanetFaction.IsPublic) return true;
+            FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
+                target.Region,
+                target.PlanetFaction.Faction);
+            return belief != null && belief.Level >= IntelLevel.Suspected;
         }
 
         private static string Humanize(string value)

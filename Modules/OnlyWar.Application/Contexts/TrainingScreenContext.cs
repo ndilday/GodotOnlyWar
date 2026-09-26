@@ -213,6 +213,7 @@ internal sealed class TrainingScreenContext
     internal static IEnumerable<Squad> OrderScoutSquads(IEnumerable<Squad> squads) =>
         squads
             .OrderBy(ForceOrdering.SquadTypeOrder)
+            .ThenBy(ForceOrdering.FormationOrdinalOrder)
             .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(squad => squad.Id);
 

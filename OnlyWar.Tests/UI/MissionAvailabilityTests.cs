@@ -1,7 +1,9 @@
 using System.Linq;
 using OnlyWar.Domain.Missions;
 using OnlyWar.Domain;
+using OnlyWar.Domain.Intelligence;
 using OnlyWar.Domain.Orders;
+using OnlyWar.Operations.Missions;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -173,5 +175,46 @@ public class MissionAvailabilityTests
 
         Assert.Equal("Sabotage — Unknown cell · Listening Post", available.Label);
         Assert.DoesNotContain(hiddenTarget.PlanetFaction.Faction.Name, available.Label);
+    }
+
+    [Fact]
+    public void CellThatWentToGround_WhileFactionIsPublicOnPlanet_IsNamed()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction cell = fixture.AddPublicCult(
+            region: 0, population: 2_000, organization: 100);
+        cell.IsPublic = false;
+        Mission mission = new(MissionType.Extermination, cell, missionSize: 1);
+        cell.Region.SpecialMissions.Add(mission);
+
+        Assert.Equal(
+            "Ambush Hidden Cell — Genestealer Cult",
+            SpecialMissionPresentation.Format(mission, cell.Region));
+    }
+
+    [Theory]
+    [InlineData(true, "Sabotage — Hidden Cult · Listening Post")]
+    [InlineData(false, "Sabotage — Unknown cell · Listening Post")]
+    public void HiddenCell_IsNamedOnlyOncePlayerIntelReachesSuspected(
+        bool suspected,
+        string expected)
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction hiddenTarget = fixture.AddHiddenFaction(
+            region: 0, GrowthType.Conversion, population: 2_000);
+        fixture.DefaultPlanetFaction.SeedTargetBelief(
+            hiddenTarget.Region,
+            hiddenTarget.PlanetFaction.Faction,
+            evidence: suspected
+                ? FactionIntelligenceRules.SuspectedThreshold
+                : FactionIntelligenceRules.SuspectedThreshold / 2f,
+            estimatedPopulation: 2_000,
+            estimatedMilitaryStrength: 2_000,
+            evidenceWeek: 0);
+        SabotageMission mission = new(
+            DefenseType.ListeningPost, size: 1, hiddenTarget);
+        hiddenTarget.Region.SpecialMissions.Add(mission);
+
+        Assert.Equal(expected, SpecialMissionPresentation.Format(mission, hiddenTarget.Region));
     }
 }

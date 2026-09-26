@@ -613,6 +613,7 @@ internal sealed class ChapterScreenContext
     internal static IEnumerable<Squad> OrderSquads(IEnumerable<Squad> squads) =>
         squads
             .OrderBy(ForceOrdering.SquadTypeOrder)
+            .ThenBy(ForceOrdering.FormationOrdinalOrder)
             .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(squad => squad.Id);
 

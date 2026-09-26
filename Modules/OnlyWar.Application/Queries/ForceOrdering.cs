@@ -44,4 +44,9 @@ public static class ForceOrdering
             candidate.SquadTemplate?.Id == squad.SquadTemplate?.Id);
         return index >= 0 ? index : int.MaxValue;
     }
+
+    // Numbered squads sort by their ordinal, not their name: as text "IX" sorts before "V".
+    // Unnumbered squads (HQ, scouts) follow, still ordered by name at the call site.
+    public static int FormationOrdinalOrder(Squad squad) =>
+        squad?.FormationOrdinal ?? int.MaxValue;
 }

@@ -87,6 +87,7 @@ namespace OnlyWar.Application
                 .Where(squad => squad.IsPresentOperationalForce && squad.Members.Count > 0)
                 .OrderBy(squad => ForceOrdering.UnitOrderKey(squad.ParentUnit))
                 .ThenBy(ForceOrdering.SquadTypeOrder)
+                .ThenBy(ForceOrdering.FormationOrdinalOrder)
                 .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(squad => squad.Id)
                 .GroupBy(squad => squad.ParentUnit)

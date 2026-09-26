@@ -53,6 +53,7 @@ namespace OnlyWar.Application
                 // order (for example, 1st through 10th Company HQ).
                 .OrderBy(option => ForceOrdering.UnitOrderKey(option.HomeSquad?.ParentUnit))
                 .ThenBy(option => ForceOrdering.SquadTypeOrder(option.HomeSquad))
+                .ThenBy(option => ForceOrdering.FormationOrdinalOrder(option.HomeSquad))
                 .ThenBy(option => option.HomeSquad?.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(option => option.HomeSquad?.Id ?? int.MaxValue)
                 .ThenBy(option => option.Soldier.Name)
@@ -168,6 +169,7 @@ namespace OnlyWar.Application
                 .Where(item => normalized == null || Matches(item, normalized))
                 .OrderBy(item => ForceOrdering.UnitOrderKey(item.Squad.ParentUnit))
                 .ThenBy(item => ForceOrdering.SquadTypeOrder(item.Squad))
+                .ThenBy(item => ForceOrdering.FormationOrdinalOrder(item.Squad))
                 .ThenBy(item => item.Squad.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(item => item.Squad.Id)
                 .ToList();

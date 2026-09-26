@@ -509,6 +509,9 @@ public partial class PlanetaryOperationsScreenView : Control
             });
             Button remove = ActionButton("UNASSIGN", "close");
             remove.CustomMinimumSize = new Vector2(140, 34);
+            // Size to the full label and icon; the squad name beside it trims instead.
+            remove.ClipText = false;
+            remove.TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming;
             remove.TooltipText = squad.Tooltip;
             int id = squad.Id;
             remove.Pressed += () => RemoveSquadRequested?.Invoke(this, id);
