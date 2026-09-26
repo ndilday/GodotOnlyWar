@@ -144,7 +144,7 @@ public static class ReadinessDecisionExtensions
             soldier.HasUntreatedSeveredLimb,
             IsProcedureReserved(soldier, program),
             soldier.FunctioningHands,
-            GetWorstWoundLevel(soldier.Body));
+            soldier.Body?.GetWorstWoundLevel() ?? WoundLevel.None);
     }
 
     private static DutyReadinessPolicyOptions ProjectOptions(
@@ -175,34 +175,5 @@ public static class ReadinessDecisionExtensions
         if (travelPhase.HasValue && travelPhase.Value != FleetTravelPhase.InOrbit)
             return SquadCommitmentKind.InTransit;
         return SquadCommitmentKind.Free;
-    }
-
-    private static WoundLevel GetWorstWoundLevel(Body body)
-    {
-        if (body?.HitLocations == null) return WoundLevel.None;
-        WoundLevel worst = WoundLevel.None;
-        foreach (var location in body.HitLocations)
-        {
-            uint total = location?.Wounds?.WoundTotal ?? 0;
-            WoundLevel current = total >= (uint)WoundLevel.Unsurvivable
-                ? WoundLevel.Unsurvivable
-                : total >= (uint)WoundLevel.Mortal
-                    ? WoundLevel.Mortal
-                    : total >= (uint)WoundLevel.Massive
-                        ? WoundLevel.Massive
-                        : total >= (uint)WoundLevel.Critical
-                            ? WoundLevel.Critical
-                            : total >= (uint)WoundLevel.Major
-                                ? WoundLevel.Major
-                                : total >= (uint)WoundLevel.Moderate
-                                    ? WoundLevel.Moderate
-                                    : total >= (uint)WoundLevel.Minor
-                                        ? WoundLevel.Minor
-                                        : total >= (uint)WoundLevel.Negligible
-                                            ? WoundLevel.Negligible
-                                            : WoundLevel.None;
-            if ((uint)current > (uint)worst) worst = current;
-        }
-        return worst;
     }
 }

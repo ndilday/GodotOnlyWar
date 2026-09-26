@@ -294,7 +294,7 @@ public class BattlePursuitActionPlannerTests
         SquadClosingMoveAction charge = Assert.IsType<SquadClosingMoveAction>(
             Assert.Single(fixture.MoveActions));
 
-        fixture.Grid.MoveSoldier(withdrawing.Soldiers[0], (10, 0), 0);
+        Assert.True(fixture.Grid.TryMoveSoldier(withdrawing.Soldiers[0], (10, 0), 0));
         withdrawing.Soldiers[0].TopLeft = (10, 0);
         charge.Execute(null);
 

@@ -34,7 +34,7 @@ namespace OnlyWar.Medical.Readiness
                 soldier.IsUndergoingMedicalProcedure
                     || ReadinessReservations.IsReserved(recruitmentProgram, soldier.Id),
                 soldier.FunctioningHands,
-                MedicalDutyReadinessPolicy.GetWorstWoundLevel(soldier.Body));
+                soldier.Body?.GetWorstWoundLevel() ?? WoundLevel.None);
             DutyReadinessPolicyOptions options = new(
                 doctrine?.InjuryThreshold,
                 doctrine?.RequireDutyReadySquadLeader ?? false,
@@ -59,7 +59,7 @@ namespace OnlyWar.Medical.Readiness
                 false,
                 false,
                 combatEffective ? 2 : 0,
-                MedicalDutyReadinessPolicy.GetWorstWoundLevel(soldier?.Body)));
+                soldier?.Body?.GetWorstWoundLevel() ?? WoundLevel.None));
         }
 
         public static bool IsDutyReady(
@@ -80,23 +80,6 @@ namespace OnlyWar.Medical.Readiness
                     : Evaluate(player, doctrine, recruitmentProgram).IsDutyReady)
                 .ToList();
         }
-
-        public static WoundLevel GetWorstWoundLevel(Body body) =>
-            MedicalDutyReadinessPolicy.GetWorstWoundLevel(body);
-
-        public static WoundLevel GetWorstWoundLevel(ISoldier soldier) =>
-            GetWorstWoundLevel(soldier?.Body);
-
-        // Short query aliases keep callers from reimplementing the body scan when their domain
-        // language already says "worst wound". Both names intentionally share the same pure path.
-        public static WoundLevel GetWorstWound(Body body) => GetWorstWoundLevel(body);
-
-        public static WoundLevel GetWorstWound(ISoldier soldier) => GetWorstWoundLevel(soldier);
-
-        public static WoundLevel GetWorstWoundLevel(Wounds wounds) =>
-            MedicalDutyReadinessPolicy.GetWorstWoundLevel(wounds);
-
-        public static WoundLevel GetWorstWound(Wounds wounds) => GetWorstWoundLevel(wounds);
 
         public static int SeverityIndex(WoundLevel level) =>
             MedicalDutyReadinessPolicy.SeverityIndex(level);

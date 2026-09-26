@@ -14,8 +14,7 @@ namespace OnlyWar.Campaign
         Transfer,
         PromotionAndAssignment,
         TransferAndRoleChange,
-        PromotionAndCreateFormation,
-        FleetRebalance
+        PromotionAndCreateFormation
     }
 
     public sealed record MusterStagedAction(

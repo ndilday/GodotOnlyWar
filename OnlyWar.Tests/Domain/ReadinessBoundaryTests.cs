@@ -35,7 +35,7 @@ public sealed class ReadinessBoundaryTests
             new Mission(700, MissionType.Patrol, fixture.DefaultRegionFaction(0), 1));
 
         SquadRowViewModel row = new SquadRowViewModelBuilder().Build(squad,
-            SquadRowContext.ForNewOrder(), program, doctrine);
+            new SquadRowContext(SquadRowContextKind.PlanetaryOperations, SquadRowAction.BeginOrder), program, doctrine);
         Assert.Equal(4, row.Strength.DutyReady);
         Assert.False(row.Readiness.CanBeginDeployment);
         Assert.False(OrderForceService.AssignSquad(order, squad, new MedicalReadinessDecisions(), doctrine, program));
@@ -45,7 +45,7 @@ public sealed class ReadinessBoundaryTests
 
         program.Procedures.Clear();
         Assert.True(new SquadRowViewModelBuilder().Build(squad,
-            SquadRowContext.ForNewOrder(), program, doctrine).Readiness.CanBeginDeployment);
+            new SquadRowContext(SquadRowContextKind.PlanetaryOperations, SquadRowAction.BeginOrder), program, doctrine).Readiness.CanBeginDeployment);
         Assert.Equal(5, BattleSquadFactory.GetParticipants(squad, doctrine, program).Count);
         Assert.True(OrderForceService.AssignSquad(order, squad, new MedicalReadinessDecisions(), doctrine, program));
     }
@@ -100,16 +100,16 @@ public sealed class ReadinessBoundaryTests
             new(fixture.Sector, fixture.CurrentDate,
                 Personnel: TestPersonnelComposition.CreatePersonnel());
 
-        Assert.Throws<InvalidOperationException>(() => OrderAssignment.AssignSquadsToMission(
-            withoutReadiness, [squad], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
+        Assert.Throws<InvalidOperationException>(() => OrderAssignment.AssignParticipantsToMission(
+            withoutReadiness, [squad], [], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
         Assert.Null(squad.CurrentOrders);
 
         // The same command with the capability supplied issues normally.
         OrderCommandContext withReadiness = new(
             fixture.Sector, fixture.CurrentDate, new MedicalReadinessDecisions(),
             TestPersonnelComposition.CreatePersonnel());
-        Assert.NotNull(OrderAssignment.AssignSquadsToMission(
-            withReadiness, [squad], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
+        Assert.NotNull(OrderAssignment.AssignParticipantsToMission(
+            withReadiness, [squad], [], fixture.Planet.Regions[0], mission, -1, Aggression.Normal));
         Assert.NotNull(squad.CurrentOrders);
     }
 

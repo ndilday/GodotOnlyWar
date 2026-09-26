@@ -106,17 +106,16 @@ A project-reference arrow points from consumer to dependency. The current direct
 | `OnlyWar.Generation.Abstractions` | Abstractions, Domain | Generation ports and training-service contracts. |
 | `OnlyWar.Medical.Abstractions` | Domain | Medical and readiness facts/results. |
 | `OnlyWar.Operations.Abstractions` | Abstractions, Battles.Abstractions, Domain, Medical.Abstractions | Personnel, order, mission, and outcome ports plus neutral operational records. |
-| `OnlyWar.Persistence.Abstractions` | None | Provider-neutral file and derived-state reconstruction contracts. |
 | `OnlyWar.Runtime.Abstractions` | Abstractions, Domain | Runtime construction boundary values. |
 | `OnlyWar.Battles` | Abstractions, Battles.Abstractions, Domain, Runtime | Tactical state, planning, actions, wounds, morale, aftermath, and replay. |
 | `OnlyWar.Medical` | Abstractions, Domain, Medical.Abstractions | Headless readiness, health, procedure, facility, and care policy. |
-| `OnlyWar.Persistence` | Abstractions, Domain, Persistence.Abstractions | SQLite rules/catalog readers, save readers/writers, file storage, metadata, and format validation. |
+| `OnlyWar.Persistence` | Abstractions, Domain | SQLite rules/catalog readers, save readers/writers, file storage, metadata, and format validation. |
 | `OnlyWar.Runtime` | Abstractions, Domain, Runtime.Abstractions | Factories, names, logging, persistent/tactical IDs, randomness, and world geometry. |
 | `OnlyWar.Generation` | Abstractions, Domain, Generation.Abstractions, Runtime | Initial sector/chapter/character construction and scenario stamping. |
 | `OnlyWar.Operations` | Abstractions, Battles.Abstractions, Domain, Medical.Abstractions, Operations.Abstractions, Runtime | Mission sequencing, personnel/order policy, strategic combat, and operational-turn policy. |
 | `OnlyWar.Campaign` | Abstractions, Application.Abstractions, Battles, Battles.Abstractions, Domain, Generation, Generation.Abstractions, Medical, Medical.Abstractions, Operations, Operations.Abstractions, Runtime | Live campaign policy, turn orchestration, narrative projection/reconciliation, and campaign-owned mutation services. No SQLite. |
-| `OnlyWar.Application` | Abstractions, Application.Abstractions, Battles, Battles.Abstractions, Campaign, Domain, Generation, Generation.Abstractions, Medical, Medical.Abstractions, Operations, Operations.Abstractions, Persistence, Persistence.Abstractions, Runtime, Runtime.Abstractions | Session lifetime, detached screen queries/commands, create/load/save coordination, and composition. |
-| `OnlyWarGodot` | Abstractions, Application, Application.Abstractions, Battles, Battles.Abstractions, Campaign, Domain, Generation.Abstractions, Medical, Medical.Abstractions, Operations, Operations.Abstractions, Persistence, Persistence.Abstractions, Runtime, Runtime.Abstractions | Godot scenes, host presentation, startup/path/logging wiring, and host-only adapters. |
+| `OnlyWar.Application` | Abstractions, Application.Abstractions, Battles, Battles.Abstractions, Campaign, Domain, Generation, Generation.Abstractions, Medical, Medical.Abstractions, Operations, Operations.Abstractions, Persistence, Runtime, Runtime.Abstractions | Session lifetime, detached screen queries/commands, create/load/save coordination, and composition. |
+| `OnlyWarGodot` | Abstractions, Application, Application.Abstractions, Battles, Battles.Abstractions, Campaign, Domain, Generation.Abstractions, Medical, Medical.Abstractions, Operations, Operations.Abstractions, Persistence, Runtime, Runtime.Abstractions | Godot scenes, host presentation, startup/path/logging wiring, and host-only adapters. |
 
 The host excludes `Modules/**/*.cs` and both test projects from its own compilation, including
 nested generated `obj` sources. Runtime owns the embedded soldier-name resources and resolves them
@@ -143,7 +142,6 @@ owning project; physical subdirectories remain organizational details.
 | `OnlyWar.Medical.*` | `OnlyWar.Medical` | Headless medical and readiness policy. |
 | `OnlyWar.Operations.Abstractions.*` | `OnlyWar.Operations.Abstractions` | Operations boundary contracts and neutral records. |
 | `OnlyWar.Operations.*` | `OnlyWar.Operations` | Missions, orders, personnel, strategic combat, and operational turns. |
-| `OnlyWar.Persistence.Abstractions.*` | `OnlyWar.Persistence.Abstractions` | Provider-neutral persistence contracts. |
 | `OnlyWar.Persistence.*` | `OnlyWar.Persistence` | SQLite, save/load, rules, files, and storage adapters. |
 | `OnlyWar.Runtime.Abstractions.*` | `OnlyWar.Runtime.Abstractions` | Runtime boundary contracts. |
 | `OnlyWar.Runtime.*` | `OnlyWar.Runtime` | Factories, IDs, naming, randomness, logging, and geometry. |
@@ -902,8 +900,8 @@ marks a Scout's history before casualty removal so a wiped historical formation 
 
 Chapter Muster uses `MusterPlanService` for an editable, stable draft of transfers, promotions, role
 changes, and new/reconstituted formations. It validates the complete plan before any mutation and
-revalidates at commit. `FleetCapacityPlanService` supplies direct-placement and bounded whole-squad
-rebalance results; it never splits squads or silently relocates unrelated formations.
+revalidates at commit. Muster never splits squads and never relocates unrelated formations to make
+room.
 
 ### 5.5 Fleet
 
@@ -1565,7 +1563,7 @@ The contested melee roll is calibrated to tabletop's intuition band rather than 
 
 `BattleSquadPlanner` scores the legal semantic options (`Hold`, walk back/forward, jog toward, close-to-contact, pursuit run, and assigned interpose) directly in raw Battle Value: immediate outgoing minus friendly fire plus readiness, minus allocated option-dependent incoming, plus contact melee, plus the change in state potential `Φ(s′) − Φ(s)` (which carries screening value), minus contact/whole-squad-lock cost. Current outgoing calls the same deterministic ranged/template/blast evaluators Layer 3 uses and caps combined shooters at each target's remaining BV. Current incoming is allocated across likely targets and includes the candidate's feasible declared speed. Semantic hysteresis is an **indifference rule, not additive BV**: candidates within a small fraction of the best score (`EngagementIndifferenceFraction`, applied to that best score, with a floor that scales with the squad's engagement horizon — see below) prefer the previous turn's option kind, so an incumbent posture cannot buy its way past a materially better plan. **The band was scaled by squad Battle Value until 2026-09-20**, which is the wrong dimension — Battle Value is a stock and these scores are per-turn rates — so a squad whose shooting was worth less than that fraction of its own worth per turn could never escape the band, and the tie-break silently replaced the score. A 191-value marine squad carried a 3.82 band while its whole shooting was worth 1.3 a turn, and ran for seven hundred turns on stickiness alone over a `Hold` scoring 3.81 higher. That violated the invariant in `Design/Reference/BattleLogic.md` §5.1, which has always said a previous posture cannot win when another legal option is materially better. Destinations never participate in that identity, since an interpose point and a quarry position move every turn.
 
-**Engagement horizon.** The state potential `Φ` (`EngagementPotential`) integrates exchange rates over an expected number of exchange turns, `T`. `SquadEngagementPolicy.EnsureEngagementHorizon` derives it once per planning turn from the frozen state, stores it per squad in `BattlePlanningContext`, and every candidate in that squad's decision reads the same value. An engagement ends for a squad at its **first withdrawal point**, not at annihilation, so `T` is the shorter of two clocks (`EngagementHorizonModel.DeriveSquadExchangeTurns`), clamped to 1–183 turns:
+**Engagement horizon.** The state potential `Φ` (`EngagementPotential`) integrates exchange rates over an expected number of exchange turns, `T`. `SquadEngagementPolicy.EnsureEngagementHorizon` derives it once per planning turn from the frozen state, stores it per squad in `BattlePlanningContext`, and every candidate in that squad's decision reads the same value. An engagement ends for a squad at its **first withdrawal point**, not at annihilation, so `T` is the shorter of two clocks (`EngagementHorizonModel.DeriveSquadExchangeClocks`, whose smaller clock is the horizon), clamped to 1–183 turns:
 
 - **Enemy clock:** the enemy force's Battle Value above its withdrawal threshold, divided by this side's summed removal rate against it. The planner does not read the enemy's orders; every enemy squad is assumed **Attritional** (withdraws below 25% of its starting able strength).
 - **Own clock:** this squad's Battle Value above its own withdrawal threshold (its orders' aggression, the same rule as `BattleSquad.ShouldContinueMission`, counted in whole soldiers including the loss that crosses it), divided by the fire landing on it. Each enemy squad's rate against it is weighted by that rate's share of the enemy squad's total, so an enemy is not counted as firing at every target at once.
@@ -1873,9 +1871,8 @@ provide stable non-Scout line identities. `MusterPlanService` stages transfers, 
 and new or reconstituted formations, while `ChapterMusterViewModelBuilder` supplies candidate,
 formation, roster-delta, and constraint rows. Both live behind `IMusterScreenApplication`, which
 owns the plan instance for the active session and addresses formations by selection key rather than
-handing the screen a live transfer option. `FleetCapacityPlanService` returns typed direct-placement,
-rebalance-required, or impossible results; it never splits a squad. Commit is all-or-nothing after
-revalidation, and canceled provisional formations do not consume ordinals.
+handing the screen a live transfer option. Commit is all-or-nothing after revalidation, and canceled
+provisional formations do not consume ordinals.
 
 **Recovery Operations.** `IndividualPostingService` is the single mutation boundary for detached
 personnel. `MedicalFacilityService` enumerates known treatment sites with typed Ready, Resolvable, and
@@ -1894,12 +1891,11 @@ capacity checks and order cleanup for `MovementParty` selections containing squa
 
 Every one of these commands names the campaign it mutates. `OrderAssignment` takes an explicit
 `OrderCommandContext(Sector, Date)` from which it reads the order index, player faction and
-recruitment reservations; `OrderMutationService`, `PlanetForceMovementService`, `OrderAttachment` and
+recruitment reservations; `OrderMutationService`, `PlanetForceMovementService` and
 `IndividualPostingService.AttachToOrder` take the campaign date as a parameter so operational
 postings are stamped without consulting the current session. An order that loses its last
 participant is retired through `Order.RegisteredSector`, the registration `Sector.AddNewOrder`
-already recorded on it. `InboundOrders.ForRegion` takes the sector to scan and
-`SpecialistAvailability.EnumerateRoster/EnumerateCandidates` take the chapter roster to offer.
+already recorded on it. `SpecialistAvailability.EnumerateRoster` takes the chapter roster to offer.
 `PlanetaryOperationsScreenController` resolves those inputs from the installed campaign; it is the
 host-side adapter for this boundary, not a fallback inside the policy.
 
@@ -2313,8 +2309,8 @@ shared components, and the icon atlas.
 formation board, staged roster deltas, and a logistics/plan panel. Candidate rows use existing squad and
 rank badges plus honor/status presentation. Empty line formations show identity and lineage but no
 location. A proposed leader's destination rank and resulting title distinguish leader assignment from
-ordinary membership. The screen supports direct capacity, bounded fleet rebalance, and unsatisfiable
-states without applying a partial plan.
+ordinary membership. The screen supports direct capacity and unsatisfiable states without applying
+a partial plan.
 
 **Recovery Operations.** `RecoveryOperationsView` is hosted by the Apothecarium screen. It presents the
 recovery queue, a complete injury ledger and code-drawn body map, factual squad status, eligible care

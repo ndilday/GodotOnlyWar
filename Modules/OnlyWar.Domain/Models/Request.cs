@@ -57,7 +57,6 @@ namespace OnlyWar.Domain
         RequestHazard Hazard { get; }
         bool HasPlayerResponded { get; }
         bool IsRequestStarted(GameRulesData rules);
-        bool IsRequestCompleted();
         void ProcessTurn(Date currentDate, GameRulesData rules);
         void Fail(Date currentDate);
     }

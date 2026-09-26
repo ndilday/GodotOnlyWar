@@ -122,8 +122,6 @@ namespace OnlyWar.Campaign.Operations {
         public bool IsRequestStarted(GameRulesData rules) =>
             Status != RequestStatus.Open || IsPlayerPresent(rules);
 
-        public bool IsRequestCompleted() => Status == RequestStatus.Fulfilled;
-
         /// <summary>
         /// Advances the petition one week. <paramref name="rules"/> supplies the player faction and
         /// chapter doctrine the qualifying-strength rule reads; it may be omitted only when the

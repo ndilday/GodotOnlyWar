@@ -26,7 +26,7 @@ public class IndividualPostingServiceTests
             new Date(42, 1, 1));
 
         Assert.Contains(casualty, squad.Members);
-        Assert.Equal(2, SoldierPresenceService.NominalCount(squad));
+        Assert.Equal(2, squad.Members.Count);
         Assert.Equal(1, SoldierPresenceService.PresentCount(squad));
         Assert.Same(fixture.Planet.Regions[1], casualty.EffectiveRegion);
     }

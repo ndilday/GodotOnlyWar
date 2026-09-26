@@ -27,21 +27,21 @@ public sealed class DeploymentStorageTests : IDisposable
     }
 
     [Fact]
-    public void Discover_PrefersDefaultCompatibleSave_AndReportsInvalidSaves()
+    public void Discover_ListsEverySave_AndReportsInvalidSaves()
     {
         string defaultSave = CreateMetadataDatabase("default.s3db", SaveFormat.CurrentVersion);
-        string newerNamedSave = CreateMetadataDatabase("slot-two.s3db", SaveFormat.CurrentVersion);
+        string namedSave = CreateMetadataDatabase("slot-two.s3db", SaveFormat.CurrentVersion);
         string incompatibleSave = CreateMetadataDatabase("old-v2.s3db", 2);
         string futureSave = CreateMetadataDatabase("future.s3db", SaveFormat.CurrentVersion + 1);
         string corruptSave = Path.Combine(_tempDirectory, "corrupt.s3db");
         File.WriteAllText(corruptSave, "not a sqlite database");
-        File.SetLastWriteTimeUtc(newerNamedSave, DateTime.UtcNow.AddMinutes(1));
 
         SaveGameCatalog catalog = new(_tempDirectory);
         var saves = catalog.Discover();
 
         Assert.Equal(5, saves.Count);
-        Assert.Equal(defaultSave, catalog.FindPreferredCompatibleSave().FilePath);
+        Assert.Contains(saves, save => save.FilePath == defaultSave && save.IsCompatible);
+        Assert.Contains(saves, save => save.FilePath == namedSave && save.IsCompatible);
         Assert.Contains(saves, save => save.FilePath == incompatibleSave
             && !save.IsCompatible
             && save.SaveVersion == 2);

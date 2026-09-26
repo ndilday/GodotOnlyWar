@@ -332,7 +332,7 @@ public class EndTurnPreflightTests
             WarnSpecialMissionOpportunities = false,
             WarnRecruitmentProgram = false
         };
-        IReadOnlyList<CommandAttentionFact> facts = EndTurnPreflight.EvaluateFacts(campaign.Sector);
+        IReadOnlyList<CommandAttentionFact> facts = CommandAttentionEvaluator.Evaluate(campaign.Sector);
         EndTurnPreflightReport report = EndTurnPreflight.Evaluate(campaign.Sector, disabled);
         CommandBriefModel brief = new CommandBriefBuilder().Build(
             new Date(1, 1, 1),
@@ -416,7 +416,8 @@ public class EndTurnPreflightTests
         lender.AddSquadMember(lent);
         campaign.RootUnit.AddSquad(lender);
         GetOrAddPlayerRegionFaction(campaign, campaign.Region).LandedSquads.Add(lender);
-        OnlyWar.Operations.Orders.OrderAttachment.Attach(lent, order, new MedicalReadinessDecisions());
+        Assert.True(OnlyWar.Operations.Orders.OrderForceService.AssignCharacter(
+            order, lent, new MedicalReadinessDecisions()));
 
         EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
             campaign.Sector,

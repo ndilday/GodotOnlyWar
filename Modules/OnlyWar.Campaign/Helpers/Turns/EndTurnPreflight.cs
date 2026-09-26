@@ -26,11 +26,6 @@ namespace OnlyWar.Campaign.Turns
             return EvaluateCore(sector, preferences, rules);
         }
 
-        internal static IReadOnlyList<CommandAttentionFact> EvaluateFacts(
-            Sector sector,
-            GameRulesData rules = null) =>
-            CommandAttentionEvaluator.Evaluate(sector, rules);
-
         private static EndTurnPreflightReport EvaluateCore(
             Sector sector,
             EndTurnWarningPreferences preferences,

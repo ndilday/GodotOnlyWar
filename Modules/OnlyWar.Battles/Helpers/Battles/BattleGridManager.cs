@@ -112,15 +112,6 @@ namespace OnlyWar.Battles
             InvalidateLayoutQueries();
         }
 
-        public void MoveSoldier(BattleSoldier soldier, ValueTuple<int, int> newTopLeft,
-            ushort newOrientation)
-        {
-            List<ValueTuple<int, int>> newLocation =
-                GetSoldierFootprint(soldier, newTopLeft, newOrientation);
-            EnsureMoveAvailable(soldier, newLocation);
-            MoveSoldierToCells(soldier.Soldier.Id, newLocation);
-        }
-
         public bool TryMoveSoldier(BattleSoldier soldier, ValueTuple<int, int> newTopLeft,
             ushort newOrientation)
         {
@@ -201,20 +192,6 @@ namespace OnlyWar.Battles
                 if (occupier != null && occupier != soldier.Soldier.Id) return false;
             }
             return true;
-        }
-
-        private void EnsureMoveAvailable(BattleSoldier soldier,
-            IEnumerable<ValueTuple<int, int>> cells)
-        {
-            foreach (ValueTuple<int, int> location in cells)
-            {
-                int? occupier = _grid.GetCellObject(location);
-                if (occupier != null && occupier != soldier.Soldier.Id)
-                {
-                    throw new InvalidOperationException(
-                        $"Soldier {soldier.Soldier.Id} cannot move to {location.Item1},{location.Item2}; already occupied by Soldier {occupier}");
-                }
-            }
         }
 
         public void RemoveSoldier(int soldierId)
@@ -397,29 +374,6 @@ namespace OnlyWar.Battles
                 }
             }
             return closestDistance;
-        }
-
-        public IReadOnlyList<(int SoldierId, float Distance)> GetEnemiesByDistance(int soldierId)
-        {
-            List<(int SoldierId, float Distance, int PlacementOrder)> enemies = [];
-            foreach ((int enemyId, float distance) in GetEnemyDistances(soldierId))
-            {
-                int slot = GetSlot(enemyId);
-                enemies.Add((enemyId, distance, _slotPlacementOrders[slot]));
-            }
-            enemies.Sort((first, second) =>
-            {
-                int distanceComparison = first.Distance.CompareTo(second.Distance);
-                return distanceComparison != 0
-                    ? distanceComparison
-                    : first.PlacementOrder.CompareTo(second.PlacementOrder);
-            });
-            var result = new (int SoldierId, float Distance)[enemies.Count];
-            for (int i = 0; i < enemies.Count; i++)
-            {
-                result[i] = (enemies[i].SoldierId, enemies[i].Distance);
-            }
-            return result;
         }
 
         internal EnemyDistanceEnumerable GetEnemyDistances(int soldierId) =>

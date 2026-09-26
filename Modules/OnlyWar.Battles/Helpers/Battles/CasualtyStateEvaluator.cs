@@ -19,16 +19,6 @@ namespace OnlyWar.Battles
                 .Any(location => location.Template.IsVital && location.IsSevered)
             ?? false;
 
-        /// <summary>
-        /// Down but not dead: no severed vital, yet no longer able to fight or to move. This is
-        /// exactly the predicate the wound resolver uses to pull a soldier out of the battle
-        /// (<see cref="ISoldier.IsCombatEffective"/>), minus the men it pulled out by killing.
-        /// </summary>
-        public static bool IsIncapacitated(ISoldier soldier) =>
-            soldier != null
-            && !HasSeveredVitalLocation(soldier)
-            && !soldier.IsCombatEffective;
-
         public static bool IsWounded(ISoldier soldier) =>
             soldier?.Body?.HitLocations.Any(location => location.Wounds.WoundTotal > 0) ?? false;
 
@@ -41,6 +31,9 @@ namespace OnlyWar.Battles
         {
             if (soldier == null) return CasualtyState.Unharmed;
             if (HasSeveredVitalLocation(soldier)) return CasualtyState.Killed;
+            // Down but not dead: no severed vital, yet no longer able to fight or to move. This is
+            // exactly the predicate the wound resolver uses to pull a soldier out of the battle
+            // (ISoldier.IsCombatEffective), minus the men it pulled out by killing.
             if (!soldier.IsCombatEffective)
             {
                 return bodyRecovered ? CasualtyState.Incapacitated : CasualtyState.Killed;

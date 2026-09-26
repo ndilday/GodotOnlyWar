@@ -240,7 +240,7 @@ internal sealed class OperationsScreenQueries : CampaignScreenApplication, IOper
             .Select(read.PlayerPresence)
             .Where(presence => presence != null)
             .SelectMany(presence => SpecialistAvailability.EnumerateRoster(
-                presence, region, roster, Readiness, contextOrder, Personnel))
+                presence, region, roster, contextOrder, Personnel))
             .Where(option => IsInOrderArea(option?.Soldier, region))
             .GroupBy(option => option.Soldier.Id)
             .Select(group => group.First())

@@ -13,7 +13,7 @@ namespace OnlyWar.Battles
     /// itself reaching the point where it stops continuing its mission
     /// (<see cref="BattleSquad.ShouldContinueMission"/>). Both are casualty thresholds set by
     /// aggression -- half the starting strength at Normal -- not annihilation, so the horizon is
-    /// the shorter of the two times to lose that much. See <see cref="DeriveSquadExchangeTurns"/>.
+    /// the shorter of the two times to lose that much. See <see cref="DeriveSquadExchangeClocks"/>.
     /// The squad's own threshold comes from its own orders; the enemy's orders are not the
     /// planner's to know, so every enemy is assumed Attritional (withdrawing at a quarter of its
     /// starting strength).
@@ -77,29 +77,16 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// One squad's horizon: the shorter of the time for its side to strip the enemy force down
-        /// to that force's withdrawal point, and the time for the fire aimed at this squad to
-        /// strip IT down to its own. Each budget is battle value that can be lost before the
+        /// The two clocks behind one squad's horizon: turns for its side to strip the enemy force
+        /// down to that force's withdrawal point, and turns for the fire aimed at this squad to
+        /// strip IT down to its own. The horizon is the smaller of the two; the caller takes it
+        /// and keeps both for diagnostics. Each budget is battle value that can be lost before the
         /// threshold, not the whole pool.
         ///
         /// <para>A budget already spent means that side is at its threshold now, so the exchange is
-        /// about to end: the horizon is the one-turn minimum, never zero. A zero rate on either
+        /// about to end: that clock is the one-turn minimum, never zero. A zero rate on either
         /// side leaves that side's clock at the cap, as <see cref="DeriveExpectedExchangeTurns"/>
         /// does.</para>
-        /// </summary>
-        internal static float DeriveSquadExchangeTurns(
-            float enemyBattleValueBeforeWithdrawal,
-            float outgoingRemovalRate,
-            float ownBattleValueBeforeWithdrawal,
-            float incomingRemovalRate) =>
-            Math.Min(
-                TurnsToLose(enemyBattleValueBeforeWithdrawal, outgoingRemovalRate),
-                TurnsToLose(ownBattleValueBeforeWithdrawal, incomingRemovalRate));
-
-        /// <summary>
-        /// The two clocks <see cref="DeriveSquadExchangeTurns"/> takes the minimum of, for
-        /// diagnostics: turns until the enemy force reaches its withdrawal point, and turns until
-        /// this squad reaches its own.
         /// </summary>
         internal static (float EnemyWithdrawalTurns, float OwnWithdrawalTurns) DeriveSquadExchangeClocks(
             float enemyBattleValueBeforeWithdrawal,

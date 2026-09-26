@@ -77,13 +77,6 @@ namespace OnlyWar.Application
             IsEnabled = isEnabled;
             ContextBadge = contextBadge;
         }
-
-        public static SquadRowContext ForNewOrder(
-            Region target = null,
-            bool isSelected = false,
-            bool isSelectable = true) =>
-            new(SquadRowContextKind.PlanetaryOperations, SquadRowAction.BeginOrder,
-                target: target, isSelected: isSelected, isSelectable: isSelectable);
     }
 
     /// <summary>

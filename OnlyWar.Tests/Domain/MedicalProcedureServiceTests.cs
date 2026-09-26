@@ -192,7 +192,7 @@ public class MedicalProcedureServiceTests
         RegionFaction regionFaction = new(planetFaction, region)
         {
             IsPublic = true,
-            Population = MedicalFacilityRules.MinimumImperialPopulation
+            Population = OnlyWar.Medical.Treatment.MedicalFacilityPolicy.MinimumImperialPopulation
         };
         region.RegionFactionMap[player.Id] = regionFaction;
         return region;

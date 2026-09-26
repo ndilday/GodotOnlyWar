@@ -82,6 +82,28 @@ namespace OnlyWar.Domain.Soldiers
             }
         }
 
+        /// <summary>
+        /// The most severe band holding at least one wound, or <see cref="WoundLevel.None"/>.
+        /// Bands are never summed: two Minor wounds are still Minor. This is the one owner of the
+        /// "worst wound" rule -- duty readiness, order readiness and the Apothecarium all read it
+        /// rather than decoding the bands themselves.
+        /// </summary>
+        public WoundLevel WorstLevel
+        {
+            get
+            {
+                if (UnsurvivableWounds > 0) return WoundLevel.Unsurvivable;
+                if (MortalWounds > 0) return WoundLevel.Mortal;
+                if (MassiveWounds > 0) return WoundLevel.Massive;
+                if (CriticalWounds > 0) return WoundLevel.Critical;
+                if (MajorWounds > 0) return WoundLevel.Major;
+                if (ModerateWounds > 0) return WoundLevel.Moderate;
+                if (MinorWounds > 0) return WoundLevel.Minor;
+                if (NegligibleWounds > 0) return WoundLevel.Negligible;
+                return WoundLevel.None;
+            }
+        }
+
         public Wounds(uint woundTotal, uint weeksOfHealing)
         {
             WoundTotal = woundTotal;
@@ -492,39 +514,18 @@ namespace OnlyWar.Domain.Soldiers
             {
                 return Template.Name + ": <color=red>Crippled</color>";
             }
-            else if(Wounds.WoundTotal >= (uint)WoundLevel.Unsurvivable)
+            return Wounds.WorstLevel switch
             {
-                return Template.Name + ": <color=red>Unsurvivable</color>";
-            }
-            else if (Wounds.WoundTotal >= (uint)WoundLevel.Mortal)
-            {
-                return Template.Name + ":<color=red> Mortal</color>";
-            }
-            else if (Wounds.WoundTotal >= (uint)WoundLevel.Massive)
-            {
-                return Template.Name + ": <color=maroon>Massive</color>";
-            }
-            else if (Wounds.WoundTotal >= (uint)WoundLevel.Critical)
-            {
-                return Template.Name + ": <color=maroon>Critical</color>";
-            }
-            else if (Wounds.WoundTotal >= (uint)WoundLevel.Major)
-            {
-                return Template.Name + ": <color=orange>Major</color>";
-            }
-            else if (Wounds.WoundTotal >= (uint)WoundLevel.Moderate)
-            {
-                return Template.Name + ": <color=orange>Moderate</color>";
-            }
-            else if (Wounds.WoundTotal >= (uint)WoundLevel.Minor)
-            {
-                return Template.Name + ": <color=green>Minor</color>";
-            }
-            else if (Wounds.WoundTotal >= (uint)WoundLevel.Negligible)
-            {
-                return Template.Name + ": <color=green>Negligible</color>";
-            }
-            return Template.Name + ": No wounds";
+                WoundLevel.Unsurvivable => Template.Name + ": <color=red>Unsurvivable</color>",
+                WoundLevel.Mortal => Template.Name + ":<color=red> Mortal</color>",
+                WoundLevel.Massive => Template.Name + ": <color=maroon>Massive</color>",
+                WoundLevel.Critical => Template.Name + ": <color=maroon>Critical</color>",
+                WoundLevel.Major => Template.Name + ": <color=orange>Major</color>",
+                WoundLevel.Moderate => Template.Name + ": <color=orange>Moderate</color>",
+                WoundLevel.Minor => Template.Name + ": <color=green>Minor</color>",
+                WoundLevel.Negligible => Template.Name + ": <color=green>Negligible</color>",
+                _ => Template.Name + ": No wounds"
+            };
         }
     }
 
@@ -1004,6 +1005,23 @@ namespace OnlyWar.Domain.Soldiers
         /// </summary>
         public int[] TotalProbabilityMap { get; private set; }
         public int InjuryRevision { get; private set; }
+
+        /// <summary>
+        /// The worst wound anywhere on the body: the highest <see cref="Wounds.WorstLevel"/> over
+        /// its hit locations. Locations are compared, never summed, so a Minor wound on each arm
+        /// is still Minor.
+        /// </summary>
+        public WoundLevel GetWorstWoundLevel()
+        {
+            WoundLevel worst = WoundLevel.None;
+            foreach (HitLocation location in HitLocations)
+            {
+                WoundLevel current = location?.Wounds?.WorstLevel ?? WoundLevel.None;
+                // WoundLevel values are band positions, so their numeric order is severity order.
+                if ((uint)current > (uint)worst) worst = current;
+            }
+            return worst;
+        }
 
         public Body(List<HitLocation> hitLocations)
         {

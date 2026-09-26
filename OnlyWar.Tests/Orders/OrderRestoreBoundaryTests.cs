@@ -185,8 +185,8 @@ public class OrderRestoreBoundaryTests
             .MinimumDutyReadySquadStrength = 6;
 
         Squad squad = CreateSquad(issuing, "First", true);
-        Assert.Null(OrderAssignment.AssignSquadsToMission(
-            issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
+        Assert.Null(OrderAssignment.AssignParticipantsToMission(
+            issuing.OrderCommands, [squad], [], issuing.Planet.Regions[0], recon, -1,
             Aggression.Normal));
         Assert.Empty(issuing.Sector.Orders.Values);
 
@@ -197,8 +197,8 @@ public class OrderRestoreBoundaryTests
         installed.Sector.PlayerForce.Army.ChapterOperationalDoctrine
             .MinimumDutyReadySquadStrength = 99;
 
-        Order order = OrderAssignment.AssignSquadsToMission(
-            issuing.OrderCommands, [squad], issuing.Planet.Regions[0], recon, -1,
+        Order order = OrderAssignment.AssignParticipantsToMission(
+            issuing.OrderCommands, [squad], [], issuing.Planet.Regions[0], recon, -1,
             Aggression.Normal);
 
         Assert.NotNull(order);
@@ -218,10 +218,10 @@ public class OrderRestoreBoundaryTests
         Squad secondSquad = CreateSquad(second, "Second", true);
         AvailableMission recon = new("Recon", MissionAvailabilityKind.Recon);
 
-        Order firstOrder = OrderAssignment.AssignSquadsToMission(
-            first.OrderCommands, [firstSquad], first.Planet.Regions[0], recon, -1, Aggression.Normal);
-        Order secondOrder = OrderAssignment.AssignSquadsToMission(
-            second.OrderCommands, [secondSquad], second.Planet.Regions[0], recon, -1, Aggression.Normal);
+        Order firstOrder = OrderAssignment.AssignParticipantsToMission(
+            first.OrderCommands, [firstSquad], [], first.Planet.Regions[0], recon, -1, Aggression.Normal);
+        Order secondOrder = OrderAssignment.AssignParticipantsToMission(
+            second.OrderCommands, [secondSquad], [], second.Planet.Regions[0], recon, -1, Aggression.Normal);
 
         Assert.NotNull(firstOrder);
         Assert.NotNull(secondOrder);

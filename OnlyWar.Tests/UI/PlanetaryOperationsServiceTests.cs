@@ -95,9 +95,9 @@ public class PlanetaryOperationsServiceTests
             fixture, target, "Assigned Squad", members: 5, withLeader: true);
         AvailableMission recon = MissionAvailability.GetAvailableMissions(target, target)
             .Single(option => option.Kind == MissionAvailabilityKind.Recon);
-        Order order = OrderAssignment.AssignSquadsToMission(
+        Order order = OrderAssignment.AssignParticipantsToMission(
             fixture.OrderCommands,
-            [assigned], target, recon, -1, Aggression.Normal);
+            [assigned], [], target, recon, -1, Aggression.Normal);
 
         RegionalSquadCandidate candidate = RegionalOrderEligibilityService.Build(
                 fixture.Sector, target, new MedicalReadinessDecisions(), recon, order)
@@ -149,9 +149,9 @@ public class PlanetaryOperationsServiceTests
             fixture, source, "Surface Squad", members: 5, withLeader: true);
         AvailableMission defend = MissionAvailability.GetAvailableMissions(source, source)
             .Single(option => option.Kind == MissionAvailabilityKind.Defend);
-        Order order = OrderAssignment.AssignSquadsToMission(
+        Order order = OrderAssignment.AssignParticipantsToMission(
             fixture.OrderCommands,
-            [squad], source, defend, -1, Aggression.Normal);
+            [squad], [], source, defend, -1, Aggression.Normal);
         Assert.NotNull(order);
         Ship ship = AddOrbitingShip(fixture, capacity: 1);
 
@@ -176,9 +176,9 @@ public class PlanetaryOperationsServiceTests
             fixture, source, "Surface Squad", members: 5, withLeader: true);
         AvailableMission defend = MissionAvailability.GetAvailableMissions(source, source)
             .Single(option => option.Kind == MissionAvailabilityKind.Defend);
-        Order order = OrderAssignment.AssignSquadsToMission(
+        Order order = OrderAssignment.AssignParticipantsToMission(
             fixture.OrderCommands,
-            [squad], source, defend, -1, Aggression.Normal);
+            [squad], [], source, defend, -1, Aggression.Normal);
         Ship ship = AddOrbitingShip(fixture, capacity: 10);
 
         ForceMovementResult result = PlanetForceMovementService.Embark(

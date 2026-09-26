@@ -54,8 +54,9 @@ public readonly record struct SectorMapLabelPlacement(
     float Scale);
 
 /// <summary>
-/// Stable priority data for a planet label. The final planet-id tiebreak is part of the
-/// value rather than being left to dictionary or source-enumeration order.
+/// Stable priority data for a planet label: active work first, then request severity, then
+/// governance seats, then importance. <see cref="SectorMapLabelLayout.Place"/> breaks a tie in
+/// <see cref="Rank"/> by planet id, so the order never depends on source-enumeration order.
 /// </summary>
 public readonly record struct SectorMapPlanetLabelPriority(
     int PlanetId,
@@ -64,11 +65,20 @@ public readonly record struct SectorMapPlanetLabelPriority(
     bool IsGovernanceSeat,
     int Importance)
 {
+    // Each term must outweigh everything below it. Planet importance is authored per template
+    // and runs to several thousand (Feral worlds centre on 6100), so it is held inside a fixed
+    // band that the seat bonus clears; a seat bonus of 1000 once let an unimportant-but-large
+    // world outrank a governance seat.
+    private const long MaximumImportance = 99_999L;
+    private const long SeatWeight = MaximumImportance + 1L;
+    private const long SeverityWeight = 1_000_000L;
+    private const long ActiveWorkWeight = 3_000_000_000L;
+
     public long Rank =>
-        (HasActiveWork ? 3_000_000_000L : 0L)
-        + (long)RequestSeverity * 1_000_000L
-        + (IsGovernanceSeat ? 1_000L : 0L)
-        + Importance;
+        (HasActiveWork ? ActiveWorkWeight : 0L)
+        + (long)RequestSeverity * SeverityWeight
+        + (IsGovernanceSeat ? SeatWeight : 0L)
+        + Math.Clamp((long)Importance, 0L, MaximumImportance);
 }
 
 /// <summary>
@@ -87,18 +97,6 @@ public static class SectorMapLabelLayout
         new Vector2(1.0f, 0.0f),   // right
         new Vector2(-1.0f, 0.0f)   // left
     ];
-
-    public static SectorMapLabelBand SelectBand(
-        float zoom,
-        float bandABoundary = 1.1f,
-        float bandBBoundary = 3.5f)
-    {
-        if (bandBBoundary <= bandABoundary)
-            throw new ArgumentOutOfRangeException(nameof(bandBBoundary));
-
-        if (zoom < bandABoundary) return SectorMapLabelBand.A;
-        return zoom < bandBBoundary ? SectorMapLabelBand.B : SectorMapLabelBand.C;
-    }
 
     /// <summary>
     /// Places candidates greedily in descending priority order. The offsets are intentionally
@@ -147,30 +145,19 @@ public static class SectorMapLabelLayout
     }
 
     /// <summary>
-    /// Returns the proportional size used when a label is wider than its region's inscribed
-    /// width. Height is reduced with width so the label remains horizontal and undistorted.
+    /// The font scale for a label measured at full size: <paramref name="scaleLimit"/> (held to
+    /// 0.05-1), reduced further only as far as needed to fit <paramref name="maxWidth"/>. Scaling
+    /// the font shrinks width and height together, so the label stays undistorted. A
+    /// <paramref name="maxWidth"/> of zero or less means the label is unconstrained.
     /// </summary>
-    public static Vector2 ClampExtentToWidth(Vector2 extent, float maxWidth)
+    public static float FitScale(float measuredWidth, float maxWidth, float scaleLimit = 1.0f)
     {
-        if (extent.X <= 0 || extent.Y <= 0 || maxWidth <= 0) return Vector2.Zero;
-        if (extent.X <= maxWidth) return extent;
-
-        float scale = maxWidth / extent.X;
-        return extent * scale;
-    }
-
-    public static IReadOnlyList<SectorMapPlanetLabelPriority> OrderPlanetPriorities(
-        IEnumerable<SectorMapPlanetLabelPriority> priorities)
-    {
-        if (priorities == null) throw new ArgumentNullException(nameof(priorities));
-
-        return priorities
-            .OrderByDescending(priority => priority.HasActiveWork)
-            .ThenByDescending(priority => priority.RequestSeverity)
-            .ThenByDescending(priority => priority.IsGovernanceSeat)
-            .ThenByDescending(priority => priority.Importance)
-            .ThenBy(priority => priority.PlanetId)
-            .ToList();
+        float scale = Math.Clamp(scaleLimit, 0.05f, 1.0f);
+        if (maxWidth > 0 && measuredWidth * scale > maxWidth)
+        {
+            scale = maxWidth / measuredWidth;
+        }
+        return scale;
     }
 
     private static Vector2 GetPosition(Vector2 anchor, Vector2 size, Vector2 offset, float gap)

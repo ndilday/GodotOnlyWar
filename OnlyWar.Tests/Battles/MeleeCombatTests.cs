@@ -77,7 +77,7 @@ public class MeleeCombatTests
         Assert.True(defender.IsDualWieldingMelee());
         Assert.Equal(2, defender.EquippedMeleeWeapons.Count);
         Assert.Equal(0, defender.HandsFree);
-        Assert.Equal(1f, defender.GetMeleeParryModifier());
+        Assert.Equal(1f, MeleeMath.SumParryModifiers(defender.EquippedMeleeWeapons));
         // defense comes from parry modifiers only — no flat dual-wield bonus
         Assert.Equal(1f, MeleeAttackAction.GetDefenderDefenseModifier(defender));
         Assert.Equal(defender.Soldier.GetTotalSkillValue(OffHandParrySkill), MeleeAttackAction.GetDefenderMeleeSkill(defender, AttackSkill));

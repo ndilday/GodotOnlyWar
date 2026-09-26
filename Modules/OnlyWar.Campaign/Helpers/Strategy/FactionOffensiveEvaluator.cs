@@ -101,20 +101,6 @@ internal sealed class FactionOffensiveEvaluator
     // ForceTaskBuilder - so "cannot take it but can still hurt it" became a real option instead of a
     // branch that a frozen region never reached.
 
-    internal static PotentialOffensive ChooseReconTarget(IEnumerable<PotentialOffensive> underKnown) =>
-        underKnown.OrderByDescending(o => o.Reward).FirstOrDefault();
-
-    /// <summary>
-    /// Whether this much force would carry the region. Force is now a PARAMETER rather than a property
-    /// of the target: under marginal allocation the question "is it winnable" is answered by what the
-    /// auction is willing to spend, not by what happened to be spare beside it.
-    /// </summary>
-    internal static bool IsWinnable(PotentialOffensive offensive, long attackingForce)
-    {
-        return attackingForce
-            > offensive.EstimatedDefenderBattleValue * OffensiveForceRatioThreshold;
-    }
-
     internal static bool IsWellReconnoitred(PotentialOffensive offensive, int attackerFactionId) =>
         offensive.TargetRegion.GetFactionRegionAwareness(attackerFactionId)
             >= FactionStrategyPlanningConstants.ReconIntelThreshold;

@@ -216,37 +216,6 @@ namespace OnlyWar.Campaign.Medical
             && MedicalProcedureService.IsApothecary(soldier)
             && soldier.IsCombatEffective;
 
-        /// <summary>
-        /// The Apothecaries who would treat this brother if he needed it today, under whichever of
-        /// the two passes he falls into. Drives the Apothecarium screen's field-care readout, so the
-        /// player can see BEFORE committing that sending the Apothecary forward leaves the men at
-        /// home uncovered -- the tension §2.6 wanted made legible.
-        ///
-        /// Derived from exactly the same predicates the passes use, so the screen cannot promise
-        /// care the engine will not deliver.
-        /// </summary>
-        public static IReadOnlyList<PlayerSoldier> GetCoveringApothecaries(
-            PlayerSoldier soldier, IEnumerable<PlayerSoldier> chapterMembers)
-        {
-            if (soldier == null) return [];
-
-            Order order = soldier.CurrentOrder ?? soldier.AssignedSquad?.CurrentOrders;
-            if (order != null)
-            {
-                return EnumerateUnderOrder(order).Where(IsAvailableApothecary).ToList();
-            }
-
-            if (chapterMembers == null) return [];
-            string key = GetLocationKey(soldier);
-            if (key == null) return [];
-            return chapterMembers
-                .Where(candidate => candidate != null
-                    && !IsOnMission(candidate)
-                    && IsAvailableApothecary(candidate)
-                    && GetLocationKey(candidate) == key)
-                .ToList();
-        }
-
         public static float GetCapacity(
             PlayerSoldier apothecary,
             RatingConsumerBindings ratingBindings = null) =>

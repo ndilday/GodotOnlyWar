@@ -416,24 +416,29 @@ public class SectorEntityLogicTests
     // region's public enemy factions proportional to deployed strength, instead of being handed
     // entirely to whichever faction is iterated first.
     [Fact]
-    public void HandlePublicFactionIntelligence_SingleEnemyGetsTheFullBudget()
+    public void HandleBeliefIntelligence_SingleEnemyGetsTheFullBudget()
     {
         RNG.Reset(7);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddPublicCult(0, population: 1000, organization: 100);
         enemy.Garrison = enemy.Population;
         PlanetIntelligenceProcessor processor = CreateIntelligenceProcessor(fixture);
+        FactionIntelBelief belief = new(
+            enemy.Region,
+            enemy.PlanetFaction.Faction,
+            OnlyWar.Domain.Intelligence.FactionIntelligenceRules.ConfirmedThreshold,
+            estimatedPopulation: null,
+            estimatedMilitaryStrength: null,
+            lastEvidenceWeek: 0);
 
-        // Each opportunity roll only has ~50% odds of producing a mission (chance < 0 rolls
-        // nothing), so a single call rarely reaches the budget. But the loop bound
-        // (budget - already-identified-count-for-this-faction) means repeated calls against the
-        // same faction monotonically climb and saturate exactly at the budget, since once the
-        // count reaches it the loop bound drops to zero and stops running. Calling it many times
-        // therefore proves the budget passed in is honored in full for a single enemy - matching
-        // the pre-fix behavior where the lone faction consumed the entire region budget.
+        // The loop bound is (budget - missions already identified against this faction), so
+        // repeated calls against the same faction climb monotonically and saturate exactly at the
+        // budget: once the count reaches it the bound drops to zero and nothing more is generated.
+        // Calling it many times therefore proves the budget passed in is honored in full for a
+        // single enemy, and never exceeded.
         for (int i = 0; i < 100; i++)
         {
-            processor.HandlePublicFactionIntelligence(enemy, specMissionBudget: 5f);
+            processor.HandleBeliefIntelligence(belief, specMissionBudget: 5f);
         }
 
         Assert.Equal(5, enemy.Region.SpecialMissions.Count(m => m.RegionFaction == enemy));

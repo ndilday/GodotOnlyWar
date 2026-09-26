@@ -9,7 +9,6 @@
     <ProjectReference Include="../OnlyWar.Application.Abstractions/OnlyWar.Application.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Generation.Abstractions/OnlyWar.Generation.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Operations.Abstractions/OnlyWar.Operations.Abstractions.csproj" />
-    <ProjectReference Include="../OnlyWar.Persistence.Abstractions/OnlyWar.Persistence.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Runtime.Abstractions/OnlyWar.Runtime.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Battles.Abstractions/OnlyWar.Battles.Abstractions.csproj" />
     <ProjectReference Include="../OnlyWar.Medical.Abstractions/OnlyWar.Medical.Abstractions.csproj" />

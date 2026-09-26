@@ -38,10 +38,6 @@ namespace OnlyWar.Persistence.Storage
             or SaveGameCompatibility.UpgradeAvailable;
         public bool IsUpgradeAvailable => Compatibility == SaveGameCompatibility.UpgradeAvailable;
         public DateTime LastWriteTimeLocal => LastWriteTimeUtc.ToLocalTime();
-        public bool IsLegacyDefault => string.Equals(
-            Path.GetFileName(FilePath),
-            GameStorage.DefaultSaveFileName,
-            StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -71,16 +67,6 @@ namespace OnlyWar.Persistence.Storage
                 .OrderByDescending(entry => entry.LastWriteTimeUtc)
                 .ThenBy(entry => entry.DisplayName, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
-        }
-
-        public SaveGameEntry FindPreferredCompatibleSave()
-        {
-            // Retained for callers transitioning to the visible chooser. default.s3db remains a
-            // sensible preference for legacy installations, followed by the newest valid save.
-            return Discover()
-                .OrderByDescending(entry => entry.IsLegacyDefault)
-                .ThenByDescending(entry => entry.LastWriteTimeUtc)
-                .FirstOrDefault(entry => entry.IsCompatible);
         }
 
         public SaveGameEntry Find(string filePath)

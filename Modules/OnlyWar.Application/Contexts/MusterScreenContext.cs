@@ -377,14 +377,12 @@ internal sealed class MusterScreenContext
     private static string ActionIconKey(MusterMutationKind kind) => kind switch
     {
         MusterMutationKind.PromotionAndCreateFormation => "formation_create",
-        MusterMutationKind.FleetRebalance => "fleet_rebalance",
         _ => "route"
     };
 
     private static string ActionIconTooltip(MusterMutationKind kind) => kind switch
     {
         MusterMutationKind.PromotionAndCreateFormation => "Create new formation",
-        MusterMutationKind.FleetRebalance => "Fleet rebalance",
         _ => "Personnel reassignment"
     };
 }

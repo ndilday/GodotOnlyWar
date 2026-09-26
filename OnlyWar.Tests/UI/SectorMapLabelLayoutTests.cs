@@ -37,21 +37,24 @@ public class SectorMapLabelLayoutTests
     }
 
     [Theory]
-    [InlineData(0.33, SectorMapLabelBand.A)]
-    [InlineData(1.1, SectorMapLabelBand.B)]
-    [InlineData(3.5, SectorMapLabelBand.C)]
-    [InlineData(10.0, SectorMapLabelBand.C)]
-    public void SelectBand_UsesTheSpecifiedZoomBoundaries(float zoom, SectorMapLabelBand expected)
-    {
-        Assert.Equal(expected, SectorMapLabelLayout.SelectBand(zoom));
-    }
-
-    [Fact]
-    public void ClampExtentToWidth_PreservesAspectRatio()
+    // Too wide: shrunk just enough to fit.
+    [InlineData(250f, 100f, 1.0f, 0.4f)]
+    // Already fits: full size.
+    [InlineData(50f, 100f, 1.0f, 1.0f)]
+    // No width constraint.
+    [InlineData(250f, 0f, 1.0f, 1.0f)]
+    // A caller's own limit already fits, so it stands.
+    [InlineData(250f, 100f, 0.3f, 0.3f)]
+    // The limit is held to 0.05-1.
+    [InlineData(50f, 0f, 2.0f, 1.0f)]
+    [InlineData(50f, 0f, 0.0f, 0.05f)]
+    public void FitScale_ShrinksOnlyAsFarAsTheWidthRequires(
+        float measuredWidth, float maxWidth, float scaleLimit, float expected)
     {
         Assert.Equal(
-            new Vector2(100, 20),
-            SectorMapLabelLayout.ClampExtentToWidth(new Vector2(250, 50), 100));
+            expected,
+            SectorMapLabelLayout.FitScale(measuredWidth, maxWidth, scaleLimit),
+            precision: 5);
     }
 
     [Fact]
@@ -79,17 +82,30 @@ public class SectorMapLabelLayoutTests
         Assert.Empty(placements);
     }
 
+    // Planet labels are placed in Rank order, planet id breaking ties - which is how SectorMap
+    // orders them. Importance is authored in the thousands, so it must not reach past the seat
+    // bonus: a governance seat on a Civilised world outranks a far more important Feral one.
     [Fact]
-    public void OrderPlanetPriorities_UsesRequestsThenSeatsThenImportanceThenId()
+    public void PlanetLabels_PlaceByRequestsThenSeatsThenImportanceThenId()
     {
-        var ordered = SectorMapLabelLayout.OrderPlanetPriorities(
+        SectorMapPlanetLabelPriority[] priorities =
         [
-            new SectorMapPlanetLabelPriority(4, false, SectorMapRequestSeverity.Concerned, false, 99),
-            new SectorMapPlanetLabelPriority(3, false, SectorMapRequestSeverity.Concerned, true, 1),
-            new SectorMapPlanetLabelPriority(2, true, SectorMapRequestSeverity.Serious, false, 1),
-            new SectorMapPlanetLabelPriority(1, true, SectorMapRequestSeverity.Serious, false, 1)
-        ]);
+            new(5, false, SectorMapRequestSeverity.Concerned, false, 99),
+            new(4, false, SectorMapRequestSeverity.Concerned, false, 6100),
+            new(3, false, SectorMapRequestSeverity.Concerned, true, 1005),
+            new(2, true, SectorMapRequestSeverity.Serious, false, 1),
+            new(1, true, SectorMapRequestSeverity.Serious, false, 1)
+        ];
 
-        Assert.Equal([1, 2, 3, 4], ordered.Select(priority => priority.PlanetId));
+        // Anchors far apart, so every label fits and the placement order is the processing order.
+        var placements = SectorMapLabelLayout.Place(
+            priorities.Select(priority => new SectorMapLabelCandidate(
+                priority.PlanetId,
+                new Vector2(100 * priority.PlanetId, 50),
+                priority.Rank,
+                new Vector2(20, 10))),
+            new SectorMapLabelBounds(0, 0, 1000, 100));
+
+        Assert.Equal([1, 2, 3, 4, 5], placements.Select(placement => placement.Id));
     }
 }

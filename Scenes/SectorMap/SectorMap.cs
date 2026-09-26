@@ -594,11 +594,7 @@ public partial class SectorMap : Node2D
         Font font = GetLabelFont(style);
         int baseFontSize = Mathf.Max(1, Mathf.RoundToInt(style.WorldFontSize));
         Godot.Vector2 measured = MeasureText(font, text, baseFontSize);
-        float scale = Mathf.Clamp(fontScaleLimit, 0.05f, 1.0f);
-        if (maxWidth > 0 && measured.X * scale > maxWidth)
-        {
-            scale = maxWidth / measured.X;
-        }
+        float scale = SectorMapLabelLayout.FitScale(measured.X, maxWidth, fontScaleLimit);
 
         int fontSize = Mathf.Max(1, Mathf.RoundToInt(baseFontSize * scale));
         measured = MeasureText(font, text, fontSize);

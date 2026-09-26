@@ -33,7 +33,6 @@ public class SupplyRequestLifecycleTests
         request.ProcessTurn(new Date(1, 1, 3), fixture.Rules);
 
         Assert.Equal(RequestStatus.Failed, request.Status);
-        Assert.False(request.IsRequestCompleted());
         Assert.Equal(new Date(1, 1, 3), request.DateRequestResolved);
     }
 

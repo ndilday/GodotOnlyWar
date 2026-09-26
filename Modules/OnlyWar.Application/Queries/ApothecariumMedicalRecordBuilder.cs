@@ -396,7 +396,7 @@ namespace OnlyWar.Application
                 location.IsCybernetic,
                 needsReplacement,
                 severity,
-                MedicalProcedureChoiceMapping.ToView(GetPrincipalWoundLevel(location.Wounds)),
+                MedicalProcedureChoiceMapping.ToView(location.Wounds.WorstLevel),
                 location.IsSevered,
                 location.IsCrippled);
         }
@@ -649,20 +649,6 @@ namespace OnlyWar.Application
             }
 
             return MedicalSeverity.None;
-        }
-
-        private static WoundLevel GetPrincipalWoundLevel(Wounds wounds)
-        {
-            if (wounds == null) return WoundLevel.None;
-            if (wounds.UnsurvivableWounds > 0) return WoundLevel.Unsurvivable;
-            if (wounds.MortalWounds > 0) return WoundLevel.Mortal;
-            if (wounds.MassiveWounds > 0) return WoundLevel.Massive;
-            if (wounds.CriticalWounds > 0) return WoundLevel.Critical;
-            if (wounds.MajorWounds > 0) return WoundLevel.Major;
-            if (wounds.ModerateWounds > 0) return WoundLevel.Moderate;
-            if (wounds.MinorWounds > 0) return WoundLevel.Minor;
-            if (wounds.NegligibleWounds > 0) return WoundLevel.Negligible;
-            return WoundLevel.None;
         }
 
         private static string GetStatus(HitLocation location, MedicalProcedure activeProcedure = null)

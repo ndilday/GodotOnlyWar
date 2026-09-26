@@ -258,7 +258,7 @@ namespace OnlyWar.Campaign.Turns
         private static long? EstimatePublicActivity(long value, float awareness) =>
             FactionIntelligenceRules.CoarsenEstimate(value, awareness);
 
-        private void HandleBeliefIntelligence(FactionIntelBelief belief, float specMissionBudget)
+        internal void HandleBeliefIntelligence(FactionIntelBelief belief, float specMissionBudget)
         {
             Region region = belief.Region;
             int existing = region.SpecialMissions.Count(mission =>
@@ -276,6 +276,9 @@ namespace OnlyWar.Campaign.Turns
                     // concrete hidden RegionFaction anchor to execute against.
                     continue;
                 }
+                // One z per opportunity picks the mission: z >= 2 assassination, 1 <= z < 2
+                // sabotage against a defended enemy (ambush when it has no works), 0 <= z < 1
+                // ambush, and a negative z - about half of all rolls - finds nothing this week.
                 if (chance >= 2)
                 {
                     GenerateAssassinationMission(current);
@@ -288,7 +291,7 @@ namespace OnlyWar.Campaign.Turns
                     if (defenseTotal <= 0) GenerateAmbushMission(current);
                     else GenerateSabotageMission(current, defenseTotal);
                 }
-                else
+                else if (chance >= 0)
                 {
                     GenerateAmbushMission(current);
                 }
@@ -318,37 +321,6 @@ namespace OnlyWar.Campaign.Turns
             }
         }
 
-        internal void HandlePublicFactionIntelligence(
-            RegionFaction enemyRegionFaction,
-            float specMissionBudget)
-        {
-            float specMissionChance = specMissionBudget;
-            specMissionChance -= enemyRegionFaction.Region.SpecialMissions
-                .Count(mission => mission.RegionFaction == enemyRegionFaction);
-            for (int i = 0; i < specMissionChance; i++)
-            {
-                double chance = _turn.Random.NextRandomZValue();
-                if (chance >= 2)
-                {
-                    GenerateAssassinationMission(enemyRegionFaction);
-                }
-                else if (chance >= 1)
-                {
-                    double defenseTotal = RegionDefenses.GetShared(
-                            enemyRegionFaction,
-                            DefenseType.Entrenchment)
-                        + RegionDefenses.GetShared(enemyRegionFaction, DefenseType.ListeningPost)
-                        + RegionDefenses.GetShared(enemyRegionFaction, DefenseType.AntiAir);
-                    if (defenseTotal <= 0) GenerateAmbushMission(enemyRegionFaction);
-                    else GenerateSabotageMission(enemyRegionFaction, defenseTotal);
-                }
-                else if (chance >= 0)
-                {
-                    GenerateAmbushMission(enemyRegionFaction);
-                }
-            }
-        }
-
         private void GenerateAmbushMission(RegionFaction enemyRegionFaction)
         {
             int maxSize = (int)MissionStealthDifficulty.TroopMagnitude(
@@ -375,12 +347,14 @@ namespace OnlyWar.Campaign.Turns
             double listeningPost = RegionDefenses.GetShared(
                 enemyRegionFaction,
                 DefenseType.ListeningPost);
+            // Half-open bands, so a defence at level 0 owns no share of the roll - not even a
+            // roll of exactly 0.
             double roll = _turn.Random.GetLinearDouble() * defenseTotal;
-            if (roll <= entrenchment)
+            if (roll < entrenchment)
             {
                 AddSabotageMission(enemyRegionFaction, DefenseType.Entrenchment, entrenchment);
             }
-            else if (roll - entrenchment <= listeningPost)
+            else if (roll - entrenchment < listeningPost)
             {
                 AddSabotageMission(enemyRegionFaction, DefenseType.ListeningPost, listeningPost);
             }

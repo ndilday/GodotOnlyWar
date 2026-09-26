@@ -564,7 +564,7 @@ public sealed class ActivePursuitContactLifecycleTests
         BattleSoldier target = fixture.Quarry.Soldiers[0];
         RangedWeapon weapon = shooter.EquippedRangedWeapons[0];
         shooter.Aim = new ValueTuple<int, RangedWeapon, int>(target.Soldier.Id, weapon, 2);
-        fixture.Grid.MoveSoldier(target, (200, 0), target.Orientation);
+        Assert.True(fixture.Grid.TryMoveSoldier(target, (200, 0), target.Orientation));
         target.TopLeft = (200, 0);
 
         PursuitPairActivity activity = Assert.Single(fixture.BuildActivities());

@@ -11,7 +11,7 @@ namespace OnlyWar.Tests.Domain;
 public class SoldierTrainingCalculatorTests
 {
     [Fact]
-    public void ApplyMarineWorkExperienceByType_AppliesSoldierTemplateTrainingProfileWeights()
+    public void ApplyTrainingProfile_AppliesSoldierTemplateTrainingProfileWeights()
     {
         TrainingProfile profile = new(
             1,
@@ -35,14 +35,14 @@ public class SoldierTrainingCalculatorTests
             [TestSkills.Ranged, TestSkills.Melee, TestSkills.Stealth, TestSkills.Leadership],
             [profile]);
 
-        calculator.ApplyMarineWorkExperienceByType(soldier, 8);
+        calculator.ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, 8);
 
         Assert.Equal(2, soldier.Skills.Single(s => s.BaseSkill == TestSkills.Ranged).PointsInvested);
         Assert.Equal(6, soldier.Skills.Single(s => s.BaseSkill == TestSkills.Melee).PointsInvested);
     }
 
     [Fact]
-    public void ApplyMarineWorkExperienceByType_AppliesAttributeTrainingProfileEntries()
+    public void ApplyTrainingProfile_AppliesAttributeTrainingProfileEntries()
     {
         TrainingProfile profile = new(
             1,
@@ -66,7 +66,7 @@ public class SoldierTrainingCalculatorTests
             [TestSkills.Ranged, TestSkills.Melee, TestSkills.Stealth, TestSkills.Leadership],
             [profile]);
 
-        calculator.ApplyMarineWorkExperienceByType(soldier, 20);
+        calculator.ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, 20);
 
         Assert.Equal(12, soldier.Strength, precision: 5);
         Assert.Equal(12, soldier.Dexterity, precision: 5);

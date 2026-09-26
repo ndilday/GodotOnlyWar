@@ -118,28 +118,16 @@ public class BattleGridAndPlacementTests
     }
 
     [Fact]
-    public void MoveSoldier_FreesOldCellAndOccupiesNew()
+    public void TryMoveSoldier_FreesOldCellAndOccupiesNew()
     {
         BattleGridManager grid = new();
         BattleSoldier soldier = CreateBattleSoldier(1);
         grid.PlaceSoldier(soldier, true, Cell(0, 0));
 
-        grid.MoveSoldier(soldier, new ValueTuple<int, int>(3, 3), 0);
+        Assert.True(grid.TryMoveSoldier(soldier, new ValueTuple<int, int>(3, 3), 0));
 
         Assert.True(grid.IsSpaceAvailable(new ValueTuple<int, int>(0, 0)));
         Assert.Equal(new ValueTuple<int, int>(3, 3), grid.GetSoldierPosition(1)[0]);
-    }
-
-    [Fact]
-    public void MoveSoldier_ThrowsWhenTargetOccupiedByAnother()
-    {
-        BattleGridManager grid = new();
-        BattleSoldier mover = CreateBattleSoldier(1);
-        grid.PlaceSoldier(mover, true, Cell(0, 0));
-        grid.PlaceSoldier(CreateBattleSoldier(2), false, Cell(1, 0));
-
-        Assert.Throws<InvalidOperationException>(
-            () => grid.MoveSoldier(mover, new ValueTuple<int, int>(1, 0), 0));
     }
 
     [Fact]
@@ -233,7 +221,7 @@ public class BattleGridAndPlacementTests
         Assert.Equal(2f, grid.GetNearestEnemy(1, out int firstClosest), precision: 4);
         Assert.Equal(2, firstClosest);
 
-        grid.MoveSoldier(initiallyNear, new ValueTuple<int, int>(10, 0), 0);
+        Assert.True(grid.TryMoveSoldier(initiallyNear, new ValueTuple<int, int>(10, 0), 0));
 
         Assert.Equal(5f, grid.GetNearestEnemy(1, out int secondClosest), precision: 4);
         Assert.Equal(3, secondClosest);
@@ -254,7 +242,7 @@ public class BattleGridAndPlacementTests
     }
 
     [Fact]
-    public void GetEnemiesByDistance_UpdatesBothSidesAfterMovement()
+    public void GetNearestEnemy_UpdatesBothSidesAfterMovement()
     {
         BattleGridManager grid = new();
         BattleSoldier attacker = CreateBattleSoldier(1);
@@ -264,17 +252,20 @@ public class BattleGridAndPlacementTests
         grid.PlaceSoldier(nearEnemy, false, Cell(2, 0));
         grid.PlaceSoldier(farEnemy, false, Cell(6, 0));
 
-        Assert.Equal([2, 3], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
-        Assert.Equal([1], grid.GetEnemiesByDistance(2).Select(enemy => enemy.SoldierId));
+        grid.GetNearestEnemy(1, out int attackerTarget);
+        Assert.Equal(2, attackerTarget);
+        Assert.Equal(2f, grid.GetNearestEnemy(2, out int moverTarget), precision: 4);
+        Assert.Equal(1, moverTarget);
 
-        grid.MoveSoldier(nearEnemy, new ValueTuple<int, int>(10, 0), 0);
+        Assert.True(grid.TryMoveSoldier(nearEnemy, new ValueTuple<int, int>(10, 0), 0));
 
-        Assert.Equal([3, 2], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
-        Assert.Equal(10f, grid.GetEnemiesByDistance(2)[0].Distance, precision: 4);
+        grid.GetNearestEnemy(1, out attackerTarget);
+        Assert.Equal(3, attackerTarget);
+        Assert.Equal(10f, grid.GetNearestEnemy(2, out _), precision: 4);
     }
 
     [Fact]
-    public void GetEnemiesByDistance_LazyRebuildPreservesPlacementOrderForNewTie()
+    public void GetNearestEnemy_LazyRebuildPreservesPlacementOrderForNewTie()
     {
         BattleGridManager grid = new();
         BattleSoldier subject = CreateBattleSoldier(1);
@@ -284,11 +275,14 @@ public class BattleGridAndPlacementTests
         grid.PlaceSoldier(firstPlacedEnemy, false, Cell(-5, 0));
         grid.PlaceSoldier(secondPlacedEnemy, false, Cell(2, 0));
 
-        Assert.Equal([2, 99], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
+        grid.GetNearestEnemy(1, out int closest);
+        Assert.Equal(2, closest);
 
-        grid.MoveSoldier(firstPlacedEnemy, new ValueTuple<int, int>(-2, 0), 0);
+        Assert.True(grid.TryMoveSoldier(firstPlacedEnemy, new ValueTuple<int, int>(-2, 0), 0));
 
-        Assert.Equal([99, 2], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
+        // Now tied at distance 2: the first-placed enemy wins.
+        Assert.Equal(2f, grid.GetNearestEnemy(1, out closest), precision: 4);
+        Assert.Equal(99, closest);
     }
 
     [Fact]
@@ -304,11 +298,11 @@ public class BattleGridAndPlacementTests
 
         Assert.Equal(5f, grid.GetMinimumDistanceBetweenSquads(first, second), precision: 4);
 
-        grid.MoveSoldier(secondSoldier, new ValueTuple<int, int>(0, 2), 0);
+        Assert.True(grid.TryMoveSoldier(secondSoldier, new ValueTuple<int, int>(0, 2), 0));
 
         Assert.Equal(2f, grid.GetMinimumDistanceBetweenSquads(first, second), precision: 4);
 
-        grid.MoveSoldier(firstSoldier, new ValueTuple<int, int>(0, 1), 0);
+        Assert.True(grid.TryMoveSoldier(firstSoldier, new ValueTuple<int, int>(0, 1), 0));
 
         Assert.Equal(1f, grid.GetMinimumDistanceBetweenSquads(first, second), precision: 4);
     }
@@ -330,14 +324,14 @@ public class BattleGridAndPlacementTests
             grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
             precision: 4);
 
-        grid.MoveSoldier(firstObserver, new ValueTuple<int, int>(4, 0), 0);
+        Assert.True(grid.TryMoveSoldier(firstObserver, new ValueTuple<int, int>(4, 0), 0));
 
         Assert.Equal(
             1f,
             grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
             precision: 4);
 
-        grid.MoveSoldier(target, new ValueTuple<int, int>(8, 0), 0);
+        Assert.True(grid.TryMoveSoldier(target, new ValueTuple<int, int>(8, 0), 0));
 
         Assert.Equal(
             2f,
@@ -401,7 +395,7 @@ public class BattleGridAndPlacementTests
 
         Assert.True(grid.IsAdjacentToEnemy(1));
 
-        grid.MoveSoldier(enemy, new ValueTuple<int, int>(4, 0), 0);
+        Assert.True(grid.TryMoveSoldier(enemy, new ValueTuple<int, int>(4, 0), 0));
 
         Assert.False(grid.IsAdjacentToEnemy(1));
     }
@@ -422,7 +416,7 @@ public class BattleGridAndPlacementTests
         int engagementCount = grid.CachedEngagementCount;
         int scrumCount = grid.CachedMeleeScrumCount;
 
-        grid.MoveSoldier(enemy, new ValueTuple<int, int>(5, 0), 0);
+        Assert.True(grid.TryMoveSoldier(enemy, new ValueTuple<int, int>(5, 0), 0));
 
         Assert.Equal(generation + 1, grid.LayoutGeneration);
         Assert.Equal(adjacencyCount, grid.CachedAdjacencyCount);
@@ -471,7 +465,7 @@ public class BattleGridAndPlacementTests
 
         Assert.Equal(new[] { 1, 2 }, grid.GetMeleeScrumParticipants(1));
 
-        grid.MoveSoldier(second, new ValueTuple<int, int>(5, 0), 0);
+        Assert.True(grid.TryMoveSoldier(second, new ValueTuple<int, int>(5, 0), 0));
 
         Assert.Equal(new[] { 1 }, grid.GetMeleeScrumParticipants(1));
         Assert.Equal(new[] { 2 }, grid.GetMeleeScrumParticipants(2));
@@ -612,12 +606,12 @@ public class BattleGridAndPlacementTests
         Assert.Equal(5f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
         Assert.Equal(5f, grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);
 
-        grid.MoveSoldier(first, new ValueTuple<int, int>(0, 4), 0);
+        Assert.True(grid.TryMoveSoldier(first, new ValueTuple<int, int>(0, 4), 0));
 
         Assert.Equal(3f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
         Assert.Equal(3f, grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);
 
-        grid.MoveSoldier(second, new ValueTuple<int, int>(0, 10), 0);
+        Assert.True(grid.TryMoveSoldier(second, new ValueTuple<int, int>(0, 10), 0));
 
         Assert.Equal(6f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
         Assert.Equal(6f, grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);
@@ -658,7 +652,7 @@ public class BattleGridAndPlacementTests
         Assert.Equal(2f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
         Assert.Equal(20f, grid.GetDistanceBetweenSoldiers(1, 20), precision: 4);
 
-        grid.MoveSoldier(first, new ValueTuple<int, int>(0, 3), 0);
+        Assert.True(grid.TryMoveSoldier(first, new ValueTuple<int, int>(0, 3), 0));
 
         Assert.Equal((float)System.Math.Sqrt(13),
             grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);

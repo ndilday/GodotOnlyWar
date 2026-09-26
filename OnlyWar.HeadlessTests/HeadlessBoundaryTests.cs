@@ -8,7 +8,6 @@ using OnlyWar.Runtime.Factories;
 using OnlyWar.Runtime.Random;
 using OnlyWar.Runtime.WorldGeometry;
 using OnlyWar.Medical.Abstractions;
-using OnlyWar.Persistence.Abstractions;
 using OnlyWar.Runtime.Abstractions;
 using OnlyWar.Domain;
 using OnlyWar.Medical.Readiness;
@@ -38,15 +37,13 @@ public class HeadlessBoundaryTests
              "OnlyWar.Generation", "OnlyWar.Battles", "OnlyWar.Medical.Abstractions",
              "OnlyWar.Abstractions", "OnlyWar.Battles.Abstractions", "OnlyWar.Application.Abstractions",
              "OnlyWar.Runtime", "OnlyWar.Runtime.Abstractions", "OnlyWar.Medical",
-             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions",
-             "OnlyWar.Persistence.Abstractions"]);
+             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions"]);
         AssertReferences(typeof(CampaignApplication).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Persistence", "OnlyWar.Campaign", "OnlyWar.Operations",
              "OnlyWar.Generation", "OnlyWar.Battles", "OnlyWar.Medical.Abstractions",
              "OnlyWar.Abstractions", "OnlyWar.Battles.Abstractions", "OnlyWar.Application.Abstractions",
              "OnlyWar.Runtime", "OnlyWar.Runtime.Abstractions", "OnlyWar.Medical",
-             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions",
-             "OnlyWar.Persistence.Abstractions"]);
+             "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions"]);
         AssertReferences(typeof(FactionStrategyController).Assembly,
             ["OnlyWar.Abstractions", "OnlyWar.Domain", "OnlyWar.Medical.Abstractions",
              "OnlyWar.Operations", "OnlyWar.Medical", "OnlyWar.Generation",
@@ -61,8 +58,8 @@ public class HeadlessBoundaryTests
         AssertReferences(typeof(OnlyWar.Medical.Readiness.DutyReadinessPolicy).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Medical.Abstractions", "OnlyWar.Abstractions"],
             expectedFriends: []);
-        AssertReferences(typeof(OnlyWar.Persistence.Files.AtomicCampaignFileStore).Assembly,
-            ["OnlyWar.Domain", "OnlyWar.Persistence.Abstractions"], allowSqlite: true);
+        AssertReferences(typeof(OnlyWar.Persistence.Storage.SaveGameCatalog).Assembly,
+            ["OnlyWar.Domain"], allowSqlite: true);
         AssertReferences(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly,
             ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Runtime.Abstractions"],
             expectedFriends: []);
@@ -99,13 +96,12 @@ public class HeadlessBoundaryTests
         AssertFriends(typeof(FactionStrategyController).Assembly, ["OnlyWar.Tests"]);
         AssertFriends(typeof(OnlyWar.Battles.BattleTurnResolver).Assembly, ["OnlyWar.Tests"]);
         AssertFriends(typeof(OnlyWar.Medical.Readiness.DutyReadinessPolicy).Assembly, []);
-        AssertFriends(typeof(OnlyWar.Persistence.Files.AtomicCampaignFileStore).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(OnlyWar.Persistence.Storage.SaveGameCatalog).Assembly, ["OnlyWar.Tests"]);
         AssertFriends(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly, []);
         AssertFriends(typeof(OnlyWar.Operations.Missions.MissionContext).Assembly, ["OnlyWar.Tests"]);
         AssertFriends(typeof(SectorBuilder).Assembly, ["OnlyWar.Tests"]);
 
         AssertFriends(typeof(IRNG).Assembly, []);
-        AssertFriends(typeof(IAtomicCampaignFileStore).Assembly, []);
         AssertFriends(typeof(RuntimeSoldier).Assembly, []);
     }
 
@@ -124,28 +120,6 @@ public class HeadlessBoundaryTests
         Assert.DoesNotContain(typeof(EquipmentRulesCatalog).GetMethods(),
             method => method.GetParameters().Any(parameter =>
                 parameter.ParameterType.Namespace?.StartsWith("System.Data") == true));
-    }
-
-    [Fact]
-    public void PersistenceContractsDoNotExposeStorageProviderTypes()
-    {
-        Assembly persistence = typeof(IAtomicCampaignFileStore).Assembly;
-        IEnumerable<Type> publicSurface = persistence.GetExportedTypes()
-            .Where(type => type.Namespace?.StartsWith(
-                "OnlyWar.Persistence.Abstractions", StringComparison.Ordinal) == true)
-            .SelectMany(type => new[] { type }
-                .Concat(type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                    .SelectMany(method => new[] { method.ReturnType }
-                        .Concat(method.GetParameters().Select(parameter => parameter.ParameterType))))
-                .Concat(type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                    .Select(property => property.PropertyType)))
-            .SelectMany(UnwrapTypes)
-            .Distinct();
-
-        Assert.DoesNotContain(publicSurface, type =>
-            type.Namespace?.StartsWith("System.Data", StringComparison.Ordinal) == true
-            || type.Namespace?.StartsWith("Microsoft.Data.Sqlite", StringComparison.Ordinal) == true
-            || type.Name.Contains("Sqlite", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -197,7 +171,7 @@ public class HeadlessBoundaryTests
     }
 
     [Fact]
-    public void RuntimeConstructionAndPersistenceUseExplicitBoundaries()
+    public void RuntimeConstructionUsesExplicitBoundaries()
     {
         var random = new SeededRNG(seed: 17);
         var allocator = new OnlyWar.Runtime.Allocators.SequentialEntityIdAllocator(firstId: 100);
@@ -213,18 +187,6 @@ public class HeadlessBoundaryTests
         Assert.NotNull(names.GetFullName(new SeededRNG(seed: 19)));
         Assert.True(names.GivenNameCount > 0);
         Assert.True(names.SurnameCount > 0);
-
-        string path = Path.Combine(Path.GetTempPath(), $"onlywar-phase3-{Guid.NewGuid():N}.bin");
-        try
-        {
-            IAtomicCampaignFileStore store = new OnlyWar.Persistence.Files.AtomicCampaignFileStore();
-            store.Write(path, new byte[] { 1, 2, 3, 5, 8 });
-            Assert.Equal(new byte[] { 1, 2, 3, 5, 8 }, store.Read(path));
-        }
-        finally
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
     }
 
     [Fact]
@@ -310,24 +272,5 @@ public class HeadlessBoundaryTests
         Assert.Equal(
             expected.Order(StringComparer.Ordinal).ToArray(),
             actual);
-    }
-
-    private static IEnumerable<Type> UnwrapTypes(Type type)
-    {
-        if (type.IsByRef || type.IsPointer || type.IsArray)
-        {
-            foreach (Type nested in UnwrapTypes(type.GetElementType())) yield return nested;
-            yield break;
-        }
-        if (type.IsGenericType)
-        {
-            yield return type.GetGenericTypeDefinition();
-            foreach (Type argument in type.GetGenericArguments())
-            {
-                foreach (Type nested in UnwrapTypes(argument)) yield return nested;
-            }
-            yield break;
-        }
-        yield return type;
     }
 }

@@ -168,13 +168,24 @@ namespace OnlyWar.Battles
             {
                 return 0f;
             }
-            float stress = ComputeStress(input).Stress;
+            return MeanFailProbability(input.Soldiers, ComputeStress(input).Stress);
+        }
+
+        // The deterministic per-soldier fail probability, Phi((stress - resolve)/sigma), and its
+        // mean over the squad. Shared by both forecast estimators so they cannot drift apart.
+        private static float FailProbability(float stress, SoldierMoraleInput soldier) =>
+            NormalCdf((stress - EgoToResolve(soldier.Ego)) / MoraleConstants.MoraleRollSigma);
+
+        private static float MeanFailProbability(
+            IReadOnlyList<SoldierMoraleInput> soldiers,
+            float stress)
+        {
             float sum = 0f;
-            foreach (SoldierMoraleInput soldier in input.Soldiers)
+            foreach (SoldierMoraleInput soldier in soldiers)
             {
-                sum += NormalCdf((stress - EgoToResolve(soldier.Ego)) / MoraleConstants.MoraleRollSigma);
+                sum += FailProbability(stress, soldier);
             }
-            return sum / input.Soldiers.Count;
+            return sum / soldiers.Count;
         }
 
         /// <summary>
@@ -195,22 +206,18 @@ namespace OnlyWar.Battles
                 return MoraleState.Steady;
             }
             float stress = ComputeStress(input).Stress;
-            float sum = 0f;
+            float failFraction = MeanFailProbability(input.Soldiers, stress);
             bool leaderPresent = false;
             float leaderFailProbability = 0f;
             foreach (SoldierMoraleInput soldier in input.Soldiers)
             {
-                float failProbability =
-                    NormalCdf((stress - EgoToResolve(soldier.Ego)) / MoraleConstants.MoraleRollSigma);
-                sum += failProbability;
                 if (soldier.IsLeader)
                 {
                     leaderPresent = true;
-                    leaderFailProbability = failProbability;
+                    leaderFailProbability = FailProbability(stress, soldier);
                 }
             }
 
-            float failFraction = sum / count;
             // Deterministic counterpart of Evaluate's leaderHeld: a living leader more likely than
             // not to hold his own nerve steadies the squad, raising both bars (§5.3).
             bool leaderHeld = leaderPresent && !input.LeaderDead && leaderFailProbability < 0.5f;

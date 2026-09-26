@@ -252,7 +252,8 @@ public class SaveLoadRoundTripTests
             && s.Members.Count > 0
             && s.Id != administrativeSquad.Id);
         PlayerSoldier attachedSpecialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
-        OrderAttachment.Attach(attachedSpecialist, order, new MedicalReadinessDecisions());
+        Assert.True(OrderForceService.AssignCharacter(
+            order, attachedSpecialist, new MedicalReadinessDecisions()));
         int attachedSpecialistId = attachedSpecialist.Id;
         int detachableSquadId = detachableSquad.Id;
 
@@ -315,7 +316,9 @@ public class SaveLoadRoundTripTests
             .First(location => location.Template.IsVital && !location.Template.HoldsProgenoid);
         // Crippled, deliberately short of severed: down and alive, which is the whole point.
         crippledVital.Wounds.AddWound(WoundLevel.Critical);
-        Assert.True(CasualtyStateEvaluator.IsIncapacitated(incapacitated));
+        Assert.Equal(
+            CasualtyState.Incapacitated,
+            CasualtyStateEvaluator.Classify(incapacitated, bodyRecovered: true));
         Assert.False(CasualtyStateEvaluator.HasSeveredVitalLocation(incapacitated));
         uint incapacitatedWoundTotal = crippledVital.Wounds.WoundTotal;
         int crippledVitalTemplateId = crippledVital.Template.Id;
@@ -565,7 +568,6 @@ public class SaveLoadRoundTripTests
                 loadedIncapacitated.Body.HitLocations
                     .Single(location => location.Template.Id == crippledVitalTemplateId)
                     .Wounds.WoundTotal);
-            Assert.True(CasualtyStateEvaluator.IsIncapacitated(loadedIncapacitated));
             Assert.False(CasualtyStateEvaluator.HasSeveredVitalLocation(loadedIncapacitated));
             Assert.Equal(
                 CasualtyState.Incapacitated,
@@ -700,7 +702,8 @@ public class SaveLoadRoundTripTests
         Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
             s.PermitsIndividualDeployment && s.Members.Count > 0);
         PlayerSoldier specialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
-        OrderAttachment.Attach(specialist, order, new MedicalReadinessDecisions());
+        Assert.True(OrderForceService.AssignCharacter(
+            order, specialist, new MedicalReadinessDecisions()));
         int specialistId = specialist.Id;
 
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_load_orders");

@@ -78,7 +78,6 @@ public class ShowOfForceRequestTests
         request.ProcessTurn(new Date(1, 1, 4), fixture.Rules);
 
         Assert.Equal(RequestStatus.Fulfilled, request.Status);
-        Assert.True(request.IsRequestCompleted());
     }
 
     private static Region CapitalRegion(SectorSimulationFixture fixture) =>

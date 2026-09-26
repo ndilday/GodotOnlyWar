@@ -211,14 +211,14 @@ public class SquadEngagementPlanningTests
         float incomingRate,
         float expectedTurns)
     {
-        Assert.Equal(
-            expectedTurns,
-            EngagementHorizonModel.DeriveSquadExchangeTurns(
-                enemyBattleValueBeforeWithdrawal,
-                outgoingRate,
-                ownBattleValueBeforeWithdrawal,
-                incomingRate),
-            3);
+        (float enemyTurns, float ownTurns) = EngagementHorizonModel.DeriveSquadExchangeClocks(
+            enemyBattleValueBeforeWithdrawal,
+            outgoingRate,
+            ownBattleValueBeforeWithdrawal,
+            incomingRate);
+
+        // The horizon is the smaller clock, exactly as SquadEngagementPolicy takes it.
+        Assert.Equal(expectedTurns, System.Math.Min(enemyTurns, ownTurns), 3);
     }
 
     [Fact]

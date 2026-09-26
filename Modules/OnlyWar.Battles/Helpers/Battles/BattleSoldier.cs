@@ -596,17 +596,6 @@ namespace OnlyWar.Battles
                 && EquippedMeleeWeapons[1].Template.Location == EquipLocation.OneHand;
         }
 
-        public float GetMeleeParryModifier()
-        {
-            float total = 0;
-            foreach (MeleeWeapon weapon in EquippedMeleeWeapons)
-            {
-                total += weapon.Template.ParryModifier;
-            }
-
-            return total;
-        }
-
         public IReadOnlyList<int> GetHandGroupIds(RangedWeapon weapon)
         {
             SynchronizeWeaponGrips();

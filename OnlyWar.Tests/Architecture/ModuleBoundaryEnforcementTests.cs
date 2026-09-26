@@ -349,13 +349,12 @@ public sealed class ModuleBoundaryEnforcementTests
         ["OnlyWar.Operations.Abstractions"] =
             ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Battles.Abstractions",
              "OnlyWar.Medical.Abstractions"],
-        ["OnlyWar.Persistence.Abstractions"] = [],
         ["OnlyWar.Runtime.Abstractions"] = ["OnlyWar.Domain", "OnlyWar.Abstractions"],
         ["OnlyWar.Domain"] = ["OnlyWar.Abstractions"],
         ["OnlyWar.Application"] =
             ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Application.Abstractions",
              "OnlyWar.Generation.Abstractions", "OnlyWar.Operations.Abstractions",
-             "OnlyWar.Persistence.Abstractions", "OnlyWar.Runtime.Abstractions",
+             "OnlyWar.Runtime.Abstractions",
              "OnlyWar.Battles.Abstractions", "OnlyWar.Medical.Abstractions", "OnlyWar.Runtime",
              "OnlyWar.Campaign", "OnlyWar.Battles", "OnlyWar.Medical", "OnlyWar.Operations",
              "OnlyWar.Persistence", "OnlyWar.Generation"],
@@ -374,7 +373,7 @@ public sealed class ModuleBoundaryEnforcementTests
             ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Operations.Abstractions",
              "OnlyWar.Battles.Abstractions", "OnlyWar.Medical.Abstractions", "OnlyWar.Runtime"],
         ["OnlyWar.Persistence"] =
-            ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Persistence.Abstractions"],
+            ["OnlyWar.Domain", "OnlyWar.Abstractions"],
         ["OnlyWar.Runtime"] =
             ["OnlyWar.Domain", "OnlyWar.Abstractions", "OnlyWar.Runtime.Abstractions"]
     };

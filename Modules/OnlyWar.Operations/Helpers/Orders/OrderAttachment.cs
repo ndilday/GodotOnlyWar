@@ -1,108 +1,20 @@
-using OnlyWar.Operations.Readiness;
-using OnlyWar.Domain;
 using OnlyWar.Domain.Orders;
-using OnlyWar.Domain.Planets;
-using OnlyWar.Domain.Recruitment;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Squads;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Operations.Orders
 {
-    // Order-level attachment of individual specialists (Design/Reference/SpecialistAttachment.md,
-    // Phase 2a). An attached specialist remains WITH the force at the campaign/order layer. When
-    // individually duty-ready, the Phase 2 battle boundary materializes him as a one-person
-    // an engagement element; the attachment itself still does not bind him to a standing squad or add
-    // specialist battlefield effects.
+    // Queries about individual specialists attached to operations (Design/Reference/SpecialistAttachment.md,
+    // Phase 2a). Attaching and releasing them -- both halves of the pointer pair,
+    // Order.AssignedCharacters and PlayerSoldier.CurrentOrder -- is owned by OrderForceService, and
+    // whether a man may be attached is decided by IPersonnelAvailabilityQueries.EvaluateOrderAssignment.
     //
-    // This type owns BOTH halves of the pointer pair -- Order.AssignedCharacters and
-    // PlayerSoldier.CurrentOrder -- so nothing anywhere can leave a soldier half-attached.
-    // Everything else in the codebase should call Attach/Detach/ReleaseAll rather than
-    // touching either side.
-    //
-    // The soldier is deliberately NOT removed from his home squad's Members. Squad membership
+    // An attached soldier is deliberately NOT removed from his home squad's Members. Squad membership
     // drives Soldier.SquadId in the save, and GameStateDataAccess treats a squadless decorated
     // soldier as a FALLEN BROTHER on load -- so evicting him would kill him on the next save.
     public static class OrderAttachment
     {
-        // Readiness inputs come from the campaign the order belongs to, recorded on the order when
-        // the sector registered it, rather than from whichever campaign is installed (SB-05a). An
-        // order still being assembled has none, so the command owner resolves and passes them.
-        private static PlayerForce ForceFor(Order order) => order?.RegisteredSector?.PlayerForce;
-
-        // Attaches an individual to an operation. Idempotent for the same order; re-attaching
-        // a soldier who is on a different order moves him.
-        public static void Attach(
-            PlayerSoldier soldier,
-            Order order,
-            IReadinessDecisions readiness,
-            ChapterOperationalDoctrine doctrine = null)
-        {
-            if (soldier == null || order == null)
-            {
-                return;
-            }
-            if (ReferenceEquals(soldier.CurrentOrder, order))
-            {
-                if (!order.AssignedCharacters.Contains(soldier))
-                {
-                    order.AssignedCharacters.Add(soldier);
-                }
-                return;
-            }
-
-            if (soldier.AssignedSquad == null)
-            {
-                return;
-            }
-
-            // Do not mutate the old order until the new attachment has passed every guard. This
-            // preserves the all-or-nothing contract when a doctrine edit has withheld the
-            // specialist since the previous operation was issued.
-            PlayerForce attachForce = ForceFor(order);
-            DutyReadinessEvaluation duty = readiness.EvaluateSoldier(
-                soldier,
-                doctrine: ForceReadinessInputs.DoctrineFor(attachForce, soldier.AssignedSquad, doctrine),
-                program: ForceReadinessInputs.ProgramFor(attachForce, soldier.AssignedSquad));
-            if (!duty.IsDutyReady)
-            {
-                return;
-            }
-
-            if (soldier.CurrentOrder != null && !ReferenceEquals(soldier.CurrentOrder, order))
-            {
-                Detach(soldier);
-            }
-
-            OrderForceService.AssignCharacter(order, soldier, readiness, doctrine);
-        }
-
-        // Releases one individual from whatever operation he is on. Safe on an unattached man.
-        public static void Detach(PlayerSoldier soldier)
-        {
-            if (soldier?.CurrentOrder == null)
-            {
-                return;
-            }
-            OrderForceService.RemoveCharacter(soldier);
-        }
-
-        // Releases every individual attached to an order. Called wherever an order ends:
-        // player unassignment, end-of-turn cleanup of resolved orders, and the last-squad-left
-        // teardown in OrderAssignment.
-        public static void ReleaseAll(Order order)
-        {
-            if (order == null)
-            {
-                return;
-            }
-            foreach (PlayerSoldier soldier in order.AssignedCharacters.ToList())
-            {
-                OrderForceService.RemoveCharacter(order, soldier);
-            }
-        }
-
         // True if this squad has any member currently attached to a different order. Used by
         // the end-turn preflight so a formation whose specialist is forward does not get
         // flagged as idle.
@@ -112,127 +24,5 @@ namespace OnlyWar.Operations.Orders
                 member.CurrentOrder != null
                 && !ReferenceEquals(member.CurrentOrder, excludingOrder)) == true;
         }
-
-        /// <summary>
-        /// May this brother be attached to this operation? Runs before any mutation; the caller
-        /// creates nothing on a false result. See the design doc §3.2 for the six guards.
-        /// </summary>
-        /// <param name="originRegion">
-        /// The staging region the order is being issued from, or null to accept co-location
-        /// with any squad already assigned to the order.
-        /// </param>
-        public static bool CanAttach(
-            PlayerSoldier soldier,
-            Order order,
-            Region originRegion,
-            IReadinessDecisions readiness,
-            out string reason)
-        {
-            return CanAttach(
-                soldier, order, order?.AssignedSquads, originRegion, readiness, out reason, null);
-        }
-
-        /// <summary>
-        /// As above, but with the staging force supplied explicitly. Order issue needs this
-        /// overload: the squads being committed are known before the Order object exists.
-        /// </summary>
-        public static bool CanAttach(
-            PlayerSoldier soldier,
-            Order order,
-            IReadOnlyList<Squad> stagingSquads,
-            Region originRegion,
-            IReadinessDecisions readiness,
-            out string reason,
-            ChapterOperationalDoctrine doctrine = null,
-            RecruitmentProgram program = null)
-        {
-            reason = null;
-            if (soldier == null)
-            {
-                reason = "No soldier selected.";
-                return false;
-            }
-            if (order != null && ReferenceEquals(soldier.CurrentOrder, order))
-            {
-                return true;
-            }
-
-            // 1. Only formations whose function is to supply specialists may give a man up.
-            Squad squad = soldier.AssignedSquad;
-            if (squad?.PermitsIndividualDeployment != true)
-            {
-                reason = $"{soldier.Name} belongs to a formation that deploys as a unit.";
-                return false;
-            }
-
-            // 2. One man, one operation.
-            if (soldier.CurrentOrder != null && !ReferenceEquals(soldier.CurrentOrder, order))
-            {
-                reason = $"{soldier.Name} is already attached to another operation.";
-                return false;
-            }
-
-            // (Guard 3 of the design doc -- "his home squad is not itself deployed" -- is
-            // vacuous: a detachable formation is never orderable, so its members' home squad
-            // can never be under orders.)
-
-            // 4. Fit to march under the same physical and Chapter policy used by order selection.
-            PlayerForce canAttachForce = ForceFor(order);
-            DutyReadinessEvaluation duty = readiness.EvaluateSoldier(
-                soldier,
-                doctrine: ForceReadinessInputs.DoctrineFor(
-                    canAttachForce, soldier.AssignedSquad, doctrine),
-                program: ForceReadinessInputs.ProgramFor(
-                    canAttachForce, soldier.AssignedSquad, program));
-            if (!duty.IsDutyReady)
-            {
-                reason = duty.Reason ?? $"{soldier.Name} is not fit for field duty.";
-                return false;
-            }
-
-            // 5. Co-located with the operation's staging point.
-            if (!IsCoLocated(squad, stagingSquads, originRegion))
-            {
-                reason = $"{soldier.Name} is not with the force mounting this operation.";
-                return false;
-            }
-
-            // 6. Not reserved for a procedure this week.
-            return true;
-        }
-
-        private static bool IsCoLocated(
-            Squad squad, IReadOnlyList<Squad> stagingSquads, Region originRegion)
-        {
-            if (squad == null)
-            {
-                return false;
-            }
-            if (originRegion != null && squad.CurrentRegion?.Id == originRegion.Id)
-            {
-                return true;
-            }
-            return stagingSquads?.Any(assigned => SameLocation(squad, assigned)) == true;
-        }
-
-        // Same shape as MedicalProcedureService.SameLocation: aboard the same ship, or landed
-        // in the same region.
-        private static bool SameLocation(Squad a, Squad b)
-        {
-            if (a == null || b == null)
-            {
-                return false;
-            }
-            if (a.BoardedLocation != null && b.BoardedLocation != null)
-            {
-                return a.BoardedLocation.Id == b.BoardedLocation.Id;
-            }
-            if (a.CurrentRegion != null && b.CurrentRegion != null)
-            {
-                return a.CurrentRegion.Id == b.CurrentRegion.Id;
-            }
-            return false;
-        }
-
     }
 }

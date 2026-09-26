@@ -249,7 +249,9 @@ public class RecruitmentForecastServiceTests
     [InlineData(2.5, "2.5 per week")]
     public void RateFormatter_MakesSubWeeklyRatesLegible(double rate, string expected)
     {
-        Assert.Equal(expected, RecruitmentRateFormatter.FormatWeekly(rate));
+        Assert.Equal(
+            expected,
+            OnlyWar.Host.Presentation.UI.RecruitmentRatePresentation.FormatWeekly(rate));
     }
 
     private static RecruitmentProgram CreateStaffedProgram()

@@ -16,165 +16,29 @@ using System.Linq;
 
 namespace OnlyWar.Operations.Orders
 {
-    // Pure-logic extraction of OrderDialogController.OnOrdersConfirmed's Mission-construction and
-    // Order-creation logic, generalized to accept more than one squad at once (for a future
-    // multi-squad operations board). The campaign it mutates arrives as an explicit
-    // OrderCommandContext (SB-05a): the same AddNewOrder/RemoveOrder bookkeeping the dialog used to
-    // do inline, against a named sector rather than whichever campaign happens to be current.
+    // Mission construction and order creation for the player's orders, issued through
+    // OrderMutationService. The campaign it mutates arrives as an explicit OrderCommandContext
+    // (SB-05a): AddNewOrder/RemoveOrder bookkeeping against a named sector rather than whichever
+    // campaign happens to be current.
     public static class OrderAssignment
     {
-        // Reuses the existing player order for the same effective mission whenever one exists.
-        // "Same" means mission type + target region, plus target faction for Attack/Diversion,
-        // construction type for building orders, or the exact persisted mission id for a special
-        // mission. This keeps one authoritative order (and one aggression setting) per operation.
-        // Otherwise builds and registers one new Order after detaching the squads from prior tasking.
-        // Returns null (and creates nothing) if the mission descriptor can't be resolved.
-        //
-        // targetFactionId remains the selector input for Diversion and for legacy callers that
-        // construct a generic Attack descriptor. New Attack buttons carry their RegionFaction
-        // directly on AvailableMission. A negative value means no separate selection was supplied.
-        public static Order AssignSquadsToMission(
-            OrderCommandContext campaign,
-            IReadOnlyList<Squad> squads,
-            Region targetRegion,
-            AvailableMission mission,
-            int targetFactionId,
-            Aggression aggression,
-            IReadOnlyList<PlayerSoldier> attachedSoldiers = null,
-            ChapterOperationalDoctrine doctrine = null)
-        {
-            if (campaign?.Sector == null) return null;
-            if (squads == null || squads.Count == 0
-                || squads.Any(squad => squad?.CanAcceptSquadOrder != true
-                    || squad.PermitsIndividualDeployment
-                    || squad.CurrentOrders == null
-                        && !campaign.RequireReadiness().CanBeginNewDeployment(
-                            squad,
-                            program: ForceReadinessInputs.ProgramFor(campaign.Force, squad),
-                            doctrine: ForceReadinessInputs.DoctrineFor(campaign.Force, squad, doctrine))))
-            {
-                return null;
-            }
-            // A formation that may give up individuals never deploys as a unit
-            // (Design/Reference/SpecialistAttachment.md §3.3). HQ squads and the four chapter
-            // offices are personnel pools: their people reach the field only by attachment.
-            // Administrative formations are member-only personnel pools and never deploy as
-            // whole formations; their capabilities are authored by the template.
-            List<Squad> distinctSquads = squads
-                .GroupBy(squad => squad.Id)
-                .Select(group => group.First())
-                .ToList();
-            RecruitmentProgram program = campaign.Recruitment;
-            if (distinctSquads.Any(squad => squad.Members.Any(member =>
-                    RecruitmentProcedureRules.IsSoldierInBlackCarapaceProcedure(
-                        program, member.Id))))
-            {
-                return null;
-            }
-
-            // Individual specialists lent to this operation. Validated before any mutation:
-            // one bad specialist rejects the whole issue and creates nothing, matching the
-            // existing all-or-nothing contract of this method.
-            List<PlayerSoldier> distinctSpecialists = (attachedSoldiers ?? [])
-                .Where(soldier => soldier != null)
-                .GroupBy(soldier => soldier.Id)
-                .Select(group => group.First())
-                .ToList();
-            if (distinctSpecialists.Any(soldier =>
-                    RecruitmentProcedureRules.IsSoldierInBlackCarapaceProcedure(
-                        program, soldier.Id)))
-            {
-                return null;
-            }
-
-            Sector sector = campaign.Sector;
-            IPersonnelAvailabilityQueries personnel = campaign.Personnel
-                ?? throw new System.ArgumentException(
-                    "Order command context must include personnel availability queries.",
-                    nameof(campaign));
-            List<Order> equivalentOrders = sector.Orders.Values
-                .Where(order => IsPlayerOrder(order)
-                    && RepresentsEffectiveMission(
-                        order, targetRegion, mission, targetFactionId))
-                .ToList();
-            if (equivalentOrders.Count > 0)
-            {
-                Order existingOrder = equivalentOrders[0];
-                foreach (Order duplicateOrder in equivalentOrders.Skip(1))
-                {
-                    MoveSquadsToOrder(
-                        duplicateOrder.AssignedSquads.ToList(), existingOrder);
-                    sector.RemoveOrder(duplicateOrder);
-                }
-                List<Squad> existingStaging = existingOrder.AssignedSquads
-                    .Concat(distinctSquads)
-                    .ToList();
-                if (!CanAttachAll(campaign, distinctSpecialists, existingOrder, existingStaging, doctrine))
-                {
-                    return null;
-                }
-                existingOrder.SetAggression(aggression);
-                MoveSquadsToOrder(distinctSquads, existingOrder);
-                foreach (PlayerSoldier specialist in distinctSpecialists)
-                {
-                    OrderAttachment.Attach(
-                        specialist,
-                        existingOrder,
-                        campaign.RequireReadiness(),
-                        doctrine);
-                }
-                return existingOrder;
-            }
-
-            if (!CanAttachAll(campaign, distinctSpecialists, null, distinctSquads, doctrine))
-            {
-                return null;
-            }
-
-            IPersistentIdAllocator identity = campaign.Identity ?? CreateTransientIdentity();
-            Mission builtMission = BuildMission(
-                targetRegion,
-                mission,
-                targetFactionId,
-                campaign.PlayerFaction,
-                identity);
-            if (builtMission == null)
-            {
-                return null;
-            }
-
-            foreach (Squad squad in distinctSquads)
-            {
-                DetachFromCurrentOrder(squad);
-            }
-
-            // The Order constructor sets squad.CurrentOrders = this for every squad passed in,
-            // so assigning CurrentOrders separately afterwards is unnecessary.
-            Order newOrder = new Order(
-                identity.GetNextOrderId(),
-                distinctSquads,
-                true,
-                false,
-                aggression,
-                builtMission,
-                sector.PlayerForce?.Faction);
-            sector.AddNewOrder(newOrder);
-            foreach (PlayerSoldier specialist in distinctSpecialists)
-            {
-                OrderAttachment.Attach(
-                    specialist,
-                    newOrder,
-                    campaign.RequireReadiness(),
-                    doctrine);
-            }
-            return newOrder;
-        }
-
         /// <summary>
         /// Creates or updates a mission from a mixed movement force. Characters are first-class
         /// order participants here, but a new order still requires at least one manoeuvre squad;
         /// characters may be added to an existing squad-backed order independently.
         /// </summary>
+        /// <remarks>
+        /// Reuses the existing player order for the same effective mission whenever one exists.
+        /// "Same" means mission type + target region, plus target faction for Attack/Diversion,
+        /// construction type for building orders, or the exact persisted mission id for a special
+        /// mission. This keeps one authoritative order (and one aggression setting) per operation.
+        /// A squad already committed to a different order is rejected, not re-tasked. Returns null
+        /// if the mission descriptor can't be resolved.
+        ///
+        /// targetFactionId remains the selector input for Diversion and for callers that
+        /// construct a generic Attack descriptor. New Attack buttons carry their RegionFaction
+        /// directly on AvailableMission. A negative value means no separate selection was supplied.
+        /// </remarks>
         public static Order AssignParticipantsToMission(
             OrderCommandContext campaign,
             IReadOnlyList<Squad> squads,
@@ -241,8 +105,8 @@ namespace OnlyWar.Operations.Orders
             if (targetOrder == null)
             {
                 // An attached character supplements an operation; it cannot be the operation's
-                // only force. Keep this invariant at the mutation boundary as well as in the
-                // ordinary AssignSquadsToMission API.
+                // only force. OrderMutationService checks this too; keep it here as well so no
+                // caller can create a specialists-only order.
                 if (distinctSquads.Count == 0)
                 {
                     return null;
@@ -368,23 +232,6 @@ namespace OnlyWar.Operations.Orders
                 ForceReadinessInputs.DoctrineFor(campaign.Force, character?.AssignedSquad, doctrine),
                 ForceReadinessInputs.ProgramFor(campaign.Force, character?.AssignedSquad));
 
-        // Every specialist must clear OrderAttachment.CanAttach against the force actually
-        // being committed; the staging list is passed explicitly because for a brand-new order
-        // the Order object does not exist yet. targetOrder is null in that case, which makes
-        // the "already attached elsewhere" guard reject anyone already committed.
-        private static bool CanAttachAll(
-            OrderCommandContext campaign,
-            IReadOnlyList<PlayerSoldier> specialists,
-            Order targetOrder,
-            IReadOnlyList<Squad> stagingSquads,
-            ChapterOperationalDoctrine doctrine)
-        {
-            return specialists.All(soldier => OrderAttachment.CanAttach(
-                soldier, targetOrder, stagingSquads, null, campaign.RequireReadiness(), out _,
-                ForceReadinessInputs.DoctrineFor(campaign.Force, soldier?.AssignedSquad, doctrine),
-                ForceReadinessInputs.ProgramFor(campaign.Force, soldier?.AssignedSquad)));
-        }
-
         public static bool UnassignSquads(IReadOnlyList<Squad> squads)
         {
             if (squads == null || squads.Count == 0)
@@ -399,27 +246,6 @@ namespace OnlyWar.Operations.Orders
                 .Select(group => group.First()))
             {
                 DetachFromCurrentOrder(squad);
-                changed = true;
-            }
-            return changed;
-        }
-
-        // Recalls individual specialists from whatever operation they are attached to. The
-        // order itself survives -- it still has its squads, and it is the squads that decide
-        // whether the operation exists at all.
-        public static bool UnassignSpecialists(IReadOnlyList<PlayerSoldier> soldiers)
-        {
-            if (soldiers == null || soldiers.Count == 0)
-            {
-                return false;
-            }
-            bool changed = false;
-            foreach (PlayerSoldier soldier in soldiers
-                .Where(soldier => soldier?.CurrentOrder != null)
-                .GroupBy(soldier => soldier.Id)
-                .Select(group => group.First()))
-            {
-                OrderForceService.RemoveCharacter(soldier);
                 changed = true;
             }
             return changed;
@@ -488,30 +314,6 @@ namespace OnlyWar.Operations.Orders
                     && existingMission.RegionFaction.PlanetFaction.Faction.Id == targetFactionId,
                 _ => false
             };
-        }
-
-        private static void MoveSquadsToOrder(
-            IReadOnlyList<Squad> squads,
-            Order targetOrder)
-        {
-            foreach (Squad squad in squads)
-            {
-                if (ReferenceEquals(squad.CurrentOrders, targetOrder))
-                {
-                    if (!targetOrder.AssignedSquads.Contains(squad))
-                    {
-                        targetOrder.AssignedSquads.Add(squad);
-                    }
-                    continue;
-                }
-
-                DetachFromCurrentOrder(squad);
-                if (!targetOrder.AssignedSquads.Contains(squad))
-                {
-                    targetOrder.AssignedSquads.Add(squad);
-                }
-                squad.CurrentOrders = targetOrder;
-            }
         }
 
         // An order that empties out is retired from the sector that registered it, which the order

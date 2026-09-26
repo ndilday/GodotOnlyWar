@@ -83,41 +83,18 @@ namespace OnlyWar.Operations.Orders
         }
 
         /// <summary>
-        /// The individuals who may be lent to an operation staged out of <paramref name="originRegion"/>.
-        /// Drawn from the landed squads of the player's presence there whose templates permit
-        /// detachment, filtered through <see cref="OrderAttachment.CanAttach"/>.
+        /// Every member of a landed personnel-pool formation for the Region Ops roster. This keeps
+        /// unavailable or already-attached men in the tree as selectable rows, so assigning a
+        /// specialist never makes him disappear from the region detail view. Their assignment
+        /// status is displayed beside the row, and the availability flag still prevents a second
+        /// attachment from being accepted; filter on <see cref="SpecialistOption.IsAvailable"/>
+        /// for only the men who may be lent now.
         /// </summary>
         /// <param name="contextOrder">
         /// The order being edited, when the player re-opened an existing one from the inbound
-        /// dossier -- its own attached specialists stay selectable. Null when issuing a fresh
-        /// order, in which case anyone already committed elsewhere is excluded.
+        /// dossier -- its own attached specialists stay available. Null when issuing a fresh
+        /// order, in which case anyone already committed elsewhere is unavailable.
         /// </param>
-        public static IReadOnlyList<SpecialistOption> EnumerateCandidates(
-            RegionFaction playerRegionFaction,
-            Region originRegion,
-            IEnumerable<PlayerSoldier> rosterCharacters,
-            IReadinessDecisions readiness,
-            Order contextOrder = null,
-            IPersonnelAvailabilityQueries personnel = null)
-        {
-            return EnumerateRoster(
-                    playerRegionFaction,
-                    originRegion,
-                    rosterCharacters,
-                    readiness,
-                    contextOrder,
-                    personnel)
-                .Where(option => option.IsAvailable)
-                .ToList();
-        }
-
-        /// <summary>
-        /// Every member of a landed personnel-pool formation for the Region Ops roster. Unlike
-        /// <see cref="EnumerateCandidates"/>, this keeps unavailable or already-attached men in
-        /// the tree as selectable rows, so assigning a specialist never makes him disappear from
-        /// the region detail view. Their assignment status is displayed beside the row, and the
-        /// availability flag still prevents a second attachment from being accepted.
-        /// </summary>
         /// <param name="rosterCharacters">
         /// The chapter roster the caller is looking at — every man who could be lent to an operation,
         /// wherever he currently is. Supplied explicitly rather than read from the active campaign
@@ -127,7 +104,6 @@ namespace OnlyWar.Operations.Orders
             RegionFaction playerRegionFaction,
             Region originRegion,
             IEnumerable<PlayerSoldier> rosterCharacters,
-            IReadinessDecisions readiness,
             Order contextOrder = null,
             IPersonnelAvailabilityQueries personnel = null)
         {
@@ -154,15 +130,12 @@ namespace OnlyWar.Operations.Orders
                             && ReferenceEquals(soldier.CurrentOrder, contextOrder);
                         SpecialistAvailabilityEvaluation evaluation = assignedToContext
                             ? SpecialistAvailabilityEvaluation.Allowed
-                            : soldier.AssignedSquad?.PermitsIndividualDeployment == true
-                                ? Project(surface.EvaluateOrderAssignment(
-                                    PersonnelAvailabilityProjection.ForOrderAssignment(
-                                        soldier,
-                                        contextOrder,
-                                        originRegion,
-                                        contextOrder?.AssignedSquads)))
-                                : EvaluateLegacyCandidate(
-                                    soldier, contextOrder, originRegion, readiness);
+                            : Project(surface.EvaluateOrderAssignment(
+                                PersonnelAvailabilityProjection.ForOrderAssignment(
+                                    soldier,
+                                    contextOrder,
+                                    originRegion,
+                                    contextOrder?.AssignedSquads)));
                         return new SpecialistOption(
                             soldier,
                             soldier.AssignedSquad,
@@ -188,21 +161,6 @@ namespace OnlyWar.Operations.Orders
                     (PersonnelAvailabilityReasonCode)decision.ReasonCode,
                     decision.Reason);
 
-        private static SpecialistAvailabilityEvaluation EvaluateLegacyCandidate(
-            PlayerSoldier soldier,
-            Order contextOrder,
-            Region originRegion,
-            IReadinessDecisions readiness)
-        {
-            bool isAvailable = OrderAttachment.CanAttach(
-                soldier, contextOrder, null, originRegion, readiness, out string reason);
-            return isAvailable
-                ? SpecialistAvailabilityEvaluation.Allowed
-                : new SpecialistAvailabilityEvaluation(
-                    false,
-                    PersonnelAvailabilityReasonCode.NotAtOrigin,
-                    reason ?? "The character is not available at this origin.");
-        }
 
         private static string DescribeStatus(
             PlayerSoldier soldier,

@@ -56,32 +56,6 @@ public static class DutyReadinessPolicy
             : new DutyReadinessEvaluation(true, DutyReadinessReasonCode.Ready, null, worst);
     }
 
-    public static WoundLevel GetWorstWoundLevel(Body body)
-    {
-        if (body == null) return WoundLevel.None;
-        WoundLevel worst = WoundLevel.None;
-        foreach (HitLocation location in body.HitLocations)
-        {
-            WoundLevel current = GetWorstWoundLevel(location?.Wounds);
-            if (SeverityIndex(current) > SeverityIndex(worst)) worst = current;
-        }
-        return worst;
-    }
-
-    public static WoundLevel GetWorstWoundLevel(Wounds wounds)
-    {
-        if (wounds == null) return WoundLevel.None;
-        if (wounds.UnsurvivableWounds > 0) return WoundLevel.Unsurvivable;
-        if (wounds.MortalWounds > 0) return WoundLevel.Mortal;
-        if (wounds.MassiveWounds > 0) return WoundLevel.Massive;
-        if (wounds.CriticalWounds > 0) return WoundLevel.Critical;
-        if (wounds.MajorWounds > 0) return WoundLevel.Major;
-        if (wounds.ModerateWounds > 0) return WoundLevel.Moderate;
-        if (wounds.MinorWounds > 0) return WoundLevel.Minor;
-        if (wounds.NegligibleWounds > 0) return WoundLevel.Negligible;
-        return WoundLevel.None;
-    }
-
     public static int SeverityIndex(WoundLevel level) => level switch
     {
         WoundLevel.Negligible => 1,

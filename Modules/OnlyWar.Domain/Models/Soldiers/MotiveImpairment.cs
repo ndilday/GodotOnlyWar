@@ -109,9 +109,12 @@ namespace OnlyWar.Domain.Soldiers
         /// the body has a strictly higher cripple threshold.
         /// </summary>
         public static bool IsPrincipal(Body body, HitLocationTemplate template) =>
+            IsPrincipal(template, GetPrincipalCrippleThreshold(body));
+
+        private static bool IsPrincipal(HitLocationTemplate template, uint principalThreshold) =>
             template != null
             && template.IsMotive
-            && template.CrippleWound >= GetPrincipalCrippleThreshold(body);
+            && template.CrippleWound >= principalThreshold;
 
         /// <summary>
         /// The highest cripple threshold among the body's motive locations. Locations at this
@@ -140,7 +143,7 @@ namespace OnlyWar.Domain.Soldiers
                 ? 0f
                 : GetBandMultiplier(location.Wounds.WoundTotal);
 
-            return location.Template.CrippleWound >= principalThreshold
+            return IsPrincipal(location.Template, principalThreshold)
                 ? banded
                 : System.Math.Max(banded, CasualtyConstants.ExtremitySpeedFloor);
         }

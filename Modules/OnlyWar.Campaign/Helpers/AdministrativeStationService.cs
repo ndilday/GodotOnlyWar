@@ -59,27 +59,7 @@ namespace OnlyWar.Campaign
                 return new AdministrativeStationResult(true, "Formation already seated.", 1);
             }
 
-            if (station.Ship != null)
-            {
-                int oldStationed = formation.DutyStation?.Ship == station.Ship
-                    ? SoldierPresenceService.PresentCount(formation)
-                    : 0;
-                if (ShipCapacityService.AvailableCapacity(station.Ship, _personnel) + oldStationed
-                    < SoldierPresenceService.PresentCount(formation))
-                {
-                    return AdministrativeStationResult.Failure(
-                        $"{station.Ship.Name} has insufficient capacity for the administrative station.");
-                }
-            }
-
-            RemoveFromCurrentStation(formation);
-            formation.DutyStation = station;
-            if (station.Ship != null)
-            {
-                station.Ship.StationAdministrativeFormation(formation);
-            }
-            NormalizeMembers(formation);
-            return new AdministrativeStationResult(true, "Administrative formation seated.", 1);
+            return SeatFormations([formation], station);
         }
 
         public AdministrativeStationResult SeatAll(

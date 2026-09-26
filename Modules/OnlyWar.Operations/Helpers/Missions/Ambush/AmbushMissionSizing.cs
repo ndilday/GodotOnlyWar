@@ -59,19 +59,6 @@ namespace OnlyWar.Operations.Missions.Ambush
                 wholeSquads + (positiveTarget % referenceSquadBattleValue == 0 ? 0 : 1));
         }
 
-        public static string FormatRecommendedMinimumForce(Mission mission)
-        {
-            if (mission?.MissionType != MissionType.Ambush
-                || mission.TargetBattleValue is not long targetBattleValue)
-            {
-                return null;
-            }
-
-            long squads = RecommendedMinimumSquads(targetBattleValue);
-            string unit = squads == 1 ? "squad" : "squads";
-            return $"Recommended Minimum Force: {squads:N0} {unit}";
-        }
-
         private static long SaturatingMultiply(long left, long right)
         {
             if (left <= 0 || right <= 0) return 0;

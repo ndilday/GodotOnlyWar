@@ -724,16 +724,24 @@ public class FactionStrategyControllerTests
             > FactionOffensiveEvaluator.RewardRiskScore(easy));
     }
 
-    // Winnability now takes the force as an argument instead of reading it off the target, so the same
-    // target is winnable or not depending on what the auction is willing to spend on it.
+    // Winnability is a property of the force offered, not of whatever was spare beside the target: the
+    // assault task's launch threshold (its carry point) is the offensive force ratio times the believed
+    // defender, and the auction will not fund it below that.
     [Fact]
-    public void IsWinnable_AnswersForTheForceOffered_NotForWhateverWasSpare()
+    public void AssaultTask_LaunchThresholdIsTheOffensiveForceRatio()
     {
         Faction attacker = CreateNonPlayerFaction();
-        var offensive = Offensive(CreateTargetRegionFaction(attacker), attackForce: 0, estimatedDefenderBv: 1000, reward: 5000);
+        RegionFaction target = CreateTargetRegionFaction(attacker);
+        var offensive = Offensive(target, attackForce: 0, estimatedDefenderBv: 1000, reward: 5000);
 
-        Assert.False(FactionOffensiveEvaluator.IsWinnable(offensive, 100));
-        Assert.True(FactionOffensiveEvaluator.IsWinnable(offensive, 2000));
+        List<ForceTask> tasks = new ForceTaskBuilder(null).Build(
+            attacker, target.Region.Planet, [], [offensive], new SharedThreatLedger(),
+            defensiveOnly: false);
+
+        ForceTask assault = Assert.Single(tasks, task => task.Kind == ForceTaskKind.Assault);
+        Assert.Equal(
+            (long)System.Math.Ceiling(1000 * FactionOffensiveEvaluator.OffensiveForceRatioThreshold),
+            assault.MinimumViableAward);
     }
 
     // Removed with the mechanic: IsWinnable_ProvocationLowersTheRequiredForceRatio covered
@@ -752,17 +760,7 @@ public class FactionStrategyControllerTests
         Assert.True(FactionOffensiveEvaluator.RewardRiskScore(open) > FactionOffensiveEvaluator.RewardRiskScore(dugIn));
     }
 
-    // ----- Recon-before-invade: DecideOffensivePlan (PRD §4.24) -----
-
-    [Fact]
-    public void ChooseReconTarget_ScoutsTheRichestUnknown()
-    {
-        Faction attacker = CreateNonPlayerFaction();
-        var poor = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 500);
-        var rich = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 9000);
-
-        Assert.Same(rich, FactionOffensiveEvaluator.ChooseReconTarget([poor, rich]));
-    }
+    // ----- Recon-before-invade (PRD §4.24) -----
 
     [Fact]
     public void IsWellReconnoitred_TrueOnlyAtOrAboveThreshold()

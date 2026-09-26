@@ -185,7 +185,7 @@ public class MissionTargetStrengthTests
         (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation: 100_000_000, branchZ: AmbushBranchZ, sizeZ: 0.0);
 
-        processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
+        processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
 
         Mission ambush = Assert.Single(generated);
         Assert.Equal(MissionType.Ambush, ambush.MissionType);
@@ -211,7 +211,7 @@ public class MissionTargetStrengthTests
         (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation, branchZ: AmbushBranchZ, sizeZ: 3.0);
 
-        processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
+        processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
 
         Mission ambush = Assert.Single(generated);
         Assert.Equal(MissionType.Ambush, ambush.MissionType);
@@ -243,7 +243,7 @@ public class MissionTargetStrengthTests
         (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation, branchZ: AssassinationBranchZ, sizeZ: 0.0);
 
-        processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
+        processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
 
         Mission assassination = Assert.Single(generated);
         Assert.Equal(MissionType.Assassination, assassination.MissionType);
@@ -260,17 +260,58 @@ public class MissionTargetStrengthTests
         (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation, branchZ: AssassinationBranchZ, sizeZ: 3.0);
 
-        processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
+        processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
 
         Assert.Equal(expectedSize, Assert.Single(generated).MissionSize);
     }
 
+    // One z per opportunity picks the band. A negative roll - about half of them - finds nothing;
+    // the 1-2 band is sabotage against a defended enemy and falls back to an ambush when the enemy
+    // has no works to sabotage.
+    [Theory]
+    [InlineData(-0.5, false, null)]
+    [InlineData(0.5, false, MissionType.Ambush)]
+    [InlineData(1.5, false, MissionType.Ambush)]
+    [InlineData(1.5, true, MissionType.Sabotage)]
+    [InlineData(2.5, false, MissionType.Assassination)]
+    public void HandleBeliefIntelligence_RollPicksTheMissionBand(
+        double branchZ, bool defended, MissionType? expected)
+    {
+        (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
+            CreateGenerator(hordePopulation: 10_000, branchZ, sizeZ: 0.0);
+        if (defended)
+        {
+            horde.Entrenchment = 2.0;
+        }
+
+        processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
+
+        if (expected == null)
+        {
+            Assert.Empty(generated);
+        }
+        else
+        {
+            Assert.Equal(expected, Assert.Single(generated).MissionType);
+        }
+    }
+
     // --- fixtures ---
 
-    // HandlePublicFactionIntelligence rolls one z to pick which special mission to generate, then the
+    // HandleBeliefIntelligence rolls one z to pick which special mission to generate, then the
     // generator rolls a second z for the mission's size. These select the branch.
     private const double AmbushBranchZ = 0.5;
     private const double AssassinationBranchZ = 2.5;
+
+    // The confirmed player belief RefreshSpecialMissions hands the generator for a known enemy.
+    private static FactionIntelBelief ConfirmedBelief(RegionFaction target) =>
+        new(
+            target.Region,
+            target.PlanetFaction.Faction,
+            OnlyWar.Domain.Intelligence.FactionIntelligenceRules.ConfirmedThreshold,
+            estimatedPopulation: null,
+            estimatedMilitaryStrength: null,
+            lastEvidenceWeek: 0);
 
     // A turn processor over a single region held by one public PopulationIsMilitary horde, with both
     // z-rolls pinned: the first picks the branch, the second the rolled (pre-cap) mission size.

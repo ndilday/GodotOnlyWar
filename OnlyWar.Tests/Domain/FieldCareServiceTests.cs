@@ -497,42 +497,6 @@ public class FieldCareServiceTests
     private static float PointsIn(PlayerSoldier soldier, BaseSkill skill) =>
         soldier.Skills.FirstOrDefault(s => s.BaseSkill.Id == skill.Id)?.PointsInvested ?? 0f;
 
-    // ---- Coverage readout ------------------------------------------------------------------------
-
-    [Fact]
-    public void CoverageReadout_NamesTheApothecaryUnderTheSameOrder()
-    {
-        PlayerSoldier apothecary = Apothecary("Kadmon", 100f);
-        PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Major);
-        OrderFor(apothecary, patient);
-
-        IReadOnlyList<PlayerSoldier> covering =
-            FieldCareService.GetCoveringApothecaries(patient, [apothecary, patient]);
-
-        Assert.Single(covering);
-        Assert.Equal(apothecary.Id, covering[0].Id);
-    }
-
-    [Fact]
-    public void CoverageReadout_GoesEmptyForTheMenHeLeftBehind()
-    {
-        Region region = TestRegion(7);
-        PlayerSoldier apothecary = Apothecary("Kadmon", 100f);
-        PlayerSoldier homeWounded = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Major);
-        PlaceInRegion(region, apothecary, homeWounded);
-
-        Assert.Single(FieldCareService.GetCoveringApothecaries(
-            homeWounded, [apothecary, homeWounded]));
-
-        Order order = new([new Squad("Line", null, TestModelFactory.SquadTemplate)],
-                          false, true, Aggression.Normal, null);
-        order.AssignedCharacters.Add(apothecary);
-        apothecary.CurrentOrder = order;
-
-        Assert.Empty(FieldCareService.GetCoveringApothecaries(
-            homeWounded, [apothecary, homeWounded]));
-    }
-
     // ---- The Master is better, and not by much ---------------------------------------------------
 
     [Fact]

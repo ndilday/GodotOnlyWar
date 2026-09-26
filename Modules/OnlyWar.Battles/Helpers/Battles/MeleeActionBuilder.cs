@@ -497,18 +497,17 @@ namespace OnlyWar.Battles
 
         private int DetermineAttackCount(BattleSoldier soldier, MeleeWeapon weapon)
         {
-            float attackCount = MeleeMath.CalculateBaseAttackCount(
-                soldier.Soldier.AttackSpeed,
-                weapon?.Template.AttackSpeedMultiplier
-                    ?? MeleeWeaponTemplate.DefaultAttackSpeedMultiplier);
-            int guaranteedAttacks = (int)Math.Floor(attackCount);
-            float fractionalAttack = attackCount - guaranteedAttacks;
-            if (_random.GetLinearDouble() < fractionalAttack)
+            float attackSpeedMultiplier = weapon?.Template.AttackSpeedMultiplier
+                ?? MeleeWeaponTemplate.DefaultAttackSpeedMultiplier;
+            int attacks = MeleeMath.CalculateGuaranteedAttackCount(
+                soldier.Soldier.AttackSpeed, attackSpeedMultiplier);
+            if (_random.GetLinearDouble() < MeleeMath.CalculateFractionalAttackChance(
+                    soldier.Soldier.AttackSpeed, attackSpeedMultiplier))
             {
-                guaranteedAttacks++;
+                attacks++;
             }
 
-            return Math.Max(0, guaranteedAttacks);
+            return attacks;
         }
     }
 }

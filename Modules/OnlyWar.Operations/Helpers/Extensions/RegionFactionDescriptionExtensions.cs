@@ -15,20 +15,6 @@ namespace OnlyWar.Operations.Extensions
     /// </summary>
     public static class RegionFactionDescriptionExtensions
     {
-        public static string GetPopulationDescription(this RegionFaction regionFaction)
-        {
-            if (regionFaction == null) return "None";
-            if (regionFaction.PlanetFaction.Faction.IsPlayerFaction)
-            {
-                return regionFaction.Population.ToString();
-            }
-
-            FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
-                regionFaction.Region,
-                regionFaction.PlanetFaction.Faction);
-            return FormatBelievedPopulation(belief);
-        }
-
         // Fuzzy, fog-of-war-friendly description of a defensive value (Entrenchment,
         // Detection, Anti-Air). Shared by the planet-tactical and region screens so enemy
         // defenses read consistently and never expose the raw value to the player.
@@ -77,7 +63,7 @@ namespace OnlyWar.Operations.Extensions
         }
 
         // Strength magnitude expressed as an order-of-magnitude word, intel-gated to match
-        // fog-of-war disclosure. Lower intel yields coarser estimates (same as GetPopulationDescription).
+        // fog-of-war disclosure. Lower intel yields coarser estimates.
         public static string GetForceMagnitudeDescription(this RegionFaction regionFaction)
         {
             if (regionFaction == null) return "None";
@@ -103,16 +89,6 @@ namespace OnlyWar.Operations.Extensions
             return belief.EstimatedMilitaryStrength.HasValue
                 ? GetMagnitudeWord(belief.EstimatedMilitaryStrength.Value)
                 : "Unknown";
-        }
-
-        private static string FormatBelievedPopulation(FactionIntelBelief belief)
-        {
-            if (belief == null) return "None";
-            if (belief.Level == IntelLevel.Rumor) return "Rumor";
-            if (!belief.EstimatedPopulation.HasValue) return "Unknown";
-            return belief.EstimatedPopulation.Value > 0
-                ? belief.EstimatedPopulation.Value.ToString()
-                : "Low";
         }
 
         // Maps a deployed strength value to a rough order-of-magnitude word.

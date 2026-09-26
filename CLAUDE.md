@@ -151,7 +151,7 @@ ahead of the path breaks first-token matching.
   merely drifted.** The `Category!=Slow` bullet was still claiming 1700 tests when the
   filter actually ran 3185.
 - There are **two test projects**, and both run on an unfiltered `dotnet test`:
-  `OnlyWar.Tests` (the suite proper) and `OnlyWar.HeadlessTests` (14 tests, ~0.2s warm and
+  `OnlyWar.Tests` (the suite proper) and `OnlyWar.HeadlessTests` (13 tests as of 2026-09-26, ~0.2s warm and
   ~8s on the session's first run, which is start-up and not the tests). Every
   filter below is written against `OnlyWar.Tests` and the headless project runs alongside
   it regardless, which is why two "Passed!" lines come back per invocation.

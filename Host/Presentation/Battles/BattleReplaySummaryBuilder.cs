@@ -375,7 +375,7 @@ namespace OnlyWar.Host.Presentation.Battles
                 : null;
 
             IReadOnlyList<BattleReplayMapFormation> formations = GetAllSquads(currentState)
-                .Where(IsActive)
+                .Where(ShouldDrawSquad)
                 .OrderBy(squad => squad.Id)
                 .Select(ProjectMapFormation)
                 .ToList();
@@ -417,13 +417,9 @@ namespace OnlyWar.Host.Presentation.Battles
             List<BattleReplayMapPoint> points,
             BattleStateSnapshot state)
         {
-            foreach (BattleSquadSnapshot squad in GetAllSquads(state).Where(IsActive))
+            foreach ((int x, int y) in GetDeployedBoundaryPositions(state))
             {
-                foreach (BattleSoldierSnapshot soldier in squad.Soldiers)
-                {
-                    points.Add(new BattleReplayMapPoint(soldier.MinX, soldier.MinY));
-                    points.Add(new BattleReplayMapPoint(soldier.MaxX, soldier.MaxY));
-                }
+                points.Add(new BattleReplayMapPoint(x, y));
             }
         }
 
@@ -606,12 +602,16 @@ namespace OnlyWar.Host.Presentation.Battles
         private static bool AreSamePoint(BattleReplayMapPoint left, BattleReplayMapPoint right) =>
             Math.Abs(left.X - right.X) <= 0.01f && Math.Abs(left.Y - right.Y) <= 0.01f;
 
-        internal static bool ShouldDrawSquad(BattleSquadSnapshot squad) => IsActive(squad);
+        // Only squads still on the field are drawn or framed; a departed, routed-off or
+        // eliminated squad is represented by its map transition instead.
+        internal static bool ShouldDrawSquad(BattleSquadSnapshot squad) =>
+            squad?.Status == BattleSquadStatus.Active;
 
+        // The corner cells of every deployed soldier, which is what frames the replay map.
         internal static IEnumerable<ValueTuple<int, int>> GetDeployedBoundaryPositions(
             BattleStateSnapshot state)
         {
-            foreach (BattleSquadSnapshot squad in GetAllSquads(state).Where(IsActive))
+            foreach (BattleSquadSnapshot squad in GetAllSquads(state).Where(ShouldDrawSquad))
             {
                 foreach (BattleSoldierSnapshot soldier in squad.Soldiers)
                 {
@@ -620,9 +620,6 @@ namespace OnlyWar.Host.Presentation.Battles
                 }
             }
         }
-
-        private static bool IsActive(BattleSquadSnapshot squad) =>
-            squad?.Status == BattleSquadStatus.Active;
 
         private static string BuildPhaseLabel(BattleTurn turn)
         {

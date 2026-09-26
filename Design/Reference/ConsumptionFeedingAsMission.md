@@ -220,6 +220,10 @@ the opening scenario than either scenario tunable.
   `0.05` in the shipped Tyranid `ScenarioInfiltratorOverride` row. Motivation: the
   seed-1 "invaded but not conquered" invariant was failing. **Not yet verified** — the test had not
   been re-run after the edit.
+- **2026-09-26:** lowered to `0.03`. At 5% the cult rose in all 16 regions and took seed 1 almost
+  whole before the player arrived (cult held 7 regions, contested 6 with the swarm, Imperials public
+  in only 2). At 3% it is roughly on par with the PDF, and its advantage is meant to come from the
+  first-turn emergence ambush and insider intel rather than from raw numbers.
 - **Failing test this is aimed at:**
   `OnlyWar.Tests.Generation.ScenarioBuilderTests.GenerateSector_Seed1ProducesPlayablePromisedWorldInvariants`
   (`OnlyWar.Tests/Generation/ScenarioBuilderTests.cs`), failing with

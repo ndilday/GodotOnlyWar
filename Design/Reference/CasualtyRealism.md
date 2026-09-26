@@ -449,7 +449,7 @@ Every tunable lives in `Helpers/Medical/FieldCareConstants.cs`, in code and not 
 | Unspent capacity | **Use-it-or-lose-it.** No carry-over state to persist. | — |
 | Anything else supplying capacity | **No** — Apothecaries only this pass. A ship's apothecarion or fortress-monastery bonus is a later question. | — |
 | Medical XP for treating | **Yes, implemented.** There is no roll, so the margin substitute is *work done*: `0.01` skill points per point of capacity actually spent, to every base skill composing the Medical rating (Diagnosis + First Aid, read from the data-driven `RatingDefinition` rather than by name), split between co-working Apothecaries by capacity share. A fully-busy week banks ~0.21 points — deliberately level with `ChapterUpkeepProcessor`'s 0.2 weekly training points. | `MedicalExperiencePerCapacitySpent` |
-| Opportunity cost / default lean | **Field wins, by construction rather than by rule.** An Apothecary under an order fails the "not on a mission" test that defines the garrison pool, so the pools are disjoint and no man spends a day twice. The cost is shown, not hidden: the Apothecarium's field-care readout goes to "no Apothecary on hand" for the men he left behind. | `ApplyGarrisonFieldCare` |
+| Opportunity cost / default lean | **Field wins, by construction rather than by rule.** An Apothecary under an order fails the "not on a mission" test that defines the garrison pool, so the pools are disjoint and no man spends a day twice. The Apothecarium once showed that cost as a per-brother field-care readout; the readout was removed from the screen on 2026-08-12 and its query (`GetCoveringApothecaries`) on 2026-09-26, so the cost is now visible only in who gets treated. | `ApplyGarrisonFieldCare` |
 
 **One consequence worth recording, since §2.6 does not make it obvious.**
 `HitLocation.IsReplacementEligible` is true from the **cripple** threshold upward, so the worst wound
@@ -616,9 +616,9 @@ surgery at a site he has left.
 boundary: `BattleSquad` retains the campaign identity and `MissionContext` retains the engagement
 participant set, while `MissionContext.FieldCare` → `MissionOutcomeClassification` →
 `MissionReportSummaryBuilder.BuildFieldCareLine` is appended to the end-of-turn debrief. The
-Apothecarium's `MedicalSoldierSummary.FieldCareStatus` names who is covering a brother and at what
-daily capacity — or says nobody is — and its status separates duty-ready, physically unavailable,
-and doctrine-withheld characters.
+Apothecarium separates duty-ready, physically unavailable, and doctrine-withheld characters. (It
+also once named who was covering each brother, `MedicalSoldierSummary.FieldCareStatus`; that
+readout was removed from the screen on 2026-08-12.)
 
 Carries the `AddWound` progress-reset decision (§3.3) unchanged. Pinned by
 `OnlyWar.Tests/Domain/FieldCareServiceTests.cs` — capacity curve, cost-curve flatness, worst-first

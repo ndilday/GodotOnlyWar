@@ -109,11 +109,6 @@ namespace OnlyWar.Campaign
             return soldier.Template.WorkExperienceTrainingProfile;
         }
 
-        public void ApplyMarineWorkExperienceByType(ISoldier soldier, float points)
-        {
-            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
-        }
-
         public void TrainScouts(
             IEnumerable<Squad> scoutSquads,
             Dictionary<int, string> squadTrainingOptionMap,
@@ -178,7 +173,7 @@ namespace OnlyWar.Campaign
             }
         }
 
-        private void ApplyTrainingProfile(ISoldier soldier, TrainingProfile trainingProfile, float points)
+        internal void ApplyTrainingProfile(ISoldier soldier, TrainingProfile trainingProfile, float points)
         {
             if (trainingProfile == null || trainingProfile.Entries.Count == 0 || points <= 0) return;
 

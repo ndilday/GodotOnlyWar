@@ -48,9 +48,22 @@ public class ChapterOperationalDoctrineTests
         Wound(soldier, "Left Arm", WoundLevel.Minor);
         Wound(soldier, "Right Leg", WoundLevel.Minor);
 
-        Assert.Equal(WoundLevel.Minor, DutyReadinessService.GetWorstWound(soldier));
+        Assert.Equal(WoundLevel.Minor, soldier.Body.GetWorstWoundLevel());
         Assert.True(DutyReadinessService.Evaluate(
             soldier, new ChapterOperationalDoctrine(WoundLevel.Moderate)).IsDutyReady);
+    }
+
+    [Fact]
+    public void WorstWound_WithinOneLocation_TakesTheHighestBandWithoutSumming()
+    {
+        Wounds wounds = new(0, 0);
+        wounds.AddWound(WoundLevel.Minor);
+        wounds.AddWound(WoundLevel.Minor);
+        Assert.Equal(WoundLevel.Minor, wounds.WorstLevel);
+
+        wounds.AddWound(WoundLevel.Major);
+        Assert.Equal(WoundLevel.Major, wounds.WorstLevel);
+        Assert.Equal(WoundLevel.None, new Wounds(0, 0).WorstLevel);
     }
 
     [Fact]

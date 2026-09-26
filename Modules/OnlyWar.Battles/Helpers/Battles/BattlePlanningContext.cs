@@ -140,7 +140,7 @@ namespace OnlyWar.Battles
 
     /// <summary>
     /// The inputs and both clocks behind one squad's engagement horizon. See
-    /// <see cref="EngagementHorizonModel.DeriveSquadExchangeTurns"/>.
+    /// <see cref="EngagementHorizonModel.DeriveSquadExchangeClocks"/>.
     /// </summary>
     internal readonly record struct EngagementHorizonDiagnostics(
         float EnemyBattleValueBeforeWithdrawal,

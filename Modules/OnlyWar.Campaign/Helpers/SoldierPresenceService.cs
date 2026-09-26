@@ -11,9 +11,6 @@ namespace OnlyWar.Campaign
             squad?.Members?.Where(member =>
                 member is not PlayerSoldier player || player.IndividualPosting == null).ToList() ?? [];
 
-        public static int NominalCount(Squad squad) =>
-            squad?.Members?.Count ?? 0;
-
         public static int PresentCount(Squad squad) =>
             PresentMembers(squad).Count;
     }

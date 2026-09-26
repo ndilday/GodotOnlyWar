@@ -7,13 +7,6 @@ using System.Linq;
 
 namespace OnlyWar.Campaign
 {
-    public static class MedicalFacilityRules
-    {
-        public const long MinimumImperialPopulation = 1_000_000;
-        public static readonly IReadOnlySet<string> SurgeryWorldTypes =
-            new HashSet<string> { "Hive", "Forge", "Civilised" };
-    }
-
     public sealed class MedicalFacilityService
     {
         public bool SupportsMajorSurgery(ShipTemplate template) =>

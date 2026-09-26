@@ -24,6 +24,19 @@ the final word:
   correctly that the writer recreates the schema on every save and therefore needs no migration; that
   reasoning does **not** extend to the reader. The later format-13 posting redesign replaced the
   historical `OrderSoldier` table; see PRD §4.18 / TDD §4.2.
+- `OrderAssignment.AssignSquadsToMission`, the order-issue method this document plans around, was
+  removed on 2026-09-26. Orders are issued through `OrderMutationService.CreateOrAdd`, which calls
+  `OrderAssignment.AssignParticipantsToMission` with squads and characters as separate lists and
+  validates characters with `IPersonnelAvailabilityQueries.EvaluateOrderAssignment` rather than
+  `OrderAttachment.CanAttach`. It rejects a squad already on another order instead of re-tasking it.
+- The same day, `OrderAttachment.Attach`, `Detach`, `ReleaseAll` and both `CanAttach` overloads were
+  removed; only `HasAttachedMembers` remains. Both halves of the pointer pair are owned by
+  `OrderForceService` (`AssignCharacter`, `RemoveCharacter`, `ReleaseOrder`), and §3.2's guards
+  live in `PersonnelAvailabilityPolicy.EvaluateOrderAssignment`. Unlike `Attach`, `AssignCharacter`
+  refuses a man already on another order rather than moving him.
+- `InboundOrders` / `InboundOrderInfo`, the region-dossier summary this document extends with
+  "+N attached", lost its screen when the planetary-operations screens replaced the old tactical
+  ones (2026-08-27) and was removed on 2026-09-26.
 
 Scope: attachment as an **organizational** concept whose battle entry is now handled at the Phase 2
 engagement boundary. An individually duty-ready attached specialist is materialized as a one-person
