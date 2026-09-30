@@ -239,6 +239,27 @@ public sealed class RosterAndMapScreenApplicationTests
         AssertDetached(typeof(ChapterBrowserView));
     }
 
+    // Mars pipeline (TDD §6.14): the roster row says where a brother
+    // on Mars is and when he returns, not only that he is unavailable.
+    [Fact]
+    public void TheChapterBrowserShowsABrotherOnMarsWithHisReturnDate()
+    {
+        CampaignApplication application = CreateChapterCampaign(out Squad squad);
+        PlayerSoldier adept = new(TestModelFactory.CreateSoldier(name: "Brother Adept"), "Brother Adept");
+        squad.AddSquadMember(adept);
+        new OnlyWar.Campaign.IndividualPostingService(new OnlyWar.Operations.Orders.OrderCommitmentSurface())
+            .Create(adept, IndividualPostingPurpose.Mechanicus, CampaignLocation.OffSector,
+                new Date(42, 5, 10), new Date(42, 25, 10));
+
+        ChapterBrowserView view = application.QueryChapterBrowser(
+            new ChapterBrowserQuery(null, squad.Id, null, null, null, [], null));
+
+        ChapterBrowserMenuItem row = Assert.Single(view.LeftMenu, item => item.Id == adept.Id);
+        Assert.Equal("On Mars — returns 10.25.M42", row.Subtitle);
+        Assert.All(view.LeftMenu.Where(item => item.Id != adept.Id),
+            item => Assert.DoesNotContain("Mars", item.Subtitle));
+    }
+
     [Fact]
     public void ATransferConfirmedAgainstAReplacedCampaignIsRefused()
     {

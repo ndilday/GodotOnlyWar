@@ -151,6 +151,58 @@ public sealed class MedicalScreenApplicationTests
         }
     }
 
+    // Mars pipeline (TDD §6.14): under the Mechanicus loan the planner
+    // needs no Techmarine, so a chapter with none can still confirm a plan, and moves only the
+    // Apothecary. Without the loan the same plan fails for want of a Techmarine.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RecoveryUnderTheMechanicusLoanMovesNoTechmarine(bool loanActive)
+    {
+        var application = CreateApplication(out var patient);
+        var chapter = application.ActiveSession.Sector.PlayerForce.Army.OrderOfBattle;
+        var staffTemplate = new SquadTemplate(600, "Staff", null, [], null, [],
+            SquadTypes.Administrative, FormationMobilityPolicy.MembersOnly);
+        var staffSquad = new Squad("Staff", chapter, staffTemplate);
+        chapter.AddSquad(staffSquad);
+        var apothecaryTemplate = new SoldierTemplate(601, TestModelFactory.HumanSpecies,
+            "Apothecary", 1, 1, false, 1, Array.Empty<(BaseSkill, float)>());
+        var source = TestModelFactory.CreateSoldier(template: apothecaryTemplate);
+        source.Id = 601;
+        var apothecary = new PlayerSoldier(source, "Apothecary");
+        staffSquad.AddSquadMember(apothecary);
+        var ship = new Ship(700, "Hospital", new ShipTemplate(700, "Hospital", 2, 0, 0));
+        var fleet = new Fleet("Fleet", null, null);
+        fleet.TaskForces.Add(new TaskForce(700, null, null, null, null, [ship]));
+        var force = new PlayerForce(null, new Army("Army", null, "Commander", chapter, [patient, apothecary])
+            { Requisition = 1000 }, fleet) { IsMechanicusLoanActive = loanActive };
+        application.Install(new GameSession(application.ActiveSession.Rules,
+            new Sector(force, [], [], fleet.TaskForces), new Date(20_000), new SeededRNG(9)));
+        var destination = new MedicalLocationId(MedicalLocationKind.Ship, ship.Id);
+        var recovery = application.QueryRecovery(new(patient.Id, Destination: destination));
+        var option = recovery.Model.SelectedTreatment;
+        var site = recovery.Model.Destinations.Single(view => view.Location == destination);
+
+        var result = application.ConfirmRecovery(new ConfirmRecoveryCommand(application.SessionToken,
+            patient.Id, destination, RecoveryMovementChoice.DetachCasualty, option.HitLocationId, option.Type));
+
+        Assert.Equal(loanActive, result.Succeeded);
+        if (loanActive)
+        {
+            Assert.Equal(OnlyWar.Campaign.TechmarineSupport.LoanLabel, site.TechmarineName);
+            Assert.DoesNotContain(site.Reasons, reason => reason.Code == "techmarine");
+            Assert.Equal(2, ship.IndividuallyBoardedSoldiers.Count);
+            Assert.Single(force.Army.MedicalProcedures);
+        }
+        else
+        {
+            Assert.Null(site.TechmarineName);
+            Assert.Contains(site.Reasons, reason => reason.Code == "techmarine");
+            Assert.Empty(ship.IndividuallyBoardedSoldiers);
+            Assert.Empty(force.Army.MedicalProcedures);
+        }
+    }
+
     private static IReadOnlyList<Type> FindDomainGraph(Type root)
     {
         HashSet<Type> visited = [];

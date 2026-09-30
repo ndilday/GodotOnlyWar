@@ -26,6 +26,8 @@ namespace OnlyWar.Campaign.Turns
         // have to be carried out of the turn separately or the report cannot mention them.
         public List<GovernorRequestReport> GovernorRequestReports { get; } = new();
         public RecruitmentTurnReport RecruitmentReport { get; set; }
+        // Brothers home from Mars this turn, or null if none (TDD §6.14).
+        public MechanicusReturnReport MechanicusReturns { get; set; }
         public string ScenarioNotification { get; set; }
         public List<CampaignEvent> CampaignEvents { get; } = new();
         public CampaignIdentity CampaignIdentity { get; set; }
@@ -39,6 +41,7 @@ namespace OnlyWar.Campaign.Turns
             FortificationTransfers.Clear();
             GovernorRequestReports.Clear();
             RecruitmentReport = null;
+            MechanicusReturns = null;
             ScenarioNotification = null;
             CampaignEvents.Clear();
             CampaignIdentity = null;

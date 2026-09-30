@@ -15,6 +15,7 @@ using OnlyWar.Domain.Fleets;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Units;
 using OnlyWar.Runtime.Naming;
 
@@ -59,7 +60,8 @@ namespace OnlyWar.Application.Adapters.Generation
                 new CandidateSessionWarmupSimulator(
                     random, readiness, personnel, commitments, battle, identity, nameGenerator),
                 BuildTrainingService(rules, random),
-                identity);
+                identity,
+                new MechanicusDepartureAdapter(rules, commitments));
         }
 
         /// <summary>
@@ -187,6 +189,48 @@ namespace OnlyWar.Application.Adapters.Generation
                 lists[role] = suitability.CreateCandidateList(role);
             }
             return lists;
+        }
+    }
+
+    /// <summary>
+    /// Founding departures to Mars through the same <see cref="MechanicusDepartureService"/> the
+    /// Armory uses, in its founding mode: only the Techmarine requirement applies.
+    /// </summary>
+    public sealed class MechanicusDepartureAdapter : IMechanicusDeparturePort
+    {
+        private readonly GameRulesData _rules;
+        private readonly IOrderCommitmentSurface _commitments;
+
+        public MechanicusDepartureAdapter(GameRulesData rules, IOrderCommitmentSurface commitments)
+        {
+            _rules = rules ?? throw new ArgumentNullException(nameof(rules));
+            _commitments = commitments ?? throw new ArgumentNullException(nameof(commitments));
+        }
+
+        public bool TrySendFounderToMars(
+            PlayerSoldier founder,
+            Squad armory,
+            SoldierTemplate techmarine,
+            Date departureDate)
+        {
+            // The Scout exclusion applies only after founding, so no Scout template is needed.
+            MechanicusDepartureService departures = new(_commitments, techmarine, null);
+            if (!departures.Evaluate(founder, atFounding: true).IsAllowed)
+            {
+                return false;
+            }
+            departures.Depart(founder, armory, departureDate, atFounding: true);
+            return true;
+        }
+
+        // Training is linear in points, so one award of the whole span equals the weekly awards.
+        public void CreditMarsTraining(IEnumerable<PlayerSoldier> soldiers, int weeks)
+        {
+            if (weeks <= 0) return;
+            MechanicusTrainingService.Train(
+                soldiers,
+                _rules.TrainingProfiles.Values,
+                MechanicusTrainingService.WeeklyPoints * weeks);
         }
     }
 

@@ -41,7 +41,8 @@ namespace OnlyWar.Application
                 result.RecruitmentReport,
                 result.CampaignEvents,
                 result.CampaignIdentity,
-                replayIdFactory);
+                replayIdFactory,
+                result.MechanicusReturns);
         }
 
         internal static LastTurnReportBuildResult Build(
@@ -55,7 +56,8 @@ namespace OnlyWar.Application
             RecruitmentTurnReport recruitmentReport = null,
             IEnumerable<CampaignEvent> campaignEvents = null,
             CampaignIdentity campaignIdentity = null,
-            Func<IBattleReplay, Guid?> replayIdFactory = null)
+            Func<IBattleReplay, Guid?> replayIdFactory = null,
+            OnlyWar.Campaign.MechanicusReturnReport mechanicusReturns = null)
         {
             List<EndOfTurnReportEntry> presentationEntries = TurnReportProjector.BuildReportEntries(
                 (missionContexts ?? Enumerable.Empty<MissionContext>()).ToList(),
@@ -67,7 +69,8 @@ namespace OnlyWar.Application
                 recruitmentReport,
                 campaignEvents,
                 campaignIdentity,
-                replayIdFactory);
+                replayIdFactory,
+                mechanicusReturns);
 
             LastTurnReportSnapshot snapshot = BuildSnapshot(resolvedDate, presentationEntries);
             return new LastTurnReportBuildResult(snapshot, presentationEntries);

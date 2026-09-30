@@ -11,7 +11,8 @@ namespace OnlyWar.Medical.Abstractions
         UntreatedSeverance,
         InsufficientFunctioningArms,
         ProcedureReservation,
-        ChapterInjuryThreshold
+        ChapterInjuryThreshold,
+        OffSector
     }
 
     /// <summary>

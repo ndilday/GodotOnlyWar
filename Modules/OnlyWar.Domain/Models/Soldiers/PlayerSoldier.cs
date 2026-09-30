@@ -155,6 +155,12 @@ namespace OnlyWar.Domain.Soldiers
         public IndividualPosting IndividualPosting { get; set; }
 
         /// <summary>
+        /// True while the soldier is posted outside the sector (training on Mars). Such a
+        /// soldier is not available for any duty; DutyReadinessService enforces it.
+        /// </summary>
+        public bool IsOffSector => IndividualPosting?.Location?.IsOffSector == true;
+
+        /// <summary>
         /// The operational order this character is assigned to. This is deliberately independent
         /// from IndividualPosting: an order assignment does not teleport a character or encode a
         /// commitment in his physical-location record.

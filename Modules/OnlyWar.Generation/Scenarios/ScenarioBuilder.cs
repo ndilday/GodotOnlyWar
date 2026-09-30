@@ -736,6 +736,10 @@ namespace OnlyWar.Generation.Scenarios
             string authorityTitle = support.Narrative.GetAuthorityTitle(authorityTier);
             string enemyName = invader.Name;
             string subsectorName = ResolveSubsectorName(sector, promised);
+            List<IndividualPosting> marsPostings = playerForce.Army.PlayerSoldierMap.Values
+                .Select(soldier => soldier.IndividualPosting)
+                .Where(posting => posting?.Purpose == IndividualPostingPurpose.Mechanicus)
+                .ToList();
 
             BriefingTokens tokens = new BriefingTokens
             {
@@ -746,7 +750,13 @@ namespace OnlyWar.Generation.Scenarios
                 AuthorityTitle = authorityTitle,
                 EnemyName = enemyName,
                 // Stable per-seed selector: the promised planet id is deterministic per seed.
-                TemplateSelector = promised.Id
+                TemplateSelector = promised.Id,
+                MarsCohortCount = playerForce.IsMechanicusLoanActive ? marsPostings.Count : 0,
+                MarsCohortReturnDate = marsPostings
+                    .Select(posting => posting.ExpectedReturnDate)
+                    .Where(returnDate => returnDate != null)
+                    .OrderBy(returnDate => returnDate.GetTotalWeeks())
+                    .LastOrDefault()
             };
 
             string briefingText = support.Narrative.ComposeOpeningBriefing(

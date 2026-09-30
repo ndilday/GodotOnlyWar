@@ -64,7 +64,10 @@ namespace OnlyWar.Campaign
                 FoundingRole.ChapterMaster => true,
                 FoundingRole.MasterOfTheForge => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 100
                     && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
-                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 60,
+                // Mars-bound founders (TDD §6.14): the Techmarine bar, plus
+                // the worthiness test, so each one would also make a full line Battle Brother.
+                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 60
+                    && IsLineCandidate(e, ratings),
                 FoundingRole.MasterOfTheApothecarion => Rating(ratings, e, RatingConsumerRole.MedicalCapacity) > 115
                     && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
                 FoundingRole.Apothecary => Rating(ratings, e, RatingConsumerRole.MedicalCapacity) > 95,
@@ -140,6 +143,13 @@ namespace OnlyWar.Campaign
             bool adamantiumCombatSpike = melee > 115 || ranged > 120;
             return tacticalBaseline && adamantiumCombatSpike;
         }
+
+        // Eligible for at least one line-marine founding role, whatever his leadership.
+        private static bool IsLineCandidate(SoldierEvaluation e, RatingConsumerBindings ratings) =>
+            IsTacticalCandidate(e, ratings)
+            || IsAssaultCandidate(e, ratings)
+            || IsDevastatorCandidate(e, ratings)
+            || IsVeteranCandidate(e, ratings);
 
         private static bool IsTacticalCandidate(SoldierEvaluation e, RatingConsumerBindings ratings)
         {

@@ -17,7 +17,8 @@ namespace OnlyWar.Campaign
         int AvailableBerths,
         PlayerSoldier Apothecary,
         PlayerSoldier Techmarine,
-        IReadOnlyList<CareDestinationReason> Reasons);
+        IReadOnlyList<CareDestinationReason> Reasons,
+        bool IsTechmarineSupportOnLoan = false);
 
     public sealed class CareDestinationService
     {
@@ -63,17 +64,17 @@ namespace OnlyWar.Campaign
 
             IReadOnlyList<PlayerSoldier> roster = force?.Army?.PlayerSoldierMap?.Values.ToList() ?? [];
             PlayerSoldier apothecary = FindStaff(force, roster, location, MedicalProcedureService.IsApothecary);
-            PlayerSoldier techmarine = FindStaff(force, roster, location, MedicalProcedureService.IsTechmarine);
+            PlayerSoldier techmarine = TechmarineSupport.FindTechmarineAt(force, location);
             bool movableApothecary = apothecary != null || roster.Any(member =>
                 CanMoveStaff(force, member, MedicalProcedureService.IsApothecary));
-            bool movableTechmarine = techmarine != null || roster.Any(member =>
-                CanMoveStaff(force, member, MedicalProcedureService.IsTechmarine));
             if (apothecary == null)
             {
                 reasons.Add(new("apothecary", "No fit, unreserved Apothecary is present.", movableApothecary));
             }
-            if (techmarine == null)
+            if (!TechmarineSupport.IsAvailableAt(force, location))
             {
+                bool movableTechmarine = roster.Any(member =>
+                    CanMoveStaff(force, member, MedicalProcedureService.IsTechmarine));
                 reasons.Add(new("techmarine", "No fit, unreserved Techmarine is present.", movableTechmarine));
             }
 
@@ -105,7 +106,8 @@ namespace OnlyWar.Campaign
                 availableBerths,
                 apothecary,
                 techmarine,
-                reasons);
+                reasons,
+                TechmarineSupport.IsOnLoan(force));
         }
 
         private static PlayerSoldier FindStaff(PlayerForce force,
@@ -115,7 +117,7 @@ namespace OnlyWar.Campaign
                 IsAvailableStaff(force, member, role)
                 && CampaignLocationService.ForSoldier(member)?.IsSamePlace(location) == true);
 
-        private static bool IsAvailableStaff(PlayerForce force,
+        internal static bool IsAvailableStaff(PlayerForce force,
             PlayerSoldier soldier,
             System.Func<ISoldier, bool> role) => soldier?.IsCombatEffective == true
                 && soldier.AssignedSquad?.MayProvideLocalSupport == true

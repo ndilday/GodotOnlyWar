@@ -93,7 +93,9 @@ namespace OnlyWar.Application
             new MedicalLocationId(value.Location.IsShip ? MedicalLocationKind.Ship : MedicalLocationKind.Region,
                 value.Location.Ship?.Id ?? value.Location.Region.Id),
             value.Name, value.SiteType, value.State, value.RequiredBerths, value.AvailableBerths,
-            value.Apothecary?.Name, value.Techmarine?.Name, value.Reasons.ToArray());
+            value.Apothecary?.Name,
+            value.Techmarine?.Name ?? (value.IsTechmarineSupportOnLoan ? TechmarineSupport.LoanLabel : null),
+            value.Reasons.ToArray());
 
         private RecoveryQueueRow BuildQueueRow(PlayerForce force, PlayerSoldier soldier)
         {

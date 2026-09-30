@@ -126,6 +126,87 @@ public class MedicalProcedureServiceTests
         Assert.False(service.CanAssign(force, wounded, CyberneticLeftArm()));
     }
 
+    // Mars pipeline (TDD §6.14): the Mechanicus loan stands in for
+    // the Techmarine while the founding cohort trains on Mars, and only while the loan runs.
+    [Fact]
+    public void EvaluateRequisites_MechanicusLoan_MeetsTheTechmarineLineWithNoTechmarine_AndEndsWithTheLoan()
+    {
+        (PlayerForce force, PlayerSoldier wounded) = BuildScenario(
+            apothecaryPresent: true, techmarinePresent: false, requisition: 100, developedWorld: true);
+        force.IsMechanicusLoanActive = true;
+        MedicalProcedureService service = new();
+
+        IReadOnlyList<ProcedureRequisite> onLoan =
+            service.EvaluateRequisites(force, wounded, CyberneticLeftArm());
+
+        Assert.True(Assert.Single(onLoan, r => r.Label == TechmarineSupport.LoanLabel).IsMet);
+        Assert.DoesNotContain(onLoan, r => r.Label == TechmarineSupport.CoLocatedLabel);
+        Assert.True(service.CanAssign(force, wounded, CyberneticLeftArm()));
+
+        force.IsMechanicusLoanActive = false;
+        IReadOnlyList<ProcedureRequisite> afterLoan =
+            service.EvaluateRequisites(force, wounded, CyberneticLeftArm());
+
+        Assert.False(Assert.Single(afterLoan, r => r.Label == TechmarineSupport.CoLocatedLabel).IsMet);
+        Assert.DoesNotContain(afterLoan, r => r.Label == TechmarineSupport.LoanLabel);
+        Assert.False(service.CanAssign(force, wounded, CyberneticLeftArm()));
+    }
+
+    [Fact]
+    public void EvaluateRequisites_MechanicusLoan_DoesNotWaiveTheOtherRequisites()
+    {
+        (PlayerForce force, PlayerSoldier wounded) = BuildScenario(
+            apothecaryPresent: false, techmarinePresent: false, requisition: 10, developedWorld: false);
+        force.IsMechanicusLoanActive = true;
+        MedicalProcedureService service = new();
+
+        IReadOnlyList<ProcedureRequisite> requisites =
+            service.EvaluateRequisites(force, wounded, CyberneticLeftArm(40));
+
+        Assert.True(requisites.Single(r => r.Label == TechmarineSupport.LoanLabel).IsMet);
+        Assert.False(requisites.Single(r => r.Label.StartsWith("Apothecary")).IsMet);
+        Assert.False(requisites.Single(r => r.Label == "Valid surgery site").IsMet);
+        Assert.False(requisites.Single(r => r.Label.StartsWith("Requisition")).IsMet);
+    }
+
+    [Fact]
+    public void CareDestination_MechanicusLoan_RemovesTheTechmarineReason_AndOnlyWhileItRuns()
+    {
+        (PlayerForce force, PlayerSoldier wounded) = BuildScenario(
+            apothecaryPresent: true, techmarinePresent: false, requisition: 100, developedWorld: true);
+        CampaignLocation site = CampaignLocationService.ForSoldier(wounded);
+        CareDestinationService destinations = new();
+
+        CareDestinationCandidate withoutLoan =
+            destinations.Evaluate(force, wounded, CyberneticLeftArm(), site);
+        Assert.Contains(withoutLoan.Reasons, reason => reason.Code == "techmarine");
+        Assert.False(withoutLoan.IsTechmarineSupportOnLoan);
+        Assert.False(TechmarineSupport.IsAvailableAt(force, site));
+
+        force.IsMechanicusLoanActive = true;
+        CareDestinationCandidate onLoan =
+            destinations.Evaluate(force, wounded, CyberneticLeftArm(), site);
+
+        Assert.DoesNotContain(onLoan.Reasons, reason => reason.Code == "techmarine");
+        Assert.True(onLoan.IsTechmarineSupportOnLoan);
+        Assert.Null(onLoan.Techmarine);
+        Assert.Equal(CareDestinationState.Ready, onLoan.State);
+        Assert.True(TechmarineSupport.IsAvailableAt(force, site));
+    }
+
+    [Fact]
+    public void TechmarineSupport_FindsACoLocatedTechmarineWithoutTheLoan()
+    {
+        (PlayerForce force, PlayerSoldier wounded) = BuildScenario(
+            apothecaryPresent: true, techmarinePresent: true, requisition: 100, developedWorld: true);
+        CampaignLocation site = CampaignLocationService.ForSoldier(wounded);
+
+        Assert.False(TechmarineSupport.IsOnLoan(force));
+        Assert.Equal("Brother Forge", TechmarineSupport.FindTechmarineAt(force, site)?.Name);
+        Assert.True(TechmarineSupport.IsAvailableAt(force, site));
+        Assert.False(TechmarineSupport.IsAvailableAt(force, CampaignLocation.OffSector));
+    }
+
     private static (PlayerForce, PlayerSoldier) BuildScenario(
         bool apothecaryPresent, bool techmarinePresent, int requisition, bool developedWorld)
     {

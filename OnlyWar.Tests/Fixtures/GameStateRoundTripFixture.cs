@@ -91,7 +91,9 @@ internal sealed class GameStateRoundTripFixture
             chapterOperationalDoctrine: sector.PlayerForce.Army.ChapterOperationalDoctrine,
             worldControlEpisodes: sector.PlayerForce.WorldControlEpisodes.States,
             ghostPopulationSources: sector.GhostPopulationSources,
-            strategicInvasionForces: sector.StrategicInvasionForces);
+            strategicInvasionForces: sector.StrategicInvasionForces,
+            mechanicusLoanActive: sector.PlayerForce.IsMechanicusLoanActive,
+            marsReturnDestination: sector.PlayerForce.MarsReturnDestination);
     }
 
     public GameStateDataBlob Load(string dbPath)

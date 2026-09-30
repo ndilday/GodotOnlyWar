@@ -27,7 +27,8 @@ namespace OnlyWar.Campaign
         ChapterInjuryThreshold,
         NotAtOrigin,
         AlreadyAtDestination,
-        ContinuousTaskCommitment
+        ContinuousTaskCommitment,
+        OffSector
     }
 
     public sealed record CharacterAvailabilityEvaluation(
@@ -157,6 +158,14 @@ namespace OnlyWar.Campaign
                     CharacterAvailabilityReasonCode.AssignedElsewhere,
                     $"{character.Name} must be removed from its current order first.");
             }
+            // Transfer is not a duty question (a wounded brother may still be transferred), so
+            // the off-sector rule is not inherited from DutyReadinessService here.
+            if (character.IsOffSector)
+            {
+                return Reject(
+                    CharacterAvailabilityReasonCode.OffSector,
+                    $"{character.Name} is away from the sector.");
+            }
             if (CampaignLocationService.ForSoldier(character)?.Ship?.Fleet?.TravelPhase
                 == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
             {
@@ -196,6 +205,7 @@ namespace OnlyWar.Campaign
             DutyReadinessReasonCode.InsufficientFunctioningArms => CharacterAvailabilityReasonCode.InsufficientFunctioningArms,
             DutyReadinessReasonCode.ProcedureReservation => CharacterAvailabilityReasonCode.ReservedForProcedure,
             DutyReadinessReasonCode.ChapterInjuryThreshold => CharacterAvailabilityReasonCode.ChapterInjuryThreshold,
+            DutyReadinessReasonCode.OffSector => CharacterAvailabilityReasonCode.OffSector,
             _ => CharacterAvailabilityReasonCode.NotCombatEffective
         };
 

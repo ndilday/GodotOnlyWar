@@ -36,4 +36,6 @@ public sealed record IndividualPostingRecord(
     IndividualPostingPurpose Purpose,
     int? LoadedShipId,
     int? LandedRegionId,
-    int StartedDate);
+    bool IsOffSector,
+    int StartedDate,
+    int? ExpectedReturnDate);

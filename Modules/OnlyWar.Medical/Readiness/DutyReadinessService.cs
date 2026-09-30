@@ -34,7 +34,8 @@ namespace OnlyWar.Medical.Readiness
                 soldier.IsUndergoingMedicalProcedure
                     || ReadinessReservations.IsReserved(recruitmentProgram, soldier.Id),
                 soldier.FunctioningHands,
-                soldier.Body?.GetWorstWoundLevel() ?? WoundLevel.None);
+                soldier.Body?.GetWorstWoundLevel() ?? WoundLevel.None,
+                soldier.IsOffSector);
             DutyReadinessPolicyOptions options = new(
                 doctrine?.InjuryThreshold,
                 doctrine?.RequireDutyReadySquadLeader ?? false,

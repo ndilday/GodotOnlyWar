@@ -71,7 +71,7 @@ public partial class CommandScreenController : MainScreenController
         _view.LoadOlderRequested -= OnLoadOlderRequested;
     }
 
-    public void RefreshFromExternalChange()
+    public override void RefreshFromExternalChange()
     {
         if (_view == null || _command == null || !_command.HasCampaign) return;
         _view.SetLens(_lens);

@@ -144,7 +144,8 @@ public static class ReadinessDecisionExtensions
             soldier.HasUntreatedSeveredLimb,
             IsProcedureReserved(soldier, program),
             soldier.FunctioningHands,
-            soldier.Body?.GetWorstWoundLevel() ?? WoundLevel.None);
+            soldier.Body?.GetWorstWoundLevel() ?? WoundLevel.None,
+            soldier is PlayerSoldier player && player.IsOffSector);
     }
 
     private static DutyReadinessPolicyOptions ProjectOptions(

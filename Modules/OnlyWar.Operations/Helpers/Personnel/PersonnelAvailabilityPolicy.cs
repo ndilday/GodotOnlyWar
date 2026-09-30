@@ -141,6 +141,8 @@ public static class PersonnelAvailabilityPolicy
                 PersonnelAvailabilityReasonCode.ReservedForProcedure,
             DutyReadinessReasonCode.ChapterInjuryThreshold =>
                 PersonnelAvailabilityReasonCode.ChapterInjuryThreshold,
+            DutyReadinessReasonCode.OffSector =>
+                PersonnelAvailabilityReasonCode.OffSector,
             _ => PersonnelAvailabilityReasonCode.NotCombatEffective
         };
         return Reject(

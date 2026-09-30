@@ -38,9 +38,8 @@ namespace OnlyWar.Campaign
                 reason = "The soldier has no organizational home.";
                 return false;
             }
-            if (location == null || location.IsShip == location.IsRegion)
+            if (!IsValidLocation(purpose, location, out reason))
             {
-                reason = "Select exactly one ship or region.";
                 return false;
             }
             if (purpose == IndividualPostingPurpose.Independent
@@ -76,7 +75,8 @@ namespace OnlyWar.Campaign
             PlayerSoldier soldier,
             IndividualPostingPurpose purpose,
             CampaignLocation location,
-            Date startedDate)
+            Date startedDate,
+            Date expectedReturnDate = null)
         {
             if (!CanCreate(soldier, purpose, location, out string reason))
             {
@@ -86,7 +86,8 @@ namespace OnlyWar.Campaign
             soldier.IndividualPosting = new IndividualPosting(
                 purpose,
                 location,
-                CloneDate(startedDate));
+                CloneDate(startedDate),
+                CloneOptionalDate(expectedReturnDate));
             AddProjection(soldier);
             CleanupEmptyPhysicalFormation(soldier.AssignedSquad);
             return soldier.IndividualPosting;
@@ -101,11 +102,12 @@ namespace OnlyWar.Campaign
             PlayerSoldier soldier,
             IndividualPostingPurpose purpose,
             CampaignLocation location,
-            Date startedDate)
+            Date startedDate,
+            Date expectedReturnDate = null)
         {
             if (soldier?.AssignedSquad == null)
                 throw new InvalidOperationException("The posting soldier has no organizational home.");
-            if (location == null || location.IsShip == location.IsRegion)
+            if (!IsValidLocation(purpose, location, out _))
                 throw new InvalidOperationException("The posting has an invalid location.");
             if (location.Ship?.Fleet?.TravelPhase == OnlyWar.Domain.Fleets.FleetTravelPhase.InWarp)
                 throw new InvalidOperationException("Individuals cannot be posted through the Warp.");
@@ -118,7 +120,7 @@ namespace OnlyWar.Campaign
 
             soldier.IndividualPosting?.Location?.Ship?.DisembarkIndividual(soldier);
             soldier.IndividualPosting = new IndividualPosting(
-                purpose, location, CloneDate(startedDate));
+                purpose, location, CloneDate(startedDate), CloneOptionalDate(expectedReturnDate));
             // CurrentOrder is deliberately preserved. A posting is physical state only.
             location.Ship?.BoardIndividual(soldier);
             CleanupEmptyPhysicalFormation(soldier.AssignedSquad);
@@ -129,6 +131,10 @@ namespace OnlyWar.Campaign
         public void Move(PlayerSoldier soldier, CampaignLocation location)
         {
             if (soldier?.IndividualPosting == null) throw new InvalidOperationException("Soldier is not posted.");
+            if (soldier.IsOffSector)
+            {
+                throw new InvalidOperationException("A soldier outside the sector cannot be moved.");
+            }
             if (location == null || location.IsShip == location.IsRegion)
             {
                 throw new InvalidOperationException("Select exactly one ship or region.");
@@ -181,6 +187,20 @@ namespace OnlyWar.Campaign
             soldier.CurrentOrder = null;
         }
 
+        /// <summary>
+        /// Ends an off-sector posting with the soldier back in his formation, wherever it is. He
+        /// was co-located with nothing, so <see cref="Rejoin"/> cannot apply.
+        /// </summary>
+        public void EndOffSectorPosting(PlayerSoldier soldier)
+        {
+            if (soldier?.IndividualPosting?.Location?.IsOffSector != true)
+            {
+                throw new InvalidOperationException("The soldier is not posted outside the sector.");
+            }
+            RemoveProjection(soldier);
+            soldier.IndividualPosting = null;
+        }
+
         public void NormalizeReunion(PlayerSoldier soldier)
         {
             if (soldier?.IndividualPosting == null
@@ -212,8 +232,36 @@ namespace OnlyWar.Campaign
             soldier?.IndividualPosting?.Location?.Ship?.DisembarkIndividual(soldier);
         }
 
+        /// <summary>
+        /// A posting is at exactly one ship or one region, except a Mechanicus posting, which is
+        /// always off-sector. Off-sector is accepted for no other purpose.
+        /// </summary>
+        private static bool IsValidLocation(
+            IndividualPostingPurpose purpose,
+            CampaignLocation location,
+            out string reason)
+        {
+            reason = null;
+            if (purpose == IndividualPostingPurpose.Mechanicus)
+            {
+                if (location?.IsOffSector == true) return true;
+                reason = "A Mechanicus posting must be outside the sector.";
+                return false;
+            }
+            if (location == null || location.IsOffSector || location.IsShip == location.IsRegion)
+            {
+                reason = "Select exactly one ship or region.";
+                return false;
+            }
+            return true;
+        }
+
         private static Date CloneDate(Date date) => date == null
             ? new Date(1)
+            : new Date(date.Millenium, date.Year, date.Week);
+
+        private static Date CloneOptionalDate(Date date) => date == null
+            ? null
             : new Date(date.Millenium, date.Year, date.Week);
 
         private void CleanupEmptyPhysicalFormation(Squad squad)

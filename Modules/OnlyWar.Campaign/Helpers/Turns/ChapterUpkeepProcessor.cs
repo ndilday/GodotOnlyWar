@@ -215,14 +215,22 @@ namespace OnlyWar.Campaign.Turns
                 float points = LeftoverTrainingPoints(squad, missionDaysBySquad);
                 if (points <= 0f) continue;
 
-                SoldierProgressLog.ProgressSnapshot before = SoldierProgressLog.Capture(squad.Members);
-                foreach (ISoldier soldier in squad.Members)
+                List<ISoldier> present = squad.Members
+                    .Where(soldier => !MechanicusTrainingService.IsOnMars(soldier))
+                    .ToList();
+                SoldierProgressLog.ProgressSnapshot before = SoldierProgressLog.Capture(present);
+                foreach (ISoldier soldier in present)
                 {
                     trainingService.ApplySoldierWorkExperience(soldier, squad, points);
                 }
                 SoldierProgressLog.LogDelta(
-                    $"Training XP [garrison] {squad.Name}", squad.Members, before);
+                    $"Training XP [garrison] {squad.Name}", present, before);
             }
+
+            // Brothers on Mars train every week, whatever their Armory squad is doing.
+            MechanicusTrainingService.Train(
+                sector.PlayerForce?.Army?.PlayerSoldierMap?.Values,
+                _turn.Rules?.TrainingProfiles?.Values);
         }
 
         // Only squads that actually ran a mission get an entry, so TrainScouts keeps its original rule
@@ -283,14 +291,18 @@ namespace OnlyWar.Campaign.Turns
 
             foreach (Squad squad in embarkedSquads.Where(squad => !IsScoutSquad(squad)))
             {
-                SoldierProgressLog.ProgressSnapshot before = SoldierProgressLog.Capture(squad.Members);
-                foreach (ISoldier soldier in squad.Members)
+                // A brother on Mars was never aboard; his weeks are counted by Mars training.
+                List<ISoldier> present = squad.Members
+                    .Where(soldier => !MechanicusTrainingService.IsOnMars(soldier))
+                    .ToList();
+                SoldierProgressLog.ProgressSnapshot before = SoldierProgressLog.Capture(present);
+                foreach (ISoldier soldier in present)
                 {
                     trainingService.ApplySoldierWorkExperience(soldier, squad, points);
                 }
                 SoldierProgressLog.LogDelta(
                     $"Training XP [garrison, {subjectiveWeeks:F1}w warp] {squad.Name}",
-                    squad.Members, before);
+                    present, before);
             }
         }
 

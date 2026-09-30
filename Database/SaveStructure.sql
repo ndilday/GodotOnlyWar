@@ -17,7 +17,11 @@ CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NO
 -- ScenarioType 0 (None) means no scenario. HomeWorldPlanetId remains null until the
 -- Promised World is won. Format v5 is an intentional clean break from older saves and adds
 -- chapter/planet loadout doctrine plus character (role and individual) loadout persistence.
-CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioInvaderFactionId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id), CampaignId TEXT, CampaignSeed INTEGER, RandomAlgorithmVersion INTEGER NOT NULL DEFAULT 1);
+-- IsMechanicusLoanActive: tech-priests on loan while the founding Techmarines train on Mars.
+-- MarsReturnShipId / MarsReturnRegionId: the player's standing destination for brothers returning
+-- from Mars, at most one of them set; both null means the default (Home World, else flagship).
+-- No foreign keys: a destination that no longer exists falls back on load rather than failing.
+CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioInvaderFactionId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id), CampaignId TEXT, CampaignSeed INTEGER, RandomAlgorithmVersion INTEGER NOT NULL DEFAULT 1, IsMechanicusLoanActive BOOLEAN NOT NULL DEFAULT 0, MarsReturnShipId INTEGER, MarsReturnRegionId INTEGER, CHECK (MarsReturnShipId IS NULL OR MarsReturnRegionId IS NULL));
 
 -- One mutable operational policy belongs to the current player Chapter. A NULL threshold is the
 -- explicit Incapacitated option; physical deployability and procedure reservations still apply.
@@ -250,7 +254,9 @@ CREATE TABLE OrderCharacter (OrderId INTEGER NOT NULL REFERENCES Assignment (Id)
 -- Table: IndividualPosting
 -- Save-owned physical location for a soldier away from his home formation. Order membership lives
 -- in OrderCharacter; this table intentionally contains no order lifetime/commitment column.
-CREATE TABLE IndividualPosting (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id), Purpose INTEGER NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region (Id), StartedDate INTEGER NOT NULL, CHECK ((LoadedShipId IS NOT NULL) <> (LandedRegionId IS NOT NULL)));
+-- The location is exactly one of: a ship, a region, or off-sector (IsOffSector = 1, e.g. Mars).
+-- ExpectedReturnDate is null for an open-ended posting.
+CREATE TABLE IndividualPosting (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id), Purpose INTEGER NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region (Id), IsOffSector INTEGER NOT NULL DEFAULT 0, StartedDate INTEGER NOT NULL, ExpectedReturnDate INTEGER, CHECK ((LoadedShipId IS NOT NULL) + (LandedRegionId IS NOT NULL) + (IsOffSector <> 0) = 1));
 
 
 COMMIT TRANSACTION;

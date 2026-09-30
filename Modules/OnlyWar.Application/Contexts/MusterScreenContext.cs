@@ -18,7 +18,7 @@ internal sealed class MusterScreenContext
 
     private const string StaleSessionMessage = "The campaign changed. Reopen the Muster screen.";
 
-    private readonly MusterPlanService _musterPlan = new();
+    private readonly MusterPlanService _musterPlan;
     private readonly SoldierFilterService _musterFilters = new();
     private ChapterMusterViewModelBuilder _musterBuilder;
 
@@ -34,10 +34,12 @@ internal sealed class MusterScreenContext
         _rules = rules;
         _currentDate = currentDate;
         _identity = identity;
+        _musterPlan = new MusterPlanService(ArmoryScreenContext.BranchScreenSpecialistTypes(rules));
     }
 
     private ChapterMusterViewModelBuilder MusterBuilder =>
-        _musterBuilder ??= new ChapterMusterViewModelBuilder(_rules?.AwardCatalog);
+        _musterBuilder ??= new ChapterMusterViewModelBuilder(
+            _rules?.AwardCatalog, ArmoryScreenContext.BranchScreenSpecialistTypes(_rules));
 
     internal int StagedActionCount => _musterPlan.Actions.Count;
 

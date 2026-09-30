@@ -16,6 +16,13 @@ public static class DutyReadinessPolicy
         in DutyReadinessPolicyOptions options = default)
     {
         string name = string.IsNullOrWhiteSpace(facts.Name) ? "Soldier" : facts.Name;
+        // First: a soldier outside the sector is unavailable whatever his health.
+        if (facts.IsOffSector)
+        {
+            return Reject(DutyReadinessReasonCode.OffSector,
+                $"{name} is away from the sector.");
+        }
+
         if (facts.HasUntreatedSeveredLimb)
         {
             return Reject(DutyReadinessReasonCode.UntreatedSeverance,

@@ -43,6 +43,8 @@
    - 6.10 [Campaign Operations Services](#610-campaign-operations-services)
    - 6.11 [Sector Map Label Layer](#611-sector-map-label-layer)
    - 6.12 [Ork Infestation](#612-ork-infestation)
+   - 6.13 [Faction Capability Decoupling](#613-faction-capability-decoupling)
+   - 6.14 [Techmarines & the Mars Pipeline](#614-techmarines--the-mars-pipeline)
 7. [UI Layer](#7-ui-layer)
    - 7.1 [View / Controller Pattern](#71-view--controller-pattern)
    - 7.2 [Screen Inventory](#72-screen-inventory)
@@ -437,7 +439,7 @@ Relationship records such as `PresenceRequestRecord`, `OrderCharacterRecord`, an
 rebuilds session state, while Operations and Campaign bind order, posting, relationship, narrative,
 and chronicle projections after the domain graph exists. SQL access does not own those policies.
 
-`SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 19 and are written to
+`SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 22 and are written to
 `GlobalData.SaveVersion`. Missing saves are opened in neither create nor write mode, and the chooser
 retains compatible, incompatible, and corrupt entries with an explicit reason.
 
@@ -460,7 +462,9 @@ load.
 Key tables and their relationships:
 
 ```
-GlobalData           (Millenium, Year, Week, SaveVersion)
+GlobalData           (Millenium, Year, Week, SaveVersion, ...,
+                      IsMechanicusLoanActive, MarsReturnShipId→Ship nullable,
+                      MarsReturnRegionId→Region nullable) -- at most one Mars return place (§6.14)
 LastTurnReport       (Id = 1, ResolvedDate, PayloadJson)
 ChapterOperationalDoctrine
                      (Id = 1, InjuryThreshold nullable, RequireDutyReadySquadLeader,
@@ -518,7 +522,8 @@ Assignment           (Id, MissionId, IsQuiet, IsActivelyEngaging,
 OrderSquad           (OrderId→Assignment, SquadId)       -- order-to-squad junction
 OrderCharacter       (OrderId→Assignment, SoldierId→Soldier) -- character participants
 IndividualPosting    (SoldierId→Soldier, Purpose,
-                      LoadedShipId→Ship, LandedRegionId→Region, StartedDate)
+                      LoadedShipId→Ship, LandedRegionId→Region, IsOffSector,
+                      StartedDate, ExpectedReturnDate)
                                                           -- physical posting only; exactly one place
 
 Soldier              (Id, SoldierTemplateId, SquadId, Name, Strength, Dexterity,
@@ -762,8 +767,12 @@ Legs cripple at `Massive` and sever at `Mortal` — deliberately a band apart, s
 **Individual postings.** `PlayerSoldier.AssignedSquad` is the permanent organizational home. An optional
 `IndividualPosting` overrides the soldier's physical location without removing him from
 `Squad.Members`, preserving nominal strength, lineage, save ownership, and fallen-brother detection.
-`CampaignLocation` represents exactly one ship or one landed region. The save stores only the physical
-`Purpose` (`Independent` or `Medical`), location, and start date; operational commitment is the separate
+`CampaignLocation` represents exactly one ship, one landed region, or off-sector. Off-sector is never
+`IsSamePlace` as anything and is valid only for the `Mechanicus` purpose (training on Mars); a soldier
+there (`PlayerSoldier.IsOffSector`) fails duty readiness with `DutyReadinessReasonCode.OffSector`, so
+every duty consumer rejects him, and organizational transfer rejects him separately. The save stores
+only the physical `Purpose` (`Independent`, `Medical` or `Mechanicus`), location, start date and an
+optional expected-return date; operational commitment is the separate
 `PlayerSoldier.CurrentOrder` / `Order.AssignedCharacters` relationship. `IndividualPostingService` owns
 physical movement, medical detachment, reunion normalization, death cleanup, and individual ship
 manifests. Posted soldiers never occupy two locations, and ending an order or procedure does not
@@ -1699,7 +1708,7 @@ healing, and procedure order, then emits exactly one `NearDeathRecovery` when a 
 brother becomes deployable. Natural/field care, cybernetic, and vat-grown recovery are distinguished
 without scanning full career histories; a missing or fallen soldier closes no fictional recovery.
 
-`MedicalProcedure` (soldier id, hit-location template id, `MedicalProcedureType { Cybernetic, VatGrown }`, weeks remaining, Requisition cost paid up front) is a Domain health primitive. `MedicalProcedureService` remains the Campaign adapter while typed duration/cost and facility rules live in `OnlyWar.Medical`; recruitment reservations and staffing/capacity are supplied as facts at the boundary. The adapter validates eligibility, surgery site, co-located staff, and affordability, then deducts cost and creates the procedure; `EvaluateRequisites` returns the per-requisite breakdown the UI renders green/red. Durations and costs live in `MedicalProcedureRules`, never in UI literals. The gates are a co-located Apothecary **and** Techmarine (same ship or same region, checked only at procedure start) plus a valid surgery site — aboard a ship, or an Imperial/player-controlled Hive/Forge/Civilised region. No fortress-monastery is modeled, so a player-held region serves as the de-facto base.
+`MedicalProcedure` (soldier id, hit-location template id, `MedicalProcedureType { Cybernetic, VatGrown }`, weeks remaining, Requisition cost paid up front) is a Domain health primitive. `MedicalProcedureService` remains the Campaign adapter while typed duration/cost and facility rules live in `OnlyWar.Medical`; recruitment reservations and staffing/capacity are supplied as facts at the boundary. The adapter validates eligibility, surgery site, co-located staff, and affordability, then deducts cost and creates the procedure; `EvaluateRequisites` returns the per-requisite breakdown the UI renders green/red. Durations and costs live in `MedicalProcedureRules`, never in UI literals. The gates are a co-located Apothecary **and** Techmarine support (same ship or same region, checked only at procedure start; `TechmarineSupport` is the single predicate, and the Mechanicus loan satisfies it everywhere, §6.14) plus a valid surgery site — aboard a ship, or an Imperial/player-controlled Hive/Forge/Civilised region. No fortress-monastery is modeled, so a player-held region serves as the de-facto base.
 
 **Apothecary field care.** `OnlyWar.Medical.Treatment.FieldCarePolicy` converts explicit provider
 capacity into wound demotions for explicit patient bodies. Campaign's `FieldCareService` remains the
@@ -1813,6 +1822,14 @@ independent of Generation and the host.
 10. Sweep remaining specialists into their chapter organizations and remaining soldiers into the Tenth Company, creating overflow Scout Squads as necessary.
 11. Initialize the fleet with the first available fleet template.
 12. Record a founding history entry.
+
+The chapter founds with no Techmarine present (§6.14). While chapter-level organizations are
+populated, `SendFoundersToMars` sends every candidate on the Techmarine founding list to Mars through
+the `IMechanicusDeparturePort` generation port, dated at the end of the first training phase, with no
+cap. `RoleSuitabilityService` admits a founder to that list only if he clears the Techmarine bar **and**
+qualifies for a line-marine founding role (the worthiness test). The cohort skips the role-specific
+training of step 4, is credited the Mars training for the weeks between departure and game start, and
+the Mechanicus loan is set at every founding.
 
 All role lists share the `unassignedSoldierMap` as the single consumption authority, so one soldier may qualify for several roles but can only be assigned once. `ChapterGenerationDoctrine` resolves the required rules objects once by stable semantic assignment and fails fast when required data is missing or ambiguous. The detailed founding eligibility and ordering table is retained in `Design/Reference/FoundingRoleAssignment.md`.
 
@@ -2054,6 +2071,79 @@ regional columns. Older Ork table/column/member names remain read-compatible so 
 load and round-trip into the generic state. The capability-subset regression tests, rules-data
 validation tests, save/load tests, and planetary-operations presentation tests cover the contract.
 
+### 6.14 Techmarines & the Mars Pipeline
+
+PRD §4.28 owns the player-facing rules. The implementation lives in OnlyWar.Campaign, with the
+Armory screen in OnlyWar.Application and `Scenes/ArmoryScreen`.
+
+**Storage.** A brother training on Mars is an ordinary `PlayerSoldier` in the Armory squad with an
+`IndividualPosting` of purpose `Mechanicus` at `CampaignLocation.OffSector`, carrying an explicit
+`ExpectedReturnDate` (§5.3). He holds the Techmarine template from the day he leaves. Because he is
+off-sector he fails duty readiness, uses no berth, is never co-located with anyone, and is refused by
+organizational transfer (§5.3). `MechanicusTrainingService.IsOnMars` is the one test for him.
+
+**Departure.** `MechanicusDepartureService` is the one operation for founding and for the Armory
+screen. `Evaluate` returns a `MechanicusDepartureReasonCode`: a line brother
+(`SoldierTransferService.IsLineBrother`, shared with the career-track transfer rule) who is not a
+Scout Marine, meets the Techmarine template requirements, is not already posted, not committed to an
+operation, duty-ready, and not aboard a fleet in the Warp. At founding only the posting and template
+checks apply. `Depart` moves him into the Armory (disbanding an emptied source squad), sets the
+Techmarine template, creates the posting with a return date `TrainingWeeks` (1,040) after departure,
+and records a soldier event. Everyone sent together returns together; the explicit return date leaves
+room for individual dates without a save change.
+
+**Training.** `ChapterUpkeepProcessor` excludes brothers on Mars from the ordinary weekly training and
+work experience, and `MechanicusTrainingService.Train` applies the rules-data profile
+`mechanicus_mars_training` at the ordinary 0.2 points a week. The profile mirrors the Techmarine MOS
+skills and weights; over 1,040 weeks every Techmarine skill receives at least its MOS points.
+
+**Return.** `TurnController` runs `MechanicusReturnService.ProcessReturns` each turn after training
+and puts the `MechanicusReturnReport` on `TurnResolutionResult.MechanicusReturns`, which
+`TurnReportProjector` turns into "Returned from Mars" and "Mechanicus Loan Ended" report entries. A
+brother is due when his expected return date is on or before the current date. `ResolveDestination`
+takes `PlayerForce.MarsReturnDestination` (the player's standing choice), else the Home World's
+capital region while the chapter controls the Home World, else the flagship; a choice that no longer
+exists resolves to null. The returnee gets an `Independent` posting there. If the place is gone, is
+the Armory's own duty station, or cannot take him, the posting is cleared and he rejoins the Armory at
+its duty station.
+
+**Mechanicus loan.** `PlayerForce.IsMechanicusLoanActive` is an explicit flag, set at every founding.
+It cannot be derived from "the chapter has a Techmarine", because the cohort holds the Techmarine
+template while away. `TechmarineSupport.IsAvailableAt` is the single "Techmarine support here"
+predicate used by surgery gating (`MedicalProcedureService`), care destinations
+(`CareDestinationService`) and recovery planning (`RecoveryPlanService`); the loan satisfies it
+everywhere, so the planner never moves a Techmarine the chapter lacks, and the requisite line reads
+`TechmarineSupport.LoanLabel`. The loan ends when a return leaves nobody on Mars who departed on or
+before the returning group, so a chapter that founded with no cohort keeps the loan until its first
+sent brother returns. The founding directive (`BriefingComposer`) states the loan.
+
+**Branch-screen rule.** Ordinary promotions happen on the Chapter screen; entry into and promotion
+within a specialist branch happen on that branch's screen. `SoldierTransferService` takes the
+specialist types that are managed on their own screen, and `ArmoryScreenContext.BranchScreenSpecialistTypes`
+supplies the Techmarine branch to the Chapter screen, the muster plan and the muster view builder. A
+slot of that branch is then never a transfer opening, and `ApplyTransfer` refuses a stale option for
+one. The default constructor keeps the unrestricted rule for callers that need it.
+
+**Armory promotions.** `ArmoryPromotionService` promotes to any Techmarine-branch slot of the Armory's
+squad template that ranks above the brother's current template (rank, then subrank): Master Techmarine
+and Master of the Forge in today's rules data, with no doctrine role needed for the middle rank. The
+brother must serve in the Armory, be home from Mars, meet the target's template requirements, pass
+`CharacterAvailabilityService.EvaluateOrganizationalTransfer`, and find an open place (the slot's
+`MaximumNumber`; Master of the Forge has one). Only his template changes; he keeps his posting.
+
+**Armory screen.** `IArmoryScreenApplication` (`ArmoryScreenApplication` over `ArmoryScreenContext`)
+returns a detached `ArmoryOverview`: Techmarines at home with their promotion options, brothers on
+Mars with their return dates, the brothers who may be sent now, the loan, and the return-destination
+choices (every chapter ship and every Home World region; a vanished standing choice stays listed as
+unavailable). Commands (`SendToMars`, `Promote`, `SetMarsReturnDestination`) carry the session token
+and are refused for a replaced campaign. The Armory squad stays in the Chapter screen tree as an
+organizational node.
+
+**Persistence.** Save format 22: the posting's `Purpose`, `IsOffSector` and `ExpectedReturnDate`, and
+`GlobalData.IsMechanicusLoanActive` with at most one of `MarsReturnShipId` / `MarsReturnRegionId`
+(§4.3). The raw `GameStateDataBlob` keeps postings apart; `SavedGameLoader` reattaches them, so a
+headcount taken from the raw blob counts brothers on Mars as present with their squad.
+
 ---
 
 ## 7. UI Layer
@@ -2183,6 +2273,7 @@ and ineligible-squad rejection.
 | `squad_screen` | `SquadScreenController` | `SquadScreenView` | Squad detail |
 | `planetary_operations_screen` | `PlanetaryOperationsScreenController` | `PlanetaryOperationsScreenView` | Regional order, movement, specialist, and detachment workspace |
 | `apothecary_screen` | `ApothecariumScreenController` | `ApothecariumScreenView` | Wound, geneseed, and Recovery Operations management |
+| `armory_screen` | `ArmoryScreenController` | `ArmoryScreenView` | Techmarines, Mars departures and returns, Armory promotions (§6.14); armour, weapon and vehicle sections reserved |
 | `recruiter_screen` | *(controller)* | *(view)* | Training pipeline |
 | `BattleReviewScreen` | `BattleReviewController` | `BattleReviewView` | Post-battle replay |
 | `CommandScreen` | `CommandScreenController` | `CommandScreenView` | Live Command Brief, frozen Chapter Chronicle, and Last Turn Report access |
@@ -2192,6 +2283,12 @@ and ineligible-squad rejection.
 ### 7.3 Navigation Model
 
 `MainGameScreenController` maintains a `Stack<Control>` (`_previousScreenStack`). Opening a sub-screen pushes the current screen onto the stack and hides it. Closing via `CloseButton` pops and restores the previous screen. The galaxy view is the root; all other screens are overlays managed through this stack.
+
+Every `MainScreenController` that shows campaign data overrides `RefreshFromExternalChange()`, which
+re-queries while keeping the player's place where it still exists. After a turn resolves,
+`MainGameScene.RefreshScreensAfterTurn` calls it on every visible screen in the primary content host
+and on a visible planetary operations overlay; a hidden screen re-queries when it is opened or
+restored from the stack. A new screen that skips the override shows data from before the turn.
 
 ### 7.4 Last-Turn Report Snapshot
 

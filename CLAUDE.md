@@ -128,6 +128,13 @@ ahead of the path breaks first-token matching.
   reading the output; keep it to what decides the next step.
 - Put source data in plain `.txt`/`.json` files beside the script rather than inlining it,
   so the data can be edited without touching the logic.
+- **Windows PowerShell 5.1 reads text as Windows-1252 unless told otherwise, and it silently
+  corrupts UTF-8.** It reads a BOM-less `.ps1` that way, so a `§` or `—` literal in the script becomes
+  `Â§` / `â€”`. `Get-Content` reads a BOM-less source file the same way, so rewriting the file garbles
+  every non-ASCII character already in it. Both happened on 2026-09-30 across 33 `.cs` files. Keep
+  scripts ASCII-only (build other characters with `[char]0x00A7`). Read and write repo files with
+  `[System.IO.File]::ReadAllText/WriteAllText` and an explicit `UTF8Encoding`, and keep an existing
+  BOM. The damage reverses exactly: `UTF8.GetString(GetEncoding(1252).GetBytes(text))`.
 
 ## Build & test
 

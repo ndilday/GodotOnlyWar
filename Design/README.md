@@ -50,7 +50,9 @@ into `OnlyWar_TDD.md`;
 their implementation facts and verification boundaries are recorded there. The three corresponding
 Active plans were deleted on 2026-08-21 under the promotion rule. `ForceLegibility.md` was implemented,
 distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is now recorded in
-`VisualBaselines/PlanetaryOperations/`. Active design work currently retained here is:
+`VisualBaselines/PlanetaryOperations/`. `MarsPipeline.md` (Techmarines & the Mars pipeline, PRD
+§4.28) was implemented and checked in Godot, distilled into TDD §6.14, and deleted on 2026-09-30.
+Active design work currently retained here is:
 
 - `RangedCombatFollowUps.md` — narrow ranged-combat backlog described below.
 

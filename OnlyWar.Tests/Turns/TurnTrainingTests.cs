@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using OnlyWar.Campaign;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Extensions;
 using OnlyWar.Campaign.Simulation;
@@ -158,6 +159,53 @@ public class TurnTrainingTests
         Assert.Equal(FleetTravelPhase.InboundSystemTransit, fixture.TaskForce.TravelPhase);
     }
 
+    // Mars pipeline (TDD §6.14): a brother on Mars trains against the
+    // Mars profile every turn, and takes no garrison work experience with his home squad.
+    [Fact]
+    public void ProcessTurn_TrainsABrotherOnMarsWithTheMarsProfileInsteadOfGarrison()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerSquad("Home Squad", out ISoldier squadmate);
+        fixture.LandSquad(squad);
+        PlayerSoldier adept = fixture.AddMarsBrother(squad);
+
+        fixture.ProcessTurn();
+
+        Assert.Contains(squadmate, fixture.TrainingService.WorkExperienceSoldiers);
+        Assert.DoesNotContain(adept, fixture.TrainingService.WorkExperienceSoldiers);
+        Assert.Equal(0, GetSkillPoints(adept, TestSkills.Ranged));
+        TrainingProfile mars = fixture.MarsProfile;
+        float totalWeight = mars.Entries.Sum(entry => entry.Weight);
+        Assert.All(mars.Entries, entry => Assert.Equal(
+            MechanicusTrainingService.WeeklyPoints * entry.Weight / totalWeight,
+            GetSkillPoints(adept, entry.Skill),
+            precision: 5));
+    }
+
+    // His squad's Warp transit is not his: he trains his one week on Mars, and takes none of the
+    // subjective Warp weeks the squad banks on arrival.
+    [Fact]
+    public void ProcessTurn_TrainsABrotherOnMarsWhileHisSquadIsInTheWarp()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerSquad("Embarked Squad", out ISoldier squadmate);
+        fixture.Ship.LoadSquad(squad);
+        squad.BoardedLocation = fixture.Ship;
+        PlayerSoldier adept = fixture.AddMarsBrother(squad);
+        fixture.PutTaskForceInWarp(currentPhaseWeeksRemaining: 1, subjectiveWarpWeeks: 3);
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(0.6f, GetSkillPoints(squadmate, TestSkills.Ranged), precision: 6);
+        Assert.Equal(0, GetSkillPoints(adept, TestSkills.Ranged));
+        TrainingProfile mars = fixture.MarsProfile;
+        TrainingProfileEntry first = mars.Entries.First();
+        Assert.Equal(
+            MechanicusTrainingService.WeeklyPoints * first.Weight / mars.Entries.Sum(entry => entry.Weight),
+            GetSkillPoints(adept, first.Skill),
+            precision: 5);
+    }
+
     private static float GetSkillPoints(ISoldier soldier, BaseSkill skill)
     {
         return soldier.Skills.SingleOrDefault(s => s.BaseSkill == skill)?.PointsInvested ?? 0;
@@ -274,6 +322,23 @@ public class TurnTrainingTests
             _squads.Add(squad);
             soldier = playerSoldier;
             return squad;
+        }
+
+        public TrainingProfile MarsProfile =>
+            MechanicusTrainingService.FindProfile(Rules.TrainingProfiles.Values);
+
+        // A home-squad member posted to Mars. Mars training reads the Army's soldier map, so he
+        // is registered there as a real roster member is.
+        public PlayerSoldier AddMarsBrother(Squad squad)
+        {
+            PlayerSoldier adept = new(TestModelFactory.CreateSoldier(SoldierTemplate), "Brother Adept");
+            squad.AddSquadMember(adept);
+            Sector.PlayerForce.Army.PlayerSoldierMap[adept.Id] = adept;
+            new OnlyWar.Campaign.IndividualPostingService(new OnlyWar.Operations.Orders.OrderCommitmentSurface())
+                .Create(adept, IndividualPostingPurpose.Mechanicus, CampaignLocation.OffSector,
+                    CurrentDate, MechanicusDepartureService.ExpectedReturnDate(CurrentDate));
+            _soldiers.Add(adept);
+            return adept;
         }
 
         public Squad CreatePlayerScoutSquad(string name, out ISoldier scout)

@@ -162,6 +162,36 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
+    public void GetTransferOptions_KeepsLeadershipTrackBrothersOnTheLeadershipTrack()
+    {
+        // The leadership track is a one-way door too: a Sergeant may be promoted to another
+        // leadership slot, but never moves to a specialist slot or back to a line slot, even
+        // one of higher rank (Ancients, Champions and Veterans are line brothers).
+        const byte chaplainType = 4;
+        SoldierTemplate chaplain = CreateTemplate(33, "Chaplain", 3, false, chaplainType);
+        SoldierTemplate veteran = CreateTemplate(34, "Veteran", 3, false);
+        SoldierTemplate captain = CreateTemplate(36, "Captain", 3, true);
+        SquadTemplate commandTemplate = CreateSquadTemplate(
+            "Command Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (veteran, 0, 4),
+            (chaplain, 0, 1));
+        SquadTemplate hqTemplate = CreateSquadTemplate("Company HQ", (captain, 0, 1));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", commandTemplate);
+        PlayerSoldier sergeant = AddPlayerSoldier(source, TestModelFactory.SergeantTemplate, "Sergeant Marius");
+        Squad target = AddSquad(chapter, "Target Squad", commandTemplate);
+        AddPlayerSoldier(target, TestModelFactory.SergeantTemplate, "Sergeant Titus");
+        Squad hq = AddSquad(chapter, "Leaderless HQ", hqTemplate);
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, sergeant).ToList();
+
+        Assert.DoesNotContain(options, option => option.SoldierTemplate == chaplain);
+        Assert.DoesNotContain(options, option => option.SoldierTemplate == veteran);
+        Assert.Contains(options, option => option.SquadId == hq.Id && option.SoldierTemplate == captain);
+    }
+
+    [Fact]
     public void GetTransferOptions_RequiresDestinationTemplateStatAndRatingRequirements()
     {
         SoldierTemplate librarian = CreateTemplate(

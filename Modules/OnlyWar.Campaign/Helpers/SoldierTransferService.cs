@@ -147,6 +147,23 @@ namespace OnlyWar.Campaign
     public class SoldierTransferService
     {
         private readonly SoldierTemplateEligibilityService _eligibilityService = new();
+        private readonly HashSet<byte> _branchScreenSpecialistTypes;
+
+        /// <param name="branchScreenSpecialistTypes">
+        /// Specialist branches whose entry and promotions happen on the branch's own screen, never
+        /// through an ordinary transfer (TDD §6.14: a Techmarine is made on
+        /// Mars and a Master of the Forge is promoted on the Armory screen). A slot of one of these
+        /// types is never a transfer opening. Leave empty for the unrestricted rule.
+        /// </param>
+        public SoldierTransferService(IEnumerable<byte> branchScreenSpecialistTypes = null)
+        {
+            _branchScreenSpecialistTypes = branchScreenSpecialistTypes?.ToHashSet() ?? [];
+        }
+
+        private bool IsBranchScreenSlot(SoldierTemplate slot) =>
+            slot != null
+            && slot.SpecialistType != 0
+            && _branchScreenSpecialistTypes.Contains(slot.SpecialistType);
 
         public SoldierTransferContext CreateContext(Unit orderOfBattle) =>
             SoldierTransferContext.Build(orderOfBattle);
@@ -169,7 +186,7 @@ namespace OnlyWar.Campaign
             PlayerSoldier soldier,
             bool includeCurrentAssignment = false)
         {
-            if (context == null || soldier?.AssignedSquad == null)
+            if (context == null || soldier?.AssignedSquad == null || soldier.IsOffSector)
             {
                 return [];
             }
@@ -215,7 +232,7 @@ namespace OnlyWar.Campaign
             PlayerSoldier soldier,
             bool promotionOnly)
         {
-            if (context == null || soldier?.AssignedSquad == null)
+            if (context == null || soldier?.AssignedSquad == null || soldier.IsOffSector)
             {
                 return false;
             }
@@ -360,7 +377,8 @@ namespace OnlyWar.Campaign
                     continue;
                 }
                 if (!IsRankEligible(element.SoldierTemplate, soldier.Template)
-                    || !IsSpecialistEligible(element.SoldierTemplate, soldier.Template)
+                    || !IsTrackEligible(element.SoldierTemplate, soldier.Template)
+                    || IsBranchScreenSlot(element.SoldierTemplate)
                     || !_eligibilityService.IsEligible(soldier, element.SoldierTemplate))
                 {
                     continue;
@@ -503,7 +521,8 @@ namespace OnlyWar.Campaign
             {
                 return false;
             }
-            if (!_eligibilityService.IsEligible(soldier, option.SoldierTemplate))
+            if (IsBranchScreenSlot(option.SoldierTemplate)
+                || !_eligibilityService.IsEligible(soldier, option.SoldierTemplate))
             {
                 return false;
             }
@@ -791,16 +810,33 @@ namespace OnlyWar.Campaign
             return slot.Rank >= soldier.Rank;
         }
 
-        // Becoming a specialist is a one-way door. A line/command brother
-        // (SpecialistType 0) may still be drawn into any track — a regular marine can
-        // become a Chaplain, Apothecary, Techmarine, etc. But once a soldier holds a
-        // specialist calling, he may only transfer within that same SpecialistType: he
-        // can never return to the line or cross over to another specialty. This keeps an
-        // Apothecary transferable only to Apothecary roles.
-        private static bool IsSpecialistEligible(SoldierTemplate slot, SoldierTemplate soldier)
+        // Career tracks are one-way doors. A line brother (SpecialistType 0, not a squad
+        // leader — Ancients and Champions included) may still be drawn into any track: he
+        // can become a Chaplain, Apothecary, Techmarine, or a Sergeant. But once a soldier
+        // holds a specialist calling, he may only transfer within that same SpecialistType,
+        // and once he is on the leadership track (a non-specialist squad leader) he may only
+        // transfer to another leadership slot. Neither can return to the line or cross over.
+        private static bool IsTrackEligible(SoldierTemplate slot, SoldierTemplate soldier)
         {
-            return soldier.SpecialistType == 0 || slot.SpecialistType == soldier.SpecialistType;
+            if (IsLineBrother(soldier))
+            {
+                return true;
+            }
+            if (soldier.SpecialistType != 0)
+            {
+                return slot.SpecialistType == soldier.SpecialistType;
+            }
+            return slot.SpecialistType == 0 && slot.IsSquadLeader;
         }
+
+        /// <summary>
+        /// A line brother: no specialist calling and not on the leadership track. Ancients and
+        /// Champions are line brothers. The one career-track definition, shared by transfer
+        /// (<see cref="IsTrackEligible"/>) and by departure for Mars
+        /// (<see cref="MechanicusDepartureService"/>), so the two cannot drift apart.
+        /// </summary>
+        public static bool IsLineBrother(SoldierTemplate soldier) =>
+            soldier != null && soldier.SpecialistType == 0 && !soldier.IsSquadLeader;
 
         // Gates a transfer on where the two squads are, not just what slots are open.
         // A squad pinned in an enemy-controlled region is cut off: it may only trade
@@ -898,7 +934,8 @@ namespace OnlyWar.Campaign
                 && (!promotionOnly
                     || IsPromotionTarget(element.SoldierTemplate, soldier.Template))
                 && IsRankEligible(element.SoldierTemplate, soldier.Template)
-                && IsSpecialistEligible(element.SoldierTemplate, soldier.Template)
+                && IsTrackEligible(element.SoldierTemplate, soldier.Template)
+                && !IsBranchScreenSlot(element.SoldierTemplate)
                 && _eligibilityService.IsEligible(soldier, element.SoldierTemplate)
                 && element.MaximumNumber > 0;
         }
@@ -955,7 +992,8 @@ namespace OnlyWar.Campaign
                 return false;
             }
             if (!IsRankEligible(element.SoldierTemplate, soldier.Template)
-                || !IsSpecialistEligible(element.SoldierTemplate, soldier.Template))
+                || !IsTrackEligible(element.SoldierTemplate, soldier.Template)
+                || IsBranchScreenSlot(element.SoldierTemplate))
             {
                 return false;
             }

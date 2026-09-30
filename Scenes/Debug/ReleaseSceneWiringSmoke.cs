@@ -111,6 +111,17 @@ public partial class ReleaseSceneWiringSmoke : Node
             await NextFrame();
         }
 
+        Press(RequireNode<Button>(bottomMenu,
+            "Panel/MarginContainer/HBoxContainer/ArmoryButton"));
+        ArmoryScreenController armory = await WaitForVisible<ArmoryScreenController>(mainGame);
+        if (Require(armory != null, "Armory navigation did not open the application-backed screen."))
+        {
+            RequireNode<ArmoryScreenView>(armory, "ArmoryScreenView");
+            armory.RefreshFromExternalChange();
+            armory.RequestClose();
+            await NextFrame();
+        }
+
         VBoxContainer dossierSection = RequireNode<VBoxContainer>(systemInspector,
             "Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection");
         VBoxContainer dossierContent = RequireNode<VBoxContainer>(systemInspector,

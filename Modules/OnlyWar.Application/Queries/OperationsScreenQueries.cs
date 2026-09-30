@@ -183,7 +183,7 @@ internal sealed class OperationsScreenQueries : CampaignScreenApplication, IOper
 
         return new MovementOperationsView(
             projector.BuildRegionCards(region), tree, ships, selectedShipId,
-            selectedSquadIds.Count + selectedCharacterIds.Count,
+            selectedSquadIds.Count, selectedCharacterIds.Count,
             validSquadIds, validCharacterIds);
     }
 

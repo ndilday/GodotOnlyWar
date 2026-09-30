@@ -74,7 +74,9 @@ public class SoldierDetailBuilder
             ? "Available for duty"
             : readiness.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold
                 ? "Withheld by doctrine"
-                : "Wounded or impaired";
+                : readiness.ReasonCode == DutyReadinessReasonCode.OffSector
+                    ? "Away from the sector"
+                    : "Wounded or impaired";
         string location = SquadLocationFormatter.Format(squad);
         bool canNavigateToLocation = SquadLocationNavigation.Resolve(squad) is not null;
 

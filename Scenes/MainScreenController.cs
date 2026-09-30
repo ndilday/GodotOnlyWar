@@ -18,4 +18,13 @@ public partial class MainScreenController : Control
     {
         CloseRequested?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Rebuilds the screen from the current campaign, keeping the player's place where it still
+    /// exists. The host calls this when the campaign changed under an open screen, most notably
+    /// after a turn resolves. A screen that shows campaign data overrides it.
+    /// </summary>
+    public virtual void RefreshFromExternalChange()
+    {
+    }
 }

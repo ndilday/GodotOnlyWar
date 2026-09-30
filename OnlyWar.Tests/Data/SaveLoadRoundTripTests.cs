@@ -247,11 +247,13 @@ public class SaveLoadRoundTripTests
         // below: PlayerSoldier's constructor swaps the wrapper into the squad in place of the
         // base Soldier during load, so an id-only assertion would pass while the game held two
         // divergent objects.
+        // Only a present member can be attached: the Armory founds holding only brothers on Mars.
         Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
             s.PermitsIndividualDeployment
-            && s.Members.Count > 0
+            && s.Members.OfType<PlayerSoldier>().Any(member => member.IndividualPosting == null)
             && s.Id != administrativeSquad.Id);
-        PlayerSoldier attachedSpecialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
+        PlayerSoldier attachedSpecialist = detachableSquad.Members.OfType<PlayerSoldier>()
+            .First(member => member.IndividualPosting == null);
         Assert.True(OrderForceService.AssignCharacter(
             order, attachedSpecialist, new MedicalReadinessDecisions()));
         int attachedSpecialistId = attachedSpecialist.Id;
@@ -341,6 +343,14 @@ public class SaveLoadRoundTripTests
         army.PlayerSoldierMap.Remove(doomedId);
         army.FallenBrothers[doomedId] = doomed;
 
+        // Mars pipeline: the founding cohort's postings, the loan and the standing return
+        // destination (TDD §6.14).
+        int marsCohortCount = army.PlayerSoldierMap.Values.Count(soldier =>
+            soldier.IndividualPosting?.Purpose == IndividualPostingPurpose.Mechanicus);
+        Assert.True(marsCohortCount > 0);
+        Assert.True(sector.PlayerForce.IsMechanicusLoanActive);
+        sector.PlayerForce.MarsReturnDestination = CampaignLocation.Landed(landedRegion);
+
         List<Unit> originalUnits = _roundTrip.CurrentUnits;
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_roundtrip");
         try
@@ -351,6 +361,11 @@ public class SaveLoadRoundTripTests
 
             Assert.Equal(_date, loaded.CurrentDate);
             Assert.Equal(777, loaded.Requisition);
+            Assert.True(loaded.IsMechanicusLoanActive);
+            Assert.Equal(landedRegion.Id, loaded.MarsReturnRegionId);
+            Assert.Null(loaded.MarsReturnShipId);
+            Assert.Equal(marsCohortCount, loaded.IndividualPostings.Count(posting =>
+                posting.Purpose == IndividualPostingPurpose.Mechanicus && posting.IsOffSector));
             Assert.Equal(WoundLevel.Critical, loaded.ChapterOperationalDoctrine.InjuryThreshold);
             Assert.False(loaded.ChapterOperationalDoctrine.RequireDutyReadySquadLeader);
             Assert.Equal(6, loaded.ChapterOperationalDoctrine.MinimumDutyReadySquadStrength);
@@ -419,9 +434,13 @@ public class SaveLoadRoundTripTests
             Assert.Equal(
                 sector.Fleets.Values.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSquads.Count),
                 loaded.Fleets.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSquads.Count));
+            // The raw blob keeps postings in IndividualPostings; only SavedGameLoader reattaches
+            // them. So compare squad membership aboard, which the blob does carry, not
+            // LoadedSoldierCount, which leaves out posted soldiers and would count the Mars
+            // cohort aboard the Armory's ship only on the loaded side.
             Assert.Equal(
-                sector.Fleets.Values.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSoldierCount),
-                loaded.Fleets.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSoldierCount));
+                sector.Fleets.Values.SelectMany(tf => tf.Ships).Sum(MembersAboard),
+                loaded.Fleets.SelectMany(tf => tf.Ships).Sum(MembersAboard));
 
             Assert.Equal(CountSoldiers(originalUnits), CountSoldiers(loaded.Units));
             Assert.Equal(CountSquads(originalUnits), CountSquads(loaded.Units));
@@ -742,6 +761,10 @@ public class SaveLoadRoundTripTests
             GameStateRoundTripFixture.CleanupDb(dbPath);
         }
     }
+
+    private static int MembersAboard(OnlyWar.Domain.Fleets.Ship ship) =>
+        ship.LoadedSquads.Sum(squad => squad.Members.Count)
+        + ship.AdministrativeStations.Sum(squad => squad.Members.Count);
 
     private static int CountSoldiers(IEnumerable<Unit> rootUnits)
     {

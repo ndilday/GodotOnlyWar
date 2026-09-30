@@ -180,6 +180,16 @@ namespace OnlyWar.Domain
         // (PRD 4.9, post-0.7). Defaults to pristine; the stockpile starts empty.
         public float GeneseedPurity { get; set; }
 
+        // The Adeptus Mechanicus lends the chapter tech-priests while its founding Techmarines
+        // train on Mars (TDD §6.14). The loan satisfies the Techmarine
+        // requirement for replacement surgery. It is an explicit flag, not "the chapter has no
+        // Techmarine": the founding cohort holds the Techmarine template while away.
+        public bool IsMechanicusLoanActive { get; set; }
+
+        // The player's standing destination for brothers returning from Mars, or null for the
+        // default: the Home World's capital region, else the flagship.
+        public CampaignLocation MarsReturnDestination { get; set; }
+
         public PlayerForce(Faction faction, Army army, Fleet fleet)
             : base(faction, null, army, fleet)
         {

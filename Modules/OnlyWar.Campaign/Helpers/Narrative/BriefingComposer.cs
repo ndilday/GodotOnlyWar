@@ -75,7 +75,7 @@ namespace OnlyWar.Campaign.Narrative
             {
                 text = text.Replace(substitution.Key, substitution.Value);
             }
-            return text;
+            return text + ComposeMechanicusLoan(tokens);
         }
 
         public static string ComposeInvasionPromisedWorldBriefing(BriefingTokens tokens)
@@ -85,7 +85,27 @@ namespace OnlyWar.Campaign.Narrative
                 + "has denied the xenos any fleet or reinforcement; what remains is a ground horde, "
                 + $"led by its commander. [b]{tokens.AuthorityTitle} {tokens.AuthorityName}[/b] offers "
                 + $"the world to the [b]{tokens.ChapterName}[/b] when the invasion is broken and its "
-                + "last survivors are hunted down.";
+                + "last survivors are hunted down."
+                + ComposeMechanicusLoan(tokens);
+        }
+
+        // The Mechanicus loan (TDD §6.14): the chapter founds with no
+        // Techmarine present, so the directive says who covers for them and until when.
+        private static string ComposeMechanicusLoan(BriefingTokens tokens)
+        {
+            if (tokens.MarsCohortCount <= 0)
+            {
+                return string.Empty;
+            }
+            string brothers = tokens.MarsCohortCount == 1
+                ? "One of your brothers is"
+                : $"{tokens.MarsCohortCount} of your brothers are";
+            string returns = tokens.MarsCohortReturnDate == null
+                ? "until their return"
+                : $"until their return on [b]{tokens.MarsCohortReturnDate}[/b]";
+            return $"\n\n{brothers} on Mars, in training as Techmarines. The Adeptus Mechanicus "
+                + $"lends the Chapter tech-priests {returns}, so that replacement surgery "
+                + "can continue in their absence.";
         }
 
     }

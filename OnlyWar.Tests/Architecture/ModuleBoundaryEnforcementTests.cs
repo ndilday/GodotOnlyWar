@@ -94,6 +94,7 @@ public sealed class ModuleBoundaryEnforcementTests
     {
         Type[] screenPorts =
         [
+            typeof(IArmoryScreenApplication),
             typeof(ICommandScreenApplication),
             typeof(IDiplomacyScreenApplication),
             typeof(ICampaignNavigationApplication),

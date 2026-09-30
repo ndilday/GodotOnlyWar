@@ -8,6 +8,7 @@ public partial class BottomMenu : Control
         None,
         Chapter,
         Apothecarium,
+        Armory,
         TrainingUnit,
         Fleet,
         Diplomacy,
@@ -18,6 +19,7 @@ public partial class BottomMenu : Control
 
     public event EventHandler ChapterButtonPressed;
     public event EventHandler ApothecariumButtonPressed;
+    public event EventHandler ArmoryButtonPressed;
     public event EventHandler TrainingUnitButtonPressed;
     public event EventHandler FleetButtonPressed;
     public event EventHandler DiplomacyButtonPressed;
@@ -39,7 +41,9 @@ public partial class BottomMenu : Control
         Button libraryButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/LibraryButton");
         IconAtlas.Apply(libraryButton, "librarium", 92);
         Button armoryButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/ArmoryButton");
+        RegisterDestination(Destination.Armory, armoryButton);
         IconAtlas.Apply(armoryButton, "armamentarium", 94);
+        armoryButton.Pressed += () => ArmoryButtonPressed?.Invoke(this, EventArgs.Empty);
         Button trainingUnitButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/TrainingUnitButton");
         RegisterDestination(Destination.TrainingUnit, trainingUnitButton);
         IconAtlas.Apply(trainingUnitButton, "training_unit", 96);

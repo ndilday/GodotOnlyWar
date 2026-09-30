@@ -53,6 +53,8 @@ public partial class FleetScreenController : MainScreenController
         }
     }
 
+    public override void RefreshFromExternalChange() => PopulateFleetData();
+
     private bool CanTransferSquadToShip(int squadId, int shipId) =>
         _application?.CanTransferSquadToShip(squadId, shipId) == true;
 

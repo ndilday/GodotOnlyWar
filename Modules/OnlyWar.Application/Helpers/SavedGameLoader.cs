@@ -105,6 +105,7 @@ namespace OnlyWar.Application.Storage
             playerForce.GeneseedStockpile = (ushort)gameState.GeneseedStockpile;
             playerForce.GeneseedPurity = gameState.GeneseedPurity;
             playerForce.HomeWorldPlanetId = gameState.HomeWorldPlanetId;
+            playerForce.IsMechanicusLoanActive = gameState.IsMechanicusLoanActive;
             playerForce.RecruitmentProgram =
                 RecruitmentSaveMapper.FromSaveData(gameState.Recruitment);
             ValidateSquadLineageInvariants(playerForce);
@@ -144,6 +145,7 @@ namespace OnlyWar.Application.Storage
             }
             RestoreOrderCharacters(gameState, playerForce);
             RestoreIndividualPostings(gameState, playerForce, sector, commitments);
+            playerForce.MarsReturnDestination = RestoreMarsReturnDestination(gameState, sector);
             if (playerForce.RecruitmentProgram != null)
             {
                 playerForce.RecruitmentProgram.TaskOrder = sector.Orders.Values.FirstOrDefault(order =>
@@ -269,7 +271,11 @@ namespace OnlyWar.Application.Storage
                         $"Posting references missing soldier {record.SoldierId}.");
                 }
                 CampaignLocation location;
-                if (record.LoadedShipId is int shipId)
+                if (record.IsOffSector)
+                {
+                    location = CampaignLocation.OffSector;
+                }
+                else if (record.LoadedShipId is int shipId)
                 {
                     if (!ships.TryGetValue(shipId, out Ship ship))
                     {
@@ -296,8 +302,32 @@ namespace OnlyWar.Application.Storage
                     soldier,
                     record.Purpose,
                     location,
-                    Date.FromTotalWeeks(record.StartedDate));
+                    Date.FromTotalWeeks(record.StartedDate),
+                    record.ExpectedReturnDate is int expectedReturn
+                        ? Date.FromTotalWeeks(expectedReturn)
+                        : null);
             }
+        }
+
+        // A saved destination that no longer resolves is dropped, which restores the default
+        // destination; the return then checks again that the place exists.
+        private static CampaignLocation RestoreMarsReturnDestination(
+            GameStateDataBlob gameState,
+            Sector sector)
+        {
+            if (gameState.MarsReturnShipId is int shipId)
+            {
+                return CampaignLocation.Aboard(sector.Fleets.Values
+                    .SelectMany(fleet => fleet.Ships)
+                    .FirstOrDefault(ship => ship.Id == shipId));
+            }
+            if (gameState.MarsReturnRegionId is int regionId)
+            {
+                return CampaignLocation.Landed(sector.Planets.Values
+                    .SelectMany(planet => planet.Regions)
+                    .FirstOrDefault(region => region.Id == regionId));
+            }
+            return null;
         }
 
         private static void RestoreFactionCapabilityState(

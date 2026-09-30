@@ -20,7 +20,7 @@ internal sealed class ChapterScreenContext
     private readonly Date _currentDate;
     private readonly IPersistentIdAllocator _identity;
     private readonly RecruitmentPromotionService _promotionService;
-    private readonly SoldierTransferService _transferService = new();
+    private readonly SoldierTransferService _transferService;
     private readonly SoldierDetailBuilder _soldierDetailBuilder = new();
     private readonly SoldierFilterService _filterService = new();
     private readonly SquadRowViewModelBuilder _chapterRowBuilder = new();
@@ -38,6 +38,9 @@ internal sealed class ChapterScreenContext
         _identity = identity;
         _promotionService = promotionService
             ?? throw new ArgumentNullException(nameof(promotionService));
+        // Ordinary promotions happen here; the Techmarine branch is entered on Mars and promoted
+        // on the Armory screen (TDD §6.14).
+        _transferService = new SoldierTransferService(ArmoryScreenContext.BranchScreenSpecialistTypes(rules));
     }
 
     internal bool HasChapter => TryGetChapter() != null;
@@ -838,6 +841,17 @@ internal sealed class ChapterScreenContext
 
     private static string DutyStatus(PlayerForce force, ISoldier soldier)
     {
+        // Training on Mars (TDD §6.14): say where he is and when he returns,
+        // not merely that he is away.
+        if (soldier is PlayerSoldier
+            {
+                IndividualPosting: { Purpose: IndividualPostingPurpose.Mechanicus } mars
+            })
+        {
+            return mars.ExpectedReturnDate == null
+                ? "On Mars"
+                : $"On Mars — returns {mars.ExpectedReturnDate}";
+        }
         DutyReadinessEvaluation evaluation = DutyReadinessService.Evaluate(
             soldier,
             doctrine: force?.Army?.ChapterOperationalDoctrine,
@@ -846,7 +860,9 @@ internal sealed class ChapterScreenContext
             ? "Duty-ready"
             : evaluation.ReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold
                 ? "Withheld by doctrine"
-                : "Physically unavailable";
+                : evaluation.ReasonCode == DutyReadinessReasonCode.OffSector
+                    ? "Away from the sector"
+                    : "Physically unavailable";
     }
 
     private static string GetCompanyIconKey(Unit company) => company.UnitTemplate.Name switch

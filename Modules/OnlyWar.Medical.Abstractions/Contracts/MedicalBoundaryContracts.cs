@@ -14,7 +14,8 @@ public readonly record struct DutyReadinessFacts(
     bool HasUntreatedSeveredLimb,
     bool IsProcedureReserved,
     int FunctioningHands,
-    WoundLevel WorstWoundLevel);
+    WoundLevel WorstWoundLevel,
+    bool IsOffSector = false);
 
 /// <summary>Chapter policy supplied to the medical owner at the point of evaluation.</summary>
 public readonly record struct DutyReadinessPolicyOptions(

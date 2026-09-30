@@ -38,13 +38,16 @@ namespace OnlyWar.Application
 
     public sealed class ChapterMusterViewModelBuilder
     {
-        private readonly SoldierTransferService _transfers = new();
+        private readonly SoldierTransferService _transfers;
         private readonly SquadRowViewModelBuilder _squadRowBuilder = new();
         private readonly AwardFamilyCatalog _awardCatalog;
 
-        public ChapterMusterViewModelBuilder(AwardFamilyCatalog awardCatalog = null)
+        public ChapterMusterViewModelBuilder(
+            AwardFamilyCatalog awardCatalog = null,
+            IEnumerable<byte> branchScreenSpecialistTypes = null)
         {
             _awardCatalog = awardCatalog ?? AwardFamilyCatalog.CreateDefault();
+            _transfers = new SoldierTransferService(branchScreenSpecialistTypes);
         }
 
         public IReadOnlyList<MusterCandidateViewModel> BuildCandidates(

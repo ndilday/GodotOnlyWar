@@ -232,6 +232,10 @@ namespace OnlyWar.Campaign
             // Days a mission did not need become training credit, so the upkeep pass needs to know how
             // long each squad was actually committed for.
             _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector, BuildMissionDaysBySquad());
+            // After training, so a returnee's last week on Mars counts. Before fleet movement, so a
+            // brother reporting to the flagship travels with it.
+            _lastResult.MechanicusReturns = new MechanicusReturnService(_commitments)
+                .ProcessReturns(sector, _turn.CurrentDate);
             _fleetTurnProcessor.AdvanceFleetMovement(sector);
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
             _factionCapabilityCampaignProcessor.ProcessAttractionAndFragmentation(sector);

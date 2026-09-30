@@ -56,7 +56,9 @@ namespace OnlyWar.Application.Storage
                     : [force.RecruitmentProgram.TaskOrder],
                 ghostPopulationSources: session.Sector.GhostPopulationSources,
                 strategicInvasionForces: session.Sector.StrategicInvasionForces,
-                chapterOperationalDoctrine: force.Army.ChapterOperationalDoctrine);
+                chapterOperationalDoctrine: force.Army.ChapterOperationalDoctrine,
+                mechanicusLoanActive: force.IsMechanicusLoanActive,
+                marsReturnDestination: force.MarsReturnDestination);
             // A current-format save has committed successfully at this point. SaveData is
             // atomic, so reaching this line is the success boundary.
             if (session is GameSession applicationSession)

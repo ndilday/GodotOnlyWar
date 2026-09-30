@@ -62,6 +62,11 @@ if (Test-Path -LiteralPath $OutputDirectory) {
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
 $executablePath = Join-Path $OutputDirectory 'OnlyWar.exe'
+
+# Godot's .NET export runs dotnet publish. Reused MSBuild worker nodes outlive it and inherit
+# the console wrapper's stdout pipe, so the wrapper never sees EOF and the export never returns.
+$env:MSBUILDDISABLENODEREUSE = '1'
+$env:DOTNET_CLI_USE_MSBUILD_SERVER = '0'
 & $GodotPath --headless --path $projectRoot --export-release 'Windows Desktop' $executablePath
 if ($LASTEXITCODE -ne 0) {
     throw "Godot export failed with exit code $LASTEXITCODE."

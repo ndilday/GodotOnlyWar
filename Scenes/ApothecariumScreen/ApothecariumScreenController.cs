@@ -189,7 +189,7 @@ public partial class ApothecariumScreenController : MainScreenController
     /// the user's selection. The screen instance is reused between openings, so callers use
     /// this after another campaign screen may have moved a squad or changed its medical state.
     /// </summary>
-    public void RefreshFromExternalChange()
+    public override void RefreshFromExternalChange()
     {
         Render();
     }

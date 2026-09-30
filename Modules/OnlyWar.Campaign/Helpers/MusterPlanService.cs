@@ -45,8 +45,16 @@ namespace OnlyWar.Campaign
     public sealed class MusterPlanService
     {
         private readonly List<MusterStagedAction> _actions = [];
-        private readonly SoldierTransferService _transferService = new();
+        private readonly SoldierTransferService _transferService;
         public IReadOnlyList<MusterStagedAction> Actions => _actions;
+
+        /// <param name="branchScreenSpecialistTypes">
+        /// Specialist branches the muster may not staff (see <see cref="SoldierTransferService"/>).
+        /// </param>
+        public MusterPlanService(IEnumerable<byte> branchScreenSpecialistTypes = null)
+        {
+            _transferService = new SoldierTransferService(branchScreenSpecialistTypes);
+        }
 
         public bool IsStaged(int soldierId) => _actions.Any(action => action.SoldierId == soldierId);
 

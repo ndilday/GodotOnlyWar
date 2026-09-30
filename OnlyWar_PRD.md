@@ -65,7 +65,6 @@
    - 6.12 [Region-Level Going-Public Generalization (raised by Tyranids, §4.24)](#612-region-level-going-public-generalization-raised-by-tyranids-424)
    - 6.13 [Soldier Attribute Growth & Hero Representation (raised by Field Experience, §4.12)](#613-soldier-attribute-growth--hero-representation-raised-by-field-experience-412)
    - 6.14 [Graduated Healing Setback on New Wounds (raised by Recovery, §4.12)](#614-graduated-healing-setback-on-new-wounds-raised-by-recovery-412)
-   - 6.15 [Techmarine Cohort Shape & Roster Visibility (raised by the Mars Pipeline, §4.28)](#615-techmarine-cohort-shape--roster-visibility-raised-by-the-mars-pipeline-428)
    - 6.16 [Techmarine Maintenance Scope & Local Fabrication (raised by the Mars Pipeline, §4.28)](#616-techmarine-maintenance-scope--local-fabrication-raised-by-the-mars-pipeline-428)
    - 6.17 [Cybernetic Replacement of Crippled Vital Locations (raised by the Mars Pipeline, §4.28)](#617-cybernetic-replacement-of-crippled-vital-locations-raised-by-the-mars-pipeline-428)
    - 6.18 [Force Allocation Common Currency (raised by Faction Strategy, TDD §6.2)](#618-force-allocation-common-currency-raised-by-faction-strategy-tdd-62)
@@ -220,6 +219,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - The player can select a marine and move him to a different squad, subject to the destination squad's template requirements.
 - Required squad slots (e.g., a squad must have a Sergeant) must be filled before the transfer is permitted.
 - Optional slots (e.g., specialist roles with a min of 0) may be filled or left empty.
+- **Career tracks are one-way.** A line brother — including an Ancient, a Champion, or a Veteran — may move into any track: a specialist calling (Apothecary, Chaplain, Librarian, Techmarine) or the leadership track (Sergeant upward). Once a brother holds a specialist calling he transfers only within it; once he is on the leadership track he transfers only to another leadership slot. Neither returns to the line or crosses to another track. Transfers never demote.
 - The player can view and set the loadout for a squad, choosing from available weapon options defined by the squad's template.
 - Double-clicking a marine opens the Soldier Screen for that individual.
 
@@ -299,7 +299,7 @@ than two functioning arm/hand groups remain unconditional exclusions under every
 - When a marine dies, the battle results and death record note whether geneseed was successfully recovered.
 - **Cybernetic replacements** are available as a treatment option:
   - *Eligibility:* a non-vital hit location that has been severed — limbs (arms, hands, legs, feet) and any other non-vital part represented by the body model. Crippled locations do not require replacement for now; whether crippled vital locations need partial cybernetic/vat replacement remains an open question.
-  - *Requirements (staff):* an Apothecary **and** a Techmarine must be **co-located with the wounded marine to begin** the procedure — both present in the same place (the same ship, or the same region) as the marine's squad. This is a start-of-procedure check, not a duration lockout: because the surgery itself is a small time-sink against a week-long turn, the staff are not committed for the convalescence weeks that follow and are free to redeploy once the procedure is under way.
+  - *Requirements (staff):* an Apothecary **and** a Techmarine must be **co-located with the wounded marine to begin** the procedure — both present in the same place (the same ship, or the same region) as the marine's squad. This is a start-of-procedure check, not a duration lockout: because the surgery itself is a small time-sink against a week-long turn, the staff are not committed for the convalescence weeks that follow and are free to redeploy once the procedure is under way. Until the founding Techmarine cohort returns from Mars, tech-priests lent by the Adeptus Mechanicus satisfy the Techmarine half of this requirement (§4.28).
   - *Requirements (location):* the marine's squad must be at a site that can support augmetic surgery — aboard a ship, at the chapter's home world, or in an imperial-controlled region of a sufficiently advanced world (a Hive, Forge, or Civilised world; agri/feudal/feral/death worlds lack the infrastructure). A consequence of co-location plus this rule is a real logistics layer: a brother wounded while garrisoning a distant, undeveloped world must be evacuated home or to the fleet — or an Apothecary and Techmarine must campaign alongside him — before he can be treated.
   - *Cost:* a combination of time (weeks in the Apothecarium) and **Requisition**, the chapter's abstract supply/favor currency (§4.23). Cybernetic replacement is the faster, cheaper option; vat-grown replacement is rarer, slower, and more Requisition-intensive. Specific week counts and Requisition costs live as centralized rules constants, not UI literals.
   - *Presentation of requisites:* when viewing a soldier who requires a replacement, the Apothecary screen lists **every** prerequisite for each procedure option explicitly — co-located Apothecary, co-located Techmarine, a valid surgery site, and sufficient Requisition — rather than only enabling or greying the assign button. Each requisite is shown as a met/unmet line, **met requisites in green and unmet requisites in red**, so the player can see at a glance both that a procedure is unavailable and exactly why (e.g. "no Techmarine present" or "insufficient Requisition"). The assign action is enabled only when all requisites are green.
@@ -329,7 +329,7 @@ than two functioning arm/hand groups remain unconditional exclusions under every
 
 **Acceptance Criteria (Planned — Post-0.7):**
 - **Sergeant training cap.** A Sergeant's own skill level in a category is a hard cap on how far he can train a scout in that category — a scout cannot be trained beyond his instructor's level. Soldier ratings are updated every four turns; each time ratings update and a scout remains at his Sergeant's instructional limit in one or more skills, the Recruiter surfaces a notification. The player then has three options: leave the scout in the squad and accept no further improvement in the capped skill; transfer him to a Scout squad whose Sergeant has a higher level in that area; or promote him to a line squad, where development continues through deployment and combat experience rather than structured training.
-- The Armory allows the designation of potential Techmarines to be sent to Mars for training. The pipeline they enter — cohort timing, return delay, and what a returned Techmarine does — is specified in §4.28.
+- The Armory screen allows line Battle Brothers (not Scouts, neophytes, specialists, or leaders) to be sent to Mars for Techmarine training. The pipeline they enter — selection bar, return delay, and what a returned Techmarine does — is specified in §4.28.
 
 **Acceptance Criteria (Implemented — 0.7.3 Recruitment v1):**
 
@@ -1169,7 +1169,7 @@ This is deliberately **not** a survival economy. Consistent with the relevance/l
 **Expenditure (sinks)**
 - **Medical procedures** — cybernetic and vat-grown replacements consume Requisition (the cost model already assumed in §4.8 and the §5.2 Apothecary second pass).
 - **Recruitment** — recruiting beyond the geneseed constraint draws on manpower pledges and recruitment rights (§6.3); geneseed remains the separate hard constraint (§4.12).
-- **Wargear replacement & upgrade** — re-equipping squads and upgrading loadouts. *Phased:* initially abstracted against Requisition; a later phase introduces a real **Armory inventory** — a finite per-pattern wargear pool, depleted as brothers fall and replenished by wargear pledges — housed in the existing Armory node on the Chapter Screen (§4.5). The commitment to a real inventory model is an open question (§6.9).
+- **Wargear replacement & upgrade** — re-equipping squads and upgrading loadouts. *Phased:* initially abstracted against Requisition; a later phase introduces a real **Armory inventory** — a finite per-pattern wargear pool, depleted as brothers fall and replenished by wargear pledges — housed on the dedicated Armory screen (§4.28), which also holds the chapter's Techmarines. The commitment to a real inventory model is an open question (§6.9).
 - **Ships & vehicles** — acquisition and repair, fed by forge-world pledges.
 - **Fortification materiel** — supporting the construction missions in §4.13.
 
@@ -1177,7 +1177,7 @@ This is deliberately **not** a survival economy. Consistent with the relevance/l
 - The relationship is two-way for high authorities. The Inquisition may **requisition assets *from*** the chapter — drawing down Requisition or seizing materiel as a censure outcome — realizing the "requisition of assets" consequence raised in §6.5. This mechanic is specified here; its triggers and severity remain part of the open Inquisition questions (§6.5).
 
 **Presentation**
-- The chapter's current Requisition and its outstanding pledges (source, type, cadence, next delivery) are visible to the player. The **Armory** node on the Chapter Screen (§4.5) is the intended home for resource and, later, wargear-inventory management.
+- The chapter's current Requisition and its outstanding pledges (source, type, cadence, next delivery) are visible to the player. The dedicated **Armory** screen is the intended home for resource and, later, wargear-inventory management; it is first built for Techmarines (§4.28) and will grow to hold the chapter's armor, weapon, and vehicle counts.
 
 ---
 
@@ -1321,16 +1321,21 @@ behavior changed.
 
 ### 4.28 Techmarines & the Mars Pipeline
 
-**Description.** Techmarines are trained by the Adeptus Mechanicus on Mars, not by the chapter, and the round trip is measured in decades. Today this is a placeholder: identified aspirants leave for roughly two years and return immediately. Replacing it with a genuine deferred-cohort pipeline gives the young chapter a long capability arc — its first two decades are spent as a relationship-building infantry force — and supplies the gate on machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (§5.8): armor cannot be fielded until the chapter has Techmarines to wake and maintain its machine spirits.
+**Description.** Techmarines are trained by the Adeptus Mechanicus on Mars, not by the chapter, and the round trip is measured in decades. The deferred-cohort pipeline gives the young chapter a long capability arc — its first two decades are spent as a relationship-building infantry force — and supplies the gate on machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (§5.8): armor cannot be fielded until the chapter has Techmarines to wake and maintain its machine spirits.
 
-**Acceptance Criteria (Planned — 0.8):**
-- **The chapter starts with none.** At founding, a cohort of marines and aspirants is identified for the Adeptus Mechanicus and sent to Mars. The chapter begins its Techmarine era empty, and the first cohort returns only after a long delay — canonically ~18 in-game years, long enough to be felt rather than to be a formality. Equipment promises maturing around the cohort's return is a deliberate convergence to tune toward.
-- **The pipeline is player-driven and continuous.** Beyond the founding cohort the player can send further neophytes and marines to Mars on an ongoing basis — a trickle rather than a one-time draft. The designation surface is the Armory (§4.9).
-- **Techmarines have a defined role between missions.** Vehicle repair and maintenance is the anchor role, and it is what makes the Vehicles dependency real rather than nominal.
-- **Cybernetic repair is Techmarine work.** A cybernetic hit location damaged in battle does not heal naturally and is not eligible for Apothecary treatment. Techmarines gain a **Cybernetic Repair** procedure structurally analogous to the Apothecary's wound-healing procedures (§4.8) — staffed, sited, and costed — so a brother carrying damaged augmetics needs a Techmarine to return to duty.
-- **Interaction with replacement surgery must be deliberate.** §4.8 already requires an Apothecary **and** a Techmarine co-located to *begin* a significant body-part replacement. Starting with no Techmarines therefore removes replacement surgery from the chapter for the whole of the first cohort's absence. Either accept that as part of the early-chapter arc or supply a founding-era exception, but resolve it before implementation rather than discovering it in play.
+**Acceptance Criteria (Implemented — 0.8.1, except the last two items, which are later work; implementation in TDD §6.14):**
+- **The bar is Tech > 60.** The same threshold selects founding candidates and gates the Techmarine template for later drafts, so a founder and a later volunteer are held to one standard. With the worthiness test below, a founding sends roughly 5–25 brothers per 1,000 (mean about 13 over 40 seeds); that is accepted, below the original 15–25 aim.
+- **The chapter starts with none.** Every founder who clears the bar **and** qualifies for a line-marine role — so is worth making a full Battle Brother — leaves for Mars after his first training phase. The cohort comes out of the founding 1,000; there is no cap on its size.
+- **Training takes 20 years.** The founding cohort left two years before game start and returns together 18 years into the campaign. Everyone sent at the same time returns at the same time; individually varied return dates are a later refinement. Equipment promises maturing around the cohort's return is a deliberate convergence to tune toward.
+- **A brother on Mars is on the roll but absent.** He is carried in the Armory with the Techmarine rank from the day he leaves, marked as away on Mars with his return date, and is unavailable for any duty, transfer, promotion, or berth. He trains every turn while away, so his skills show his progress.
+- **The Mechanicus lends the chapter tech-priests until the founding cohort returns.** The loan satisfies the Techmarine requirement for replacement surgery (§4.8) and, once it exists, Cybernetic Repair — but not vehicles. It costs nothing, ends when the founding cohort arrives, and is stated in the founding directive. The Apothecary, surgery-site, and Requisition requirements still apply.
+- **Returned Techmarines arrive at the chapter homeworld**, or at the flagship if there is no homeworld; the player may set a different standing destination (any chapter ship or any Home World region). If that place no longer exists, he reports to the Armory's duty station. The return is an end-of-turn event. A returnee brings his training, not special wargear: servo-arms and similar equipment are things he is now qualified to use.
+- **The pipeline is player-driven and continuous.** After game start the player sends further line Battle Brothers from the Armory screen — never Scouts or neophytes, never a specialist (a specialist stays in his calling), and never a brother on the leadership track. A candidate must clear the bar, be fit, and not be committed to an operation; he can leave from anywhere, and cannot be recalled. The only cost is the brother himself: a man lost to the line for 20 years inside the fixed 1,000-man cap.
+- **Promotion within the Techmarine branch is the player's choice**, made on the Armory screen from Techmarines who are home: to Master Techmarine, and to the single seat of Master of the Forge. Each rank has its own requirements, and a brother is offered only the ranks above his own. By the general rule, ordinary promotions happen on the Chapter screen and entry into or promotion within a specialist branch happens on that branch's screen, so the Chapter screen and the muster never offer a Techmarine-branch slot.
+- **Techmarines have a defined role between missions.** Vehicle repair and maintenance is the anchor role, and it is what makes the Vehicles dependency real rather than nominal. Deferred until vehicles are implemented (§6.16).
+- **Cybernetic repair is Techmarine work.** A cybernetic hit location damaged in battle does not heal naturally and is not eligible for Apothecary treatment. Techmarines gain a **Cybernetic Repair** procedure structurally analogous to the Apothecary's wound-healing procedures (§4.8) — staffed, sited, and costed — so a brother carrying damaged augmetics needs a Techmarine to return to duty. A separate 0.8.1 item after the pipeline.
 
-Open questions raised by this section: cohort shape and roster visibility (§6.15), maintenance scope and local fabrication (§6.16), and cybernetic replacement of crippled vital locations (§6.17).
+Open questions raised by this section: maintenance scope and local fabrication (§6.16), and cybernetic replacement of crippled vital locations (§6.17). Cohort shape and roster visibility (formerly §6.15) were resolved above.
 
 ---
 
@@ -1443,7 +1448,9 @@ The work that remained open at the end of 0.8, together with the connective item
 
 - ⬜ **Founding myth** — a short generated chapter history at new-game start. §4.19.
 - ⬜ **Wider-Imperium dispatches (initial)** — voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing. §4.19.
-- ⬜ **Techmarines & the Mars pipeline** — replace the placeholder (aspirants leave for ~2 years and return immediately) with a deferred-cohort pipeline: the chapter starts with no Techmarines, the founding cohort returns after ~18 in-game years, and the player sends further drafts on an ongoing basis. Adds between-mission vehicle maintenance and a Techmarine **Cybernetic Repair** procedure. **Prerequisite for Vehicles** (§5.8). §4.28; open questions §§6.15–6.17.
+- ✅ **Techmarines & the Mars pipeline** — the founding placeholder is replaced with a deferred-cohort pipeline: the chapter starts with no Techmarines, the founding cohort returns 18 years after game start, the Mechanicus lends tech-priests for replacement surgery until then, and the player sends further Battle Brothers, promotes Master Techmarines and the Master of the Forge, and sets where returnees report on the new Armory screen. Techmarine-branch slots left the Chapter screen and the muster. **Prerequisite for Vehicles** (§5.8). §4.28; TDD §6.14. *(Save format 22.)*
+- ⬜ **Techmarine Cybernetic Repair** — the Techmarine procedure for damaged augmetics, after the Mars pipeline. §4.28.
+- ⬜ **Vital-location replacement** — design and implement partial cybernetic or vat-grown replacement of crippled vital locations, after Cybernetic Repair. §6.17.
 - ⬜ **Chapter Mandates** — Command Brief-backed mandates per the §4.25 design; independent follow-through after the equipment foundation, not a prerequisite for it.
 - ⬜ **Display mode and UI/text scaling** — the §4.27 requirement.
 
@@ -1655,6 +1662,8 @@ fleets. See §4.22 and `OnlyWar_TDD.md` §6.12.
 
 **Why it comes up.** §4.23 makes "replace losses" a core sink, but "losses" can mean *bodies* (recruitment, already constrained by geneseed) or also *gear*. A real inventory makes a civilized world's wargear tithe tangible and creates meaningful scarcity in re-equipping a depleted company, but it is a substantial new model touching squad loadouts (§4.5), death/maiming resolution (the point at which gear is lost or recovered), save/load, and the Armory UI. The system is designed to ship abstract-first (Requisition only) so this commitment can be deferred without rework.
 
+**Direction (2026-09-29).** Not yet decided in full, but the design is moving toward tracking at least **relic weapons** as individual items. The dedicated Armory screen (§4.28) is the planned home for the chapter's armor, weapon, and vehicle counts, whatever depth of inventory is finally chosen.
+
 **Leaning (not yet decided):** ship abstract-first; adopt the inventory model only if playtesting shows wargear scarcity adds a decision the body/geneseed constraint does not already provide.
 
 ### 6.10 Pledge Interdiction in Transit (raised by Supply, §4.23)
@@ -1691,12 +1700,6 @@ fleets. See §4.22 and `OnlyWar_TDD.md` §6.12.
 
 **Status:** deliberately not scheduled. The current location-level healing reset remains the rule; revisit this refinement only if future balance evidence shows that fresh minor wounds make severe injuries disproportionately difficult to recover from.
 
-### 6.15 Techmarine Cohort Shape & Roster Visibility (raised by the Mars Pipeline, §4.28)
-
-**Question:** How many marines are sent to Mars at founding and per later draft; do they return all at once or on staggered, individually-varied dates; and do Mars-bound marines remain in the chapter roster as present-but-unavailable, or are they removed until they return?
-
-**Why it comes up.** These are one design knob seen from three sides: together they decide whether the cohort's return reads as a single dramatic beat or as a smooth capability curve, and whether the player feels the absence continuously (visible but unusable) or only at the moment of return. A simultaneous return is the stronger narrative event; staggered dates give a smoother ramp and more campaign-to-campaign variety. Roster visibility is the cheapest of the three to change later and is likely to be settled by UI legibility rather than by design.
-
 ### 6.16 Techmarine Maintenance Scope & Local Fabrication (raised by the Mars Pipeline, §4.28)
 
 **Question:** Beyond vehicles, do Techmarines maintain small arms and power armor — and if so, is that a hard gate (no Techmarine, no serviceable wargear) or a degraded-without-them service? Separately, should they be able to convert Requisition into small arms as a local-fabrication sink?
@@ -1705,7 +1708,7 @@ fleets. See §4.22 and `OnlyWar_TDD.md` §6.12.
 
 ### 6.17 Cybernetic Replacement of Crippled Vital Locations (raised by the Mars Pipeline, §4.28)
 
-**Question:** Should a crippled *vital* hit location require partial cybernetic or vat-grown replacement — an organ rather than a limb?
+**Question:** Should a crippled *vital* hit location require partial cybernetic or vat-grown replacement — an organ rather than a limb? Scheduled to be designed and implemented in Alpha 0.8.1, after the Mars pipeline and Cybernetic Repair (§5.6).
 
 **Why it comes up.** §4.28 makes damaged cybernetics Techmarine work and §4.8 already models significant body-part replacement, so the machinery exists; the open part is whether vital locations should be routed into it rather than recovering conventionally. It bears directly on how survivable a torso or head wound is across a long career and on how much Techmarine capacity a battered chapter needs, which couples it to §6.16's scope question rather than leaving it independent.
 

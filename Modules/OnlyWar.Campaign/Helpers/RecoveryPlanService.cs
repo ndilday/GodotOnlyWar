@@ -1,3 +1,4 @@
+using OnlyWar.Medical.Readiness;
 using OnlyWar.Operations.Orders;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Fleets;
@@ -83,7 +84,9 @@ namespace OnlyWar.Campaign
                 if (staff == null) return new(false, "No Apothecary can be moved to the destination.");
                 staffToMove.Add(staff);
             }
-            if (live.Techmarine == null)
+            // The same predicate the destination was judged by: under the Mechanicus loan there
+            // is no Techmarine to move, and none is needed.
+            if (!TechmarineSupport.IsAvailableAt(force, destination))
             {
                 PlayerSoldier staff = FindMovableStaff(force, MedicalProcedureService.IsTechmarine);
                 if (staff == null) return new(false, "No Techmarine can be moved to the destination.");
@@ -146,10 +149,12 @@ namespace OnlyWar.Campaign
             return new(true, $"{soldier.Name} has rejoined {soldier.AssignedSquad.Name}.");
         }
 
-        private static PlayerSoldier FindMovableStaff(
+        // Duty readiness, not bare combat effectiveness: it is the one availability decision, and
+        // it rejects a fit brother who is off-sector on Mars.
+        internal static PlayerSoldier FindMovableStaff(
             PlayerForce force,
             Func<ISoldier, bool> role) => force.Army.PlayerSoldierMap.Values.FirstOrDefault(staff =>
-                staff.IsCombatEffective
+                DutyReadinessService.IsDutyReady(staff, recruitmentProgram: force.RecruitmentProgram)
                 && role(staff)
                 && staff.AssignedSquad?.PermitsIndividualDeployment == true
                 && !RecruitmentPromotionService.IsReservedForProcedure(

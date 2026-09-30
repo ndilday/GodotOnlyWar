@@ -4,7 +4,10 @@ namespace OnlyWar.Domain.Soldiers
     public enum IndividualPostingPurpose
     {
         Independent = 0,
-        Medical = 1
+        Medical = 1,
+        // Training by the Adeptus Mechanicus on Mars. Always off-sector; a soldier with this
+        // posting is not available for any duty (DutyReadinessReasonCode.OffSector).
+        Mechanicus = 2
     }
 
     /// <summary>
@@ -16,15 +19,20 @@ namespace OnlyWar.Domain.Soldiers
         public IndividualPostingPurpose Purpose { get; set; }
         public CampaignLocation Location { get; set; }
         public Date StartedDate { get; }
+        // When the posting is expected to end, or null when it is open-ended. Stored rather than
+        // derived from StartedDate so that individual return dates need no save change.
+        public Date ExpectedReturnDate { get; }
 
         public IndividualPosting(
             IndividualPostingPurpose purpose,
             CampaignLocation location,
-            Date startedDate)
+            Date startedDate,
+            Date expectedReturnDate = null)
         {
             Purpose = purpose;
             Location = location;
             StartedDate = startedDate;
+            ExpectedReturnDate = expectedReturnDate;
         }
 
     }

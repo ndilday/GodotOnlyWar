@@ -53,6 +53,8 @@ public partial class SquadScreenController : MainScreenController
         Refresh();
     }
 
+    public override void RefreshFromExternalChange() => Refresh();
+
     private void OnLoadoutChanged(object sender, EventArgs e)
     {
         if (!TryApply(_application?.SetSquadLoadout(

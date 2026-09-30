@@ -99,7 +99,7 @@ public partial class ChapterMusterScreenController : MainScreenController
         Refresh();
     }
 
-    public void RefreshFromExternalChange() => Refresh();
+    public override void RefreshFromExternalChange() => Refresh();
 
     public void OpenForSoldier(int? soldierId)
     {

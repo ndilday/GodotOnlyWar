@@ -173,7 +173,12 @@ namespace OnlyWar.Campaign
             }
         }
 
-        internal void ApplyTrainingProfile(ISoldier soldier, TrainingProfile trainingProfile, float points)
+        internal void ApplyTrainingProfile(ISoldier soldier, TrainingProfile trainingProfile, float points) =>
+            ApplyProfile(soldier, trainingProfile, points);
+
+        // Splits the points across the profile's entries by weight. Stateless, so training that
+        // needs no calculator state (Mars training, MechanicusTrainingService) shares it.
+        internal static void ApplyProfile(ISoldier soldier, TrainingProfile trainingProfile, float points)
         {
             if (trainingProfile == null || trainingProfile.Entries.Count == 0 || points <= 0) return;
 

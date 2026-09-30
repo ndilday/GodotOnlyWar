@@ -49,8 +49,24 @@ public class RoleSuitabilityServiceTests
     [InlineData(61f, true)]
     public void Techmarine_RequiresTechAboveThreshold(float techRating, bool eligible)
     {
-        PlayerSoldier soldier = CreateSoldier(tech: techRating);
+        PlayerSoldier soldier = CreateSoldier(melee: 95, ranged: 110, tech: techRating);
         Assert.Equal(eligible, Candidates(FoundingRole.Techmarine, soldier).Contains(soldier));
+    }
+
+    // The founding worthiness test (TDD §6.14): a Mars-bound founder must
+    // also qualify for at least one line-marine role, whatever his leadership.
+    [Fact]
+    public void Techmarine_RequiresALineMarineProfile()
+    {
+        PlayerSoldier tactical = CreateSoldier(melee: 95, ranged: 110, lead: 70, tech: 80, name: "Tactical");
+        PlayerSoldier assault = CreateSoldier(melee: 95, ranged: 100, lead: 40, tech: 80, name: "Assault");
+        PlayerSoldier devastator = CreateSoldier(melee: 85, ranged: 100, lead: 50, tech: 80, name: "Devastator");
+        PlayerSoldier unworthy = CreateSoldier(melee: 70, ranged: 90, lead: 40, tech: 120, name: "Unworthy");
+
+        List<PlayerSoldier> techmarines =
+            Candidates(FoundingRole.Techmarine, tactical, assault, devastator, unworthy);
+
+        Assert.Equal(new[] { tactical, assault, devastator }, techmarines);
     }
 
     [Fact]

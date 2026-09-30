@@ -31,6 +31,8 @@ public partial class DiplomacyScreenController : MainScreenController
 
     private void OnSessionChanged(object sender, EventArgs e) => PopulateRequestData();
 
+    public override void RefreshFromExternalChange() => PopulateRequestData();
+
     public void PopulateRequestData()
     {
         if (_view == null || _application == null) return;

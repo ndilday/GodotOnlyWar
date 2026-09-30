@@ -31,6 +31,6 @@ namespace OnlyWar.Domain
         public static string Format(CampaignLocation location) =>
             location?.Ship?.Name
                 ?? location?.Region?.Name
-                ?? "No operational location";
+                ?? (location?.IsOffSector == true ? "Off-sector" : "No operational location");
     }
 }

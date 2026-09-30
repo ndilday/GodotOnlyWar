@@ -38,6 +38,12 @@ namespace OnlyWar.Persistence.Database.GameState
         // The first-class Chapter Home World and the recruitment aggregate's primitive
         // persistence representation. Domain reconstruction happens in SavedGameLoader.
         public int? HomeWorldPlanetId { get; set; }
+        // The Mechanicus tech-priest loan (TDD §6.14), restored onto the PlayerForce.
+        public bool IsMechanicusLoanActive { get; set; }
+        // The standing destination for brothers returning from Mars, as raw ids; at most one is
+        // set. The load path resolves them against the loaded sector.
+        public int? MarsReturnShipId { get; set; }
+        public int? MarsReturnRegionId { get; set; }
         public RecruitmentSaveData Recruitment { get; set; }
         public List<Order> Orders { get; set; }
         // Medical procedures in progress (PRD 4.8 / 5.3), restored onto the loaded Army.
@@ -220,6 +226,9 @@ namespace OnlyWar.Persistence.Database.GameState
                 GeneseedStockpile = global?.GeneseedStockpile ?? 0,
                 GeneseedPurity = global?.GeneseedPurity ?? 1.0f,
                 HomeWorldPlanetId = global?.HomeWorldPlanetId,
+                IsMechanicusLoanActive = global?.IsMechanicusLoanActive ?? false,
+                MarsReturnShipId = global?.MarsReturnShipId,
+                MarsReturnRegionId = global?.MarsReturnRegionId,
                 Recruitment = recruitment,
                 Orders = _unitDataAccess.LoadedOrders.Values.ToList(),
                 MedicalProcedures = medicalProcedures,
@@ -277,7 +286,9 @@ namespace OnlyWar.Persistence.Database.GameState
                              IEnumerable<Order> additionalOrders = null,
                              IEnumerable<GhostPopulationSource> ghostPopulationSources = null,
                               IEnumerable<StrategicInvasionForce> strategicInvasionForces = null,
-                              ChapterOperationalDoctrine chapterOperationalDoctrine = null)
+                              ChapterOperationalDoctrine chapterOperationalDoctrine = null,
+                              bool mechanicusLoanActive = false,
+                              CampaignLocation marsReturnDestination = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -312,7 +323,8 @@ namespace OnlyWar.Persistence.Database.GameState
                               campaignEventLedger, chapterChronicle, campaignIdentity,
                               relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
                               additionalOrders, ghostPopulationSources, strategicInvasionForces,
-                              chapterOperationalDoctrine);
+                              chapterOperationalDoctrine, mechanicusLoanActive,
+                              marsReturnDestination);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -367,7 +379,9 @@ namespace OnlyWar.Persistence.Database.GameState
                                    IEnumerable<Order> additionalOrders,
                                    IEnumerable<GhostPopulationSource> ghostPopulationSources,
                                     IEnumerable<StrategicInvasionForce> strategicInvasionForces,
-                                    ChapterOperationalDoctrine chapterOperationalDoctrine)
+                                    ChapterOperationalDoctrine chapterOperationalDoctrine,
+                                    bool mechanicusLoanActive,
+                                    CampaignLocation marsReturnDestination)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -501,7 +515,9 @@ namespace OnlyWar.Persistence.Database.GameState
                     _recruitmentDataAccess.SaveData(transaction, recruitment);
                     _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition,
                                                      geneseedStockpile, geneseedPurity, scenario,
-                                                     homeWorldPlanetId, campaignIdentity);
+                                                     homeWorldPlanetId, campaignIdentity,
+                                                     mechanicusLoanActive,
+                                                     marsReturnDestination);
                     _campaignEventDataAccess.SaveLedger(transaction, campaignEventLedger);
                     _chapterChronicleDataAccess.SaveLedger(transaction, chapterChronicle);
                     _worldControlEpisodeDataAccess.SaveStates(transaction, worldControlEpisodes);

@@ -28,7 +28,11 @@ namespace OnlyWar.Persistence.Database.GameState
         // 17: successor invasion-force transit battle-value payload.
         // 18: explicit scenario invader identity and removal of the inert invasion beacon flag.
         // 19: singleton player-Chapter operational doctrine.
-        public const int CurrentVersion = 19;
+        // 20: IndividualPosting gains the off-sector location (Mechanicus training on Mars) and an
+        //     expected-return date.
+        // 21: GlobalData gains the Mechanicus loan flag.
+        // 22: GlobalData gains the standing destination for brothers returning from Mars.
+        public const int CurrentVersion = 22;
         public const int MinimumSupportedVersion = CurrentVersion;
     }
 }

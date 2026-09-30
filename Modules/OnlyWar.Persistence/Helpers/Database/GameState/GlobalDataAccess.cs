@@ -13,7 +13,9 @@ namespace OnlyWar.Persistence.Database.GameState
     // nullable Home World id is set when the Promised World is secured.
     public sealed record GlobalState(Date Date, int Requisition, int GeneseedStockpile,
                                      float GeneseedPurity, CampaignScenario Scenario,
-                                     int? HomeWorldPlanetId, CampaignIdentity CampaignIdentity = null);
+                                     int? HomeWorldPlanetId, CampaignIdentity CampaignIdentity = null,
+                                     bool IsMechanicusLoanActive = false,
+                                     int? MarsReturnShipId = null, int? MarsReturnRegionId = null);
 
     public class GlobalDataAccess
     {
@@ -75,9 +77,15 @@ namespace OnlyWar.Persistence.Database.GameState
 
                     int? homeWorldPlanetId = reader[14] is DBNull ? null : reader.GetInt32(14);
                     CampaignIdentity campaignIdentity = ReadCampaignIdentity(reader);
+                    int loanOrdinal = TryGetOrdinal(reader, "IsMechanicusLoanActive");
+                    bool mechanicusLoanActive = loanOrdinal >= 0 && !reader.IsDBNull(loanOrdinal)
+                        && Convert.ToInt64(reader.GetValue(loanOrdinal)) != 0;
                     state = new GlobalState(new Date(millenium, year, week), requisition,
                                             geneseedStockpile, geneseedPurity, scenario,
-                                            homeWorldPlanetId, campaignIdentity);
+                                            homeWorldPlanetId, campaignIdentity,
+                                            mechanicusLoanActive,
+                                            ReadOptionalInt(reader, "MarsReturnShipId"),
+                                            ReadOptionalInt(reader, "MarsReturnRegionId"));
                 }
             }
             return state;
@@ -86,7 +94,9 @@ namespace OnlyWar.Persistence.Database.GameState
         public void SaveGlobalData(IDbTransaction transaction, Date currentDate, int requisition,
                                    int geneseedStockpile, float geneseedPurity,
                                    CampaignScenario scenario, int? homeWorldPlanetId,
-                                   CampaignIdentity campaignIdentity = null)
+                                   CampaignIdentity campaignIdentity = null,
+                                   bool mechanicusLoanActive = false,
+                                   CampaignLocation marsReturnDestination = null)
         {
             using (var command = transaction.Connection.CreateCommand())
             {
@@ -96,13 +106,15 @@ namespace OnlyWar.Persistence.Database.GameState
                      GeneseedPurity, ScenarioType, ScenarioPromisedPlanetId, ScenarioInvaderFactionId, ScenarioState,
                      ScenarioBriefingAcknowledged, ScenarioBriefingText,
                      ScenarioOriginalAuthorityCharacterId, HomeWorldPlanetId,
-                     CampaignId, CampaignSeed, RandomAlgorithmVersion)
+                     CampaignId, CampaignSeed, RandomAlgorithmVersion, IsMechanicusLoanActive,
+                     MarsReturnShipId, MarsReturnRegionId)
                     VALUES
                     (@millenium, @year, @week, @saveVersion, @requisition, @geneseedStockpile,
                      @geneseedPurity, @scenarioType, @scenarioPromisedPlanetId, @scenarioInvaderFactionId, @scenarioState,
                      @scenarioBriefingAcknowledged, @scenarioBriefingText,
                      @scenarioOriginalAuthorityCharacterId, @homeWorldPlanetId,
-                     @campaignId, @campaignSeed, @randomAlgorithmVersion);";
+                     @campaignId, @campaignSeed, @randomAlgorithmVersion, @mechanicusLoanActive,
+                     @marsReturnShipId, @marsReturnRegionId);";
                 command.AddParam("@millenium", currentDate.Millenium);
                 command.AddParam("@year", currentDate.Year);
                 command.AddParam("@week", currentDate.Week);
@@ -124,8 +136,19 @@ namespace OnlyWar.Persistence.Database.GameState
                 command.AddParam("@campaignId", identity.CampaignId.ToString("D"));
                 command.AddParam("@campaignSeed", identity.CampaignSeed);
                 command.AddParam("@randomAlgorithmVersion", identity.RandomAlgorithmVersion);
+                command.AddParam("@mechanicusLoanActive", mechanicusLoanActive ? 1 : 0);
+                command.AddParam("@marsReturnShipId", marsReturnDestination?.Ship?.Id);
+                command.AddParam("@marsReturnRegionId", marsReturnDestination?.Region?.Id);
                 command.ExecuteNonQuery();
             }
+        }
+
+        private static int? ReadOptionalInt(IDataRecord reader, string column)
+        {
+            int ordinal = TryGetOrdinal(reader, column);
+            return ordinal < 0 || reader.IsDBNull(ordinal)
+                ? null
+                : Convert.ToInt32(reader.GetValue(ordinal));
         }
 
         private static CampaignIdentity ReadCampaignIdentity(IDataRecord reader)

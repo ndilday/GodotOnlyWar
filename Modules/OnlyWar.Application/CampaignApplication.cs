@@ -22,6 +22,7 @@ namespace OnlyWar.Application;
 /// this type only composes them, owns session lifetime, and forwards the existing UI contracts.
 /// </summary>
 public sealed class CampaignApplication :
+    IArmoryScreenApplication,
     ICampaignNavigationApplication,
     IChapterScreenApplication,
     ICommandScreenApplication,
@@ -38,6 +39,7 @@ public sealed class CampaignApplication :
     ITrainingScreenApplication
 {
     private readonly CampaignApplicationContext _context;
+    private readonly ArmoryScreenApplication _armory;
     private readonly CampaignNavigationApplication _navigation;
     private readonly ChapterScreenApplication _chapter;
     private readonly CommandScreenApplication _command;
@@ -57,6 +59,7 @@ public sealed class CampaignApplication :
     {
         _context = new CampaignApplicationContext(services);
         _operations = new OperationsScreenApplication(_context);
+        _armory = new ArmoryScreenApplication(_context);
         _navigation = new CampaignNavigationApplication(_context);
         _chapter = new ChapterScreenApplication(_context);
         _command = new CommandScreenApplication(_context);
@@ -102,6 +105,7 @@ public sealed class CampaignApplication :
 
     // These properties are useful to alternate hosts that want one screen contract without the
     // aggregate facade. The ordinary Godot host continues to inject CampaignApplication itself.
+    public IArmoryScreenApplication ArmoryScreen => _armory;
     public ICampaignNavigationApplication Navigation => _navigation;
     public IChapterScreenApplication ChapterScreen => _chapter;
     public ICommandScreenApplication CommandScreen => _command;
@@ -181,6 +185,18 @@ public sealed class CampaignApplication :
         _context.Save(filePath, session);
 
     public void Close() => _context.Close();
+
+    // IArmoryScreenApplication
+    public ArmoryOverview QueryArmory() => _armory.QueryArmory();
+    public ArmoryPrompt DescribeSendToMars(int soldierId) => _armory.DescribeSendToMars(soldierId);
+    public ArmoryCommandResult SendToMars(Guid sessionToken, int soldierId) =>
+        _armory.SendToMars(sessionToken, soldierId);
+    public ArmoryPrompt DescribePromotion(int soldierId, int templateId) =>
+        _armory.DescribePromotion(soldierId, templateId);
+    public ArmoryCommandResult Promote(Guid sessionToken, int soldierId, int templateId) =>
+        _armory.Promote(sessionToken, soldierId, templateId);
+    public ArmoryCommandResult SetMarsReturnDestination(Guid sessionToken, string destinationKey) =>
+        _armory.SetMarsReturnDestination(sessionToken, destinationKey);
 
     // ICampaignNavigationApplication
     public CampaignNavigationRoute ResolveNavigation(

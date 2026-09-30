@@ -221,7 +221,7 @@ internal sealed class SectorSimulationFixture
         return governor;
     }
 
-    public void ProcessTurn()
+    public OnlyWar.Campaign.Turns.TurnResolutionResult ProcessTurn()
     {
         TestCampaignComposition composition =
             TestPersonnelComposition.CreateCampaign(new StaticRNG());
@@ -233,7 +233,7 @@ internal sealed class SectorSimulationFixture
                 new StaticRNG());
         BattleEngagementResolver engagement = composition.Services.Battle
             .CreateEngagementResolver(session);
-        new TurnController(
+        return new TurnController(
             session,
             composition.Services.Readiness.Decisions,
             composition.Services.Operations.Personnel,

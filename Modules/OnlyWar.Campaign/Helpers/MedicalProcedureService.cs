@@ -32,8 +32,13 @@ namespace OnlyWar.Campaign
             [
                 new ProcedureRequisite("Apothecary co-located",
                     HasCoLocatedStaff(force, soldier, ApothecaryTemplates)),
-                new ProcedureRequisite("Techmarine co-located",
-                    HasCoLocatedStaff(force, soldier, TechmarineTemplates)),
+                // While the Mechanicus loan runs the line names the lent adepts, so the player
+                // does not see a met Techmarine requirement in a chapter with no Techmarines.
+                new ProcedureRequisite(
+                    TechmarineSupport.IsOnLoan(force)
+                        ? TechmarineSupport.LoanLabel
+                        : TechmarineSupport.CoLocatedLabel,
+                    squad != null && TechmarineSupport.IsAvailableAt(force, LocationOf(soldier))),
                 new ProcedureRequisite("Valid surgery site", IsValidSurgerySite(soldier)),
                 new ProcedureRequisite("Organic hit location", !IsCyberneticLocation(soldier, option)),
                 new ProcedureRequisite(
@@ -157,11 +162,14 @@ namespace OnlyWar.Campaign
             return false;
         }
 
-        private static bool IsValidSurgerySite(ISoldier soldier)
-        {
-            CampaignLocation effective = soldier is PlayerSoldier player
+        private static CampaignLocation LocationOf(ISoldier soldier) =>
+            soldier is PlayerSoldier player
                 ? CampaignLocationService.ForSoldier(player)
                 : CampaignLocationService.ForSquad(soldier?.AssignedSquad);
+
+        private static bool IsValidSurgerySite(ISoldier soldier)
+        {
+            CampaignLocation effective = LocationOf(soldier);
             Squad squad = soldier?.AssignedSquad;
             if (squad == null)
             {

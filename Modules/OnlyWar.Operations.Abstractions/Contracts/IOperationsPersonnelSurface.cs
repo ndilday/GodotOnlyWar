@@ -121,7 +121,8 @@ public enum PersonnelAvailabilityReasonCode
     ChapterInjuryThreshold,
     NotAtOrigin,
     AlreadyAtDestination,
-    ContinuousTaskCommitment
+    ContinuousTaskCommitment,
+    OffSector
 }
 
 /// <summary>Stable, serializable-in-spirit projection of a personnel availability decision.</summary>

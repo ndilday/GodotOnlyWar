@@ -138,9 +138,13 @@ public sealed record MovementOperationsView(
     IReadOnlyList<HierarchyTreeItem> ForceTree,
     IReadOnlyList<ShipChoiceView> Ships,
     int? SelectedShipId,
-    int SelectedCount,
+    int SelectedSquadCount,
+    int SelectedCharacterCount,
     IReadOnlySet<int> ValidSquadIds,
-    IReadOnlySet<int> ValidCharacterIds);
+    IReadOnlySet<int> ValidCharacterIds)
+{
+    public int SelectedCount => SelectedSquadCount + SelectedCharacterCount;
+}
 
 /// <summary>The Detach workspace.</summary>
 public sealed record DetachOperationsView(

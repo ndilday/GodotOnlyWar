@@ -28,7 +28,6 @@ namespace OnlyWar.Generation.Chapter
         // each captained company, forming the chaplaincy's pool of aspirants.
         private const int RECLUSIUM_JUDICIAR_RESERVE = 2;
         private const int DEFAULT_FOUNDING_SOLDIER_COUNT = 1000;
-        private const int MAX_TECHMARINES = 50;
         // A company only staffs its HQ if at least one line squad can be seeded from the
         // remaining pool: this many sergeants and members of a matching squad type.
         // Tuning knobs for how top-heavy a small company is allowed to found.
@@ -68,14 +67,26 @@ namespace OnlyWar.Generation.Chapter
                 nameGenerator);
 
             PlayerForce chapter = BuildChapterStructure(
-                data, support, doctrine, trainingEndDate, soldiers, chapterName);
+                data, support, doctrine, trainingEndDate, soldiers, chapterName,
+                out List<PlayerSoldier> marsCohort);
             chapter.Army.Requisition = FOUNDING_REQUISITION;
+            // The Mars-bound founders left at the end of the first training phase: they skip the
+            // phase-2 MOS training and have trained on Mars since (TDD §6.14).
+            HashSet<PlayerSoldier> onMars = marsCohort.ToHashSet();
+            support.Mechanicus.CreditMarsTraining(
+                marsCohort, date.GetTotalWeeks() - trainingEndDate.GetTotalWeeks());
             foreach (PlayerSoldier soldier in soldiers)
             {
-                ApplySoldierTypeTraining(soldier);
+                if (!onMars.Contains(soldier))
+                {
+                    ApplySoldierTypeTraining(soldier);
+                }
                 trainingService.EvaluateSoldier(soldier, date);
-
             }
+            // The Adeptus Mechanicus lends tech-priests until the founding cohort returns. The
+            // loan is set even when no founder qualified: it then ends with the first brother
+            // the player sends to Mars, since until then the chapter has no Techmarine at all.
+            chapter.IsMechanicusLoanActive = true;
             // write soldier ratings to a csv file
             //string csv = GetSoldierRatingCsv(soldiers);
             FleetTemplate foundingFleetTemplate = data.PlayerFaction.FleetTemplates.Values.FirstOrDefault();
@@ -101,7 +112,8 @@ namespace OnlyWar.Generation.Chapter
             ChapterGenerationDoctrine doctrine,
             Date trainingEndDate,
             List<PlayerSoldier> soldiers,
-            string chapterName)
+            string chapterName,
+            out List<PlayerSoldier> marsCohort)
         {
             Dictionary<int, PlayerSoldier> unassignedSoldierMap = soldiers.ToDictionary(s => s.Id);
             PlayerForce chapter = BuildChapterFromUnitTemplate(data.PlayerFaction,
@@ -110,8 +122,9 @@ namespace OnlyWar.Generation.Chapter
                                                                            doctrine,
                                                                            chapterName,
                                                                            support);
-            PopulateOrderOfBattle(trainingEndDate, support.FoundingRoles, unassignedSoldierMap,
-                chapter.Army.OrderOfBattle, doctrine, data.RatingConsumers, support.Identity);
+            marsCohort = PopulateOrderOfBattle(trainingEndDate, support.FoundingRoles,
+                support.Mechanicus, unassignedSoldierMap, chapter.Army.OrderOfBattle, doctrine,
+                data.RatingConsumers, support.Identity);
             chapter.Army.PopulateSquadMap();
             return chapter;
         }
@@ -157,8 +170,10 @@ namespace OnlyWar.Generation.Chapter
             return soldiers;
         }
 
-        private static void PopulateOrderOfBattle(Date year,
+        // Returns the founders sent to Mars.
+        private static List<PlayerSoldier> PopulateOrderOfBattle(Date year,
                                                   IFoundingRoleAdvisor foundingRoles,
+                                                  IMechanicusDeparturePort mechanicus,
                                                   Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                                   Unit oob, ChapterGenerationDoctrine templates,
                                                   RatingConsumerBindings ratingBindings,
@@ -175,7 +190,8 @@ namespace OnlyWar.Generation.Chapter
 
             // Psykers are categorically Librarius material and appear in no role list.
             AssignLibrarians(unassignedSoldierMap, oob, year, templates);
-            AssignTechMarines(unassignedSoldierMap, oob, year, templates, roleLists);
+            List<PlayerSoldier> marsCohort =
+                SendFoundersToMars(unassignedSoldierMap, oob, year, templates, roleLists, mechanicus);
             AssignChapterHQ(unassignedSoldierMap, oob, year, templates, roleLists);
             AssignApothecarionLeader(unassignedSoldierMap, oob, year, templates, roleLists);
             AssignReclusiumLeaders(unassignedSoldierMap, oob, year, templates, roleLists);
@@ -214,6 +230,7 @@ namespace OnlyWar.Generation.Chapter
             // Everyone left becomes a scout.
             AssignExcessToScouts(unassignedSoldierMap, oob, year, templates,
                 ratingBindings, identity);
+            return marsCohort;
         }
 
         // Companies are populated in order-of-battle order, so earlier companies draw
@@ -658,44 +675,32 @@ namespace OnlyWar.Generation.Chapter
                 .Sum(e => (int)e.MaximumNumber);
         }
 
-        private static void AssignTechMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
-                                              Unit chapter, Date year,
-                                              ChapterGenerationDoctrine templates,
-                                              Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
+        // Every viable Techmarine candidate leaves for Mars at the end of the first training
+        // phase, with no cap (TDD §6.14). The Techmarine founding role list
+        // already holds only worthy candidates. The chapter founds with no Techmarine present:
+        // the cohort waits in the Armory, off-sector, and a Master of the Forge is a later
+        // promotion by the player.
+        private static List<PlayerSoldier> SendFoundersToMars(
+            Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+            Unit chapter, Date departureDate,
+            ChapterGenerationDoctrine templates,
+            Dictionary<FoundingRole, List<PlayerSoldier>> roleLists,
+            IMechanicusDeparturePort mechanicus)
         {
-            // assume for now that there's a single unit to hold all of the Techmarines
             Squad armory = chapter.Squads.First(s => s.SquadTemplate == templates.Armory);
-            int assigned = 0;
-            PlayerSoldier master =
-                TakeTop(unassignedSoldierMap, roleLists[FoundingRole.MasterOfTheForge]);
-            if (master != null)
+            List<PlayerSoldier> cohort = [];
+            List<PlayerSoldier> candidates = roleLists[FoundingRole.Techmarine];
+            PlayerSoldier candidate;
+            while ((candidate = TakeTop(unassignedSoldierMap, candidates)) != null)
             {
-                AssignTechMarine(unassignedSoldierMap, armory, master, templates.MasterOfTheForge, year);
-                assigned++;
-            }
-            List<PlayerSoldier> techmarines = roleLists[FoundingRole.Techmarine];
-            while (assigned < MAX_TECHMARINES)
-            {
-                PlayerSoldier techmarine = TakeTop(unassignedSoldierMap, techmarines);
-                if (techmarine == null)
+                if (mechanicus.TrySendFounderToMars(
+                    candidate, armory, templates.Techmarine, departureDate))
                 {
-                    break;
+                    unassignedSoldierMap.Remove(candidate.Id);
+                    cohort.Add(candidate);
                 }
-                AssignTechMarine(unassignedSoldierMap, armory, techmarine, templates.Techmarine, year);
-                assigned++;
             }
-        }
-
-        private static void AssignTechMarine(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
-                                             Squad armory, PlayerSoldier soldier,
-                                             SoldierTemplate template, Date year)
-        {
-            soldier.Template = template;
-            armory.AddSquadMember(soldier);
-            soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
-                "Returned from Mars, promoted to "
-                + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
-            unassignedSoldierMap.Remove(soldier.Id);
+            return cohort;
         }
 
         // The most skilled initiate leads the Apothecarion as Master of the

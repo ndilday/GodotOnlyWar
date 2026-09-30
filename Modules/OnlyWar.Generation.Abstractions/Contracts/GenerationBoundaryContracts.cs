@@ -6,6 +6,7 @@ using OnlyWar.Domain.Fleets;
 using OnlyWar.Domain.Planets;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Soldiers.Ratings;
+using OnlyWar.Domain.Squads;
 using OnlyWar.Domain.Units;
 
 namespace OnlyWar.Generation.Abstractions;
@@ -27,6 +28,10 @@ public readonly struct BriefingTokens
     public string AuthorityTitle { get; init; }
     public string EnemyName { get; init; }
     public int TemplateSelector { get; init; }
+    // The Mechanicus loan (TDD §6.14): how many founders are training on Mars
+    // and when they return, which is when the loan ends. A zero count omits the loan paragraph.
+    public int MarsCohortCount { get; init; }
+    public Date MarsCohortReturnDate { get; init; }
 }
 
 /// <summary>
@@ -110,6 +115,27 @@ public interface IFoundingRoleAdvisor
 }
 
 /// <summary>
+/// Sends founders to Mars for Techmarine training (TDD §6.14). The departure
+/// operation and Mars training are campaign personnel policy; Generation only says who leaves,
+/// when, and for how long they have trained before the campaign starts.
+/// </summary>
+public interface IMechanicusDeparturePort
+{
+    /// <summary>
+    /// Sends a founder to Mars: into the Armory, as a Techmarine, posted off-sector until his
+    /// return. Returns false, and changes nothing, if he does not meet the Techmarine requirement.
+    /// </summary>
+    bool TrySendFounderToMars(
+        PlayerSoldier founder,
+        Squad armory,
+        SoldierTemplate techmarine,
+        Date departureDate);
+
+    /// <summary>Credits weeks of Mars training to brothers already on Mars.</summary>
+    void CreditMarsTraining(IEnumerable<PlayerSoldier> soldiers, int weeks);
+}
+
+/// <summary>
 /// Runs the authored opening's planet-scoped warm-up against the candidate campaign. Implemented
 /// outside Generation so the generator never references turn simulation, which is what keeps the
 /// two acyclic (plan §3.1). The implementation builds a session over the candidate sector; it never
@@ -137,4 +163,5 @@ public sealed record GenerationSupport(
     IFoundingRoleAdvisor FoundingRoles,
     ICandidateWarmupSimulator Warmup,
     ISoldierTrainingService Training,
-    IPersistentIdAllocator Identity);
+    IPersistentIdAllocator Identity,
+    IMechanicusDeparturePort Mechanicus);

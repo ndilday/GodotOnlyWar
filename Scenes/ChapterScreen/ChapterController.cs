@@ -198,6 +198,18 @@ public partial class ChapterController : MainScreenController
         RenderCurrentPath();
     }
 
+    // Keeps the current browse path; the application falls back to a higher level if a soldier or
+    // squad on it no longer exists (a brother who fell this turn, a disbanded squad).
+    public override void RefreshFromExternalChange()
+    {
+        if (_musterScreen?.Visible == true)
+        {
+            _musterScreen.RefreshFromExternalChange();
+            return;
+        }
+        RenderCurrentPath();
+    }
+
     public void DisplaySoldier(int soldierId)
     {
         ShowChapterOverview(refresh: false);

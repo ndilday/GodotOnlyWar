@@ -14,6 +14,7 @@ public partial class MainGameScene : Control
 	private SectorMap _sectorMap;
 	private ChapterController _chapterScreen;
 	private ApothecariumScreenController _apothecariumScreen;
+	private ArmoryScreenController _armoryScreen;
 	private TrainingUnitScreenController _trainingUnitScreen;
 	private FleetScreenController _fleetScreen;
 	private DiplomacyScreenController _diplomacyScreen;
@@ -87,6 +88,7 @@ public partial class MainGameScene : Control
 		_systemInspector.AnswerGovernorRequestPressed += OnInspectorAnswerGovernorRequestPressed;
 		_bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
 		_bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
+		_bottomMenu.ArmoryButtonPressed += OnArmoryButtonPressed;
 		_bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
 		_bottomMenu.FleetButtonPressed += OnFleetButtonPressed;
 		_bottomMenu.DiplomacyButtonPressed += OnDiplomacyButtonPressed;
@@ -484,6 +486,7 @@ public partial class MainGameScene : Control
 			if (control == _chapterScreen)
 			{
 				_activePrimaryScreen = _chapterScreen;
+				_chapterScreen.RefreshFromExternalChange();
 				_topMenu.SetScreenText("Chapter Overview");
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.Chapter);
 			}
@@ -558,6 +561,31 @@ public partial class MainGameScene : Control
 			_apothecariumScreen,
 			"Apothecarium",
 			BottomMenu.Destination.Apothecarium);
+	}
+
+	private void OnArmoryButtonPressed(object sender, EventArgs e)
+	{
+		PushVisibleOverlaySurface();
+		if (_armoryScreen == null)
+		{
+			PackedScene armoryScene = GD.Load<PackedScene>("res://Scenes/ArmoryScreen/armory_screen.tscn");
+			_armoryScreen = (ArmoryScreenController)armoryScene.Instantiate();
+			_armoryScreen.Configure(_campaignApplication);
+			_armoryScreen.CloseRequested += OnCloseScreen;
+			_armoryScreen.CampaignChanged += OnCampaignChanged;
+			AddPrimaryScreen(_armoryScreen);
+		}
+		if (ToggleOffActivePrimaryScreen(
+			_armoryScreen,
+			BottomMenu.Destination.Armory))
+		{
+			return;
+		}
+		_armoryScreen.RefreshFromExternalChange();
+		ShowPrimaryScreen(
+			_armoryScreen,
+			"Armory",
+			BottomMenu.Destination.Armory);
 	}
 
 	private void OnTrainingUnitButtonPressed(object sender, EventArgs e)
@@ -1056,7 +1084,7 @@ public partial class MainGameScene : Control
 		CreateEndOfTurnDialog();
 
 		_endOfTurnDialog.SetReport(turn.Report);
-		_commandScreen?.RefreshFromExternalChange();
+		RefreshScreensAfterTurn();
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn
@@ -1066,6 +1094,29 @@ public partial class MainGameScene : Control
 			ShowScenarioNotification(turn.ScenarioNotification);
 		}
 		return true;
+	}
+
+	// The turn changed the campaign under whatever the player left open. Every visible screen in
+	// the primary host (the active screen, and an overlay such as the squad screen) and the
+	// planetary operations overlay re-query now; a hidden screen re-queries when it is next opened
+	// or restored. The Command brief is also refreshed while hidden, as it always was here.
+	private void RefreshScreensAfterTurn()
+	{
+		foreach (Node child in _primaryContentHost.GetChildren())
+		{
+			if (child is MainScreenController screen && screen.Visible)
+			{
+				screen.RefreshFromExternalChange();
+			}
+		}
+		if (_commandScreen?.Visible == false)
+		{
+			_commandScreen.RefreshFromExternalChange();
+		}
+		if (_planetaryOperationsScreen?.Visible == true)
+		{
+			_planetaryOperationsScreen.RefreshFromExternalChange();
+		}
 	}
 
 	// Reuses the briefing dialog scene (a BBCode message + single acknowledge button) as a

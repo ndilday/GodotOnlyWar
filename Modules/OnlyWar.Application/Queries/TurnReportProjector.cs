@@ -34,7 +34,8 @@ internal static class TurnReportProjector
         RecruitmentTurnReport recruitmentReport = null,
         IEnumerable<CampaignEvent> campaignEvents = null,
         CampaignIdentity campaignIdentity = null,
-        Func<IBattleReplay, Guid?> replayIdFactory = null)
+        Func<IBattleReplay, Guid?> replayIdFactory = null,
+        OnlyWar.Campaign.MechanicusReturnReport mechanicusReturns = null)
     {
         List<EndOfTurnReportEntry> entries = [];
         HashSet<MissionContext> reportedContexts = [];
@@ -115,6 +116,7 @@ internal static class TurnReportProjector
         {
             entries.Add(BuildRecruitmentEntry(recruitmentReport));
         }
+        entries.AddRange(BuildMechanicusEntries(mechanicusReturns));
 
         foreach (CampaignEvent @event in campaignEvents ?? Enumerable.Empty<CampaignEvent>())
         {
@@ -138,6 +140,39 @@ internal static class TurnReportProjector
         }
 
         return entries;
+    }
+
+    // Returns from Mars and the end of the Mechanicus loan (TDD §6.14).
+    private static IEnumerable<EndOfTurnReportEntry> BuildMechanicusEntries(
+        OnlyWar.Campaign.MechanicusReturnReport report)
+    {
+        if (report == null) yield break;
+        foreach (var group in report.Returns.GroupBy(entry => entry.Destination))
+        {
+            List<string> names = group.Select(entry => entry.SoldierName).ToList();
+            string who = names.Count == 1
+                ? $"{names[0]} has"
+                : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]} have";
+            yield return new EndOfTurnReportEntry(
+                "Returned from Mars",
+                "The Armory",
+                $"{who} returned from training by the Adeptus Mechanicus as "
+                + $"{(names.Count == 1 ? "a Techmarine" : "Techmarines")}, and "
+                + $"{(names.Count == 1 ? "reports" : "report")} to {group.Key}.",
+                false,
+                "RETURNED");
+        }
+        if (report.LoanEnded)
+        {
+            yield return new EndOfTurnReportEntry(
+                "Mechanicus Loan Ended",
+                "The Armory",
+                "With the Chapter's own Techmarines home, the Adeptus Mechanicus has recalled the "
+                + "tech-priests it lent. Replacement surgery now needs one of the Chapter's "
+                + "own Techmarines.",
+                false,
+                "ENDED");
+        }
     }
 
     private static EndOfTurnReportEntry BuildRecruitmentEntry(

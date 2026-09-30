@@ -56,7 +56,7 @@ public partial class TrainingUnitScreenController : MainScreenController
         RefreshFromExternalChange();
     }
 
-    public void RefreshFromExternalChange()
+    public override void RefreshFromExternalChange()
     {
         if (_view == null || _application == null) return;
 

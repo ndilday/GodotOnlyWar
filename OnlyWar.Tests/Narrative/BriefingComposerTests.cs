@@ -81,6 +81,30 @@ public class BriefingComposerTests
         Assert.False(string.IsNullOrWhiteSpace(zero));
     }
 
+    // The Mechanicus loan paragraph (TDD §6.14) appears only when founders are
+    // on Mars, in both directive variants.
+    [Fact]
+    public void Compose_StatesTheMechanicusLoanOnlyWhenFoundersAreOnMars()
+    {
+        BriefingTokens withCohort = SampleTokens() with
+        {
+            MarsCohortCount = 1,
+            MarsCohortReturnDate = new OnlyWar.Domain.Date(42, 18, 3)
+        };
+
+        foreach (string text in new[]
+        {
+            BriefingComposer.ComposePromisedWorldBriefing(withCohort),
+            BriefingComposer.ComposeInvasionPromisedWorldBriefing(withCohort)
+        })
+        {
+            Assert.Contains("One of your brothers is on Mars", text);
+            Assert.Contains("3.18.M42", text);
+        }
+        Assert.DoesNotContain("Mechanicus", BriefingComposer.ComposePromisedWorldBriefing(SampleTokens()));
+        Assert.DoesNotContain("Mechanicus", BriefingComposer.ComposeInvasionPromisedWorldBriefing(SampleTokens()));
+    }
+
     [Theory]
     [InlineData(GovernanceTier.SectorCapital, "Lord of the Sector")]
     [InlineData(GovernanceTier.SubsectorCapital, "Lord of the Subsector")]

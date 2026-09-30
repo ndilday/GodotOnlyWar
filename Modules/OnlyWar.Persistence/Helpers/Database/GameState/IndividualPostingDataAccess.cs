@@ -17,13 +17,17 @@ namespace OnlyWar.Persistence.Database.GameState
             using IDbCommand command = transaction.Connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = @"INSERT INTO IndividualPosting
-                (SoldierId, Purpose, LoadedShipId, LandedRegionId, StartedDate)
-                VALUES (@soldierId, @purpose, @shipId, @regionId, @startedDate);";
+                (SoldierId, Purpose, LoadedShipId, LandedRegionId, IsOffSector,
+                 StartedDate, ExpectedReturnDate)
+                VALUES (@soldierId, @purpose, @shipId, @regionId, @isOffSector,
+                 @startedDate, @expectedReturnDate);";
             command.AddParam("@soldierId", soldier.Id);
             command.AddParam("@purpose", (int)posting.Purpose);
             command.AddParam("@shipId", posting.Location?.Ship?.Id);
             command.AddParam("@regionId", posting.Location?.Region?.Id);
+            command.AddParam("@isOffSector", posting.Location?.IsOffSector == true ? 1 : 0);
             command.AddParam("@startedDate", posting.StartedDate.GetTotalWeeks());
+            command.AddParam("@expectedReturnDate", posting.ExpectedReturnDate?.GetTotalWeeks());
             command.ExecuteNonQuery();
         }
 
@@ -32,7 +36,8 @@ namespace OnlyWar.Persistence.Database.GameState
             List<IndividualPostingRecord> records = [];
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = @"SELECT SoldierId, Purpose, LoadedShipId,
-                LandedRegionId, StartedDate FROM IndividualPosting ORDER BY SoldierId";
+                LandedRegionId, IsOffSector, StartedDate, ExpectedReturnDate
+                FROM IndividualPosting ORDER BY SoldierId";
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -45,7 +50,11 @@ namespace OnlyWar.Persistence.Database.GameState
                 IndividualPostingPurpose purpose = (IndividualPostingPurpose)purposeValue;
                 int? shipId = reader.IsDBNull(2) ? null : reader.GetInt32(2);
                 int? regionId = reader.IsDBNull(3) ? null : reader.GetInt32(3);
-                if (shipId.HasValue == regionId.HasValue)
+                bool isOffSector = reader.GetInt32(4) != 0;
+                int locationCount = (shipId.HasValue ? 1 : 0)
+                    + (regionId.HasValue ? 1 : 0)
+                    + (isOffSector ? 1 : 0);
+                if (locationCount != 1)
                 {
                     throw new InvalidDataException($"Posting for soldier {soldierId} has an invalid location.");
                 }
@@ -54,7 +63,9 @@ namespace OnlyWar.Persistence.Database.GameState
                     purpose,
                     shipId,
                     regionId,
-                    reader.GetInt32(4)));
+                    isOffSector,
+                    reader.GetInt32(5),
+                    reader.IsDBNull(6) ? null : reader.GetInt32(6)));
             }
             return records;
         }

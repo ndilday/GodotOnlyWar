@@ -37,6 +37,7 @@ public sealed class CampaignApplicationContext
     internal ChapterScreenContext Chapter { get; private set; }
     internal MusterScreenContext Muster { get; private set; }
     internal LoadoutScreenContext Loadout { get; private set; }
+    internal ArmoryScreenContext Armory { get; private set; }
     public Guid SessionToken { get; private set; } = Guid.NewGuid();
     // What the turn in progress is doing now. A host resolving the turn off its UI thread polls
     // this to tell the player where a long end of turn has got to.
@@ -129,6 +130,11 @@ public sealed class CampaignApplicationContext
             session.Sector,
             session.Rules,
             session.Identity);
+        Armory = new ArmoryScreenContext(
+            session.Sector,
+            session.Rules,
+            session.CurrentDate,
+            Services.Operations.Commitments);
         ReplaceSessionToken();
     }
 
@@ -152,6 +158,7 @@ public sealed class CampaignApplicationContext
         Chapter = null;
         Muster = null;
         Loadout = null;
+        Armory = null;
         ReplaceSessionToken();
     }
 

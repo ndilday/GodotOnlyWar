@@ -161,8 +161,9 @@ public partial class PlanetaryOperationsScreenView : Control
         }
         bool canCommit = model.SelectedCount > 0
             && (verb == PlanetaryOperationsVerb.Land || model.SelectedShipId.HasValue);
-        DisplayMovementBar(model.SelectedCount, canCommit,
-            model.SelectedCount == 0 ? "Select at least one participant."
+        DisplayMovementBar(model.SelectedCount,
+            MovementNoun(model.SelectedSquadCount, model.SelectedCharacterCount), canCommit,
+            model.SelectedCount == 0 ? "Select at least one squad or character."
             : verb == PlanetaryOperationsVerb.Embark && !model.SelectedShipId.HasValue
                 ? "Choose a ship with enough capacity." : "Confirm the selected squads.");
     }
@@ -201,7 +202,8 @@ public partial class PlanetaryOperationsScreenView : Control
         AddShipChoices(model.Ships, model.SelectedShipId);
         AddHint(_rightContent, "Treatment choice and onward care remain in Recovery Operations.");
         bool canCommit = selectedIds.Count > 0 && model.SelectedShipId.HasValue;
-        DisplayMovementBar(selectedIds.Count, canCommit,
+        DisplayMovementBar(selectedIds.Count,
+            selectedIds.Count == 1 ? "CASUALTY" : "CASUALTIES", canCommit,
             selectedIds.Count == 0 ? "Select at least one casualty."
             : !model.SelectedShipId.HasValue ? "Choose a ship with enough berths." : "Confirm the selected casualties.");
     }
@@ -736,7 +738,7 @@ public partial class PlanetaryOperationsScreenView : Control
         _bottomContent.AddChild(row);
     }
 
-    private void DisplayMovementBar(int selectedCount, bool enabled, string reason)
+    private void DisplayMovementBar(int selectedCount, string noun, bool enabled, string reason)
     {
         _bottomPanel.Visible = true;
         Clear(_bottomContent);
@@ -745,7 +747,7 @@ public partial class PlanetaryOperationsScreenView : Control
             Alignment = BoxContainer.AlignmentMode.End,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        Button confirm = ActionButton(MovementConfirmText(selectedCount),
+        Button confirm = ActionButton(MovementConfirmText(selectedCount, noun),
             _verb == PlanetaryOperationsVerb.Land ? "land_squads"
             : _verb == PlanetaryOperationsVerb.Embark ? "load_squads" : "medical");
         confirm.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -758,7 +760,7 @@ public partial class PlanetaryOperationsScreenView : Control
         _bottomContent.AddChild(row);
     }
 
-    private string MovementConfirmText(int selectedCount)
+    private string MovementConfirmText(int selectedCount, string noun)
     {
         string verb = _verb switch
         {
@@ -767,11 +769,17 @@ public partial class PlanetaryOperationsScreenView : Control
             PlanetaryOperationsVerb.Detach => "DETACHING",
             _ => $"{_verb.ToString().ToUpperInvariant()}ING"
         };
-        string noun = _verb == PlanetaryOperationsVerb.Detach ? "CASUALTY" : "PARTICIPANT";
-        string plural = selectedCount == 1
-            ? noun
-            : noun == "CASUALTY" ? "CASUALTIES" : "PARTICIPANTS";
-        return $"CONFIRM {verb} {selectedCount} {plural}";
+        return $"CONFIRM {verb} {selectedCount} {noun}";
+    }
+
+    private static string MovementNoun(int squadCount, int characterCount)
+    {
+        int total = squadCount + characterCount;
+        if (characterCount == 0)
+            return total == 1 ? "SQUAD" : "SQUADS";
+        if (squadCount == 0)
+            return total == 1 ? "CHARACTER" : "CHARACTERS";
+        return "ELEMENTS";
     }
 
     private static ScrollContainer CreateSidePanel(Container parent, float width, float ratio)
