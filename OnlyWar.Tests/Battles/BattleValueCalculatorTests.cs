@@ -329,12 +329,34 @@ public class BattleValueCalculatorTests
         });
 
         // Same body, same weapon: erupting adjacent (attack on arrival) beats walking in
-        // under fire by exactly the forgone closing tax (walker at MoveSpeed 6 keeps
-        // 0.75 * 6/8 of its melee output; the burrower keeps all of it).
-        float walkerClosing = BattleValueCalculator.MeleeClosingFactor
-            * (walker.MoveSpeed / BattleValueCalculator.MeleeClosingReferenceSpeed);
+        // under fire by exactly the forgone closing tax; the burrower keeps all of its melee output.
+        float walkerClosing = BattleValueCalculator.CalculateMeleeSwingFraction(walker);
         Assert.True(burrowerResult.Offense > walkerResult.Offense);
         Assert.Equal(walkerResult.Offense / walkerClosing, burrowerResult.Offense, precision: 3);
+    }
+
+    [Fact]
+    public void MeleeSwingFraction_FallsWithApproachTime_AndPaysTheContactTurnEvenWhenFast()
+    {
+        MeleeWeaponTemplate weapon = TestModelFactory.DefaultWeapons.PrimaryMeleeWeapon;
+        BattleValueCalculator.Input slow = new() { MoveSpeed = 3, MeleeWeapon = weapon };
+        BattleValueCalculator.Input walker = new() { MoveSpeed = 6, MeleeWeapon = weapon };
+        BattleValueCalculator.Input fast = new() { MoveSpeed = 12, MeleeWeapon = weapon };
+        BattleValueCalculator.Input faster = new() { MoveSpeed = 24, MeleeWeapon = weapon };
+
+        float slowFraction = BattleValueCalculator.CalculateMeleeSwingFraction(slow);
+        float walkerFraction = BattleValueCalculator.CalculateMeleeSwingFraction(walker);
+        float fastFraction = BattleValueCalculator.CalculateMeleeSwingFraction(fast);
+        float fasterFraction = BattleValueCalculator.CalculateMeleeSwingFraction(faster);
+
+        Assert.True(slowFraction < walkerFraction);
+        Assert.True(walkerFraction < fastFraction);
+        // Speed is uncapped, but even an instant approach loses the contact turn.
+        Assert.True(fastFraction < fasterFraction);
+        float ceiling = BattleValueCalculator.MeleeReferenceEngagementTurns
+            / (BattleValueCalculator.MeleeReferenceEngagementTurns
+                + BattleValueCalculator.MeleeContactDelayTurns);
+        Assert.True(fasterFraction < ceiling);
     }
 
     [Fact]

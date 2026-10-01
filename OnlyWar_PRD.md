@@ -1516,8 +1516,13 @@ make this a balance pass rather than a dial: the extra turn is a fixed +1 regard
 a larger share of a fast unit's short approach than a slow unit's long one, while the existing speed
 term keeps rewarding fast movers as though it were not; and the fast melee templates are the strategic
 anchors (Genestealer, Melee Carnifex), so a uniform scaling would fix the average and leave the anchors'
-relationship to each other wrong. Correcting it properly probably means making the closing term
-turn-indexed instead of flat, then regenerating the `SoldierTemplate.BattleValue` rows. Burrowers are
+relationship to each other wrong. **Status (2026-09-30):** the closing term is now turn-indexed
+(`BattleValueCalculator.CalculateMeleeSwingFraction`: `N / (N + D/MoveSpeed + 1)`, speed uncapped, the
+`+1` being the contact turn). `D` = 30 and `N` = 6 are placeholders, not measurements. Still open:
+measure `D`/`N` from play and traces, then regenerate `SoldierTemplate.BattleValue` and
+`MeleeFraction` — the monster in the reference panel also pays the new term, so every template's
+durability shifts slightly. The offline generation script is gone, so regeneration needs a rebuilt
+tool that first reproduces the stored values. Burrowers are
 unaffected: `BurrowPlacer` erupts them adjacent, so they are in contact when turn one opens. Do not
 chase this before the new turn structure has been played in Godot — if the extra turn feels wrong, the
 rule moves and the factor moves with it. This residual is intentionally tracked here rather than kept

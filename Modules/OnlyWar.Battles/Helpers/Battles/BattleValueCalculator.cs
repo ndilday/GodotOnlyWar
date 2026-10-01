@@ -36,19 +36,21 @@ public static class BattleValueCalculator
     public const float KillThresholdConMultiple = 3.0f;
 
     /// <summary>
-    /// Melee output is discounted for the turns spent closing under fire; faster movers
-    /// waste less. Factor = MeleeClosingFactor * min(1, MoveSpeed / reference speed).
+    /// Melee output is discounted for the turns spent closing under fire. The discount is the
+    /// fraction of an engagement spent swinging, indexed by turns:
+    /// <c>N / (N + D / MoveSpeed + <see cref="MeleeContactDelayTurns"/>)</c>, with N the reference
+    /// engagement length and D the reference approach distance. The fixed contact-delay turn
+    /// (reaching contact buys no blow, PRD §4.14) is a larger share of a fast unit's short approach
+    /// than a slow unit's long one, and speed is uncapped, so fast melee units are not over-credited.
     /// Burrowers pay no closing tax at all: BurrowPlacer erupts them adjacent to an
     /// enemy squad at battle start and they attack the turn they surface.
     ///
-    /// <para>OPEN TUNING ITEM, deliberately left alone — tracked in PRD §5.7. Reaching contact no
-    /// longer buys a blow in the same turn (PRD §4.14), so every closer waits one more turn to land
-    /// anything and 0.75 is optimistic. This is a flat multiplier rather than a turn count, so
-    /// nothing breaks automatically and no corrected value follows from the rules change. Burrowers
-    /// are unaffected: they start adjacent, so they strike on turn one either way.</para>
+    /// <para>D and N are placeholders until measured from play and scenario traces; change them here
+    /// and regenerate the stored template values.</para>
     /// </summary>
-    public const float MeleeClosingReferenceSpeed = 8.0f;
-    public const float MeleeClosingFactor = 0.75f;
+    public const float MeleeReferenceApproachDistance = 30.0f;
+    public const float MeleeReferenceEngagementTurns = 6.0f;
+    public const float MeleeContactDelayTurns = 1.0f;
 
     /// <summary>A unit with both a ranged and a melee mode gets this credit for the lesser mode.</summary>
     public const float SecondaryModeCredit = 0.25f;
@@ -498,10 +500,20 @@ public static class BattleValueCalculator
 
         // Melee spends turns closing under fire before it lands anything — unless the
         // attacker burrows, in which case it surfaces adjacent and swings immediately.
-        float closing = attacker.CanBurrow
-            ? 1.0f
-            : MeleeClosingFactor * Math.Min(1.0f, attacker.MoveSpeed / MeleeClosingReferenceSpeed);
-        return killRate * closing;
+        return killRate * CalculateMeleeSwingFraction(attacker);
+    }
+
+    /// <summary>Fraction of a reference engagement an attacker spends swinging rather than closing.</summary>
+    public static float CalculateMeleeSwingFraction(Input attacker)
+    {
+        if (attacker.CanBurrow)
+        {
+            return 1.0f;
+        }
+
+        float approachTurns = MeleeReferenceApproachDistance / Math.Max(0.1f, attacker.MoveSpeed);
+        return MeleeReferenceEngagementTurns
+            / (MeleeReferenceEngagementTurns + approachTurns + MeleeContactDelayTurns);
     }
 
     private static float ExpectedMeleeKills(Input attacker, MeleeWeaponTemplate weapon, float swings,
