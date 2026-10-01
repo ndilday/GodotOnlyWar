@@ -77,6 +77,7 @@ namespace OnlyWar.Operations.Missions.Assault
             // that survived each individual fight but has been ground down over several of them.
             if (context.MissionLossesExceedAggressionThreshold)
             {
+                context.AssaultBrokenOff = true;
                 context.AddLog(
                     $"Day {context.DaysElapsed}: Assault broken off - losses beyond "
                     + $"{context.Order.LevelOfAggression} tolerance.");

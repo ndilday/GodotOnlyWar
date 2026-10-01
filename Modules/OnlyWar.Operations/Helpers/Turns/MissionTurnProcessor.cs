@@ -417,6 +417,10 @@ namespace OnlyWar.Operations.Turns
                 missionContexts.Add(context);
                 if (mission.IsPlayerOrder)
                 {
+                    // Before the outcome is recorded, so the report can say the force holds the
+                    // ground. Player forces only: an AI attacker's survivors are folded into its
+                    // abstract presence by MissionAftermathProcessor.ResolveOffensiveSurvivors.
+                    MissionForceRelocation.ResolveHeldGround(context, _currentDate, _personnel);
                     MissionOutcomeRecorder.RecordMissionOutcome(context, _currentDate);
                     MissionFieldExperienceLog.LogGains(context, mission.XpBefore);
                 }

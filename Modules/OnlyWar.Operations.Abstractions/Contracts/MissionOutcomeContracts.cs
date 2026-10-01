@@ -24,6 +24,8 @@ public sealed class MissionOutcomeClassification
     public bool WasDetected { get; init; }
     public bool ReturnedToBase { get; init; }
     public bool RemainedInTargetRegion { get; init; }
+    /// <summary>A Move or an Advance ended with the force moved into, and holding, its target region.</summary>
+    public bool HeldTargetRegion { get; init; }
     public MissionForceDisposition Disposition { get; init; }
     public bool NoViableTarget { get; init; }
     public AmbushSpoilStage AmbushSpoiled { get; init; }

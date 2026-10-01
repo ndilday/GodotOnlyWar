@@ -1238,8 +1238,8 @@ public static class MissionIconKeys
             MissionType.Recon => "mission_recon",
             MissionType.DefenseInDepth => "mission_defend",
             MissionType.Patrol => "mission_patrol",
-            MissionType.Advance =>
-                mission.TargetFaction?.IsPlayerFaction == true ? "route" : "mission_attack",
+            MissionType.Advance => "mission_attack",
+            MissionType.Infiltrate => "route",
             MissionType.Diversion => "mission_diversion",
             MissionType.Ambush or MissionType.Extermination => "mission_ambush",
             MissionType.Sabotage => "mission_sabotage",

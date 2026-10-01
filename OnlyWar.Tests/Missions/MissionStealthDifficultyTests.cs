@@ -428,7 +428,7 @@ public class MissionStealthDifficultyTests
         // so the contract has to survive the reweighting.
         Region region = CreateRegion();
 
-        Assert.Null(region.SelectSpotter(new SeededRNG(7)));
+        Assert.Null(region.SelectSpotter(intruder: null, new SeededRNG(7)));
     }
 
     [Fact]
@@ -441,10 +441,55 @@ public class MissionStealthDifficultyTests
         AddEnemy(region, CreateFaction(20, "Alpha"), population: 1_000, organization: 0, intel: 0f);
         AddEnemy(region, CreateFaction(21, "Beta"), population: 1_000, organization: 0, intel: 0f);
 
-        RegionFaction spotter = region.SelectSpotter(new SeededRNG(7));
+        RegionFaction spotter = region.SelectSpotter(intruder: null, new SeededRNG(7));
 
         Assert.NotNull(spotter);
         Assert.Contains(spotter, region.RegionFactionMap.Values);
+    }
+
+    // --- the watchers are the factions hostile to THIS intruder ---
+
+    // The set used to be "every non-Imperial faction", the enemy set from the Chapter's side only. A
+    // xenos force crossing Imperial ground was then watched by its own presence and never by the
+    // Imperials holding the region. It is now the factions hostile to the intruder.
+    [Fact]
+    public void GetDetectingEnemyFactions_XenosIntruder_IsWatchedByTheImperialsAndNotByItself()
+    {
+        Region region = CreateRegion();
+        RegionFaction pdf = AddGarrisonFaction(
+            region, CreateFaction(1, "PDF", isDefaultFaction: true), garrison: 5_000, intel: 2f);
+        Faction orks = CreateFaction(20, "Orks");
+        RegionFaction orkPresence = AddHordeFaction(region, orks, population: 1_000, intel: 1f);
+
+        List<RegionFaction> watchers = region.GetDetectingEnemyFactions(orks);
+
+        Assert.Contains(pdf, watchers);
+        Assert.DoesNotContain(orkPresence, watchers);
+        Assert.Same(pdf, region.SelectSpotter(orks, new SeededRNG(7)));
+    }
+
+    // An ally sharing the ground is not looking for you. The ledger decides, not faction roles.
+    [Fact]
+    public void GetDetectingEnemyFactions_ExcludesFactionsTheLedgerCallsAllied()
+    {
+        Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
+        Region region = new(1, planet, 0, "Target Region", new RegionCoordinate(0, 0), 0);
+        planet.Regions[0] = region;
+        Faction orks = CreateFaction(20, "Orks");
+        Faction allies = CreateFaction(21, "Ork Allies");
+        Faction foes = CreateFaction(22, "Foes");
+        FactionRelationshipLedger ledger = new();
+        ledger.SetStance(orks, allies, FactionStance.Allied);
+        planet.AttachRelationshipLedger(ledger);
+        RegionFaction allied = AddHordeFaction(region, allies, population: 1_000, intel: 1f);
+        RegionFaction hostile = AddHordeFaction(region, foes, population: 1_000, intel: 1f);
+
+        List<RegionFaction> watchers = region.GetDetectingEnemyFactions(orks);
+
+        Assert.DoesNotContain(allied, watchers);
+        Assert.Contains(hostile, watchers);
+        Assert.Equal(1, MissionStealthDifficulty
+            .Calculate(region, intruderHeadcount: 5, intruder: orks).EnemyCount);
     }
 
     // --- the sabotage steps, end to end ---
@@ -523,7 +568,7 @@ public class MissionStealthDifficultyTests
     // --- fixtures ---
 
     private static double TotalWatchScore(Region region) =>
-        region.GetDetectingEnemyFactions()
+        region.GetDetectingEnemyFactions(intruder: null)
             .Sum(rf => (double)MissionStealthDifficulty.CalculateWatchScore(rf));
 
     private static (int first, int second) TallySpotters(
@@ -533,7 +578,7 @@ public class MissionStealthDifficultyTests
         int secondHits = 0;
         for (int i = 0; i < iterations; i++)
         {
-            RegionFaction spotter = region.SelectSpotter(random);
+            RegionFaction spotter = region.SelectSpotter(intruder: null, random);
             if (spotter == first) firstHits++;
             else if (spotter == second) secondHits++;
         }
@@ -785,14 +830,14 @@ public class MissionStealthDifficultyTests
 
     // This fixture represents a horde explicitly. Production rules no longer infer behavior from
     // player/default identity, so the test must declare the authored PopulationIsMilitary flag.
-    private static Faction CreateFaction(int id, string name)
+    private static Faction CreateFaction(int id, string name, bool isDefaultFaction = false)
     {
         return new Faction(
             id,
             name,
             Color.Red,
             isPlayerFaction: false,
-            isDefaultFaction: false,
+            isDefaultFaction: isDefaultFaction,
             behavior: FactionBehavior.PopulationIsMilitary,
             GrowthType.Conversion,
             new Dictionary<int, Species>(),

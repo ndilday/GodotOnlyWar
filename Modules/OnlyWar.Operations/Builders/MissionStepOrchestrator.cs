@@ -51,6 +51,10 @@ namespace OnlyWar.Operations.Missions
                     return new AssassinateStealthMissionStep();
                 case MissionType.Diversion:
                     return new DemonstrateForceMissionStep();
+                // A Move. The crossing is the InfiltrateMissionStep that GetStartingStep puts in front
+                // of this, so by the time this runs the force is already in the region.
+                case MissionType.Infiltrate:
+                    return new ArriveMissionStep();
                 case MissionType.Extermination:
                     return new PositionAmbushMissionStep();
                 case MissionType.Patrol:

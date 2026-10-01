@@ -81,7 +81,7 @@ namespace OnlyWar.Operations.Missions
             IPhysicalPostingCommands personnel)
         {
             context.ForceLostContact = true;
-            MoveForce(
+            MissionForceRelocation.MoveForce(
                 context,
                 region,
                 registerAsLanded: false,
@@ -94,73 +94,11 @@ namespace OnlyWar.Operations.Missions
             Region region,
             Date currentDate,
             IPhysicalPostingCommands personnel) =>
-            MoveForce(
+            MissionForceRelocation.MoveForce(
                 context,
                 region,
                 registerAsLanded: true,
                 currentDate: currentDate,
                 personnel: personnel);
-
-        private static void MoveForce(
-            MissionContext context,
-            Region region,
-            bool registerAsLanded,
-            Date currentDate,
-            IPhysicalPostingCommands personnel)
-        {
-            foreach (OperationalMissionElement missionSquad in context.MissionSquads)
-            {
-                if (missionSquad?.CampaignSquad != null)
-                {
-                    Squad squad = missionSquad.CampaignSquad;
-                    Region previousRegion = squad.CurrentRegion;
-                    if (previousRegion != null
-                        && squad.Faction != null
-                        && previousRegion.RegionFactionMap.TryGetValue(
-                            squad.Faction.Id, out RegionFaction previousPresence))
-                    {
-                        previousPresence.LandedSquads.Remove(squad);
-                    }
-                    squad.CurrentRegion = region;
-
-                    if (!registerAsLanded || squad.Faction == null || region?.Planet == null)
-                    {
-                        continue;
-                    }
-
-                    if (!region.Planet.PlanetFactionMap.TryGetValue(
-                        squad.Faction.Id, out PlanetFaction planetPresence))
-                    {
-                        planetPresence = new PlanetFaction(squad.Faction) { IsPublic = true };
-                        region.Planet.PlanetFactionMap[squad.Faction.Id] = planetPresence;
-                    }
-                    if (!region.RegionFactionMap.TryGetValue(
-                        squad.Faction.Id, out RegionFaction regionalPresence))
-                    {
-                        regionalPresence = new RegionFaction(planetPresence, region) { IsPublic = true };
-                        region.RegionFactionMap[squad.Faction.Id] = regionalPresence;
-                    }
-                    else
-                    {
-                        regionalPresence.IsPublic = true;
-                    }
-                    if (!regionalPresence.LandedSquads.Contains(squad))
-                    {
-                        regionalPresence.LandedSquads.Add(squad);
-                    }
-                }
-                else if (missionSquad?.CampaignCharacter != null)
-                {
-                    PlayerSoldier character = missionSquad.CampaignCharacter;
-                    IndividualPostingPurpose purpose = character.IndividualPosting?.Purpose
-                        ?? IndividualPostingPurpose.Independent;
-                    personnel.RestorePhysical(
-                        character,
-                        purpose,
-                        CampaignLocation.Landed(region),
-                        currentDate ?? new Date(1));
-                }
-            }
-        }
     }
 }

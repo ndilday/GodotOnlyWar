@@ -132,9 +132,11 @@ namespace OnlyWar.Application
                 case MissionType.ObjectiveRaid:
                 case MissionType.Ambush:
                 case MissionType.Extermination:
-                case MissionType.Infiltrate:
                 case MissionType.CloseAirSupport:
                     return BuildCombatSummary(subject, location, classification);
+
+                case MissionType.Infiltrate:
+                    return BuildMoveSummary(subject, location, classification);
 
                 case MissionType.Fortify:
                 case MissionType.DefenseInDepth:
@@ -270,6 +272,10 @@ namespace OnlyWar.Application
                 {
                     return $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} and remained deployed there.";
                 }
+                if (classification.HeldTargetRegion)
+                {
+                    return $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} and now hold positions there.";
+                }
                 bool returned = classification.ReturnedToBase
                     || classification.Disposition == MissionForceDisposition.BrokeContact;
                 return returned
@@ -288,6 +294,42 @@ namespace OnlyWar.Application
                     : $"{subject} found no viable target in {location}.";
             }
             return $"{subject} conducted a {DisplayMissionType(classification.MissionType)} in {location} without confirmed enemy casualties.";
+        }
+
+        // A Move is the one player mission whose success is arriving rather than hurting anyone, so
+        // it gets its own wording instead of the combat summary's "without confirmed casualties".
+        private static string BuildMoveSummary(
+            string subject,
+            string location,
+            MissionOutcomeClassification classification)
+        {
+            if (classification.HeldTargetRegion)
+            {
+                string arrival = classification.WasDetected
+                    ? $"{subject} were detected crossing into {location} but reached it and took up position there"
+                    : $"{subject} moved into {location} undetected and took up position there";
+                return classification.EnemiesKilled > 0
+                    ? $"{arrival}, killing {classification.EnemiesKilled} enemy troops on the way."
+                    : $"{arrival}.";
+            }
+            if (classification.Disposition == MissionForceDisposition.WithdrewUnderFire)
+            {
+                return $"{subject} were intercepted moving into {location} and forced to withdraw.";
+            }
+            if (classification.Disposition == MissionForceDisposition.LostContact)
+            {
+                return $"{subject} were detected moving into {location}, and contact with them was lost.";
+            }
+            if (classification.ReturnedToBase
+                || classification.Disposition == MissionForceDisposition.BrokeContact)
+            {
+                return $"{subject} were detected moving into {location} and fell back to their start point.";
+            }
+            if (classification.RemainedInTargetRegion)
+            {
+                return $"{subject} could not break contact in {location} and remain deployed there.";
+            }
+            return $"{subject} could not move into {location} undetected this week.";
         }
 
         private static string DisplayMissionType(MissionType missionType) =>

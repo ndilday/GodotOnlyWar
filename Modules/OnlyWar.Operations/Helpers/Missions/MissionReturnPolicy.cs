@@ -36,8 +36,10 @@ namespace OnlyWar.Operations.Missions
         public static MissionReturnPolicy GetPolicy(MissionType missionType) => missionType switch
         {
             // Takes ground and stays on it, so it gets the full week of attempts rather than
-            // surrendering the last day to a trip home.
+            // surrendering the last day to a trip home. Infiltrate is the Move order: it crosses into
+            // the region to take up residence there.
             MissionType.Advance
+                or MissionType.Infiltrate
                 or MissionType.EstablishAirhead
                 or MissionType.DeepStrike => MissionReturnPolicy.Hold,
 

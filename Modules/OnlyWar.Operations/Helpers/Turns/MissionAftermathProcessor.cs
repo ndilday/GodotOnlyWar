@@ -91,6 +91,16 @@ namespace OnlyWar.Operations.Turns
 
                 RecordTacticalBattleContacts(context, _recordTargetObservation);
 
+                // A Move is anchored on the mover's own presence in the region, so the losses it
+                // inflicted belong to whoever intercepted it on the way in - the spotter - and a Move
+                // nobody intercepted inflicted none. Debiting the anchor would bleed the Chapter's own
+                // presence for enemies it killed.
+                if (context.Order.Mission.MissionType == MissionType.Infiltrate)
+                {
+                    if (context.Spotter == null) continue;
+                    regionFaction = context.Spotter;
+                }
+
                 // Cumulative across every engagement in the mission, not just the last one.
                 // context.OpposingSquads is REPLACED each time a step raises a fresh opposing force, so
                 // once a mission can contain several battles (a multi-day assault, a recon intercepted on

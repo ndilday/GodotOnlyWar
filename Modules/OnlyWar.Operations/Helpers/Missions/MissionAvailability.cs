@@ -101,8 +101,7 @@ namespace OnlyWar.Operations.Missions
                     && orderMission.RegionFaction?.PlanetFaction?.Faction?.Id
                         == TargetFaction.PlanetFaction.Faction.Id,
                 MissionAvailabilityKind.Move =>
-                    orderMission.MissionType == MissionType.Advance
-                    && orderMission.RegionFaction?.PlanetFaction?.Faction?.IsPlayerFaction == true,
+                    orderMission.MissionType == MissionType.Infiltrate,
                 MissionAvailabilityKind.Diversion =>
                     orderMission.MissionType == MissionType.Diversion,
                 MissionAvailabilityKind.Special =>
@@ -132,12 +131,14 @@ namespace OnlyWar.Operations.Missions
             {
                 return GetConstructionLabel(construction.ConstructionType);
             }
+            if (mission?.MissionType == MissionType.Infiltrate)
+            {
+                return "Move";
+            }
             if (mission?.MissionType == MissionType.Advance)
             {
                 Faction target = mission.RegionFaction?.PlanetFaction?.Faction;
-                return target?.IsPlayerFaction == true
-                    ? "Move"
-                    : target == null ? "Attack" : $"Attack ({target.Name})";
+                return target == null ? "Attack" : $"Attack ({target.Name})";
             }
             return mission == null
                 ? string.Empty
@@ -190,13 +191,16 @@ namespace OnlyWar.Operations.Missions
                 // reverses with one line the day air attacks exist.
                 AddAttackOptions(missionOptions, publicEnemies);
             }
-            else if (publicEnemies.Count > 0)
-            {
-                AddAttackOptions(missionOptions, publicEnemies);
-                missionOptions.Add(new AvailableMission("Diversion", MissionAvailabilityKind.Diversion));
-            }
             else
             {
+                if (publicEnemies.Count > 0)
+                {
+                    AddAttackOptions(missionOptions, publicEnemies);
+                    missionOptions.Add(new AvailableMission("Diversion", MissionAvailabilityKind.Diversion));
+                }
+                // Move always infiltrates, so it is offered whether or not the region holds enemies:
+                // across empty ground the stealth check is a formality, and across contested ground
+                // it is the whole point - the squads slip in without seeking a fight.
                 missionOptions.Add(new AvailableMission("Move", MissionAvailabilityKind.Move));
             }
             IReadOnlyDictionary<int, string> specialMissionLabels =

@@ -71,7 +71,7 @@ namespace OnlyWar.Operations.Missions.Recon
             // need not be the mission's anchor RegionFaction) rather than the target.
             if (!slippedIn)
             {
-                context.Spotter = region.SelectSpotter(execution.Random);
+                context.Spotter = region.SelectSpotter(scout, execution.Random);
             }
             GameLog.Trace(() =>
                 $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)} day {context.DaysElapsed}: "

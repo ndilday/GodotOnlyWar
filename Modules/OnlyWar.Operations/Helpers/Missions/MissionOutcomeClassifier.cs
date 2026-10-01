@@ -18,6 +18,7 @@ namespace OnlyWar.Operations.Missions
                 WasDetected = context.Spotter != null,
                 ReturnedToBase = context.ForceReturnedToBase,
                 RemainedInTargetRegion = context.ForceRemainedInTargetRegion,
+                HeldTargetRegion = context.ForceHeldTargetRegion,
                 Disposition = ResolveDisposition(context),
                 NoViableTarget = context.NoViableTarget,
                 AmbushSpoiled = context.AmbushSpoiled,

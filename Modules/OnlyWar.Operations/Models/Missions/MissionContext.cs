@@ -232,6 +232,15 @@ namespace OnlyWar.Operations.Missions
         // Exfiltration grace expired while combat-capable troops remained. They begin the next turn
         // openly deployed in the mission region, using the same regional posture as an assault force.
         public bool ForceRemainedInTargetRegion { get; set; }
+        // The force crossed into the target region from outside it (InfiltrateMissionStep succeeded).
+        // A force that began in the target region never sets it. This is the precondition for a
+        // Hold mission to move its squads there (MissionForceRelocation.ResolveHeldGround).
+        public bool ForceEnteredTargetRegion { get; set; }
+        // An assault stopped seeking battle because the mission's losses crossed the order's
+        // aggression tolerance. The force pulls back rather than holding what it reached.
+        public bool AssaultBrokenOff { get; set; }
+        // A Hold mission's force was moved into its target region at the end of the mission.
+        public bool ForceHeldTargetRegion { get; set; }
         // The force could not break contact and was lost behind enemy lines (assumed dead / gone to ground).
         public bool ForceLostContact { get; set; }
         // An embedded engagement left the force combat-ineffective and ended the mission under fire.

@@ -294,8 +294,7 @@ namespace OnlyWar.Operations.Orders
                     existingMission.MissionType == MissionType.Advance
                     && existingMission.RegionFaction.PlanetFaction.Faction.Id == effectiveTargetFactionId,
                 MissionAvailabilityKind.Move =>
-                    existingMission.MissionType == MissionType.Advance
-                    && existingMission.RegionFaction.PlanetFaction.Faction.IsPlayerFaction,
+                    existingMission.MissionType == MissionType.Infiltrate,
                 MissionAvailabilityKind.Defend =>
                     existingMission.MissionType == MissionType.DefenseInDepth,
                 MissionAvailabilityKind.Patrol =>
@@ -378,9 +377,12 @@ namespace OnlyWar.Operations.Orders
                             identity.GetNextMissionId(), MissionType.Advance, enemyRegionFaction, 0);
                     }
                 case MissionAvailabilityKind.Move:
+                    // Anchored on the Chapter's own presence in the region, as Defend and Patrol are:
+                    // a Move has no target to fight. It used to be an Advance on that presence, which
+                    // ran a full assault against the Chapter's own ground and its allies.
                     return new Mission(
                         identity.GetNextMissionId(),
-                        MissionType.Advance,
+                        MissionType.Infiltrate,
                         GetOrCreatePlayerRegionFaction(selectedRegion, playerFaction),
                         0);
                 case MissionAvailabilityKind.Defend:

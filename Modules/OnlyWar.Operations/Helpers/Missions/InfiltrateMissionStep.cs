@@ -1,5 +1,6 @@
 using OnlyWar.Runtime.Factories;
 using OnlyWar.Domain.Extensions;
+using OnlyWar.Operations.Extensions;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Planets;
@@ -54,8 +55,21 @@ namespace OnlyWar.Operations.Missions
                 + $"+ambient={terms.AmbientMod:F2}, +ownTroops={terms.OwnTroopMod:F2}, "
                 + $"-intel={terms.IntelMod:F2}), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> {(margin > 0 ? "INFILTRATED" : "DETECTED")}");
-            if (margin > 0.0f)
+            bool detected = margin <= 0.0f;
+            // The faction that caught the force is drawn from the factions hostile to it whose watch
+            // made the crossing hard (ReconStealthMissionStep does the same). Without it
+            // DetectedMissionStep fell back to the mission's anchor faction, which for a Move is the
+            // Chapter's own presence in the region - so the Chapter's own patrols there would have
+            // intercepted the squad moving in. A failed check with no hostile watcher present has
+            // nobody to be seen by, so it succeeds.
+            if (detected)
             {
+                context.Spotter = region.SelectSpotter(infiltrator, execution.Random);
+                detected = context.Spotter != null;
+            }
+            if (!detected)
+            {
+                context.ForceEnteredTargetRegion = true;
                 context.AddLog(
                     $"Day {context.DaysElapsed}: Force succeeded in infiltrating "
                     + $"{context.Order.Mission.RegionFaction.Region.Name} undetected.");

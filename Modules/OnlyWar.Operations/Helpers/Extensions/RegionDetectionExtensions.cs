@@ -14,19 +14,34 @@ namespace OnlyWar.Operations.Extensions
     /// </summary>
     public static class RegionDetectionExtensions
     {
-        // The non-player, non-default factions that could plausibly detect an intruder in this
-        // region: any faction with a force fielded here (MilitaryStrength) or its own awareness of
-        // the ground (RegionAwareness). A region can hold more than one at once (e.g. a public Tyranid
-        // incursion sitting on a still-hidden cult), so detection must aggregate across all of them.
-        // Both the aggregated stealth difficulty (ReconStealthMissionStep) and the spotter roll
+        // The factions that could plausibly detect this intruder in this region: every faction hostile
+        // to it with a force fielded here (MilitaryStrength) or its own awareness of the ground
+        // (RegionAwareness). A region can hold more than one at once (e.g. a public Tyranid incursion
+        // sitting on a still-hidden cult), so detection must aggregate across all of them. Both the
+        // aggregated stealth difficulty (MissionStealthDifficulty) and the spotter roll
         // (SelectSpotter) read this same set so the difficulty and the interceptor always agree on
         // "the enemies present" (OnlyWar_TDD.md §6.2, "Multi-faction regions").
-        public static List<RegionFaction> GetDetectingEnemyFactions(this Region region)
+        //
+        // Hostility comes from the relationship ledger, from the intruder's side. This used to be
+        // "every non-Imperial faction", which is the enemy set as the Chapter sees it and nobody else:
+        // an Ork force slipping into an Imperial region was watched by any other xenos there - and by
+        // its own presence - but never by the PDF or the Chapter holding the ground.
+        public static List<RegionFaction> GetDetectingEnemyFactions(this Region region, Faction intruder)
         {
             return region.RegionFactionMap.Values
-                .Where(rf => !FactionRoles.IsImperial(rf.PlanetFaction.Faction)
+                .Where(rf => WatchesFor(rf.PlanetFaction.Faction, intruder, region.Planet)
                              && (rf.MilitaryStrength > 0 || rf.GetOwnRegionAwareness() > 0))
                 .ToList();
+        }
+
+        // With no intruder faction to ask about (a mission force with no resolvable faction, and the
+        // pure difficulty-model tests), fall back to the Chapter-side view the model was built on.
+        private static bool WatchesFor(Faction watcher, Faction intruder, Planet planet)
+        {
+            if (watcher == null) return false;
+            if (intruder == null) return !FactionRoles.IsImperial(watcher);
+            if (watcher.Id == intruder.Id) return false;
+            return FactionRelationshipService.AreHostile(intruder, watcher, planet);
         }
 
         // Chooses which enemy faction detects an intruder (OnlyWar_TDD.md §6.2). The
@@ -41,14 +56,14 @@ namespace OnlyWar.Operations.Extensions
         // intel, so the intruder was regularly "caught" by the faction least responsible for catching
         // it — and then fought an interceptor raised from that faction's order of battle.
         //
-        // Returns null only when no enemy faction is present at all (the caller then falls back to the
-        // mission's target). When every faction present scores 0 — present, but neither watching nor
-        // searching nor numerous enough to register — there is nothing to weight by, so the first
-        // enemy stands in rather than dividing by zero.
-        public static RegionFaction SelectSpotter(this Region region, IRNG random)
+        // Returns null only when no faction hostile to the intruder is present at all, in which case
+        // nobody was there to see it. When every faction present scores 0 — present, but neither
+        // watching nor searching nor numerous enough to register — there is nothing to weight by, so
+        // the first enemy stands in rather than dividing by zero.
+        public static RegionFaction SelectSpotter(this Region region, Faction intruder, IRNG random)
         {
             if (random == null) throw new ArgumentNullException(nameof(random));
-            List<RegionFaction> enemies = region.GetDetectingEnemyFactions();
+            List<RegionFaction> enemies = region.GetDetectingEnemyFactions(intruder);
             if (enemies.Count == 0) return null;
 
             double totalWatch = enemies.Sum(

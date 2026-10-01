@@ -63,10 +63,14 @@ namespace OnlyWar.Operations.Missions
                         return $"Reconnaissance of {regionName} compromised; detected by the {enemyName}, but broke contact successfully.";
                     return $"Reconnaissance of {regionName} compromised; detected by the {enemyName}.";
 
+                // A Move. Its target is the Chapter's own presence in the region, so enemyName would
+                // name the Chapter; the report says where the force went instead of who it met.
                 case MissionType.Infiltrate:
-                    return detected
-                        ? $"Infiltration of {regionName} compromised; detected by the {enemyName}."
-                        : $"Successfully infiltrated {regionName} undetected.";
+                    if (classification.HeldTargetRegion)
+                        return detected
+                            ? $"Moved into {regionName}; detected during the crossing."
+                            : $"Moved into {regionName} undetected.";
+                    return $"Move into {regionName} did not succeed.";
 
                 case MissionType.Sabotage:
                     if (aborted) return $"Sabotage mission into {regionName} aborted before objectives were met.";

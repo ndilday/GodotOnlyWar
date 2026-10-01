@@ -81,13 +81,14 @@ namespace OnlyWar.Operations.Missions
         // Detection is a property of the REGION, not of the mission's chosen target: an intruder is
         // seen by whoever is watching the ground it crosses. A region can hold several enemy factions
         // at once (a public Tyranid incursion sitting on a still-hidden cult), so every term sums over
-        // GetDetectingEnemyFactions() - the same set Region.SelectSpotter draws the interceptor from,
-        // so difficulty and interceptor always agree on "the enemies present"
-        // (OnlyWar_TDD.md §6.2, "Multi-faction regions").
+        // GetDetectingEnemyFactions(intruder) - the same set Region.SelectSpotter draws the
+        // interceptor from, so difficulty and interceptor always agree on "the enemies present"
+        // (OnlyWar_TDD.md §6.2, "Multi-faction regions"). The set is the factions hostile to THIS
+        // intruder, so an AI force crossing Imperial ground is watched by the Imperials on it.
         public static StealthDifficultyTerms Calculate(
             Region region, int intruderHeadcount, Faction intruder)
         {
-            List<RegionFaction> enemies = region.GetDetectingEnemyFactions();
+            List<RegionFaction> enemies = region.GetDetectingEnemyFactions(intruder);
             float surveillance = 0f;
             float patrol = 0f;
             float ambient = 0f;
