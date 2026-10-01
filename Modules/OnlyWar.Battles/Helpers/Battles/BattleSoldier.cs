@@ -238,43 +238,6 @@ namespace OnlyWar.Battles
             }
         }
 
-        public ValueTuple<int, int>? BottomRight
-        {
-            get
-            {
-                if (TopLeft == null) return null;
-                if(!BattleOrientation.IsFootprintRotated(Orientation))
-                {
-                    return new ValueTuple<int, int>(TopLeft.Value.Item1 + Soldier.Template.Species.Width,
-                                               TopLeft.Value.Item2 - Soldier.Template.Species.Depth);
-                }
-                else
-                {
-                    return new ValueTuple<int, int>(TopLeft.Value.Item1 + Soldier.Template.Species.Depth,
-                                               TopLeft.Value.Item2 - Soldier.Template.Species.Width);
-                }
-            }
-        }
-
-        public IReadOnlyList<ValueTuple<int, int>> PositionList
-        {
-            get
-            {
-                List<ValueTuple<int, int>> list = [];
-                if (TopLeft != null)
-                {
-                    for (int w = TopLeft.Value.Item1; w < BottomRight.Value.Item1; w++)
-                    {
-                        for (int d = BottomRight.Value.Item2; d < TopLeft.Value.Item2; d++)
-                        {
-                            list.Add(new ValueTuple<int, int>(w, d));
-                        }
-                    }
-                }
-                return list;
-            }
-        }
-
         // aim stores the target, aiming weapon, and addiional seconds the aim has been maintained
         public ValueTuple<int, RangedWeapon, int>? Aim { get; set; }
 

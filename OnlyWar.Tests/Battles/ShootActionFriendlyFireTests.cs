@@ -267,8 +267,6 @@ public class ShootActionFriendlyFireTests
         int x,
         int y)
     {
-        soldier.TopLeft = new ValueTuple<int, int>(x, y);
-        soldier.Orientation = 0;
-        grid.PlaceSoldier(soldier, side, soldier.PositionList.ToList());
+        grid.PlaceAt(soldier, side, (x, y));
     }
 }

@@ -1523,6 +1523,24 @@ chase this before the new turn structure has been played in Godot — if the ext
 rule moves and the factor moves with it. This residual is intentionally tracked here rather than kept
 as an active design document.
 
+**Pursuit Overwatch / Advance.** Per-squad Follow/Press posture is shipped (TDD §6, "Morale,
+withdrawal, and pursuit"). Not built: splitting *Following* squads into **Overwatch** (holds at the
+Stationary tier, aims and fires) and **Advance** (jogs toward the quarry, no aim), the mirror of the
+withdrawer's Cover/Bound. Pressing squads always advance. The proposal: about half of the Following
+squads on Overwatch, the best-placed ones first; a two-turn minimum role so aim can mature; a swap when
+the Overwatch squad is about to leave useful range or an Advance squad has a better shot; Overwatch
+squads keep the Cover/RearGuard squad as primary target, Advance squads take their own highest-weight
+counterpart. Role is a mask on legal options, not a score bonus. Motivation: Grist Nine Epsilon
+(2026-09-22) took 350 turns to remove a withdrawing ork force, because the whole force stood still to aim
+while the gap opened (turn 200: 244 aimed, 10 shot). Open: the Overwatch share and rotation constants
+(set them from a resolver fixture, not by guess); the contact-seeking/fire-support melee-share bands
+(0.55/0.35 were written for engagement, and tactical squads land in fire-support); charging moving fire
+against the value the same rounds earn on Overwatch; squads slower than their quarry (probably permanent
+Overwatch); and the escape pass, which still uses the follow jog speed for every pursuer instead of each
+squad's own posture. Validation: a resolver fixture that starts before the withdrawal with a
+ranged-effective pursuer (measure turns to end, shots per pursuer per turn, displacement per turn), then
+rerun Grist Nine Epsilon and look for the pursuit ending in tens of turns.
+
 **Battle Visuals Phase 3.** *(Moved here from 0.7.3.)* Terrain and cover representation; line of sight; elevation-based fire advantage. Also the deferred battle-replay *motion* work carried over from the 0.7 visual overhaul (§5.2): smooth position interpolation/tweening of formation markers between round end-states, in-flight projectile and charge-path animation, and timed reveal of casualty/rout overlays at the moment they occur, replacing the current discrete round-by-round redraw. Note the dependents that move out with it: the cover/terrain interaction for cone and blast templates (§4.14 gated follow-ons, `Design/Active/RangedCombatFollowUps.md`) is gated on the line-of-sight system landing here.
 
 **Mission System Expansion.** *(Moved here from 0.7.3.)* Talent recruitment missions; IG support missions; Chaos cult investigation; STC hunt; prisoner recovery. The intelligence/hook request outcome in §4.23 surfaces mission opportunities that these mission types would consume, and remains a lead without a destination until they exist.

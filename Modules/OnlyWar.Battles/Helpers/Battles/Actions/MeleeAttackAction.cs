@@ -146,7 +146,7 @@ namespace OnlyWar.Battles.Actions
                 }
 
                 BattleSoldier target = state.GetSoldier(strikePlan.TargetId);
-                if (!IsAdjacent(attacker, target))
+                if (!BattleOrientation.AreInContact(attacker, target))
                 {
                     continue;
                 }
@@ -403,21 +403,6 @@ namespace OnlyWar.Battles.Actions
             }
 
             return new MeleeWeapon(defender.Soldier.Template.Species.DefaultUnarmedWeapon);
-        }
-
-        private static bool IsAdjacent(BattleSoldier attacker, BattleSoldier target)
-        {
-            int topLimit = attacker.TopLeft.Value.Item2 + 1;
-            int leftLimit = attacker.TopLeft.Value.Item1 - 1;
-            int bottomLimit = attacker.BottomRight.Value.Item2 - 1;
-            int rightLimit = attacker.BottomRight.Value.Item1 + 1;
-
-            bool targetIsAbove = target.BottomRight.Value.Item2 > topLimit;
-            bool targetIsBelow = target.TopLeft.Value.Item2 < bottomLimit;
-            bool targetIsLeft = target.BottomRight.Value.Item1 < leftLimit;
-            bool targetIsRight = target.TopLeft.Value.Item1 > rightLimit;
-
-            return !targetIsAbove && !targetIsBelow && !targetIsLeft && !targetIsRight;
         }
 
         private MeleeWeapon ResolveWeapon(BattleSoldier attacker, int weaponTemplateId)

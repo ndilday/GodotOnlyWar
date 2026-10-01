@@ -365,9 +365,63 @@ corner_radius_bottom_left = 2
 shadow_color = Color(0, 0, 0, 0.65)
 shadow_size = 6
 
+[sub_resource type="StyleBoxFlat" id="DialogBody"]
+content_margin_left = 22.0
+content_margin_top = 18.0
+content_margin_right = 22.0
+content_margin_bottom = 18.0
+bg_color = Color(0.0156863, 0.0188235, 0.0203922, 0.97)
+border_width_left = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.545098, 0.431373, 0.25098, 0.82)
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="DialogFrameFocused"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.0784314, 0.0588235, 0.027451, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.827451, 0.631373, 0.305882, 0.95)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+expand_margin_top = 36.0
+
+[sub_resource type="StyleBoxFlat" id="DialogFrameUnfocused"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.0196078, 0.0227451, 0.0243137, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.329412, 0.282353, 0.184314, 0.85)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+expand_margin_top = 36.0
+
 [resource]
-default_font = ExtResource("2_y6c3v")
+default_font =ExtResource("2_y6c3v")
 default_font_size = 15
+AcceptDialog/constants/buttons_separation = 8
+AcceptDialog/styles/panel = SubResource("DialogBody")
+ConfirmationDialog/styles/panel = SubResource("DialogBody")
+Window/colors/title_color = Color(0.956863, 0.839216, 0.521569, 1)
+Window/colors/title_outline_modulate = Color(0, 0, 0, 0.75)
+Window/constants/title_height = 36
+Window/constants/title_outline_size = 1
+Window/font_sizes/title_font_size = 16
+Window/fonts/title_font = ExtResource("3_oritb")
+Window/styles/embedded_border = SubResource("DialogFrameFocused")
+Window/styles/embedded_unfocused_border = SubResource("DialogFrameUnfocused")
 Button/colors/font_color = Color(0.87451, 0.796078, 0.635294, 1)
 Button/colors/font_disabled_color = Color(0.45, 0.416667, 0.35, 0.72)
 Button/colors/font_focus_color = Color(0.980392, 0.905882, 0.72549, 1)

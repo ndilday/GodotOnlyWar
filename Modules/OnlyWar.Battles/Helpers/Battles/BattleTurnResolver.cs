@@ -342,7 +342,6 @@ namespace OnlyWar.Battles
             // Capture pair-local action facts while the turn's actor/target squad membership is
             // still available. The post-cleanup force snapshot is committed below.
             _roundMetrics.RecordExecutedActions(executedActions);
-            _woundResolver.Resolve();
 
             CleanupAtEndOfTurn();
             foreach (int casualtyId in _casualtyMap.Keys)
@@ -758,6 +757,17 @@ namespace OnlyWar.Battles
                 {
                     executedActions.Add(action);
                 }
+            }
+
+            // This turn's attacks are all spent, so settle their wounds now and clear the fallen
+            // off the grid before anyone closes. Otherwise a man cut down this turn holds his
+            // square around the enemy until cleanup, and the next charger has to wait a full turn
+            // for a ring that is already open. Ordinary moves above still ran from the turn-start
+            // roster, so a soldier dropped this turn still made his planned move.
+            _woundResolver.Resolve();
+            foreach (int casualtyId in _casualtyMap.Keys)
+            {
+                _grid.RemoveSoldier(casualtyId);
             }
 
             // Closing destinations are deliberately absent from the frozen planning layout. Once

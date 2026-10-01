@@ -609,7 +609,7 @@ readiness is zero when that shared fire-window projection says the eventual shot
 2. The squad-level preparation window uses weapon maximum range and a centroid separation delta for
    the one-turn squad projection; it does not project each target soldier's exact future cell
    through obstacles. (Pursuit posture itself is now chosen per squad from that squad's own pair
-   projections; see §5.6 and `Design/Active/PursuitFireAndMovement.md`.)
+   projections; see §5.6 and the TDD pursuit paragraph; Overwatch/Advance is tracked in PRD §5.8.)
 
 #### Complete-pursuit validation, 2026-09-21
 
@@ -888,7 +888,7 @@ the matching current-turn/escape consumers:
   existing aggression choices when a finite pair is available, but an explicit unreachable result
   can trigger the existing arithmetic standoff/break-off override.
 - Since 2026-09-22 it is evaluated **per pursuing squad** over that squad's own pairs
-  (`Design/Active/PursuitFireAndMovement.md`). Under a Normal policy the squad's equipment doctrine
+  (TDD "Morale, withdrawal, and pursuit"). Under a Normal policy the squad's equipment doctrine
   decides (contact-seeking presses, fire-support follows, mixed weighs the projections); a squad with
   no shot at all chases; and a pressing squad whose contact is more than
   `BattlePursuitPlanner.MaximumChaseTurns` away is treated as unable to catch up (stand and fire if it

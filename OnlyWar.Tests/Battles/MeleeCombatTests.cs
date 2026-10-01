@@ -365,9 +365,9 @@ public class MeleeCombatTests
         secondDefender.TopLeft = (0, 1);
 
         BattleGridManager grid = new();
-        grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());
-        grid.PlaceSoldier(firstDefender, false, firstDefender.PositionList.ToList());
-        grid.PlaceSoldier(secondDefender, false, secondDefender.PositionList.ToList());
+        grid.PlaceSoldier(attacker, true, attacker.GridFootprint());
+        grid.PlaceSoldier(firstDefender, false, firstDefender.GridFootprint());
+        grid.PlaceSoldier(secondDefender, false, secondDefender.GridFootprint());
 
         List<IAction> moveActions = [];
         List<IAction> meleeActions = [];
@@ -441,6 +441,108 @@ public class MeleeCombatTests
         Assert.False(fixture.Attacker.ChargedIntoContactLastTurn);
     }
 
+    [Fact]
+    public void ClosingSoldierFacingAFullRing_ChargesAnotherEnemySquadInReach()
+    {
+        // A 1x1 enemy has only four squares beside it. Once friends hold all four, a closing
+        // soldier who can only aim at that squad mills behind the ring while a second enemy close
+        // by stands with no one on it (Monody Prime Theta, 2026-09-26: two lictors, ten scouts,
+        // every scout sent at the first lictor).
+        BattleSquad attackerSquad = CreateBattleSquad("Closer", 1, "Closer",
+            soldier => soldier.MoveSpeed = 8);
+        BattleSquad primarySquad = CreateBattleSquad("Primary", 20, "Primary");
+        BattleSquad secondSquad = CreateBattleSquad("Second", 30, "Second");
+        BattleSoldier closer = attackerSquad.Soldiers[0];
+        BattleSoldier primary = primarySquad.Soldiers[0];
+        BattleSoldier second = secondSquad.Soldiers[0];
+        closer.TopLeft = (0, 0);
+        primary.TopLeft = (6, 0);
+        second.TopLeft = (3, 4);
+
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(closer, true, closer.GridFootprint());
+        grid.PlaceSoldier(primary, false, primary.GridFootprint());
+        grid.PlaceSoldier(second, false, second.GridFootprint());
+        Dictionary<int, BattleSoldier> soldierMap = new()
+        {
+            [closer.Soldier.Id] = closer,
+            [primary.Soldier.Id] = primary,
+            [second.Soldier.Id] = second
+        };
+        (int X, int Y)[] ring = [(5, 0), (7, 0), (6, 1), (6, -1)];
+        for (int i = 0; i < ring.Length; i++)
+        {
+            BattleSoldier blocker = CreateBattleSquad($"Ring {i}", 40 + i, $"Ring {i}")
+                .Soldiers[0];
+            blocker.TopLeft = ring[i];
+            grid.PlaceSoldier(blocker, true, blocker.GridFootprint());
+            soldierMap[blocker.Soldier.Id] = blocker;
+        }
+
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = new(
+            grid,
+            soldierMap,
+            new List<IAction>(),
+            moveActions,
+            new List<IAction>(),
+            null,
+            CreateMeleeTemplateMap(soldierMap.Values.ToArray()),
+            new SeededRNG(12345));
+        attackerSquad.IsInMelee = true;
+
+        EngagementPathDriver.Plan(planner, attackerSquad, [primarySquad]);
+        SquadClosingMoveAction closing =
+            Assert.Single(moveActions.OfType<SquadClosingMoveAction>());
+        closing.Execute(new BattleState(
+            new Dictionary<int, BattleSquad> { [attackerSquad.Id] = attackerSquad },
+            new Dictionary<int, BattleSquad>
+            {
+                [primarySquad.Id] = primarySquad,
+                [secondSquad.Id] = secondSquad
+            }));
+
+        Assert.Contains(second.Soldier.Id, grid.GetAdjacentEnemies(closer.Soldier.Id));
+        Assert.True(closer.ChargedIntoContactLastTurn);
+    }
+
+    [Theory]
+    [InlineData(1, 0, true)]
+    [InlineData(0, 1, true)]
+    [InlineData(-1, 0, true)]
+    [InlineData(0, -1, true)]
+    // Diagonal and two-away targets used to pass the strike-time check, which was a bounding box
+    // with a margin that also inherited BottomRight's one-row offset. Contact is orthogonal only,
+    // as in Grid.GetAdjacentObjects and every planning decision.
+    [InlineData(1, 1, false)]
+    [InlineData(0, -2, false)]
+    [InlineData(2, 0, false)]
+    public void PlannedStrike_LandsOnlyOnATargetInOrthogonalContact(
+        int targetX,
+        int targetY,
+        bool expectedStrike)
+    {
+        BattleSquad attackerSquad = CreateBattleSquad("Attackers", 1, "Attacker");
+        BattleSquad defenderSquad = CreateBattleSquad("Defenders", 2, "Defender");
+        BattleSoldier attacker = attackerSquad.Soldiers[0];
+        BattleSoldier defender = defenderSquad.Soldiers[0];
+        BattleGridManager grid = new();
+        grid.PlaceAt(attacker, true, (0, 0));
+        grid.PlaceAt(defender, false, (targetX, targetY));
+        MeleeAttackAction action = new(
+            attacker,
+            defender,
+            attacker.MeleeWeapons[0],
+            didMove: false,
+            log: null,
+            new SeededRNG(12345),
+            CreateMeleeTemplateMap(attacker, defender));
+
+        action.Execute(CreateState(attackerSquad, defenderSquad));
+
+        Assert.Equal(expectedStrike, action.TargetedDefenderIds.Contains(defender.Soldier.Id));
+    }
+
     private sealed class ChargeFixture
     {
         public BattleSquad AttackerSquad { get; init; }
@@ -486,8 +588,8 @@ public class MeleeCombatTests
         defender.TopLeft = (separation, 0);
 
         BattleGridManager grid = new();
-        grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());
-        grid.PlaceSoldier(defender, false, defender.PositionList.ToList());
+        grid.PlaceSoldier(attacker, true, attacker.GridFootprint());
+        grid.PlaceSoldier(defender, false, defender.GridFootprint());
         List<IAction> meleeActions = [];
         List<IAction> moveActions = [];
         BattleSquadPlanner planner = new(
@@ -565,8 +667,8 @@ public class MeleeCombatTests
         defender.TopLeft = (1, 0);
 
         BattleGridManager grid = new();
-        grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());
-        grid.PlaceSoldier(defender, false, defender.PositionList.ToList());
+        grid.PlaceSoldier(attacker, true, attacker.GridFootprint());
+        grid.PlaceSoldier(defender, false, defender.GridFootprint());
         List<IAction> moveActions = [];
         List<IAction> meleeActions = [];
         BattleSquadPlanner planner = new(

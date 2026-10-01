@@ -350,23 +350,17 @@ namespace OnlyWar.Battles
 
                 float budget = SoldierMovementPlanner.GetMovementBudget(
                     charger, SquadMovementTier.InMelee);
-                var approaches = targets
-                    .Select(target =>
-                    {
-                        ValueTuple<int, int> position = _grid.GetSoldierPosition(
-                            target.Soldier.Id)[0];
-                        ValueTuple<int, int> adjacency = _grid.GetClosestOpenAdjacency(
-                            charger.TopLeft.Value, position);
-                        float distance = adjacency == charger.TopLeft.Value
-                            ? float.MaxValue
-                            : GridDistance(charger.TopLeft.Value, adjacency);
-                        return new { Target = target, Position = position, Adjacency = adjacency, Distance = distance };
-                    })
-                    .OrderBy(candidate => candidate.Distance)
-                    .ThenBy(candidate => candidate.Target.Soldier.Id)
-                    .ToList();
-                var reachable = approaches.FirstOrDefault(candidate =>
-                    candidate.Distance <= budget + 0.0001f);
+                // The primary squad comes first. Only when every square around it that he can
+                // reach is taken does he look at the other enemy squads, so a small target whose
+                // ring is full does not leave the rest of his squad milling behind the ring while
+                // a second enemy close by stands with no one on it.
+                var reachable = ReachableApproach(charger, targets, budget)
+                    ?? ReachableApproach(
+                        charger,
+                        OtherEnemySquads(targetSquad, state)
+                            .SelectMany(squad => squad.AbleSoldiers)
+                            .Where(IsPlaced),
+                        budget);
                 BattleSoldier pursuedTarget = reachable?.Target
                     ?? targets.OrderBy(target => _grid.GetDistanceBetweenSoldiers(
                             charger.Soldier.Id, target.Soldier.Id))
@@ -414,6 +408,56 @@ namespace OnlyWar.Battles
                 }
             }
             return resolvedMovement;
+        }
+
+        private sealed record ClosingApproach(
+            BattleSoldier Target,
+            ValueTuple<int, int> Adjacency,
+            float Distance);
+
+        // The nearest open square beside any of these targets that the charger can reach this
+        // turn, or null when none is in reach.
+        private ClosingApproach ReachableApproach(
+            BattleSoldier charger,
+            IEnumerable<BattleSoldier> targets,
+            float budget)
+        {
+            ValueTuple<int, int> start = charger.TopLeft.Value;
+            // The facing ProjectMove will give him for the same move vector, so the footprint
+            // checked here is the footprint he arrives with.
+            ushort ArrivalOrientation(ValueTuple<int, int> topLeft) =>
+                _movement.CalculateOrientationFromVector(
+                    (topLeft.Item1 - start.Item1, topLeft.Item2 - start.Item2),
+                    charger,
+                    SquadMovementTier.InMelee);
+            return targets
+                .Select(target =>
+                {
+                    ValueTuple<int, int>? adjacency = _grid.GetClosestOpenAdjacency(
+                        charger, target.Soldier.Id, ArrivalOrientation);
+                    return adjacency is ValueTuple<int, int> square
+                        ? new ClosingApproach(target, square, GridDistance(start, square))
+                        : null;
+                })
+                .Where(candidate => candidate != null)
+                .OrderBy(candidate => candidate.Distance)
+                .ThenBy(candidate => candidate.Target.Soldier.Id)
+                .FirstOrDefault(candidate => candidate.Distance <= budget + 0.0001f);
+        }
+
+        private static IEnumerable<BattleSquad> OtherEnemySquads(
+            BattleSquad targetSquad,
+            BattleState state)
+        {
+            if (state == null) return [];
+            IReadOnlyDictionary<int, BattleSquad> enemySide =
+                state.ActiveOpposingSquads.ContainsKey(targetSquad.Id)
+                    ? state.ActiveOpposingSquads
+                    : state.ActiveAttackerSquads;
+            return enemySide.Values
+                .Where(squad => squad.Id != targetSquad.Id
+                    && squad.Status == BattleSquadStatus.Active)
+                .OrderBy(squad => squad.Id);
         }
 
         private static float GridDistance(

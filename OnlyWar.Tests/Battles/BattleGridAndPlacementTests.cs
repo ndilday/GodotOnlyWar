@@ -710,10 +710,11 @@ public class BattleGridAndPlacementTests
     public void GetClosestOpenAdjacency_PicksUnoccupiedNeighborNearestStart()
     {
         BattleGridManager grid = new();
-        ValueTuple<int, int> target = new(5, 5);
-        ValueTuple<int, int> start = new(5, 0); // below the target
+        BattleSoldier target = grid.PlaceAt(CreateBattleSoldier(1), false, (5, 5));
+        BattleSoldier charger = grid.PlaceAt(CreateBattleSoldier(2), true, (5, 0)); // below
 
-        ValueTuple<int, int> adjacency = grid.GetClosestOpenAdjacency(start, target);
+        ValueTuple<int, int>? adjacency = grid.GetClosestOpenAdjacency(
+            charger, target.Soldier.Id, _ => 0);
 
         // the neighbor at (5,4) is closest to a start below the target
         Assert.Equal(new ValueTuple<int, int>(5, 4), adjacency);
@@ -723,12 +724,75 @@ public class BattleGridAndPlacementTests
     public void GetClosestOpenAdjacency_SkipsReservedNeighbors()
     {
         BattleGridManager grid = new();
-        ValueTuple<int, int> target = new(5, 5);
+        BattleSoldier target = grid.PlaceAt(CreateBattleSoldier(1), false, (5, 5));
+        BattleSoldier charger = grid.PlaceAt(CreateBattleSoldier(2), true, (5, 0));
         grid.ReserveSpace(new ValueTuple<int, int>(5, 4)); // would-be closest
 
-        ValueTuple<int, int> adjacency = grid.GetClosestOpenAdjacency(new ValueTuple<int, int>(5, 0), target);
+        ValueTuple<int, int>? adjacency = grid.GetClosestOpenAdjacency(
+            charger, target.Soldier.Id, _ => 0);
 
+        Assert.NotNull(adjacency);
         Assert.NotEqual(new ValueTuple<int, int>(5, 4), adjacency);
+    }
+
+    [Fact]
+    public void GetClosestOpenAdjacency_IsNullWhenEveryContactSquareIsTaken()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier target = grid.PlaceAt(CreateBattleSoldier(1), false, (5, 5));
+        BattleSoldier charger = grid.PlaceAt(CreateBattleSoldier(2), true, (0, 0));
+        (int X, int Y)[] ring = [(4, 5), (6, 5), (5, 4), (5, 6)];
+        for (int i = 0; i < ring.Length; i++)
+        {
+            grid.PlaceAt(CreateBattleSoldier(10 + i), true, ring[i]);
+        }
+
+        Assert.Null(grid.GetClosestOpenAdjacency(charger, target.Soldier.Id, _ => 0));
+    }
+
+    [Fact]
+    public void GetClosestOpenAdjacency_OffersSquaresBesideEveryCellOfALargeTarget()
+    {
+        // A 4x2 target at top-left (10,10) fills x 10..13, y 9..10. The open square nearest a
+        // charger at (16,9) is (14,9), beside the target's far corner -- not one of the squares
+        // around the first cell of its footprint, which were all the old search looked at.
+        BattleGridManager grid = new();
+        Soldier largeModel = TestModelFactory.CreateSoldier(
+            template: CreateNonSquareTemplate(width: 4, depth: 2));
+        largeModel.Id = 1;
+        BattleSoldier target = grid.PlaceAt(new BattleSoldier(largeModel, null), false, (10, 10));
+        BattleSoldier charger = grid.PlaceAt(CreateBattleSoldier(2), true, (16, 9));
+
+        ValueTuple<int, int>? adjacency = grid.GetClosestOpenAdjacency(
+            charger, target.Soldier.Id, _ => 0);
+
+        Assert.Equal(new ValueTuple<int, int>(14, 9), adjacency);
+    }
+
+    [Theory]
+    // Unrotated, the 2x1 charger fills (x, y) and (x+1, y). Its top-left cannot be (9,0), or its
+    // second cell would land on the target, so it stops one further back at (8,0).
+    [InlineData((ushort)0, 8, 0)]
+    // Rotated, it fills (x, y) and (x, y-1), and (9,0) puts it beside the target cleanly.
+    [InlineData((ushort)2, 9, 0)]
+    public void GetClosestOpenAdjacency_PlacesALargeChargerInContactWithoutOverlap(
+        ushort arrivalOrientation,
+        int expectedX,
+        int expectedY)
+    {
+        BattleGridManager grid = new();
+        BattleSoldier target = grid.PlaceAt(CreateBattleSoldier(1), false, (10, 0));
+        Soldier largeModel = TestModelFactory.CreateSoldier(
+            template: CreateNonSquareTemplate(width: 2, depth: 1));
+        largeModel.Id = 2;
+        BattleSoldier charger = grid.PlaceAt(new BattleSoldier(largeModel, null), true, (0, 0));
+
+        ValueTuple<int, int>? adjacency = grid.GetClosestOpenAdjacency(
+            charger, target.Soldier.Id, _ => arrivalOrientation);
+
+        Assert.Equal(new ValueTuple<int, int>(expectedX, expectedY), adjacency);
+        Assert.True(grid.TryMoveSoldier(charger, adjacency.Value, arrivalOrientation));
+        Assert.Contains(target.Soldier.Id, grid.GetAdjacentEnemies(charger.Soldier.Id));
     }
 
     [Fact]
@@ -804,15 +868,18 @@ public class BattleGridAndPlacementTests
         int expectedDepth)
     {
         Soldier model = TestModelFactory.CreateSoldier(template: CreateNonSquareTemplate());
-        BattleSoldier soldier = new(model, squad: null)
-        {
-            TopLeft = new ValueTuple<int, int>(10, 10),
-            Orientation = orientation
-        };
+        BattleSoldier soldier = new(model, squad: null);
 
-        Assert.Equal(expectedWidth * expectedDepth, soldier.PositionList.Count);
-        Assert.Equal(10 + expectedWidth, soldier.BottomRight.Value.Item1);
-        Assert.Equal(10 - expectedDepth, soldier.BottomRight.Value.Item2);
+        List<ValueTuple<int, int>> footprint =
+            BattleOrientation.GetFootprint(soldier, (10, 10), orientation);
+
+        // The top-left is itself a covered cell; the footprint runs +x and -y from it.
+        Assert.Equal(expectedWidth * expectedDepth, footprint.Count);
+        Assert.Contains((10, 10), footprint);
+        Assert.Equal(10, footprint.Min(cell => cell.Item1));
+        Assert.Equal(10 + expectedWidth - 1, footprint.Max(cell => cell.Item1));
+        Assert.Equal(10, footprint.Max(cell => cell.Item2));
+        Assert.Equal(10 - expectedDepth + 1, footprint.Min(cell => cell.Item2));
     }
 
     [Fact]
@@ -821,23 +888,15 @@ public class BattleGridAndPlacementTests
         BattleGridManager grid = new();
         Soldier largeModel = TestModelFactory.CreateSoldier(template: CreateNonSquareTemplate());
         largeModel.Id = 1001;
-        BattleSoldier large = new(largeModel, squad: null)
-        {
-            TopLeft = new ValueTuple<int, int>(0, 0),
-            Orientation = 0
-        };
-        grid.PlaceSoldier(large, side: true, large.PositionList.ToList());
+        BattleSoldier large = grid.PlaceAt(
+            new BattleSoldier(largeModel, squad: null), side: true, (0, 0));
 
         Soldier blockerModel = TestModelFactory.CreateSoldier();
         blockerModel.Id = 1002;
-        BattleSoldier blocker = new(blockerModel, squad: null)
-        {
-            // Placement's Y boundary is one row above the occupied 1x1 grid cell.
-            TopLeft = new ValueTuple<int, int>(5, 5),
-            Orientation = 0
-        };
-        grid.PlaceSoldier(blocker, side: true, blocker.PositionList.ToList());
+        grid.PlaceAt(new BattleSoldier(blockerModel, squad: null), side: true, (5, 4));
 
+        // Rotated, the 1x2 figure covers (x, y) and (x+1, y): at (4,4) its second cell lands on
+        // the blocker, and at (3,4) it fits beside it.
         Assert.False(grid.IsMoveDestinationAvailable(large, (4, 4), newOrientation: 2));
         Assert.True(grid.IsMoveDestinationAvailable(large, (3, 4), newOrientation: 2));
 
@@ -846,7 +905,7 @@ public class BattleGridAndPlacementTests
         Assert.False(grid.IsSpaceAvailable((4, 4)));
     }
 
-    private static SoldierTemplate CreateNonSquareTemplate()
+    private static SoldierTemplate CreateNonSquareTemplate(ushort width = 1, ushort depth = 2)
     {
         static NormalizedValueTemplate Value(float value) => new()
         {
@@ -868,8 +927,8 @@ public class BattleGridAndPlacementTests
             Value(10),
             Value(6),
             Value(1),
-            width: 1,
-            depth: 2,
+            width: width,
+            depth: depth,
             rangedEvasion: 0f,
             meleeEvasion: 0f,
             abilities: SpeciesAbilities.None,

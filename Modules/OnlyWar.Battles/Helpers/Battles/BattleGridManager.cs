@@ -164,25 +164,8 @@ namespace OnlyWar.Battles
         }
 
         private static List<ValueTuple<int, int>> GetSoldierFootprint(BattleSoldier soldier,
-            ValueTuple<int, int> topLeft, ushort orientation)
-        {
-            List<ValueTuple<int, int>> cells = [];
-            int width = BattleOrientation.IsFootprintRotated(orientation)
-                ? soldier.Soldier.Template.Species.Depth
-                : soldier.Soldier.Template.Species.Width;
-            int depth = BattleOrientation.IsFootprintRotated(orientation)
-                ? soldier.Soldier.Template.Species.Width
-                : soldier.Soldier.Template.Species.Depth;
-            for (int w = 0; w < width; w++)
-            {
-                for (int d = 0; d < depth; d++)
-                {
-                    cells.Add(new ValueTuple<int, int>(
-                        (short)(topLeft.Item1 + w), (short)(topLeft.Item2 - d)));
-                }
-            }
-            return cells;
-        }
+            ValueTuple<int, int> topLeft, ushort orientation) =>
+            BattleOrientation.GetFootprint(soldier, topLeft, orientation);
 
         private bool CanMoveTo(BattleSoldier soldier, IEnumerable<ValueTuple<int, int>> cells)
         {
@@ -480,32 +463,88 @@ namespace OnlyWar.Battles
             return positions;
         }
 
-        public ValueTuple<int, int> GetClosestOpenAdjacency(ValueTuple<int, int> startingPoint,
-            ValueTuple<int, int> target)
+        /// <summary>
+        /// The nearest top-left the charger can move to that puts its whole footprint in open,
+        /// unreserved cells and in melee contact with the target, or null when there is none.
+        ///
+        /// <para>Both footprints count. Every cell orthogonally beside ANY target cell is a contact
+        /// square (diagonals are not; see <see cref="Grid.GetAdjacentObjects"/>), so a 4x2 target
+        /// offers twelve of them, not the four around its first cell. And a charger larger than
+        /// 1x1 reaches a contact square with any of its own cells, so each contact square yields
+        /// one candidate top-left per cell of the charger's footprint.</para>
+        ///
+        /// <para>A rectangular charger's footprint turns with its facing, and its facing on arrival
+        /// depends on the direction of the move, so the caller supplies the orientation it would
+        /// arrive with at each candidate. A candidate only counts in the footprint shape that
+        /// orientation actually gives it.</para>
+        /// </summary>
+        public ValueTuple<int, int>? GetClosestOpenAdjacency(
+            BattleSoldier charger,
+            int targetId,
+            Func<ValueTuple<int, int>, ushort> arrivalOrientation)
         {
-            ValueTuple<int, int> bestPosition = startingPoint;
-            float bestDistance = float.MaxValue;
-            ValueTuple<int, int>[] testPositions =
+            ValueTuple<int, int> start = charger.TopLeft.Value;
+            IList<ValueTuple<int, int>> targetCells = GetSoldierPosition(targetId);
+            HashSet<ValueTuple<int, int>> targetSet = [.. targetCells];
+            List<ValueTuple<int, int>> contactSquares = [];
+            HashSet<ValueTuple<int, int>> seenContactSquares = [];
+            foreach (ValueTuple<int, int> cell in targetCells)
             {
-                new(target.Item1, (short)(target.Item2 - 1)),
-                new(target.Item1, (short)(target.Item2 + 1)),
-                new((short)(target.Item1 - 1), target.Item2),
-                new((short)(target.Item1 + 1), target.Item2)
-            };
-            foreach (ValueTuple<int, int> testPosition in testPositions)
-            {
-                if (_grid.GetCellObject(testPosition) != null || _grid.IsCellReserved(testPosition))
+                ValueTuple<int, int>[] neighbors =
+                [
+                    new(cell.Item1, cell.Item2 - 1),
+                    new(cell.Item1, cell.Item2 + 1),
+                    new(cell.Item1 - 1, cell.Item2),
+                    new(cell.Item1 + 1, cell.Item2)
+                ];
+                foreach (ValueTuple<int, int> neighbor in neighbors)
                 {
-                    continue;
-                }
-                float distance = CalculateDistanceSq(startingPoint, testPosition);
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    bestPosition = testPosition;
+                    if (!targetSet.Contains(neighbor) && seenContactSquares.Add(neighbor))
+                    {
+                        contactSquares.Add(neighbor);
+                    }
                 }
             }
-            return bestPosition;
+
+            int width = charger.Soldier.Template.Species.Width;
+            int depth = charger.Soldier.Template.Species.Depth;
+            bool isSquare = width == depth;
+            (int Width, int Depth, bool Rotated)[] shapes = isSquare
+                ? [(width, depth, false)]
+                : [(width, depth, false), (depth, width, true)];
+
+            ValueTuple<int, int>? best = null;
+            float bestDistance = float.MaxValue;
+            HashSet<ValueTuple<int, int>> triedTopLefts = [];
+            foreach (ValueTuple<int, int> square in contactSquares)
+            {
+                foreach ((int shapeWidth, int shapeDepth, bool rotated) in shapes)
+                {
+                    // Footprint cells run +x and -y from the top-left (GetSoldierFootprint), so
+                    // the top-left that puts footprint cell (i, j) on this square is (x-i, y+j).
+                    for (int i = 0; i < shapeWidth; i++)
+                    {
+                        for (int j = 0; j < shapeDepth; j++)
+                        {
+                            ValueTuple<int, int> topLeft = new(square.Item1 - i, square.Item2 + j);
+                            if (topLeft == start) continue;
+                            float distance = CalculateDistanceSq(start, topLeft);
+                            if (distance >= bestDistance) continue;
+                            ushort orientation = arrivalOrientation(topLeft);
+                            if (!isSquare
+                                && BattleOrientation.IsFootprintRotated(orientation) != rotated)
+                            {
+                                continue;
+                            }
+                            if (!triedTopLefts.Add(topLeft)) continue;
+                            if (!IsMoveDestinationAvailable(charger, topLeft, orientation)) continue;
+                            bestDistance = distance;
+                            best = topLeft;
+                        }
+                    }
+                }
+            }
+            return best;
         }
 
         public void ReserveSpace(ValueTuple<int, int> location) => _grid.ReserveCell(location);
