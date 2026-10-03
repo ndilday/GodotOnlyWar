@@ -55,6 +55,8 @@ distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is
 Active design work currently retained here is:
 
 - `RangedCombatFollowUps.md` — narrow ranged-combat backlog described below.
+- `CyberneticRepair.md` — Techmarine repair of cybernetic parts (weekly time budget, requisition
+  cost, built-in armor and constitution). Decisions settled 2026-10-03; no code yet.
 
 Audited 2026-08-16 against the code. The equipment/ammunition foundation is implemented and its
 active plan was removed under the promotion rule; the narrow pooled `WeaponSet` compatibility

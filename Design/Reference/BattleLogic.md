@@ -780,7 +780,12 @@ own value models and are not replacements for either estimate:
 - `EngagementPotential.TurnsToUsefulRange`, which feeds the potential's access value, uses
   projected squad-centroid range, the useful band (`EffectiveEngagementRange`, or
   `UsefulFireRange` for fire-preserving pursuit), the candidate profile move speed, and, for a
-  pursuit role, the quarry's run speed. It replaced `EngagementExchangeModel.EvaluateArrivalTimeValue`
+  pursuit role, the quarry's run speed. For a Normal-role squad it also adds the approach speed
+  of any contact-seeking enemy that is not withdrawing, routing or covering
+  (`EnemyApproachSpeed`), so the wait is priced against the mutual closing rate: a step buys
+  `own / (own + enemy)` of a turn, not a whole one, and a squad no longer runs at a melee enemy
+  that is coming to it anyway. A shooter or a withdrawing enemy contributes no approach speed.
+  It replaced `EngagementExchangeModel.EvaluateArrivalTimeValue`
   and the continuation terminal of the bounded policy rollout, both since removed, which read the
   same inputs. These are potential differences and present-value terms. The `arrival_value` trace
   column now holds the root-state offset of the potential transition (the negated net-rate

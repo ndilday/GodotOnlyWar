@@ -176,7 +176,8 @@ namespace OnlyWar.Battles
                     : firePreservingPursuit
                         ? Math.Max(1f, state.Profile.UsefulFireRange)
                         : Math.Max(1f, state.Profile.EffectiveEngagementRange);
-                float turnsToUsefulRange = TurnsToUsefulRange(state, range, desiredRange);
+                float turnsToUsefulRange = TurnsToUsefulRange(
+                    state, range, desiredRange, EnemyApproachSpeed(state, enemy, opposing));
                 // Pursuit fire-support saturates at the useful band's boundary. Once it is inside
                 // that band, moving still changes the live shot but does not create a new arrival
                 // opportunity worth buying with a whole-battle horizon. Other doctrines retain
@@ -273,13 +274,7 @@ namespace OnlyWar.Battles
             float expectedExchangeTurns)
         {
             SquadEngagementFrame opposingFrame = state.Frames.GetValueOrDefault(enemy.Id);
-            if (opposingFrame == null
-                || !opposing.IsContactSeeking
-                || opposingFrame.Role is EngagementSquadRole.Bound
-                    or EngagementSquadRole.Routing
-                    or EngagementSquadRole.BreakOff
-                    or EngagementSquadRole.Cover
-                    or EngagementSquadRole.RearGuard)
+            if (!IsApproachingContactSeeker(opposing, opposingFrame))
             {
                 return 0;
             }
@@ -362,19 +357,61 @@ namespace OnlyWar.Battles
         /// stands. The exchange integral reads the same infinity as "stay at the current rate for
         /// the whole horizon", which is also correct.</para>
         ///
-        /// <para>Only a pursuit frame carries a quarry speed; every other role sees the
-        /// unchanged raw-move behaviour.</para>
+        /// <para>Only a pursuit frame carries a quarry speed. A Normal-role squad facing an enemy
+        /// that is itself closing on it adds that enemy's approach speed to its own (see
+        /// <see cref="EnemyApproachSpeed"/>); every other role sees the unchanged raw-move
+        /// behaviour.</para>
+        ///
+        /// <para>WHY THE ENEMY'S APPROACH COUNTS. Dividing the gap by the squad's own move prices
+        /// every step as if the enemy were standing still. Observed 2026-10-01 (ork shootas against
+        /// Genestealers, start range 200): the orks ran for the first ten turns because each step
+        /// bought a whole turn off a wait that was really a third as long, since the Genestealers
+        /// cover the rest of the gap themselves. With the mutual rate a step buys only
+        /// own/(own+enemy) of a turn, so holding to aim wins once aiming is worth more than that.
+        /// An enemy that is not approaching (a shooter holding its ground, a withdrawing squad)
+        /// contributes nothing, so a squad still advances on one.</para>
         /// </summary>
-        private static float TurnsToUsefulRange(State state, float range, float desiredRange)
+        private static float TurnsToUsefulRange(
+            State state, float range, float desiredRange, float enemyApproachSpeed = 0)
         {
             float gap = Math.Max(0, range - desiredRange);
             if (gap <= 0) return 0;
-            float quarrySpeed = state.Frame != null && IsPursuitRole(state.Frame.Role)
-                ? Math.Max(0, state.Frame.QuarryRunSpeed)
-                : 0;
-            float closingRate = state.Profile.MoveSpeed - quarrySpeed;
+            bool pursuit = state.Frame != null && IsPursuitRole(state.Frame.Role);
+            float quarrySpeed = pursuit ? Math.Max(0, state.Frame.QuarryRunSpeed) : 0;
+            float closingRate = state.Profile.MoveSpeed - quarrySpeed
+                + (pursuit ? 0 : Math.Max(0, enemyApproachSpeed));
             return closingRate <= 0 ? float.PositiveInfinity : gap / closingRate;
         }
+
+        /// <summary>
+        /// How fast this enemy squad is closing on the squad being scored, for a squad in the
+        /// Normal role. Only a contact-seeking enemy that is not withdrawing, routing or covering
+        /// counts; a ranged enemy is not assumed to walk into our range. Zero for every other role,
+        /// which keeps the pursuit and withdrawal pricing exactly as it was.
+        /// </summary>
+        private static float EnemyApproachSpeed(
+            State state, BattleSquad enemy, BattleSquadCapabilityProfile opposing)
+        {
+            if (state.Frame != null && state.Frame.Role != EngagementSquadRole.Normal)
+            {
+                return 0;
+            }
+
+            SquadEngagementFrame opposingFrame = state.Frames.GetValueOrDefault(enemy.Id);
+            return IsApproachingContactSeeker(opposing, opposingFrame)
+                ? Math.Max(0, opposing.MoveSpeed)
+                : 0;
+        }
+
+        private static bool IsApproachingContactSeeker(
+            BattleSquadCapabilityProfile opposing, SquadEngagementFrame opposingFrame) =>
+            opposingFrame != null
+            && opposing.IsContactSeeking
+            && opposingFrame.Role is not (EngagementSquadRole.Bound
+                or EngagementSquadRole.Routing
+                or EngagementSquadRole.BreakOff
+                or EngagementSquadRole.Cover
+                or EngagementSquadRole.RearGuard);
 
         /// <summary>
         /// Prices delay before a squad can contribute without a hard useful/useless branch. The
