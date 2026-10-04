@@ -5,17 +5,27 @@ using OnlyWar.Domain.Orders;
 
 namespace OnlyWar.Battles
 {
+    /// <param name="RemainingShare">
+    /// Sum over the side's squads of w * able / starting, where w is the squad's share of its OWN
+    /// side's starting battle value. 1 at battle start, 0 when no squad has an able soldier.
+    /// </param>
+    /// <param name="LostSharePreviousTwoRounds">
+    /// The same weighted sum over soldiers lost in the previous two rounds: w * lost / starting.
+    /// </param>
     public sealed record BattleForceMetrics(
-        int StartingBattleValue,
-        int CurrentBattleValue,
-        int BattleValueLostPreviousTwoRounds,
+        double RemainingShare,
+        double LostSharePreviousTwoRounds,
         int AbleSoldierCount,
         float FastestPursuitSquadSpeed,
         float SlowestMainBodySquadSpeed,
         int RangedCoverSquadCount,
         bool AnySquadInMelee,
         bool HasViableDamagingActionRecently,
-        bool CanAnySquadProsecuteMission);
+        bool CanAnySquadProsecuteMission)
+    {
+        /// <summary>Share of the side's starting strength lost so far (1 - RemainingShare).</summary>
+        public double LostShareSinceStart => 1.0 - RemainingShare;
+    }
 
     public sealed record BattleForceEvaluationInput(
         int Turn,
@@ -47,7 +57,7 @@ namespace OnlyWar.Battles
         VoluntaryWithdrawalDecision Decision,
         VoluntaryWithdrawalReason Reason,
         bool IsEligible,
-        double RemainingBattleValueFraction,
+        double RemainingShare,
         double? EligibilityThreshold,
         BattleDecisionTrace Trace)
     {
@@ -61,6 +71,11 @@ namespace OnlyWar.Battles
     /// </summary>
     public static class BattleForceEvaluator
     {
+        // Shares are sums of weighted fractions, so two mathematically equal values can differ in
+        // the last bits. Differences below this are ties (and exact threshold hits are not
+        // "below" the threshold), matching the exact integer comparisons the BV metrics gave.
+        private const double ShareTolerance = 1e-9;
+
         public const double AvoidEligibilityThreshold = 0.90;
         public const double CautiousEligibilityThreshold = 0.75;
         public const double NormalEligibilityThreshold = 0.50;
@@ -82,11 +97,9 @@ namespace OnlyWar.Battles
             ArgumentNullException.ThrowIfNull(input.Friendly);
             ArgumentNullException.ThrowIfNull(input.Enemy);
 
-            double remaining = input.Friendly.StartingBattleValue > 0
-                ? (double)input.Friendly.CurrentBattleValue / input.Friendly.StartingBattleValue
-                : 0;
+            double remaining = input.Friendly.RemainingShare;
             double? threshold = GetEligibilityThreshold(input.Aggression);
-            bool eligible = threshold.HasValue && remaining < threshold.Value;
+            bool eligible = threshold.HasValue && remaining < threshold.Value - ShareTolerance;
 
             (VoluntaryWithdrawalDecision decision, VoluntaryWithdrawalReason reason) =
                 SelectDecision(input, eligible, threshold);
@@ -134,15 +147,17 @@ namespace OnlyWar.Battles
                     VoluntaryWithdrawalReason.AboveCasualtyThreshold);
             }
 
-            if (input.Friendly.CurrentBattleValue < input.Enemy.CurrentBattleValue)
+            // Cumulative loss shares: each side's fraction of its own starting strength lost.
+            if (input.Friendly.LostShareSinceStart
+                > input.Enemy.LostShareSinceStart + ShareTolerance)
             {
                 return (
                     VoluntaryWithdrawalDecision.FightingWithdrawal,
                     VoluntaryWithdrawalReason.EligibleAndOutmatched);
             }
 
-            if (input.Friendly.BattleValueLostPreviousTwoRounds
-                > input.Enemy.BattleValueLostPreviousTwoRounds)
+            if (input.Friendly.LostSharePreviousTwoRounds
+                > input.Enemy.LostSharePreviousTwoRounds + ShareTolerance)
             {
                 return (
                     VoluntaryWithdrawalDecision.FightingWithdrawal,
@@ -181,18 +196,16 @@ namespace OnlyWar.Battles
                 BattleDecisionTrace.Field("turn", input.Turn),
                 BattleDecisionTrace.Field("side", input.Side),
                 BattleDecisionTrace.Field("aggression", input.Aggression),
-                BattleDecisionTrace.Field("start_bv", input.Friendly.StartingBattleValue),
-                BattleDecisionTrace.Field("current_bv", input.Friendly.CurrentBattleValue),
                 BattleDecisionTrace.Field("remaining", remaining),
                 BattleDecisionTrace.Field("threshold", threshold),
-                BattleDecisionTrace.Field("friendly_bv", input.Friendly.CurrentBattleValue),
-                BattleDecisionTrace.Field("enemy_bv", input.Enemy.CurrentBattleValue),
+                BattleDecisionTrace.Field("friendly_lost", input.Friendly.LostShareSinceStart),
+                BattleDecisionTrace.Field("enemy_lost", input.Enemy.LostShareSinceStart),
                 BattleDecisionTrace.Field(
                     "friendly_loss_2r",
-                    input.Friendly.BattleValueLostPreviousTwoRounds),
+                    input.Friendly.LostSharePreviousTwoRounds),
                 BattleDecisionTrace.Field(
                     "enemy_loss_2r",
-                    input.Enemy.BattleValueLostPreviousTwoRounds),
+                    input.Enemy.LostSharePreviousTwoRounds),
                 BattleDecisionTrace.Field(
                     "friendly_viable_damage",
                     input.Friendly.HasViableDamagingActionRecently),

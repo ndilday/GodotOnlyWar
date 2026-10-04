@@ -20,15 +20,16 @@ public class BattleForceEvaluatorTests
     [InlineData(Aggression.Normal, 50, false)]
     [InlineData(Aggression.Attritional, 24, true)]
     [InlineData(Aggression.Attritional, 25, false)]
-    public void Evaluate_UsesStrictAggressionBattleValueThresholds(
+    public void Evaluate_UsesStrictAggressionRemainingShareThresholds(
         Aggression aggression,
-        int currentBattleValue,
+        int remainingPercent,
         bool expectedEligible)
     {
+        // The enemy has lost a smaller share, so an eligible friendly force is also outmatched.
         BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(
             aggression,
-            friendly: Metrics(currentBattleValue),
-            enemy: Metrics(currentBattleValue + 1)));
+            friendly: Metrics(remainingPercent),
+            enemy: Metrics(remainingPercent + 1)));
 
         Assert.Equal(expectedEligible, result.IsEligible);
         Assert.Equal(expectedEligible, result.ShouldWithdraw);
@@ -40,7 +41,7 @@ public class BattleForceEvaluatorTests
         BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(
             Aggression.Aggressive,
             friendly: Metrics(1, loss: 99, viableDamage: false, canProsecute: false),
-            enemy: Metrics(200, viableDamage: true)));
+            enemy: Metrics(100, viableDamage: true)));
 
         Assert.False(result.IsEligible);
         Assert.False(result.ShouldWithdraw);
@@ -63,6 +64,21 @@ public class BattleForceEvaluatorTests
         Assert.Equal(VoluntaryWithdrawalReason.EligibleButNoPressure, result.Reason);
     }
 
+    [Fact]
+    public void Evaluate_EqualLossSharesAreNotOutmatched()
+    {
+        // Both sides have lost the same share of their own strength. The rule compares shares,
+        // never absolute strength, so even a much smaller force is not "outmatched" by ties.
+        BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(
+            Aggression.Cautious,
+            friendly: Metrics(70),
+            enemy: Metrics(70)));
+
+        Assert.True(result.IsEligible);
+        Assert.False(result.ShouldWithdraw);
+        Assert.Equal(VoluntaryWithdrawalReason.EligibleButNoPressure, result.Reason);
+    }
+
     [Theory]
     [InlineData(39, 40, 2, 2, true, true, true,
         VoluntaryWithdrawalReason.EligibleAndOutmatched)]
@@ -73,10 +89,10 @@ public class BattleForceEvaluatorTests
     [InlineData(40, 35, 2, 3, true, true, false,
         VoluntaryWithdrawalReason.EligibleAndMissionIncapable)]
     public void Evaluate_EligibleForceWithdrawsForEachContinuationRule(
-        int friendlyBattleValue,
-        int enemyBattleValue,
-        int friendlyLoss,
-        int enemyLoss,
+        int friendlyRemainingPercent,
+        int enemyRemainingPercent,
+        int friendlyLossPercent,
+        int enemyLossPercent,
         bool friendlyViableDamage,
         bool enemyViableDamage,
         bool canProsecute,
@@ -85,11 +101,11 @@ public class BattleForceEvaluatorTests
         BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(
             Aggression.Normal,
             friendly: Metrics(
-                friendlyBattleValue,
-                friendlyLoss,
+                friendlyRemainingPercent,
+                friendlyLossPercent,
                 friendlyViableDamage,
                 canProsecute),
-            enemy: Metrics(enemyBattleValue, enemyLoss, enemyViableDamage)));
+            enemy: Metrics(enemyRemainingPercent, enemyLossPercent, enemyViableDamage)));
 
         Assert.True(result.ShouldWithdraw);
         Assert.Equal(expectedReason, result.Reason);
@@ -126,7 +142,7 @@ public class BattleForceEvaluatorTests
         Assert.Equal(first.Decision, second.Decision);
         Assert.Equal(first.Reason, second.Reason);
         Assert.Equal(first.IsEligible, second.IsEligible);
-        Assert.Equal(first.RemainingBattleValueFraction, second.RemainingBattleValueFraction);
+        Assert.Equal(first.RemainingShare, second.RemainingShare);
         Assert.Equal(first.EligibilityThreshold, second.EligibilityThreshold);
         Assert.Equal(first.Trace.Render(), second.Trace.Render());
     }
@@ -146,9 +162,9 @@ public class BattleForceEvaluatorTests
         Assert.Equal("first", result.Trace["side"]);
         Assert.Equal("eligible_and_losing_exchange", result.Trace["reason"]);
         Assert.Equal(
-            "WITHDRAW_EVAL turn=8 side=first aggression=Cautious start_bv=100 "
-            + "current_bv=68 remaining=0.68 threshold=0.75 friendly_bv=68 enemy_bv=61 "
-            + "friendly_loss_2r=11 enemy_loss_2r=3 friendly_viable_damage=true "
+            "WITHDRAW_EVAL turn=8 side=first aggression=Cautious remaining=0.68 "
+            + "threshold=0.75 friendly_lost=0.32 enemy_lost=0.39 "
+            + "friendly_loss_2r=0.11 enemy_loss_2r=0.03 friendly_viable_damage=true "
             + "enemy_viable_damage=true can_prosecute_mission=true "
             + "decision=FightingWithdrawal reason=eligible_and_losing_exchange",
             result.Trace.Render());
@@ -167,17 +183,17 @@ public class BattleForceEvaluatorTests
             Enemy: enemy);
     }
 
+    /// <summary>A force snapshot expressed as percentages of the side's own starting strength.</summary>
     internal static BattleForceMetrics Metrics(
-        int currentBattleValue,
+        int remainingPercent,
         int loss = 0,
         bool viableDamage = true,
         bool canProsecute = true)
     {
         return new BattleForceMetrics(
-            StartingBattleValue: 100,
-            CurrentBattleValue: currentBattleValue,
-            BattleValueLostPreviousTwoRounds: loss,
-            AbleSoldierCount: System.Math.Max(0, currentBattleValue / 10),
+            RemainingShare: remainingPercent / 100.0,
+            LostSharePreviousTwoRounds: loss / 100.0,
+            AbleSoldierCount: System.Math.Max(0, remainingPercent / 10),
             FastestPursuitSquadSpeed: 6,
             SlowestMainBodySquadSpeed: 5,
             RangedCoverSquadCount: 1,

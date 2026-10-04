@@ -21,7 +21,13 @@ namespace OnlyWar.Battles
         private const int RecentActionWindowRounds = 2;
 
         private readonly BattleState _state;
-        private readonly Dictionary<BattleSide, Queue<int>> _battleValueHistory = [];
+        // Per side: each squad's starting able headcount and its weight, the squad's share of its
+        // OWN side's starting battle value. Weights are within-side only, so force shares never
+        // compare battle value across sides and are unchanged by any rescaling of it.
+        private readonly Dictionary<BattleSide, Dictionary<int, SquadStart>> _squadStarts = [];
+        // Per side: the counted able headcount of every starting squad after each of the last
+        // rounds (oldest first), seeded with the starting headcounts.
+        private readonly Dictionary<BattleSide, Queue<Dictionary<int, int>>> _ableCountHistory = [];
         private readonly Dictionary<BattleSide, Queue<bool>> _damageActionHistory = [];
         private readonly Dictionary<int, int> _squadIdBySoldierId = [];
         private readonly Queue<HashSet<SquadPair>> _attackPairHistory = [];
@@ -35,10 +41,13 @@ namespace OnlyWar.Battles
         internal BattleRoundMetrics(BattleState state)
         {
             _state = state ?? throw new ArgumentNullException(nameof(state));
-            _battleValueHistory[BattleSide.Attacker] =
-                new Queue<int>([_state.AttackerSide.StartingBattleValue]);
-            _battleValueHistory[BattleSide.Opposing] =
-                new Queue<int>([_state.OpposingSide.StartingBattleValue]);
+            foreach (BattleSide side in Enum.GetValues<BattleSide>())
+            {
+                Dictionary<int, SquadStart> starts = BuildSquadStarts(GetAllSquads(side));
+                _squadStarts[side] = starts;
+                _ableCountHistory[side] = new Queue<Dictionary<int, int>>(
+                    [starts.Values.ToDictionary(start => start.SquadId, start => start.AbleSoldiers)]);
+            }
             _damageActionHistory[BattleSide.Attacker] = new Queue<bool>();
             _damageActionHistory[BattleSide.Opposing] = new Queue<bool>();
 
@@ -136,9 +145,9 @@ namespace OnlyWar.Battles
         {
             foreach (BattleSide side in Enum.GetValues<BattleSide>())
             {
-                Queue<int> values = _battleValueHistory[side];
-                values.Enqueue(CurrentBattleValue(side));
-                while (values.Count > 3) values.Dequeue();
+                Queue<Dictionary<int, int>> counts = _ableCountHistory[side];
+                counts.Enqueue(CountedAbleSoldiers(side));
+                while (counts.Count > 3) counts.Dequeue();
 
                 bool usedDamagingAction = _pendingDamagingActorIds.Any(actorId =>
                     IsSoldierOnSide(actorId, side));
@@ -209,20 +218,30 @@ namespace OnlyWar.Battles
         {
             List<BattleSquad> squads = GetActiveSquads(side).ToList();
             List<BattleSoldier> soldiers = squads.SelectMany(squad => squad.AbleSoldiers).ToList();
-            // Squads that stood down from a pursuit left the field on their own terms, not as
-            // casualties, so their strength still counts (see BattleSideState.StoodDownSquadIds).
-            int current = soldiers.Sum(soldier => soldier.EffectiveBattleValue)
-                + GetSideState(side).StoodDownBattleValue;
-            Queue<int> history = _battleValueHistory[side];
-            int prior = history.Count > 0 ? history.Peek() : current;
+
+            // Headcount shares. Each starting squad contributes w * able / starting, where w is
+            // its share of its OWN side's starting battle value. A squad that stood down from a
+            // pursuit left the field on its own terms, not as a casualty, so it still counts at
+            // the headcount it stood down with (see BattleSideState.StoodDownSquadIds).
+            Dictionary<int, int> counted = CountedAbleSoldiers(side);
+            Dictionary<int, int> prior = _ableCountHistory[side].Peek();
+            double remaining = 0;
+            double lostPreviousTwoRounds = 0;
+            foreach (SquadStart start in _squadStarts[side].Values)
+            {
+                int now = counted.GetValueOrDefault(start.SquadId);
+                int before = prior.GetValueOrDefault(start.SquadId, now);
+                remaining += start.Share(now);
+                lostPreviousTwoRounds += start.Share(Math.Max(0, before - now));
+            }
+
             float fastest = squads.Select(SafeSquadMove).DefaultIfEmpty(0).Max();
             float slowest = squads.Select(SafeSquadMove).DefaultIfEmpty(0).Min();
             int cover = squads.Count(squad => !squad.IsInMelee
                 && squad.AbleSoldiers.Any(soldier => soldier.EquippedRangedWeapons.Count > 0));
             return new BattleForceMetrics(
-                GetSideState(side).StartingBattleValue,
-                current,
-                Math.Max(0, prior - current),
+                remaining,
+                lostPreviousTwoRounds,
                 soldiers.Count,
                 fastest,
                 slowest,
@@ -232,8 +251,65 @@ namespace OnlyWar.Battles
                 soldiers.Count > 0);
         }
 
-        internal int CurrentBattleValue(BattleSide side) => GetActiveSquads(side)
-            .Sum(CurrentBattleValue) + GetSideState(side).StoodDownBattleValue;
+        /// <summary>
+        /// The squad's contribution to its side's force share when <paramref name="ableCount"/>
+        /// of its soldiers are able: w * able / starting. Zero for a squad that began the battle
+        /// with no able soldiers.
+        /// </summary>
+        internal double SquadShare(BattleSide side, BattleSquad squad, int ableCount) =>
+            _squadStarts[side].TryGetValue(squad.Id, out SquadStart start)
+                ? start.Share(ableCount)
+                : 0;
+
+        /// <summary>
+        /// Counted able headcount per starting squad: active squads at their live count, squads
+        /// that stood down at the count they stood down with, everyone else at zero.
+        /// </summary>
+        private Dictionary<int, int> CountedAbleSoldiers(BattleSide side)
+        {
+            IReadOnlyDictionary<int, BattleSquad> active = side == BattleSide.Attacker
+                ? _state.ActiveAttackerSquads
+                : _state.ActiveOpposingSquads;
+            BattleSideState sideState = GetSideState(side);
+            Dictionary<int, int> counted = [];
+            foreach (int squadId in _squadStarts[side].Keys)
+            {
+                counted[squadId] = active.TryGetValue(squadId, out BattleSquad squad)
+                    ? squad.AbleSoldiers.Count
+                    : sideState.StoodDownAbleCounts.GetValueOrDefault(squadId);
+            }
+            return counted;
+        }
+
+        private static Dictionary<int, SquadStart> BuildSquadStarts(
+            IReadOnlyCollection<BattleSquad> squads)
+        {
+            List<(int Id, int Able, long BattleValue)> raw = squads
+                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .Select(squad => (
+                    squad.Id,
+                    squad.AbleSoldiers.Count,
+                    squad.AbleSoldiers.Sum(soldier => (long)soldier.EffectiveBattleValue)))
+                .ToList();
+            long totalBattleValue = raw.Sum(item => item.BattleValue);
+            long totalAble = raw.Sum(item => (long)item.Able);
+            // A side whose battle value is all zero has no within-side proportion to take, so
+            // fall back to headcount weights rather than dividing by zero.
+            return raw.ToDictionary(
+                item => item.Id,
+                item => new SquadStart(
+                    item.Id,
+                    item.Able,
+                    totalBattleValue > 0
+                        ? (double)item.BattleValue / totalBattleValue
+                        : (double)item.Able / totalAble));
+        }
+
+        private readonly record struct SquadStart(int SquadId, int AbleSoldiers, double Weight)
+        {
+            internal double Share(int ableCount) =>
+                Weight * Math.Min(Math.Max(ableCount, 0), AbleSoldiers) / AbleSoldiers;
+        }
 
         private IReadOnlyCollection<BattleSquad> GetActiveSquads(BattleSide side) =>
             side == BattleSide.Attacker
@@ -251,9 +327,6 @@ namespace OnlyWar.Battles
         private bool IsSoldierOnSide(int soldierId, BattleSide side) => GetAllSquads(side)
             .SelectMany(squad => squad.Soldiers)
             .Any(soldier => soldier.Soldier.Id == soldierId);
-
-        private static int CurrentBattleValue(BattleSquad squad) => squad.AbleSoldiers
-            .Sum(soldier => soldier.EffectiveBattleValue);
 
         private static float SafeSquadMove(BattleSquad squad) =>
             squad.AbleSoldiers.Count == 0 ? 0 : squad.GetSquadMove();

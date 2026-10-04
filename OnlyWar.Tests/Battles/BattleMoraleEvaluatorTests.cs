@@ -82,15 +82,31 @@ public class BattleMoraleEvaluatorTests
     [Fact]
     public void ComputeForceDisadvantage_ZeroWhenEvenAndNoLosses()
     {
-        Assert.Equal(0f, BattleMoraleEvaluator.ComputeForceDisadvantage(100, 100, 0, 0));
+        Assert.Equal(0f, BattleMoraleEvaluator.ComputeForceDisadvantage(0, 0, 0, 0));
+        // Equal non-zero loss shares are an even split, not a disadvantage.
+        Assert.Equal(0f, BattleMoraleEvaluator.ComputeForceDisadvantage(0.2, 0.2, 0.05, 0.05));
     }
 
     [Fact]
-    public void ComputeForceDisadvantage_PositiveWhenOutmatchedAndBleeding()
+    public void ComputeForceDisadvantage_ZeroWhenLosingLessThanTheEnemy()
     {
-        // 100 BV vs 180 BV, two-round losses 40 vs 10 — the reference "losing" case.
-        float value = BattleMoraleEvaluator.ComputeForceDisadvantage(100, 180, 40, 10);
-        Assert.InRange(value, 0.40f, 0.42f);
+        Assert.Equal(0f, BattleMoraleEvaluator.ComputeForceDisadvantage(0.1, 0.5, 0.0, 0.2));
+    }
+
+    [Fact]
+    public void ComputeForceDisadvantage_PositiveWhenLosingMoreAndStillBleeding()
+    {
+        // Own side has lost 40% of its strength to the enemy's 20%, and 8% to 2% over the last
+        // two rounds — the reference "losing" case: cumulative split 2/3 -> 1/3, trend split
+        // 0.8 -> 0.6, so 0.6 * (1/3) + 0.4 * 0.6 = 0.44.
+        float value = BattleMoraleEvaluator.ComputeForceDisadvantage(0.40, 0.20, 0.08, 0.02);
+        Assert.InRange(value, 0.43f, 0.45f);
+    }
+
+    [Fact]
+    public void ComputeForceDisadvantage_SaturatesWhenOnlyTheFriendlySideHasLost()
+    {
+        Assert.Equal(1f, BattleMoraleEvaluator.ComputeForceDisadvantage(0.3, 0.0, 0.1, 0.0));
     }
 
     // --- the check: outcomes by species and context (§5, §10 Phase 7 targets) ---

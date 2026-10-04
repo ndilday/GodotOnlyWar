@@ -966,15 +966,41 @@ loss, nearby routing allies, local outnumbering, and force-wide disadvantage. Pe
 an Ego-based convex curve. Synapse coverage skips the morale check; command auras reduce shock but
 do not grant immunity. Squad states are `Steady`, `Shaken`, or sticky `Routing`.
 
-Force continuation treats the aggression casualty threshold as eligibility, not an automatic order.
-It also considers remaining effective Battle Value, loss trend, ability to damage the enemy, and the
-mission posture. A routing squad uses the withdrawal/pursuit pipeline without covering fire or
-orderly role rotation.
+**Force shares.** Withdrawal and rout decisions never compare Battle Value across sides. They read
+headcount shares (`BattleRoundMetrics.BuildMetrics` -> `BattleForceMetrics`). Per squad: `s` starting
+able soldiers, `a` able now, `l` lost in the previous two rounds, and weight `w` = the squad's share
+of its OWN side's starting Battle Value (headcount weights if the side's BV is zero). A squad that
+stood down counts at the headcount it stood down with (`BattleSideState.StoodDownAbleCounts`);
+squads that were eliminated or withdrew count as zero.
+
+```text
+RemainingShare              = Σ w · a / s
+LostShareSinceStart         = 1 − RemainingShare
+LostSharePreviousTwoRounds  = Σ w · l / s
+```
+
+Rescaling every Battle Value, or one side's relative to the other's, changes none of these
+(`ForceShareScaleFreeTests`).
+
+Force continuation (`BattleForceEvaluator`) treats the aggression casualty threshold as eligibility,
+not an automatic order: eligible when the friendly `RemainingShare` is below the threshold (Avoid
+0.90, Cautious 0.75, Normal 0.50, Attritional 0.25, Aggressive none). An eligible force then
+withdraws if it is outmatched (its `LostShareSinceStart` exceeds the enemy's), losing the exchange
+(its `LostSharePreviousTwoRounds` exceeds the enemy's), unable to damage while the enemy can, or
+unable to prosecute the mission. A routing squad uses the withdrawal/pursuit pipeline without
+covering fire or orderly role rotation.
+
+Morale's force-wide disadvantage (`BattleMoraleEvaluator.ComputeForceDisadvantage`) is
+`0.6 · d(lostSinceStart) + 0.4 · d(lostPreviousTwoRounds)`, where `d(f, e) = clamp(2 · (f/(f+e) −
+0.5), 0, 1)` is the friendly side's excess share of the combined losses (0 when both are 0). Weights
+are `MoraleConstants.ForceDisadvantageCumulativeLossWeight` and `ForceDisadvantageLossWeight`.
 
 Organized withdrawal uses a fixed heading and leapfrog roles. The farthest suitable squad covers
 while other squads bound/run; role assignment is re-evaluated as the formation moves. A rear guard
-is selected only when the counterfactual predicts at least one additional survivor, with surviving
-Battle Value as the tie-break. Weapon quality alone cannot pull a safely escaping squad back.
+is selected only when the counterfactual raises the side's expected surviving share by at least
+`WithdrawalForecast.MinimumAdditionalShare` (0.01), ranked by that gain with additional survivors as
+the tie-break; a squad's surviving share is `w · a / s`. Weapon quality alone cannot pull a safely
+escaping squad back.
 
 Each pursuing squad chooses `BreakOff`, `Follow`, `Press`, or `Standoff` for itself, from its own
 pairs' contact and useful-attack projections, its aggression and its equipment doctrine
@@ -983,8 +1009,8 @@ squad with no shot at all chases; a squad that cannot reach contact within
 `BattlePursuitPlanner.MaximumChaseTurns` stands and fires with a shot now, follows with a shot later,
 and otherwise breaks off. The side's posture is the most committed squad posture, so the pursuit
 ends only when every squad breaks off. A squad that breaks off while others continue **stands
-down** and leaves the field (`BattleSideState.StoodDownSquadIds`): its battle value at that moment
-still counts in its side's force metrics, so the force evaluator does not read the exit as
+down** and leaves the field (`BattleSideState.StoodDownSquadIds`): its able headcount at that moment
+still counts in its side's remaining share, so the force evaluator does not read the exit as
 casualties. `Follow` compares holding fire, jogging with reduced-accuracy fire, and running without
 fire; the run is selected when the projected gain from closing outweighs the moving shot. `Press`
 runs without ranged fire as a committed pursuit posture.

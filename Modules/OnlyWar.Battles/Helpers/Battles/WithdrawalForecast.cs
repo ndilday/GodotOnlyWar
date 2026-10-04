@@ -10,15 +10,16 @@ namespace OnlyWar.Battles;
 public static class WithdrawalForecast
 {
     public const int DefaultHorizonTurns = 3;
-    // §8.1 BV-primary metric: a rear guard must improve expected surviving Battle Value by at
-    // least this margin over ordinary withdrawal (expected able survivors is now only the
-    // tie-break). Replaces the former MinimumAdditionalSurvivors headcount gate. Home is here,
-    // alongside the horizon, matching where the survivor gate lived. Phase 7 calibration target.
-    public const float MinimumAdditionalBattleValue = 1f;
+    // §8.1 surviving-share metric: a rear guard must improve the side's expected surviving share
+    // (Σ w · able / starting, w = the squad's share of its OWN side's starting battle value) by at
+    // least this margin over ordinary withdrawal; expected able survivors is only the
+    // tie-break. Replaces the former absolute-BV gate of 1 BV (about 1% of a 100-200 BV force),
+    // so no absolute battle value enters the decision. Phase 7 calibration target.
+    public const float MinimumAdditionalShare = 0.01f;
 
     public sealed record Projection(
         int ExpectedAbleSurvivors,
-        float ExpectedSurvivingBattleValue,
+        float ExpectedSurvivingShare,
         int ExpectedSquadsIntercepted,
         int ExpectedMainBodyMaskedDepartures);
 
@@ -49,10 +50,14 @@ public static class WithdrawalForecast
     /// command-loss term applied instead of its current support? Only read when
     /// <paramref name="DependsOnCommandAura"/> and every command provider is lost in the branch.
     /// </param>
+    /// <param name="SurvivingShare">
+    /// This squad's contribution to its side's surviving share if it escapes: w · able / starting
+    /// (see <see cref="BattleRoundMetrics.SquadShare"/>).
+    /// </param>
     public sealed record SquadGeometry(
         int SquadId,
         int AbleSoldiers,
-        float BattleValue,
+        float SurvivingShare,
         float CurrentEnemySeparation,
         float RunSpeed,
         bool ProvidesSynapse = false,
@@ -101,7 +106,7 @@ public static class WithdrawalForecast
         int SquadId,
         Projection Projection,
         int AdditionalSurvivors,
-        float AdditionalSurvivingBattleValue,
+        float AdditionalSurvivingShare,
         bool Eligible,
         string Reason);
 
@@ -122,10 +127,10 @@ public static class WithdrawalForecast
     /// <see cref="SquadGeometry.RoutsIfSevered"/> / <see cref="SquadGeometry.RoutsIfCommandLost"/>
     /// verdict) it forfeits the masked-departure delay and is intercepted at the pursuit
     /// rules' higher rate. This is what charges the Warriors-hold branch for the escaping
-    /// swarm's coverage lapse and stops BV-primary from sacrificing the wrong squad. The
+    /// swarm's coverage lapse and stops share-primary from sacrificing the wrong squad. The
     /// command aura is the second consumer of the same seam (§4.3, Phase 6): an HQ held as
     /// rear guard or run down strips its dependents' support, which is what protects an
-    /// Imperial Captain — never worth more BV than a squad, but his loss costs the platoon.
+    /// Imperial Captain — never worth more share than a squad, but his loss costs the platoon.
     /// It is deterministic and RNG-free — expected value only.
     ///
     /// The propagation is capped at exactly ONE level (§8.2, locked): provider loss raises the
@@ -178,7 +183,7 @@ public static class WithdrawalForecast
             && !Intercepted(provider, delay, oneTurnAttackReach));
 
         int survivors = 0;
-        float survivingBv = 0;
+        float survivingShare = 0;
         int intercepted = 0;
         int masked = 0;
 
@@ -212,12 +217,12 @@ public static class WithdrawalForecast
             }
 
             survivors += squad.AbleSoldiers;
-            survivingBv += squad.BattleValue;
+            survivingShare += squad.SurvivingShare;
             if (rearGuardSquadId.HasValue && !routsAfterAuraLoss && delay >= MaskedDepartureTurnsRequired)
                 masked++;
         }
 
-        return new Projection(survivors, survivingBv, intercepted, masked);
+        return new Projection(survivors, survivingShare, intercepted, masked);
     }
 
     public const float MaskedDepartureTurnsRequired = 1.0f;
@@ -230,12 +235,13 @@ public static class WithdrawalForecast
             .ToList();
 
         // §8.1 / §9 (items 1 and 2 swapped 2026-07-16): greatest expected additional surviving
-        // BV first, then greatest additional survivors as the tie-break — the inverse of the old
-        // survivor-primary rule. The structural gates (not_exposed / safely_withdrawing) still
-        // guard against sacrificing a safe squad, so BV-primary does not reintroduce that trap.
+        // share first, then greatest additional survivors as the tie-break — the inverse of the
+        // old survivor-primary rule. The structural gates (not_exposed / safely_withdrawing)
+        // still guard against sacrificing a safe squad, so share-primary does not reintroduce
+        // that trap.
         (Candidate Candidate, CandidateEvaluation Evaluation)? selected = evaluations
             .Where(item => item.Evaluation.Eligible)
-            .OrderByDescending(item => item.Evaluation.AdditionalSurvivingBattleValue)
+            .OrderByDescending(item => item.Evaluation.AdditionalSurvivingShare)
             .ThenByDescending(item => item.Evaluation.AdditionalSurvivors)
             .ThenByDescending(item => item.Candidate.IsEngaged)
             .ThenBy(item => item.Candidate.NearestEnemyDistance)
@@ -246,7 +252,7 @@ public static class WithdrawalForecast
 
         int? selectedId = selected?.Candidate.SquadId;
         int survivorImprovement = selected?.Evaluation.AdditionalSurvivors ?? 0;
-        float bvImprovement = selected?.Evaluation.AdditionalSurvivingBattleValue ?? 0;
+        float shareImprovement = selected?.Evaluation.AdditionalSurvivingShare ?? 0;
         string reason = selectedId.HasValue ? "material_improvement" : "no_material_candidate";
         BattleDecisionTrace trace = new("REARGUARD_EVAL", new List<KeyValuePair<string, string>>
         {
@@ -254,12 +260,12 @@ public static class WithdrawalForecast
             BattleDecisionTrace.Field("side", input.IsFirstSide ? "first" : "second"),
             BattleDecisionTrace.Field("horizon", input.HorizonTurns),
             BattleDecisionTrace.Field("baseline_survivors", input.Baseline.ExpectedAbleSurvivors),
-            BattleDecisionTrace.Field("baseline_bv", input.Baseline.ExpectedSurvivingBattleValue),
+            BattleDecisionTrace.Field("baseline_share", input.Baseline.ExpectedSurvivingShare),
             BattleDecisionTrace.Field("baseline_intercepted", input.Baseline.ExpectedSquadsIntercepted),
             BattleDecisionTrace.Field("baseline_masked", input.Baseline.ExpectedMainBodyMaskedDepartures),
             BattleDecisionTrace.Field("selected_squad", selectedId),
             BattleDecisionTrace.Field("survivor_improvement", survivorImprovement),
-            BattleDecisionTrace.Field("bv_improvement", bvImprovement),
+            BattleDecisionTrace.Field("share_improvement", shareImprovement),
             BattleDecisionTrace.Field("reason", reason)
         });
         List<BattleDecisionTrace> candidateTraces = evaluations.Select(item =>
@@ -267,11 +273,11 @@ public static class WithdrawalForecast
             {
                 BattleDecisionTrace.Field("squad", item.Evaluation.SquadId),
                 BattleDecisionTrace.Field("survivors", item.Evaluation.Projection.ExpectedAbleSurvivors),
-                BattleDecisionTrace.Field("bv", item.Evaluation.Projection.ExpectedSurvivingBattleValue),
+                BattleDecisionTrace.Field("share", item.Evaluation.Projection.ExpectedSurvivingShare),
                 BattleDecisionTrace.Field("intercepted", item.Evaluation.Projection.ExpectedSquadsIntercepted),
                 BattleDecisionTrace.Field("masked", item.Evaluation.Projection.ExpectedMainBodyMaskedDepartures),
                 BattleDecisionTrace.Field("survivor_improvement", item.Evaluation.AdditionalSurvivors),
-                BattleDecisionTrace.Field("bv_improvement", item.Evaluation.AdditionalSurvivingBattleValue),
+                BattleDecisionTrace.Field("share_improvement", item.Evaluation.AdditionalSurvivingShare),
                 BattleDecisionTrace.Field("ego", item.Candidate.SquadEgo),
                 BattleDecisionTrace.Field("shaken", item.Candidate.IsShaken),
                 BattleDecisionTrace.Field("sustained_coverage", item.Candidate.WillRemainSynapseCoveredWhileHolding),
@@ -287,7 +293,7 @@ public static class WithdrawalForecast
     private static CandidateEvaluation EvaluateCandidate(Input input, Candidate candidate)
     {
         int additionalSurvivors = candidate.Projection.ExpectedAbleSurvivors - input.Baseline.ExpectedAbleSurvivors;
-        float additionalBv = candidate.Projection.ExpectedSurvivingBattleValue - input.Baseline.ExpectedSurvivingBattleValue;
+        float additionalShare = candidate.Projection.ExpectedSurvivingShare - input.Baseline.ExpectedSurvivingShare;
         string rejection = null;
 
         if (!candidate.IsClosestSquad && !candidate.IsEngaged && !candidate.WithinNextTurnInterceptReach)
@@ -303,12 +309,12 @@ public static class WithdrawalForecast
             rejection = "shaken";
         else if (!WillNotBreakWhileHolding(candidate))
             rejection = "will_break_if_held";
-        // §8.1 BV-primary gate (replaces the former survivor-improvement gate).
-        else if (additionalBv < MinimumAdditionalBattleValue)
-            rejection = "insufficient_bv_improvement";
+        // §8.1 surviving-share gate (replaces the former survivor-improvement gate).
+        else if (additionalShare < MinimumAdditionalShare)
+            rejection = "insufficient_share_improvement";
 
         return new CandidateEvaluation(candidate.SquadId, candidate.Projection,
-            additionalSurvivors, additionalBv, rejection == null,
+            additionalSurvivors, additionalShare, rejection == null,
             rejection ?? "eligible_material_improvement");
     }
 

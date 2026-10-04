@@ -312,11 +312,17 @@ public class CommandAuraTests
 
     // --- §8.2 second consumer: command collapse in the withdrawal forecast ---
 
+    // Surviving shares of a side's starting strength: a Captain (5%), a marine squad (25%) and
+    // two PDF platoons (35% each) make up the force in the keystone below.
+    private const float HqShare = 0.05f;
+    private const float MarineShare = 0.25f;
+    private const float PlatoonShare = 0.35f;
+
     private static WithdrawalForecast.SquadGeometry Hq(int id) =>
-        new(id, 1, 10, 4, 8, ProvidesCommandAura: true);
+        new(id, 1, HqShare, 4, 8, ProvidesCommandAura: true);
 
     private static WithdrawalForecast.SquadGeometry Platoon(int id, bool routsIfCommandLost) =>
-        new(id, 10, 60, 4, 8, DependsOnCommandAura: true, RoutsIfCommandLost: routsIfCommandLost);
+        new(id, 10, PlatoonShare, 4, 8, DependsOnCommandAura: true, RoutsIfCommandLost: routsIfCommandLost);
 
     [Fact]
     public void HqHeldAsRearGuard_SeversItsDependents_OnlyWhenCollapseIsModelled()
@@ -333,10 +339,10 @@ public class CommandAuraTests
         // Blind: the platoon departs masked behind its Captain. Modelled: his loss routs it,
         // it forfeits the delay, and the pursuit's higher reach runs it down.
         Assert.Equal(10, blind.ExpectedAbleSurvivors);
-        Assert.Equal(60, blind.ExpectedSurvivingBattleValue);
+        Assert.Equal(PlatoonShare, blind.ExpectedSurvivingShare, 5);
         Assert.Equal(1, blind.ExpectedMainBodyMaskedDepartures);
         Assert.Equal(0, modelled.ExpectedAbleSurvivors);
-        Assert.Equal(0, modelled.ExpectedSurvivingBattleValue);
+        Assert.Equal(0f, modelled.ExpectedSurvivingShare);
         Assert.Equal(2, modelled.ExpectedSquadsIntercepted);
     }
 
@@ -348,9 +354,9 @@ public class CommandAuraTests
         // escapes ordinary reach (final separation 4.5 > 3) but not the routed reach (4.5).
         var geometry = new[]
         {
-            new WithdrawalForecast.SquadGeometry(1, 1, 10, 0, 1, ProvidesCommandAura: true),
+            new WithdrawalForecast.SquadGeometry(1, 1, HqShare, 0, 1, ProvidesCommandAura: true),
             new WithdrawalForecast.SquadGeometry(
-                2, 10, 60, 6, 8, DependsOnCommandAura: true, RoutsIfCommandLost: true)
+                2, 10, PlatoonShare, 6, 8, DependsOnCommandAura: true, RoutsIfCommandLost: true)
         };
 
         WithdrawalForecast.Projection modelled = WithdrawalForecast.ProjectOpenGround(
@@ -382,7 +388,7 @@ public class CommandAuraTests
             rearGuardSquadId: 1, rearGuardDelayTurns: 1, modelCommandCollapse: true);
 
         Assert.Equal(10, projection.ExpectedAbleSurvivors);
-        Assert.Equal(60, projection.ExpectedSurvivingBattleValue);
+        Assert.Equal(PlatoonShare, projection.ExpectedSurvivingShare, 5);
         Assert.Equal(2, projection.ExpectedSquadsIntercepted);
         Assert.Equal(1, projection.ExpectedMainBodyMaskedDepartures);
     }
@@ -390,14 +396,14 @@ public class CommandAuraTests
     [Fact]
     public void Keystone_CaptainIsProtected_OnlyWhenCommandCollapseIsModelled()
     {
-        // §4.3: the Imperial BV spread is nearly flat, so a Captain (10 BV here) never outvalues
-        // a squad — he must be protected because his death costs the platoon. Force: Captain HQ,
+        // §4.3: the Imperial BV spread is nearly flat, so a Captain (5% of the force here) never
+        // outvalues a squad — he must be protected because his death costs the platoon. Force: Captain HQ,
         // a marine squad (Ego 14, the only other eligible rear guard), and two PDF platoons
         // steadied by the Captain's aura that rout if he is lost.
         var geometry = new[]
         {
             Hq(1),
-            new WithdrawalForecast.SquadGeometry(2, 5, 45, 4, 8),
+            new WithdrawalForecast.SquadGeometry(2, 5, MarineShare, 4, 8),
             Platoon(3, routsIfCommandLost: true),
             Platoon(4, routsIfCommandLost: true)
         };
@@ -418,10 +424,10 @@ public class CommandAuraTests
         }
 
         // Blind to collapse the cheap Captain looks like the perfect sacrifice (everyone else's
-        // 165 BV escapes behind him)...
+        // 95% share escapes behind him)...
         Assert.Equal(1, Decide(modelCommandCollapse: false));
         // ...but modelling it, his death routs both platoons mid-escape: holding the marine
-        // squad instead saves Captain + platoons (130 BV vs 45). The Captain is protected.
+        // squad instead saves Captain + platoons (75% share vs 25%). The Captain is protected.
         Assert.Equal(2, Decide(modelCommandCollapse: true));
     }
 }

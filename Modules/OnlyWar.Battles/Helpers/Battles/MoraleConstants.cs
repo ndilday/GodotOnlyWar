@@ -21,12 +21,13 @@ namespace OnlyWar.Battles
     ///
     ///   Reference case — 25% casualties THIS turn, 25% cumulative, force losing:
     ///     shock   = w1*0.25 + w2*0.25 = 2.0*0.25 + 1.0*0.25 = 0.75
-    ///     context = 1 + k*forceDisadvantage ~= 1 + 1.0*0.41 = 1.41   (bv 100 vs 180,
-    ///               two-round losses 40 vs 10 -> forceDisadvantage ~= 0.41)
-    ///     stress  = 0.75 * 1.41 = 1.06
-    ///     gaunt  (resolve 0.950): per-soldier fail P(z > (0.950-1.06)/0.25) = P(z>-0.43)
-    ///             ~= 0.67 -> failFraction ~0.67 >= RoutThreshold 0.5 -> ROUTING (usually).
-    ///     marine (resolve 3.850): P(z > (3.850-1.06)/0.25) = P(z>11) ~= 0 -> STEADY.
+    ///     context = 1 + k*forceDisadvantage ~= 1 + 1.0*0.44 = 1.44   (own side has lost 40% of
+    ///               its strength vs the enemy's 20%, two-round losses 8% vs 2% ->
+    ///               forceDisadvantage = 0.6*0.33 + 0.4*0.6 ~= 0.44)
+    ///     stress  = 0.75 * 1.44 = 1.08
+    ///     gaunt  (resolve 0.950): per-soldier fail P(z > (0.950-1.08)/0.25) = P(z>-0.52)
+    ///             ~= 0.70 -> failFraction ~0.70 >= RoutThreshold 0.5 -> ROUTING (usually).
+    ///     marine (resolve 3.850): P(z > (3.850-1.08)/0.25) = P(z>11) ~= 0 -> STEADY.
     ///
     ///   Heavy fire — 40% this turn, 40% cumulative, losing (stress ~1.68):
     ///     gaunt  P(z>-2.9) ~= 0.998 -> whole squad routs (prompt collapse).
@@ -36,9 +37,9 @@ namespace OnlyWar.Battles
     ///   3.850 -> STEADY. Only a catastrophic corner (all of the above at context ~2.0,
     ///   stress 4.0) can break a marine squad — "effectively never," not "immune."
     ///
-    ///   Winning (context 1.0) vs losing (context 1.41) on the SAME local shock 0.75:
+    ///   Winning (context 1.0) vs losing (context 1.44) on the SAME local shock 0.75:
     ///     gaunt winning: stress 0.75 < 0.950 -> STEADY (fail P ~0.21 per man).
-    ///     gaunt losing:  stress 1.06 > 0.950 -> ROUTING (fail P ~0.67 per man).
+    ///     gaunt losing:  stress 1.08 > 0.950 -> ROUTING (fail P ~0.70 per man).
     ///   That asymmetry (global context MULTIPLIES local shock) is a locked decision (§2).
     /// </summary>
     public static class MoraleConstants
@@ -113,9 +114,11 @@ namespace OnlyWar.Battles
 
         // --- §5.2 global context multiplier: context = 1 + k * forceDisadvantage. Phase 7. ---
         public const float ContextDisadvantageCoefficient = 1.0f;
-        // forceDisadvantage blends force-wide BV share and two-round loss trend (both from
-        // BattleForceEvaluator's existing metrics). Weights sum to 1.
-        public const float ForceDisadvantageBvWeight = 0.6f;
+        // forceDisadvantage blends the cumulative loss-share split (friendly lost share of both
+        // sides' lost shares since the start) and the same split over the previous two rounds
+        // (both from BattleForceMetrics; each side's loss is a fraction of its own starting
+        // strength, so no battle value is compared across sides). Weights sum to 1.
+        public const float ForceDisadvantageCumulativeLossWeight = 0.6f;
         public const float ForceDisadvantageLossWeight = 0.4f;
 
         // --- §5.2 per-soldier roll noise: fails_i = (stress + N(0, sigma)) > resolve_i. ---

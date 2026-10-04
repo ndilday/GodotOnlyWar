@@ -6,12 +6,11 @@ using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Tests.Fixtures;
 
-// Every SoldierTemplate here must pass a non-zero battleValue. BattleValue defaults to 0, and a
-// side whose total BattleValue is 0 degenerates the force math in BattleTurnResolver: bvShare
-// comes out 0, so BattleMoraleEvaluator.ComputeForceDisadvantage reports maximum disadvantage and
-// the morale context multiplier pins at its ceiling. Harmless in the pure-function tests that
-// pass their own inputs, but silently wrong in any test that runs a full battle through
-// BattleTurnResolver. A test that WANTS a valueless side should declare its own battleValue: 0
+// Every SoldierTemplate here should pass a non-zero battleValue. BattleValue defaults to 0. Force
+// shares (BattleRoundMetrics) weight each squad by its share of its own side's starting
+// BattleValue; a side whose total is 0 falls back to headcount weights, so it no longer
+// degenerates, but other BV consumers (target choice, doctrine) still read a valueless side as
+// worthless. A test that WANTS a valueless side should declare its own battleValue: 0
 // template locally, the way BattleTurnResolverWithdrawalTests does, so the intent is explicit.
 internal static class TestModelFactory
 {

@@ -113,7 +113,7 @@ internal sealed class MoraleServiceHarness
     /// <summary>Runs the end-of-turn check for one side against even force metrics.</summary>
     public List<BattleEvent> Check(BattleSide side)
     {
-        BattleForceMetrics metrics = new(100, 100, 0, 5, 0f, 0f, 0, false, true, true);
+        BattleForceMetrics metrics = new(1.0, 0.0, 5, 0f, 0f, 0, false, true, true);
         List<BattleEvent> events = [];
         Service.EvaluateSide(side, metrics, metrics, events);
         return events;

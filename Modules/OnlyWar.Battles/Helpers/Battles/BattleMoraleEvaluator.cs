@@ -233,29 +233,37 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// forceDisadvantage in [0,1] from the force-wide BV share and the two-round loss
-        /// trend that <see cref="BattleForceEvaluator"/> already computes (§5.2). 0 when
-        /// winning/even; approaches 1 when outmatched and bleeding.
+        /// forceDisadvantage in [0,1] from the two sides' cumulative loss shares and their
+        /// two-round loss shares, as <see cref="BattleForceMetrics"/> reports them (§5.2). Each
+        /// is a fraction of that side's OWN starting strength (headcount weighted within the
+        /// side), so nothing here compares battle value across sides. 0 when winning/even;
+        /// approaches 1 when losing a far larger share of the force, and still bleeding.
         /// </summary>
         public static float ComputeForceDisadvantage(
-            int friendlyBattleValue,
-            int enemyBattleValue,
-            int friendlyLossPreviousTwoRounds,
-            int enemyLossPreviousTwoRounds)
+            double friendlyLostSinceStart,
+            double enemyLostSinceStart,
+            double friendlyLostPreviousTwoRounds,
+            double enemyLostPreviousTwoRounds)
         {
-            float bvTotal = friendlyBattleValue + enemyBattleValue;
-            float bvShare = bvTotal > 0 ? friendlyBattleValue / bvTotal : 0.5f;
-            float bvDisadvantage = Math.Clamp((0.5f - bvShare) * 2f, 0f, 1f);
-
-            float lossTotal = friendlyLossPreviousTwoRounds + enemyLossPreviousTwoRounds;
-            float lossShare = lossTotal > 0 ? friendlyLossPreviousTwoRounds / lossTotal : 0.5f;
-            float lossDisadvantage = Math.Clamp((lossShare - 0.5f) * 2f, 0f, 1f);
+            float cumulativeDisadvantage =
+                LossDisadvantage(friendlyLostSinceStart, enemyLostSinceStart);
+            float trendDisadvantage =
+                LossDisadvantage(friendlyLostPreviousTwoRounds, enemyLostPreviousTwoRounds);
 
             return Math.Clamp(
-                (MoraleConstants.ForceDisadvantageBvWeight * bvDisadvantage)
-                    + (MoraleConstants.ForceDisadvantageLossWeight * lossDisadvantage),
+                (MoraleConstants.ForceDisadvantageCumulativeLossWeight * cumulativeDisadvantage)
+                    + (MoraleConstants.ForceDisadvantageLossWeight * trendDisadvantage),
                 0f,
                 1f);
+        }
+
+        // The friendly side's share of the two sides' combined losses (0.5 when neither has lost
+        // anything), mapped so an even split is 0 and the friendly side taking all of it is 1.
+        private static float LossDisadvantage(double friendlyLost, double enemyLost)
+        {
+            double total = friendlyLost + enemyLost;
+            double share = total > 0 ? friendlyLost / total : 0.5;
+            return (float)Math.Clamp((share - 0.5) * 2.0, 0.0, 1.0);
         }
 
         /// <summary>

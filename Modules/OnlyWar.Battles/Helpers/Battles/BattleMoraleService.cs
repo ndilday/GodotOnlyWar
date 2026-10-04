@@ -189,10 +189,10 @@ namespace OnlyWar.Battles
                 .ToList();
             List<BattleSquad> enemy = GetActiveSquads(Opposite(side)).ToList();
             float forceDisadvantage = BattleMoraleEvaluator.ComputeForceDisadvantage(
-                friendlyMetrics.CurrentBattleValue,
-                enemyMetrics.CurrentBattleValue,
-                friendlyMetrics.BattleValueLostPreviousTwoRounds,
-                enemyMetrics.BattleValueLostPreviousTwoRounds);
+                friendlyMetrics.LostShareSinceStart,
+                enemyMetrics.LostShareSinceStart,
+                friendlyMetrics.LostSharePreviousTwoRounds,
+                enemyMetrics.LostSharePreviousTwoRounds);
             bool commandLostThisTurn = _commandAliveAtTurnStart.Contains(side)
                 && !HasLivingCommand(side);
             // Any friendly squad, at any range: squads are assumed to share a vox net.

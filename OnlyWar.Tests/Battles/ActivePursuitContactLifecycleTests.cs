@@ -140,8 +140,8 @@ public sealed class ActivePursuitContactLifecycleTests
         // keeps pursuing it leaves the field instead of standing idle. Grist Nine Epsilon,
         // 2026-09-22: 22 of 33 squads broke off and stood still for hundreds of turns.
         TwoPursuerFixture fixture = CreateTwoPursuerFixture(drySquadSpeed: 4f);
-        int dryBattleValue = fixture.Dry.AbleSoldiers.Sum(soldier => soldier.EffectiveBattleValue);
-        int forceBattleValue = fixture.Metrics.BuildMetrics(BattleSide.Attacker).CurrentBattleValue;
+        int dryAbleSoldiers = fixture.Dry.AbleSoldiers.Count;
+        double forceRemainingShare = fixture.Metrics.BuildMetrics(BattleSide.Attacker).RemainingShare;
         List<BattleEvent> events = [];
 
         BattleTerminalRequest terminal =
@@ -157,11 +157,12 @@ public sealed class ActivePursuitContactLifecycleTests
         Assert.Equal(PursuitPosture.Follow, fixture.Service.GetPursuitPosture(BattleSide.Attacker));
         Assert.Equal(BattleSideIntent.Pursuing, fixture.State.AttackerSide.Intent);
 
-        // Standing down is not a casualty: the side's strength is unchanged.
-        Assert.Equal(dryBattleValue, fixture.State.AttackerSide.StoodDownBattleValue);
+        // Standing down is not a casualty: the side's remaining share is unchanged.
+        Assert.Equal(dryAbleSoldiers, fixture.State.AttackerSide.StoodDownAbleCounts[fixture.Dry.Id]);
         Assert.Equal(
-            forceBattleValue,
-            fixture.Metrics.BuildMetrics(BattleSide.Attacker).CurrentBattleValue);
+            forceRemainingShare,
+            fixture.Metrics.BuildMetrics(BattleSide.Attacker).RemainingShare,
+            9);
     }
 
     [Fact]

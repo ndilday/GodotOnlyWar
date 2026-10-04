@@ -824,7 +824,7 @@ namespace OnlyWar.Battles
                 .OrderBy(squad => squad.Id)
                 .ToList())
             {
-                pursuing.StoodDownBattleValue += CurrentBattleValue(squad);
+                pursuing.StoodDownAbleCounts[squad.Id] = squad.AbleSoldiers.Count;
                 pursuing.StoodDownSquadIds.Add(squad.Id);
                 squadPostures.Remove(squad.Id);
                 DisengageSquad(pursuingSide, squad, events, "stood down from the pursuit");
@@ -1178,10 +1178,10 @@ namespace OnlyWar.Battles
             // §8.2 command collapse: force disadvantage feeds the closed-form rout estimate used
             // to price a severed dependent's collapse (see EstimateRoutsIfUncovered).
             float forceDisadvantage = BattleMoraleEvaluator.ComputeForceDisadvantage(
-                friendlyMetrics.CurrentBattleValue,
-                enemyMetrics.CurrentBattleValue,
-                friendlyMetrics.BattleValueLostPreviousTwoRounds,
-                enemyMetrics.BattleValueLostPreviousTwoRounds);
+                friendlyMetrics.LostShareSinceStart,
+                enemyMetrics.LostShareSinceStart,
+                friendlyMetrics.LostSharePreviousTwoRounds,
+                enemyMetrics.LostSharePreviousTwoRounds);
             List<WithdrawalForecast.SquadGeometry> geometry = squads.Select(squad =>
             {
                 float squadEgo = SquadEgo(squad);
@@ -1202,7 +1202,8 @@ namespace OnlyWar.Battles
                 return new WithdrawalForecast.SquadGeometry(
                     squad.Id,
                     squad.AbleSoldiers.Count,
-                    CurrentBattleValue(squad),
+                    (float)_roundMetrics.SquadShare(
+                        withdrawingSide, squad, squad.AbleSoldiers.Count),
                     MinimumSquadToForceSeparation(squad, enemy),
                     squad.GetSquadMove(),
                     provides,
@@ -2066,9 +2067,6 @@ namespace OnlyWar.Battles
             List<BattleSoldier> able = squad.AbleSoldiers;
             return able.Count > 0 ? able.Average(soldier => soldier.Soldier.Ego) : 0f;
         }
-
-        private static int CurrentBattleValue(BattleSquad squad) => squad.AbleSoldiers
-            .Sum(soldier => soldier.EffectiveBattleValue);
 
         private static float SafeSquadMove(BattleSquad squad) =>
             squad.AbleSoldiers.Count == 0 ? 0 : squad.GetSquadMove();

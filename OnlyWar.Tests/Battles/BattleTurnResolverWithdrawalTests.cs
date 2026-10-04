@@ -70,12 +70,14 @@ public class BattleTurnResolverWithdrawalTests
         BattleGridManager grid = new();
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, holder.Soldiers[0], false, 40, 0);
+        List<Soldier> reserves = AddReserves(withdrawing, grid, 73_008);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [withdrawing],
             [holder],
             Aggression.Normal,
             Aggression.Aggressive);
+        KnockOut(withdrawing, reserves);
 
         for (int turn = 0; turn < 20 && resolver.BattleHistory.Outcome == null; turn++)
         {
@@ -115,12 +117,14 @@ public class BattleTurnResolverWithdrawalTests
         BattleGridManager grid = new();
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, holder.Soldiers[0], false, 1_000, 0);
+        List<Soldier> reserves = AddReserves(withdrawing, grid, 73_013);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [withdrawing],
             [holder],
             Aggression.Normal,
             Aggression.Avoid);
+        KnockOut(withdrawing, reserves);
 
         resolver.ProcessNextTurn();
 
@@ -148,9 +152,8 @@ public class BattleTurnResolverWithdrawalTests
     [Fact]
     public void ProcessNextTurn_BurrowCapableWithdrawingSquadDisengagesImmediately()
     {
-        // Valueless so the force evaluator elects to withdraw, the same way the BreakOff case
-        // above does — stated locally rather than leaning on a fixture's BattleValue, so the
-        // premise of the test is visible at the point of use.
+        // Two of its three soldiers are knocked out before turn one (AddReserves/KnockOut), so
+        // the force evaluator elects to withdraw, the same way the BreakOff case above does.
         SoldierTemplate zeroValueBurrower = new(
             73_020,
             TestModelFactory.BurrowerSpecies,
@@ -169,12 +172,14 @@ public class BattleTurnResolverWithdrawalTests
         BattleGridManager grid = new();
         Place(grid, burrowers.Soldiers[0], true, 0, 0);
         Place(grid, pursuers.Soldiers[0], false, 1_000, 0);
+        List<Soldier> reserves = AddReserves(burrowers, grid, 73_023);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [burrowers],
             [pursuers],
             Aggression.Normal,
             Aggression.Normal);
+        KnockOut(burrowers, reserves);
 
         resolver.ProcessNextTurn();
 
@@ -217,12 +222,14 @@ public class BattleTurnResolverWithdrawalTests
         BattleGridManager grid = new();
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, pursuer.Soldiers[0], false, 400, 0);
+        List<Soldier> reserves = AddReserves(withdrawing, grid, 73_033);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [withdrawing],
             [pursuer],
             Aggression.Normal,
             Aggression.Aggressive);
+        KnockOut(withdrawing, reserves);
 
         resolver.ProcessNextTurn();
 
@@ -260,15 +267,23 @@ public class BattleTurnResolverWithdrawalTests
         BattleGridManager grid = new();
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, pursuer.Soldiers[0], false, 400, 0);
+        List<Soldier> reserves = AddReserves(withdrawing, grid, 73_053);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [withdrawing],
             [pursuer],
             Aggression.Normal,
             Aggression.Aggressive);
+        KnockOut(withdrawing, reserves);
 
         resolver.ProcessNextTurn();
 
+        // The withdrawal was ordered (so the engagement is a pursuit, as in the paired case
+        // above) and the pursuer, having a worthwhile shot, keeps it alive.
+        Assert.Contains(
+            resolver.BattleHistory.Turns.Last().Events,
+            battleEvent => battleEvent.Type == BattleEventType.WithdrawalOrdered
+                && battleEvent.Side == BattleSide.Attacker);
         Assert.Null(resolver.BattleHistory.Outcome);
     }
 
@@ -293,21 +308,6 @@ public class BattleTurnResolverWithdrawalTests
         withdrawing.Soldiers[0].RangedWeapons.Clear();
         withdrawing.Soldiers[0].ClearReadiedRangedWeapons();
         ((Soldier)withdrawing.Soldiers[0].Soldier).Constitution = 5_000;
-        // Keep this a positive-valued, concrete quarry while still making the resolver enter a
-        // withdrawal. The engagement-participant boundary leaves one able runner in a three-body
-        // starting roster, so Normal aggression has a real < 0.5 remaining-value trigger instead
-        // of relying on the old zero-value fixture that cannot demonstrate useful fire.
-        foreach (int soldierId in new[] { 73_059, 73_060 })
-        {
-            Soldier reserve = TestModelFactory.CreateSoldier(
-                zeroValueHuman,
-                $"Withdrawing Reserve {soldierId}");
-            reserve.Id = soldierId;
-            reserve.MoveSpeed = 6;
-            withdrawing.Squad.AddSquadMember(reserve);
-            withdrawing.Soldiers.Add(new BattleSoldier(reserve, withdrawing));
-        }
-        withdrawing.RefreshEngagementParticipants([withdrawing.Soldiers[0].Soldier]);
         SoldierTemplate highValuePursuer = new(
             73_058,
             TestModelFactory.HumanSpecies,
@@ -332,12 +332,18 @@ public class BattleTurnResolverWithdrawalTests
         BattleGridManager grid = new();
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, pursuer.Soldiers[0], false, 60, 0);
+        // Keep this a positive-valued, concrete quarry while still making the resolver enter a
+        // withdrawal: two of its three soldiers are knocked out before turn one, so one third of
+        // the side's starting strength remains, below Normal aggression's 0.5 threshold, and the
+        // enemy has lost nothing.
+        List<Soldier> reserves = AddReserves(withdrawing, grid, 73_059);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [withdrawing],
             [pursuer],
             Aggression.Normal,
             Aggression.Aggressive);
+        KnockOut(withdrawing, reserves);
         List<string> trace = [];
         Action<string> originalSink = BattleLog.Sink;
         try
@@ -393,14 +399,20 @@ public class BattleTurnResolverWithdrawalTests
         Place(grid, firstRunner.Soldiers[0], true, 0, 0);
         Place(grid, secondRunner.Soldiers[0], true, 0, 20);
         Place(grid, pursuer.Soldiers[0], false, 40, 10);
+        List<Soldier> firstReserves = AddReserves(firstRunner, grid, 73_074);
+        List<Soldier> secondReserves = AddReserves(secondRunner, grid, 73_076);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [firstRunner, secondRunner],
             [pursuer],
             Aggression.Normal,
             Aggression.Aggressive);
+        KnockOut(firstRunner, firstReserves);
+        KnockOut(secondRunner, secondReserves);
 
-        // The valueless side elects to withdraw on turn one. On turn two the single pursuer can
+        // Each runner squad has lost two of its three soldiers, so the side (two squads of equal
+        // weight, one third of each remaining) is below Normal's threshold and elects to withdraw
+        // on turn one. On turn two the single pursuer can
         // select only one squad as its quarry; the other is well beyond the two-turn retarget
         // horizon at a relative closing speed of two.
         resolver.ProcessNextTurn();
@@ -451,7 +463,8 @@ public class BattleTurnResolverWithdrawalTests
         // and so is no edge at all — the pursuer needs a thousand turns to gain a single yard.
         ((Soldier)withdrawing.Soldiers[0].Soldier).MoveSpeed = 6f;
         ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 6.001f;
-        // Worth nothing (so its side elects to run), unarmed (so it cannot win the fight it is
+        // Two of its three soldiers are knocked out before turn one (so its side elects to run),
+        // unarmed (so it cannot win the fight it is
         // running from), and durable enough that neither side can settle this by killing. The
         // withdrawal is only declared at the END of turn one, so turn one is fought at engaged
         // ranges — a fragile quarry simply dies there, which is correct behaviour and not the case
@@ -470,12 +483,14 @@ public class BattleTurnResolverWithdrawalTests
         // in which the chase became unkillable.
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, pursuer.Soldiers[0], false, 7, 0);
+        List<Soldier> reserves = AddReserves(withdrawing, grid, 73_093);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [withdrawing],
             [pursuer],
             Aggression.Normal,
             Aggression.Aggressive);
+        KnockOut(withdrawing, reserves);
 
         for (int turn = 0; turn < 50 && resolver.BattleHistory.Outcome == null; turn++)
         {
@@ -486,6 +501,11 @@ public class BattleTurnResolverWithdrawalTests
         Assert.Equal(BattleEndReason.Annihilation, outcome.EndReason);
         Assert.Equal(BattleSide.Attacker, outcome.SideHoldingField);
         Assert.Contains(pursuer.Id, outcome.EliminatedSquadIds);
+        // The chase this regression is about only exists if the withdrawal was actually ordered.
+        Assert.Contains(
+            resolver.BattleHistory.Turns.SelectMany(turn => turn.Events),
+            battleEvent => battleEvent.Type == BattleEventType.WithdrawalOrdered
+                && battleEvent.Side == BattleSide.Attacker);
         Assert.DoesNotContain(withdrawing.Id, outcome.DisengagedSquadIds);
         // The point of the whole exercise: it ends in a handful of turns rather than grinding.
         Assert.True(
@@ -524,12 +544,14 @@ public class BattleTurnResolverWithdrawalTests
         BattleGridManager grid = new();
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, pursuer.Soldiers[0], false, 6, 0);
+        List<Soldier> reserves = AddReserves(withdrawing, grid, 73_103);
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [withdrawing],
             [pursuer],
             Aggression.Normal,
             Aggression.Aggressive);
+        KnockOut(withdrawing, reserves);
 
         for (int turn = 0; turn < 50 && resolver.BattleHistory.Outcome == null; turn++)
         {
@@ -538,6 +560,10 @@ public class BattleTurnResolverWithdrawalTests
 
         BattleOutcome outcome = Assert.IsType<BattleOutcome>(resolver.BattleHistory.Outcome);
         Assert.NotEqual(BattleEndReason.TurnCap, outcome.EndReason);
+        Assert.Contains(
+            resolver.BattleHistory.Turns.SelectMany(turn => turn.Events),
+            battleEvent => battleEvent.Type == BattleEventType.WithdrawalOrdered
+                && battleEvent.Side == BattleSide.Attacker);
     }
 
     // Enormous nominal reach, no ability to hit or hurt anything at it: accuracy and damage are
@@ -672,6 +698,53 @@ public class BattleTurnResolverWithdrawalTests
     {
         soldier.TopLeft = new ValueTuple<int, int>(x, y);
         grid.PlaceSoldier(soldier, side, [soldier.TopLeft.Value]);
+    }
+
+    // Voluntary withdrawal is a headcount decision: the force evaluator asks what share of the
+    // side's starting strength is still able, and withdraws below the aggression threshold when
+    // the side has lost a larger share than the enemy. A one-soldier squad starts at full
+    // strength and cannot trip that on turn one, so the withdrawing fixtures here start with
+    // `count` extra soldiers (they count in the starting roster) and put them out of the fight
+    // once the resolver exists (KnockOut), leaving the side at 1/(1 + count) on the first
+    // end-of-turn evaluation. The enemy has lost nothing, so the side is also outmatched.
+    private static List<Soldier> AddReserves(
+        BattleSquad squad,
+        BattleGridManager grid,
+        int firstReserveId,
+        int count = 2)
+    {
+        List<Soldier> reserves = [];
+        BattleSoldier first = squad.Soldiers[0];
+        for (int i = 0; i < count; i++)
+        {
+            Soldier reserve = TestModelFactory.CreateSoldier(
+                first.Soldier.Template,
+                $"{squad.Name} Reserve {i + 1}");
+            reserve.Id = firstReserveId + i;
+            reserve.MoveSpeed = first.Soldier.MoveSpeed;
+            squad.Squad.AddSquadMember(reserve);
+            BattleSoldier wrapper = new(reserve, squad);
+            squad.Soldiers.Add(wrapper);
+            Place(grid, wrapper, true, first.TopLeft.Value.Item1, first.TopLeft.Value.Item2 + 1 + i);
+            reserves.Add(reserve);
+        }
+
+        return reserves;
+    }
+
+    // The resolver clones the squad into its own state, but the soldiers' bodies are shared, so a
+    // wound taken here is a casualty in the live battle. InvalidateAbleSoldiers bumps a
+    // generation token the original and its clone share, which makes the clone re-read who is able.
+    private static void KnockOut(BattleSquad squad, IEnumerable<Soldier> soldiers)
+    {
+        foreach (Soldier soldier in soldiers)
+        {
+            soldier.Body.HitLocations
+                .First(location => location.Template.IsVital)
+                .Wounds.AddWound(WoundLevel.Unsurvivable);
+        }
+
+        squad.InvalidateAbleSoldiers();
     }
 
     private static Faction CreateFaction(int id, string name, SoldierTemplate template)
