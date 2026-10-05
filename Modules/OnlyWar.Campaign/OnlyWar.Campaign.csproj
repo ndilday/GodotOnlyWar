@@ -44,5 +44,6 @@
     <Using Include="OnlyWar.Runtime.Logging" />
     <Using Include="OnlyWar.Runtime.Random" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.Diagnostics" />
   </ItemGroup>
 </Project>

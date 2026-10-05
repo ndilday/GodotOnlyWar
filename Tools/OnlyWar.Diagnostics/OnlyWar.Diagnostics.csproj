@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Opt-in balance and calibration tools (squad duels, the break-even ladder, the gauntlet and its
+    probit fit). They run as xUnit facts so they share the test workflow (dotnet test, -e settings),
+    but they are not part of the correctness suite: every fact returns at once unless its RUN_*
+    variable is set. Only the fitter's unit tests (ProbitFitTests) run by default. See README.md.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Modules/OnlyWar.Domain/OnlyWar.Domain.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Abstractions/OnlyWar.Abstractions.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Application.Abstractions/OnlyWar.Application.Abstractions.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Generation.Abstractions/OnlyWar.Generation.Abstractions.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Operations.Abstractions/OnlyWar.Operations.Abstractions.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Runtime.Abstractions/OnlyWar.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Battles.Abstractions/OnlyWar.Battles.Abstractions.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Medical.Abstractions/OnlyWar.Medical.Abstractions.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Application/OnlyWar.Application.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Campaign/OnlyWar.Campaign.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Battles/OnlyWar.Battles.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Medical/OnlyWar.Medical.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Operations/OnlyWar.Operations.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Persistence/OnlyWar.Persistence.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
+    <ProjectReference Include="../../Modules/OnlyWar.Generation/OnlyWar.Generation.csproj" />
+    <Using Include="OnlyWar.Abstractions" />
+    <Using Include="OnlyWar.Medical.Abstractions" />
+    <Using Include="OnlyWar.Generation.Abstractions" />
+    <Using Include="OnlyWar.Domain.Missions" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shared with the test suite rather than copied: the rules-database locator, the sector and
+         campaign composition helpers ScenarioTraceDiagnostics uses, the model factory and grid
+         placement the battle probes use, and the collection that serializes facts using
+         process-wide state. The modules grant this project the same friend access as OnlyWar.Tests
+         (ModuleBoundaryEnforcementTests pins that). -->
+    <Compile Include="../../OnlyWar.Tests/Fixtures/TestGeneration.cs" Link="Fixtures/TestGeneration.cs" />
+
+    <Compile Include="../../OnlyWar.Tests/Fixtures/RulesDatabaseFixture.cs" Link="Fixtures/RulesDatabaseFixture.cs" />
+    <Compile Include="../../OnlyWar.Tests/Fixtures/TestModelFactory.cs" Link="Fixtures/TestModelFactory.cs" />
+    <Compile Include="../../OnlyWar.Tests/Fixtures/TestSkills.cs" Link="Fixtures/TestSkills.cs" />
+    <Compile Include="../../OnlyWar.Tests/Fixtures/BattleGridTestPlacement.cs" Link="Fixtures/BattleGridTestPlacement.cs" />
+    <Compile Include="../../OnlyWar.Tests/Fixtures/TestPersonnelComposition.cs" Link="Fixtures/TestPersonnelComposition.cs" />
+    <Compile Include="../../OnlyWar.Tests/SharedStateCollection.cs" Link="SharedStateCollection.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

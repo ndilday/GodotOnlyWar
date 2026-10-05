@@ -27,6 +27,10 @@ namespace OnlyWar.HeadlessTests;
 
 public class HeadlessBoundaryTests
 {
+    // The full suite and the opt-in diagnostics project (Tools/OnlyWar.Diagnostics), which links
+    // the suite's fixtures, are the only friends of a module that grants friend access at all.
+    private static readonly string[] TestSuiteFriends = ["OnlyWar.Diagnostics", "OnlyWar.Tests"];
+
     [Fact]
     public void AssembliesHaveOnlyTheirAllowedProductionDependencies()
     {
@@ -88,18 +92,18 @@ public class HeadlessBoundaryTests
     }
 
     [Fact]
-    public void ProductionAssembliesExposeOnlyTheFullSuiteFriend()
+    public void ProductionAssembliesExposeOnlyTheTestSuiteFriends()
     {
-        AssertFriends(typeof(Coordinate).Assembly, ["OnlyWar.Tests"]);
-        AssertFriends(typeof(BattleSquadFactory).Assembly, ["OnlyWar.Tests"]);
-        AssertFriends(typeof(CampaignApplication).Assembly, ["OnlyWar.Tests"]);
-        AssertFriends(typeof(FactionStrategyController).Assembly, ["OnlyWar.Tests"]);
-        AssertFriends(typeof(OnlyWar.Battles.BattleTurnResolver).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(Coordinate).Assembly, TestSuiteFriends);
+        AssertFriends(typeof(BattleSquadFactory).Assembly, TestSuiteFriends);
+        AssertFriends(typeof(CampaignApplication).Assembly, TestSuiteFriends);
+        AssertFriends(typeof(FactionStrategyController).Assembly, TestSuiteFriends);
+        AssertFriends(typeof(OnlyWar.Battles.BattleTurnResolver).Assembly, TestSuiteFriends);
         AssertFriends(typeof(OnlyWar.Medical.Readiness.DutyReadinessPolicy).Assembly, []);
-        AssertFriends(typeof(OnlyWar.Persistence.Storage.SaveGameCatalog).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(OnlyWar.Persistence.Storage.SaveGameCatalog).Assembly, TestSuiteFriends);
         AssertFriends(typeof(OnlyWar.Runtime.Factories.RuntimeSoldierFactory).Assembly, []);
-        AssertFriends(typeof(OnlyWar.Operations.Missions.MissionContext).Assembly, ["OnlyWar.Tests"]);
-        AssertFriends(typeof(SectorBuilder).Assembly, ["OnlyWar.Tests"]);
+        AssertFriends(typeof(OnlyWar.Operations.Missions.MissionContext).Assembly, TestSuiteFriends);
+        AssertFriends(typeof(SectorBuilder).Assembly, TestSuiteFriends);
 
         AssertFriends(typeof(IRNG).Assembly, []);
         AssertFriends(typeof(RuntimeSoldier).Assembly, []);
@@ -258,7 +262,7 @@ public class HeadlessBoundaryTests
             if (!allowSqlite)
                 Assert.DoesNotContain("Sqlite", reference.Name, StringComparison.OrdinalIgnoreCase);
         }
-        AssertFriends(assembly, expectedFriends ?? ["OnlyWar.Tests"]);
+        AssertFriends(assembly, expectedFriends ?? TestSuiteFriends);
     }
 
     private static void AssertFriends(Assembly assembly, string[] expected)

@@ -9,12 +9,12 @@ namespace OnlyWar.Operations.StrategicCombat
         public const int MaxTacticalActors = 120;
         public const int MaxGeneratedSquads = 24;
 
-        // Battle-value anchors from the shipped rules database (OnlyWar.s3db), regenerated
-        // with the engine-faithful BattleValueCalculator model after the melee rework and
-        // defense-skill fix: used to keep strategic thresholds tied to real soldiers rather
-        // than the old implicit "10 BV per trooper" rule of thumb.
+        // Battle-value anchors from the shipped rules database (OnlyWar.s3db): used to keep strategic
+        // thresholds tied to real soldiers rather than the old implicit "10 BV per trooper" rule of
+        // thumb. Calibrated from simulated battles on 2026-10-05 (Design/Active/
+        // BattleValueCalibration.md, section 7.14): a Tactical Marine is worth about seventeen PDF
+        // troopers, not the 9 the old formula gave. Keep these equal to the database.
         public const long PdfTrooperBattleValue = 5;
-        public const long TacticalMarineBattleValue = 9;
 
         // These strategic thresholds retain the pre-recalculation unit scale. BattleValues are
         // deliberately compressed to that same scale so garrison growth, force pools, and

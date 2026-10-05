@@ -56,7 +56,15 @@ namespace OnlyWar.Operations.Missions
                 ? "Ambush Hidden Cell"
                 : Humanize(missionType.ToString());
 
-        public static string FormatRecommendedForce(Mission mission, int currentWeek)
+        /// <summary>
+        /// The "Recommended force" line. The squad count comes from the player's own squads that
+        /// could be committed (see <see cref="AmbushMissionSizing.RecommendSquads"/>); how precise
+        /// the line is allowed to be still depends only on how well the target is known.
+        /// </summary>
+        public static string FormatRecommendedForce(
+            Mission mission,
+            int currentWeek,
+            AmbushForceAvailability availability)
         {
             if (mission == null) return null;
             FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
@@ -65,10 +73,21 @@ namespace OnlyWar.Operations.Missions
             IntelLevel level = belief?.Level ?? IntelLevel.Rumor;
             long target = mission.TargetBattleValue
                 ?? AmbushMissionSizing.EstimateLegacyTargetBattleValue(mission.MissionSize);
-            long squads = AmbushMissionSizing.RecommendedMinimumSquads(target);
+            SquadRecommendation recommendation =
+                AmbushMissionSizing.RecommendSquads(target, availability);
+            long squads = recommendation.Squads;
             string unit = squads == 1 ? "squad" : "squads";
-            if (FactionRelationshipService.IsImperial(
-                mission.RegionFaction?.PlanetFaction?.Faction))
+            bool imperial = FactionRelationshipService.IsImperial(
+                mission.RegionFaction?.PlanetFaction?.Faction);
+
+            // Whatever the intel level, no estimate of the target brings it within reach of the
+            // squads on hand, so the useful statement is the shortfall. A rumor still has no
+            // estimate to compare.
+            if (recommendation.ExceedsAvailable && (imperial || level >= IntelLevel.Suspected))
+            {
+                return $"Recommended force: more than your {squads:N0} available {unit}";
+            }
+            if (imperial)
             {
                 return $"Recommended force: {squads:N0} {unit}";
             }

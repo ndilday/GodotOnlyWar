@@ -33,8 +33,13 @@ public class BattleAbandonedWoundedTests
     // own MOS training, weapons, armour and BattleValue, so the fight produces real wounds.
     private const int TyranidFactionId = 2;
     private const int TermagauntSquadTemplateId = 18;
-    private const long TermagauntBroodBudget = 90L; // 15 gaunts — enough casualties that some
-                                                    // go down maimed rather than dead.
+    // 15 gaunts — enough casualties that some go down maimed rather than dead. Sized by COUNT; the
+    // BV budget is read from the gaunt template so a BattleValue recalibration cannot shrink it.
+    private const int TermagauntBroodSize = 15;
+
+    private static long TermagauntBroodBudget(Faction tyranids) =>
+        TermagauntBroodSize * (long)tyranids.SquadTemplates[TermagauntSquadTemplateId]
+            .Elements.First().SoldierTemplate.BattleValue;
     private const int PdfInfantrySquadTemplateId = 34;
     // Engagement scoring and movement changes shift this seeded battle's winner (most recently
     // Phase 3 of Design/Reference/BattleLogic.md, which removed the arrival-time
@@ -90,7 +95,7 @@ public class BattleAbandonedWoundedTests
             tyranids,
             TermagauntSquadTemplateId,
             "Termagaunt Brood",
-            TermagauntBroodBudget,
+            TermagauntBroodBudget(tyranids),
             entityIds);
         // The live rosters lose their casualties as the battle runs, so record who started.
         List<int> broodStartingIds = brood.Soldiers.Select(s => s.Soldier.Id).ToList();

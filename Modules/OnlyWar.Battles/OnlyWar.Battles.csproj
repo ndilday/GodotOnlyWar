@@ -7,5 +7,6 @@
     <ProjectReference Include="../OnlyWar.Runtime/OnlyWar.Runtime.csproj" />
     <Using Include="OnlyWar.Abstractions" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.Diagnostics" />
   </ItemGroup>
 </Project>

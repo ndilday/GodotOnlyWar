@@ -13,7 +13,7 @@ using OnlyWar.Domain.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
-namespace OnlyWar.Tests.Turns;
+namespace OnlyWar.Diagnostics.Turns;
 
 // Throwaway balance-diagnostic (NOT a correctness test): generate the opening "Promised World"
 // scenario across several seeds, snapshot the board the player inherits, then run each sector

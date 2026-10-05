@@ -1,5 +1,6 @@
 using OnlyWar.Domain;
 using OnlyWar.Domain.Missions;
+using OnlyWar.Operations.Missions.Ambush;
 using OnlyWar.Operations.Orders;
 using OnlyWar.Operations.Planetary;
 using OnlyWar.Medical.Readiness;
@@ -28,6 +29,7 @@ namespace OnlyWar.Application;
 internal sealed class OperationsReadContext
 {
     private readonly Sector _sector;
+    private readonly GameRulesData _rules;
 
     internal Date CurrentDate { get; }
     internal int CurrentWeek => CurrentDate?.GetTotalWeeks() ?? 0;
@@ -52,11 +54,13 @@ internal sealed class OperationsReadContext
 
     internal OperationsReadContext(
         Sector sector,
+        GameRulesData rules,
         Date currentDate,
         IReadinessDecisions readiness,
         IPersonnelAvailabilityQueries personnel)
     {
         _sector = sector ?? throw new ArgumentNullException(nameof(sector));
+        _rules = rules ?? throw new ArgumentNullException(nameof(rules));
         CurrentDate = currentDate ?? throw new ArgumentNullException(nameof(currentDate));
         Readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
         Personnel = personnel ?? throw new ArgumentNullException(nameof(personnel));
@@ -96,6 +100,25 @@ internal sealed class OperationsReadContext
         Order contextOrder) =>
         RegionalOrderEligibilityService.Build(
             _sector, region, Readiness, mission, contextOrder);
+
+    /// <summary>
+    /// The squads the player could commit to <paramref name="mission"/> from this region, valued
+    /// for the "Recommended force" line. Availability is exactly the order workspace's own
+    /// eligibility (the same squads the force tree offers for this mission), plus any squad already
+    /// on <paramref name="contextOrder"/>. The reference squad is the chapter's standard tactical
+    /// squad template, read from the rules data.
+    /// </summary>
+    internal AmbushForceAvailability BuildForceAvailability(
+        Region region,
+        AvailableMission mission,
+        Order contextOrder = null) =>
+        new(BuildEligibility(region, mission, contextOrder).Groups
+                .SelectMany(group => group.Candidates)
+                .Where(candidate => SpecialistAvailability.IsMissionSquadFormation(candidate.Squad))
+                .DistinctBy(candidate => candidate.Squad.Id)
+                .Select(candidate => AmbushMissionSizing.SquadBattleValue(candidate.Squad))
+                .ToList(),
+            AmbushMissionSizing.FullStrengthBattleValue(_rules.ChapterDoctrine?.TacticalSquad));
 
     internal Order FindEquivalentOrder(
         Region region,

@@ -67,6 +67,7 @@ public sealed class CampaignApplicationContext
         }
         OperationsRead = new OperationsReadContext(
             session.Sector,
+            session.Rules,
             session.CurrentDate,
             Services.Readiness.Decisions,
             Services.Operations.Availability);

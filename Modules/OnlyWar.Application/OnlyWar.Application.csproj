@@ -81,5 +81,6 @@
     <Using Include="OnlyWar.Runtime.Random" />
     <Using Include="OnlyWar.Runtime.WorldGeometry" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.Diagnostics" />
   </ItemGroup>
 </Project>

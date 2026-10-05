@@ -35,11 +35,16 @@ public class BattleMoraleResolverTests
     // (TestModelFactory.MarineTemplate) do NOT: they have empty MosTraining (nobody can shoot)
     // and a nominal BattleValue, which silently breaks the morale force-context math.
     private const int TyranidFactionId = 2;
-    // Termagaunt Squad: 10-30 Devourer gaunts in 5mm chitin, BattleValue 6, Ego 8 — the exact
-    // gaunt case MoraleConstants' hand-calculation is written around, and leaderless (no
-    // sergeant), so it gets no LeaderThresholdBonus.
+    // Termagaunt Squad: 10-30 Devourer gaunts in 5mm chitin, Ego 8 — the exact gaunt case
+    // MoraleConstants' hand-calculation is written around, and leaderless (no sergeant), so it gets
+    // no LeaderThresholdBonus. The brood is sized by COUNT; its BV budget is read from the gaunt
+    // template, so recalibrating BattleValue cannot shrink it below the squad's minimum.
     private const int TermagauntSquadTemplateId = 18;
-    private const long TermagauntBroodBudget = 60L; // 10 gaunts
+    private const int TermagauntBroodSize = 10;
+
+    private static long TermagauntBroodBudget(Faction tyranids) =>
+        TermagauntBroodSize * (long)tyranids.SquadTemplates[TermagauntSquadTemplateId]
+            .Elements.First().SoldierTemplate.BattleValue;
     // PDF Infantry Squad: a fixed 1 sergeant + 9 autogun troopers, BattleValue 5, Ego 10.
     private const int PdfInfantrySquadTemplateId = 34;
     // Four platoons (40 men, 200 BV) against the 60 BV brood: enough massed autogun fire to
@@ -50,9 +55,9 @@ public class BattleMoraleResolverTests
     [Fact]
     public void LowEgoSquadUnderSustainedFire_RoutsAndBattleEndsInRout()
     {
-        // A leaderless Termagaunt brood (10 gaunts, 60 BV) advances across open ground into
-        // massed autogun fire from four PDF platoons (40 men, 200 BV). The gaunts are both
-        // outgunned in BattleValue and locally outnumbered 4:1, and they take the casualties, so
+        // A leaderless Termagaunt brood (10 gaunts) advances across open ground into massed
+        // autogun fire from four PDF platoons (40 men). The gaunts are locally outnumbered 4:1
+        // and they take the casualties, so
         // the §5.2 context multiplier climbs and morale must break them (Routing, SquadRouted
         // event) rather than let them close and swarm the line. The PDF's Avoid aggression then
         // declines pursuit, so the routed side disengages and the battle records the typed Rout
@@ -70,7 +75,7 @@ public class BattleMoraleResolverTests
             tyranids,
             TermagauntSquadTemplateId,
             "Termagaunt Brood",
-            TermagauntBroodBudget,
+            TermagauntBroodBudget(tyranids),
             entityIds);
         List<BattleSquad> platoons = Enumerable.Range(0, PdfPlatoonCount)
             .Select(i => CreateNpcSquad(

@@ -162,6 +162,10 @@ ahead of the path breaks first-token matching.
   ~8s on the session's first run, which is start-up and not the tests). Every
   filter below is written against `OnlyWar.Tests` and the headless project runs alongside
   it regardless, which is why two "Passed!" lines come back per invocation.
+- The Battle Value calibration tools (duel, ladder, gauntlet and the probit fitter) are a separate
+  project, `Tools/OnlyWar.Diagnostics` (since 2026-10-04), not part of the correctness suite: run
+  them with `dotnet test Tools\OnlyWar.Diagnostics ...`, and see its README for the `RUN_*`
+  switches. Its only always-on tests are the fitter's (`ProbitFitTests`, under a second).
 - The suite **splits cleanly in two**, and as of 2026-09-20 it is `Category!=Slow` at 3177
   and `Category=Slow` at **13 tests**, measured on a machine the user was working on
   (7m45s for the slow half, 42s for the fast one — counts only, those clocks say more about
@@ -176,7 +180,10 @@ ahead of the path breaks first-token matching.
   two `ScenarioTraceDiagnostics` entries, which return in microseconds unless
   `RUN_SCENARIO_TRACE=1` is set, and — the 13th, added between 2026-09-19 and 2026-09-20 —
   `GovernanceHierarchyTests.Governance_IsDeterministicForSeed`, which the next two bullets
-  used to describe as the untagged test that dominated the fast half.
+  used to describe as the untagged test that dominated the fast half. **On 2026-10-04 the two
+  `ScenarioTraceDiagnostics` entries and the two `ActivePursuitScaleDiagnosticsTests` entries
+  (both opt-in, both tagged `Slow`) moved to `Tools/OnlyWar.Diagnostics`**, so they no longer
+  count in this suite's slow half (it ran 16 on 2026-10-03, so expect 12).
 - Per-test durations from a TRX of a PARALLEL run are inflated by contention between the
   tests themselves — the three `ScenarioBuilderTests` of 2026-08-08 reported 1m53s+1m50s+22s
   inside the full run and totalled 1m17s alone. Rank with them; never size with them.
@@ -233,9 +240,12 @@ ahead of the path breaks first-token matching.
   to what it proves.
 - While iterating, `--filter "FullyQualifiedName~OnlyWar.Tests.Battles"` (1682 tests, ~4s)
   is still the fastest useful signal — it tripled in count and got faster.
-- Add `&Category!=Slow` to an area filter. `Generation` (6), `Data` (4) and `Turns` (2)
-  carry every `Slow` test between them, and an area name alone will pull them in.
-- Run `ScenarioTraceDiagnostics` only when asked, with `-e RUN_SCENARIO_TRACE=1`. Narrow it
+- Add `&Category!=Slow` to an area filter. `Generation` (6), `Data` (4) and, until
+  2026-10-04, `Turns` (2, the scenario traces, now moved out) carry every `Slow` test between
+  them, and an area name alone will pull them in.
+- Run `ScenarioTraceDiagnostics` only when asked. It now lives in `Tools/OnlyWar.Diagnostics`:
+  `dotnet test Tools\OnlyWar.Diagnostics --filter "FullyQualifiedName~ScenarioTraceDiagnostics"
+  -e RUN_SCENARIO_TRACE=1`. Narrow it
   with `-e SCENARIO_TRACE_SEEDS=1` — seed 1 alone is ~17.5 min (2026-08-02), all eight
   seeds far longer. Traces land in `%TEMP%\GodotOnlyWar\scenario-trace\seed-<n>.txt` at
   `GameLogLevel.Debug`; read the trace rather than trusting the pass/fail, and grep

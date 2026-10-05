@@ -660,6 +660,98 @@ public class PlanetaryOperationsServiceTests
             Assert.Single(view.ActiveOrders).Tooltip);
     }
 
+    // The recommendation counts the player's own squads, strongest first. Test marines are worth 2
+    // BV each, so a five-man squad is 10 and a six-man squad is 12. The weaker squad is added first,
+    // so counting in roster order would need two squads for a 12 BV target and strongest-first one.
+    [Theory]
+    [InlineData(12L, "Recommended force: 1 squad")]
+    [InlineData(13L, "Recommended force: 2 squads")]
+    [InlineData(22L, "Recommended force: 2 squads")]
+    [InlineData(23L, "Recommended force: more than your 2 available squads")]
+    public void RecommendedForce_CountsAvailableSquadsStrongestFirst(
+        long targetBattleValue, string expected)
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction target = AddLocatedCult(fixture, region, population: 2_000);
+        AddPlayerSquad(fixture, region, "Weaker Squad", members: 5, withLeader: true);
+        AddPlayerSquad(fixture, region, "Stronger Squad", members: 6, withLeader: true);
+        Mission special = new(MissionType.Ambush, target, missionSize: 1, targetBattleValue);
+        region.SpecialMissions.Add(special);
+
+        Assert.Equal(expected, RecommendedForceOf(fixture, region, special));
+    }
+
+    // A squad that is already on another order cannot be committed, so the recommendation must not
+    // count it: it is exactly the availability the order workspace's force tree applies.
+    [Fact]
+    public void RecommendedForce_IgnoresSquadsAlreadyCommittedElsewhere()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction target = AddLocatedCult(fixture, region, population: 2_000);
+        AddPlayerSquad(fixture, region, "Free Squad", members: 5, withLeader: true);
+        Squad busy = AddPlayerSquad(fixture, region, "Busy Squad", members: 9, withLeader: true);
+        fixture.Sector.AddNewOrder(new Order(
+            [busy], true, false, Aggression.Normal,
+            new Mission(MissionType.Patrol, target, missionSize: 0)));
+        Mission special = new(MissionType.Ambush, target, missionSize: 1, targetBattleValue: 11);
+        region.SpecialMissions.Add(special);
+
+        // Free Squad alone is worth 10; had Busy Squad (18) been counted the answer would be one squad.
+        Assert.Equal(
+            "Recommended force: more than your 1 available squad",
+            RecommendedForceOf(fixture, region, special));
+    }
+
+    // With nothing to commit there is no squad to count, so the target is measured in the chapter's
+    // standard tactical squad at full strength, read from the rules data.
+    [Fact]
+    public void RecommendedForce_WithNoAvailableSquads_UsesTheRulesTacticalSquad()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction target = AddLocatedCult(fixture, region, population: 2_000);
+        GameRulesData rules = fixture.Rules
+            ?? OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(
+                RulesDatabaseFixture.DatabasePath);
+        long reference = rules.ChapterDoctrine.TacticalSquad.BattleValue;
+        long targetBattleValue = reference * 3 + 1;
+        Mission special = new(
+            MissionType.Ambush, target, missionSize: 1, targetBattleValue);
+        region.SpecialMissions.Add(special);
+
+        Assert.Equal(
+            "Recommended force: 4 squads",
+            RecommendedForceOf(fixture, region, special));
+    }
+
+    // Located intel, so the line names an exact squad count rather than a range. The other intel
+    // levels are covered in AmbushForceRecommendationTests, where the observer's belief is the only
+    // one in play.
+    private static RegionFaction AddLocatedCult(
+        SectorSimulationFixture fixture, Region region, long population)
+    {
+        RegionFaction cult = fixture.AddPublicCult(0, population, organization: 100);
+        fixture.DefaultPlanetFaction.SeedTargetBelief(
+            region,
+            cult.PlanetFaction.Faction,
+            evidence: 6f,
+            estimatedPopulation: population,
+            estimatedMilitaryStrength: population,
+            evidenceWeek: 0);
+        return cult;
+    }
+
+    private static string RecommendedForceOf(
+        SectorSimulationFixture fixture, Region region, Mission special)
+    {
+        AvailableMission available = MissionAvailability.GetAvailableMissions(region, region)
+            .Single(option => option.SpecialMission?.Id == special.Id);
+        return Projections(fixture).QueryOrders(region.Id).SpecialMissions
+            .Single(option => option.Key == available.IdentityKey).RecommendedForce;
+    }
+
     [Fact]
     public void OrderMutation_LiveAggressionAndSpecialistAttachmentRoundTrip()
     {

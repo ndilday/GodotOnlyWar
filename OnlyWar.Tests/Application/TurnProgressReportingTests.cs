@@ -51,8 +51,15 @@ public class TurnProgressReportingTests
             new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
         Squad pdf = SquadFactory.GenerateSquad(
             imperial.SquadTemplates[PdfInfantrySquadTemplateId], random, entityIds, "PDF Platoon");
+        // Fifteen gaunts, budgeted from the gaunt template's own BattleValue so a recalibration
+        // cannot push the budget below the squad's minimum size.
+        SquadTemplate broodTemplate = tyranids.SquadTemplates[TermagauntSquadTemplateId];
         Squad brood = SquadFactory.GenerateSquadWithinBudget(
-            tyranids.SquadTemplates[TermagauntSquadTemplateId], 90L, random, entityIds, "Brood");
+            broodTemplate,
+            15L * broodTemplate.Elements.First().SoldierTemplate.BattleValue,
+            random,
+            entityIds,
+            "Brood");
         Assert.NotNull(pdf);
         Assert.NotNull(brood);
 

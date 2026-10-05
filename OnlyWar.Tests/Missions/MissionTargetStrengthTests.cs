@@ -194,10 +194,13 @@ public class MissionTargetStrengthTests
         Assert.Equal(
             10 * StrategicCombatRules.PdfTrooperBattleValue,
             ambush.TargetBattleValue);
+        // The mission is sized to a real target, not to nothing: with no squads to count, a
+        // reference squad worth more than the whole target recommends exactly one squad.
         Assert.Equal(
             1,
-            AmbushMissionSizing.RecommendedMinimumSquads(
-                ambush.TargetBattleValue.Value));
+            AmbushMissionSizing.RecommendSquads(
+                ambush.TargetBattleValue.Value,
+                new AmbushForceAvailability([], ReferenceSquadBattleValue: 100)).Squads);
     }
 
     // The magnitude still has to cap the size: a rolled size of 4 stands against a hive fleet but is
@@ -220,12 +223,14 @@ public class MissionTargetStrengthTests
             (long)System.Math.Pow(10, expectedSize)
             * StrategicCombatRules.PdfTrooperBattleValue;
         Assert.Equal(expectedTargetBattleValue, ambush.TargetBattleValue);
+        // The recommendation tracks the generated target: a reference squad of 100 BV needs
+        // ceil(target / 100) squads, so the size-4 hive fleet asks for far more than the size-2 cell.
+        const long referenceSquadBattleValue = 100;
         Assert.Equal(
-            (expectedTargetBattleValue
-             + AmbushMissionSizing.ReferenceSquadBattleValue - 1)
-            / AmbushMissionSizing.ReferenceSquadBattleValue,
-            AmbushMissionSizing.RecommendedMinimumSquads(
-                ambush.TargetBattleValue.Value));
+            (expectedTargetBattleValue + referenceSquadBattleValue - 1) / referenceSquadBattleValue,
+            AmbushMissionSizing.RecommendSquads(
+                ambush.TargetBattleValue.Value,
+                new AmbushForceAvailability([], referenceSquadBattleValue)).Squads);
     }
 
     // GenerateAssassinationMission has the same shape over Population. A horde's Population is

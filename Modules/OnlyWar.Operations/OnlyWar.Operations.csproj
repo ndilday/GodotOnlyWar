@@ -28,5 +28,6 @@
     <Using Include="OnlyWar.Runtime.Factories" />
     <Using Include="OnlyWar.Runtime.Logging" />
     <InternalsVisibleTo Include="OnlyWar.Tests" />
+    <InternalsVisibleTo Include="OnlyWar.Diagnostics" />
   </ItemGroup>
 </Project>

@@ -18,7 +18,7 @@ using OnlyWar.Tests.Fixtures;
 
 using Xunit;
 
-namespace OnlyWar.Tests.Battles;
+namespace OnlyWar.Diagnostics.Battles;
 
 /// <summary>
 /// Opt-in balance diagnostic, not a correctness test: one boltgun marine against a few lasgun PDF

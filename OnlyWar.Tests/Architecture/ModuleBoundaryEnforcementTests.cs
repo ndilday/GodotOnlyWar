@@ -310,6 +310,9 @@ public sealed class ModuleBoundaryEnforcementTests
             .Where(path => !IsBuildArtifact(path))
             .ToArray();
 
+        // The opt-in diagnostics project (Tools/OnlyWar.Diagnostics) links the test suite's fixtures,
+        // so it gets exactly the friend access the test suite has; it ships nothing.
+        string[] testFriends = ["OnlyWar.Diagnostics", "OnlyWar.Tests"];
         foreach (string projectFile in projectFiles)
         {
             string project = Path.GetFileNameWithoutExtension(projectFile);
@@ -321,7 +324,7 @@ public sealed class ModuleBoundaryEnforcementTests
                 "OnlyWar.Domain" or
                 "OnlyWar.Generation" or
                 "OnlyWar.Operations" or
-                "OnlyWar.Persistence" => ["OnlyWar.Tests"],
+                "OnlyWar.Persistence" => testFriends,
                 "OnlyWar.Medical" or
                 "OnlyWar.Runtime" => [],
                 _ when project.EndsWith(".Abstractions", StringComparison.Ordinal) => [],
@@ -335,6 +338,7 @@ public sealed class ModuleBoundaryEnforcementTests
                 + $"expected [{string.Join(", ", expected)}].");
         }
 
+        // The Godot host assembly: the diagnostics project does not reference it.
         Assert.Equal(
             ["OnlyWar.Tests"],
             FriendAssemblies(typeof(BattleReplaySummaryBuilder).Assembly));

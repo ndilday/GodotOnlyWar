@@ -732,9 +732,9 @@ internal sealed class OperationsScreenProjector
                 MissionIconKeys.ForOrder(order.Mission),
                 BuildMissionTooltip(order, all))).ToList(),
             all.Where(option => option.Kind != MissionAvailabilityKind.Special)
-                .Select(option => BuildMissionOption(option, active)).ToList(),
+                .Select(option => BuildMissionOption(target, option, active)).ToList(),
             all.Where(option => option.Kind == MissionAvailabilityKind.Special)
-                .Select(option => BuildMissionOption(option, active)).ToList(),
+                .Select(option => BuildMissionOption(target, option, active)).ToList(),
             forceTree,
             BuildEditor(selectedOrder, specialists),
             selectedOrder?.Id,
@@ -759,16 +759,31 @@ internal sealed class OperationsScreenProjector
             .ToList() ?? [];
 
     private MissionOptionView BuildMissionOption(
-        AvailableMission mission, IReadOnlyList<Order> active) =>
-        new(mission.IdentityKey,
+        Region target, AvailableMission mission, IReadOnlyList<Order> active)
+    {
+        // The squads already on this mission's order are counted by its recommendation, exactly as
+        // the active-order row for the same mission counts them, so the two never disagree.
+        Order existing = active.FirstOrDefault(order => mission.RepresentsOrder(order));
+        return new(mission.IdentityKey,
             mission.Label,
             MissionIconKeys.ForAvailable(mission),
-            BuildMissionTooltip(mission),
+            BuildMissionTooltip(target, mission, existing),
             mission.Kind == MissionAvailabilityKind.Special,
-            mission.SpecialMission == null ? null
-                : SpecialMissionPresentation.FormatRecommendedForce(
-                    mission.SpecialMission, CurrentWeek),
-            active.Any(order => mission.RepresentsOrder(order)));
+            RecommendedForce(target, mission, existing),
+            existing != null);
+    }
+
+    // The squads counted are those this region's order workspace would offer for the mission, so
+    // the recommendation and the force tree always agree about what is available. A squad already
+    // on the order being described still counts: it is committed, not unavailable.
+    private string RecommendedForce(
+        Region target, AvailableMission mission, Order contextOrder = null) =>
+        mission?.SpecialMission == null
+            ? null
+            : SpecialMissionPresentation.FormatRecommendedForce(
+                mission.SpecialMission,
+                CurrentWeek,
+                _read.BuildForceAvailability(target, mission, contextOrder));
 
     private static OrderEditorView BuildEditor(
         Order order, IReadOnlyList<SpecialistOption> specialists)
@@ -811,32 +826,32 @@ internal sealed class OperationsScreenProjector
                 candidate.Exclusion, candidate.IsAssignedToContext)).ToList();
     }
 
-    private string BuildMissionTooltip(AvailableMission mission)
+    private string BuildMissionTooltip(
+        Region target, AvailableMission mission, Order contextOrder = null)
     {
         if (mission?.SpecialMission == null) return mission?.Label ?? "";
-        return $"{mission.Label}\n{SpecialMissionPresentation.FormatRecommendedForce(
-            mission.SpecialMission, CurrentWeek)}";
+        return $"{mission.Label}\n{RecommendedForce(target, mission, contextOrder)}";
     }
 
     private string BuildMissionTooltip(Order order, IReadOnlyList<AvailableMission> options)
     {
+        Region region = order?.Mission?.RegionFaction?.Region;
         AvailableMission mission = options?.FirstOrDefault(
             option => option.RepresentsOrder(order));
-        if (mission != null) return BuildMissionTooltip(mission);
+        if (mission != null) return BuildMissionTooltip(region, mission, order);
 
         // Keep the active row useful if an already-created order is no longer represented by
         // the current availability snapshot (for example, after intelligence changes).
         Mission orderMission = order?.Mission;
         if (orderMission == null) return "";
-        Region region = orderMission.RegionFaction?.Region;
         bool isSpecial = region?.SpecialMissions?.Any(
             candidate => candidate?.Id == orderMission.Id) == true;
         if (!isSpecial) return MissionAvailability.GetOrderLabel(orderMission);
 
-        return BuildMissionTooltip(new AvailableMission(
+        return BuildMissionTooltip(region, new AvailableMission(
             SpecialMissionPresentation.Format(orderMission, region),
             MissionAvailabilityKind.Special,
-            orderMission));
+            orderMission), order);
     }
 
     // ---------------------------------------------------------------- dossier cards

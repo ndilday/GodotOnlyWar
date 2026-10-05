@@ -18,7 +18,7 @@ using OnlyWar.Domain.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
-namespace OnlyWar.Tests.Battles;
+namespace OnlyWar.Diagnostics.Battles;
 
 /// <summary>
 /// Opt-in scale probes for the active-pursuit invariant. These use the same direct
