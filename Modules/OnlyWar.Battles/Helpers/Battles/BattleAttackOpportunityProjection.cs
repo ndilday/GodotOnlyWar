@@ -746,7 +746,8 @@ internal sealed class BattleAttackOpportunityProjection
             : 0;
         if (aimBonus.HasValue)
         {
-            modifier += weapon.Template.Accuracy + aimBonus.Value + 1;
+            modifier += RangedTargetSelector.AimAccuracy(shooter, weapon.Template)
+                + aimBonus.Value + 1;
         }
         return _ranged.EvaluateRangedTarget(
             shooter,

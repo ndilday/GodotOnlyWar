@@ -258,6 +258,10 @@ public class BattleTurnResolverWithdrawalTests
             Array.Empty<ValueTuple<BaseSkill, float>>(),
             battleValue: 1);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_051, zeroValueHuman);
+        // Tough enough to live through the first turn's hits. The pursuer's gun genuinely hits at
+        // 400 yards (its bearer has the skill the engine requires for its Accuracy), and a frail
+        // target died on turn one, before the withdrawal was even ordered.
+        ((Soldier)withdrawing.Soldiers[0].Soldier).Constitution = 150;
         BattleSquad pursuer = CreateSquad(
             "Pursuer",
             73_052,
@@ -626,6 +630,11 @@ public class BattleTurnResolverWithdrawalTests
         soldier.ClearReadiedRangedWeapons();
         soldier.RangedWeapons.Add(longGun);
         soldier.ReadyWeapon(longGun);
+        // The engine caps an aimed shot's Accuracy at the shooter's skill with the weapon
+        // (ShootAction.CalculateToHitModifiers), and since 2026-10-09 the planner does too. A
+        // default soldier's skill is far below 25, so the gun's Accuracy was a promise the engine
+        // never kept; the bearer needs the skill to use it for the shot to be genuinely worthwhile.
+        ((Soldier)soldier.Soldier).Dexterity = 30;
     }
 
     private static BattleTurnResolver CreateResolver(

@@ -304,11 +304,34 @@ namespace OnlyWar.Battles
                 takeOutTerms);
         }
 
-        private static PairRemovalTerm BuildPairRemovalTerm(
+        private PairRemovalTerm BuildPairRemovalTerm(
             BattleSoldier shooter,
             RangedTargetEvaluation evaluation)
         {
             RangedWeaponTemplate template = evaluation.Weapon.Template;
+            // The aimed shots the shot planner weighs against firing now, through the same
+            // evaluator and with the same bonus (RangedTargetSelector.EvaluateFireTiming), so each
+            // carries the burst the planner would really choose for it. The term picks among them
+            // with the planner's own rule at every range (PairRemovalTerm.SustainedRateAt).
+            List<AimPlan> aimPlans = [];
+            if (!template.IsTemplateWeapon)
+            {
+                for (int bonus = 0; bonus <= RangedTargetSelector.FullAimBonusTurns; bonus++)
+                {
+                    RangedTargetEvaluation aimed = _ranged.EvaluateRangedTarget(
+                        shooter,
+                        evaluation.Target,
+                        evaluation.Weapon,
+                        evaluation.Range,
+                        RangedTargetSelector.AimAccuracy(shooter, template) + bonus + 1f,
+                        evaluation.TargetSpeed);
+                    aimPlans.Add(new AimPlan(aimed.PreRollHitTotal, aimed.ShotsToFire, bonus + 2));
+                }
+            }
+            RangedWeapon weapon = evaluation.Weapon;
+            int? fixedRounds = weapon.IsUnlimited || weapon.IsSelfRegenerating
+                ? 0
+                : weapon.IsConsumableItem ? 1 : null;
             float effectiveArmor = (evaluation.Target.Armor?.Template.ArmorProvided ?? 0f)
                 * template.ArmorMultiplier;
             // Only a degrading weapon needs the K_loc vector. For a non-degrading weapon
@@ -332,7 +355,9 @@ namespace OnlyWar.Battles
                 GetBattleValue(evaluation.Target),
                 BattleModifiersUtil.GetEffectiveMaxRange(shooter.Soldier, template),
                 takeOutTerms,
-                template.IsTemplateWeapon ? null : template.Accuracy);
+                aimPlans,
+                RangedTargetSelector.AmmunitionScarcity(weapon),
+                fixedRounds);
         }
     }
 }

@@ -170,7 +170,7 @@ namespace OnlyWar.Battles
                 target,
                 weapon,
                 range,
-                weapon.Template.Accuracy + Math.Max(aim.Item3, FullAimBonusTurns) + 1);
+                AimAccuracy(soldier, weapon.Template) + Math.Max(aim.Item3, FullAimBonusTurns) + 1);
             return evaluation.Score > 0 && evaluation.HitProbability > StickyMinimumHitProbability;
         }
 
@@ -180,8 +180,8 @@ namespace OnlyWar.Battles
         /// Net(shot after j more aim turns, at the range projected j turns ahead) / (j + 1).
         /// <see cref="FireTiming.ShootNowValue"/> is the net value of firing now, which takes one
         /// turn. The planner fires when the second is at least the first, and a planned or stored aim
-        /// is priced at the prepared rate (<see cref="FireTiming.Readiness"/>) so the engagement
-        /// potential values aiming in the same currency as shooting. With no further aim possible
+        /// is priced at the prepared shot's gross removal per turn (<see cref="FireTiming.Readiness"/>)
+        /// so the engagement potential values aiming in the same currency as its forecast. With no further aim possible
         /// the prepared rate is <see cref="float.MinValue"/>, which always favours firing.
         ///
         /// <para>Net value charges each shot for the rounds it spends: Score − scarcity × (value of
@@ -235,7 +235,7 @@ namespace OnlyWar.Battles
                         break;
                     }
                     float modifier = -(aimWeapon.Template.Bulk * bulkMultiplier)
-                        + ((aimWeapon.Template.Accuracy + bonus + 1) * aimMultiplier);
+                        + ((AimAccuracy(soldier, aimWeapon.Template) + bonus + 1) * aimMultiplier);
                     prepared.Add((
                         _shotEvaluator.EvaluateRangedTarget(
                             soldier,
@@ -259,31 +259,66 @@ namespace OnlyWar.Battles
                 ? float.MinValue
                 : NetShotValue(shootNow, valuePerRound);
             float preparedRate = float.MinValue;
+            float preparedGrossRate = 0;
             foreach ((RangedTargetEvaluation shot, int turns) in prepared)
             {
-                preparedRate = Math.Max(preparedRate, NetShotValue(shot, valuePerRound) / turns);
+                float rate = NetShotValue(shot, valuePerRound) / turns;
+                if (rate > preparedRate)
+                {
+                    preparedRate = rate;
+                    preparedGrossRate = shot.Score / turns;
+                }
             }
-            return new FireTiming(shootNowValue, preparedRate);
+            return new FireTiming(shootNowValue, preparedRate, shootNow?.Score ?? 0, preparedGrossRate);
         }
 
         /// <summary>
-        /// The two sides of the aim-versus-shoot comparison, both in battle value per turn.
+        /// The weapon Accuracy an aimed shot adds for this shooter, as the engine applies it
+        /// (ShootAction.CalculateToHitModifiers): capped by the shooter's skill with the weapon. An
+        /// aimed shot's whole bonus is this + the aim turns + 1. The planner added the uncapped
+        /// Accuracy until 2026-10-09, which over-promised aiming to every shooter less skilled than
+        /// his weapon is accurate.
         /// </summary>
-        internal readonly record struct FireTiming(float ShootNowValue, float PreparedRate)
+        internal static float AimAccuracy(BattleSoldier shooter, RangedWeaponTemplate template) =>
+            Math.Min(
+                template.Accuracy,
+                shooter.Soldier.GetTotalSkillValue(template.RelatedSkill));
+
+        /// <summary>
+        /// The two sides of the aim-versus-shoot comparison, both in battle value per turn and net
+        /// of the round charge, and the gross removal per turn of each side's chosen shot.
+        /// </summary>
+        /// <para>The net values decide how the soldier fires (aim or shoot, how long to aim). The
+        /// readiness values are the GROSS removal per turn of the plan that decision picks, because
+        /// readiness is compared in the engagement potential with the exchange forecast's standing
+        /// rate, which is gross removal of the same plan (PairRemovalTerm.SustainedRateAt). Until
+        /// 2026-10-09 readiness was the net value: the round charge took about half of it, so a
+        /// standing turn was credited half what the forecast said it was worth, and every step
+        /// toward the enemy looked cheap (Neophyte Hybrids crept toward Shoota Boyz without firing;
+        /// Design/Active/BattleValueCalibration.md, 7.21).</para>
+        internal readonly record struct FireTiming(
+            float ShootNowValue,
+            float PreparedRate,
+            float ShootNowGross = 0,
+            float PreparedGrossRate = 0)
         {
             internal bool ShootNow => ShootNowValue >= PreparedRate;
 
             /// <summary>
-            /// Readiness (engagement-potential) value of a planned aim: the per-turn value of the
-            /// prepared shot, never negative. Nothing left to aim for, or a shot that removes
-            /// nothing, is worth nothing.
+            /// Readiness (engagement-potential) value of a planned aim: the gross removal per turn
+            /// of the prepared shot the planner prefers, never negative. Nothing left to aim for,
+            /// or a shot that removes nothing, is worth nothing.
             /// </summary>
-            internal float Readiness => Math.Max(0f, PreparedRate);
+            internal float Readiness =>
+                PreparedRate == float.MinValue ? 0f : Math.Max(0f, PreparedGrossRate);
 
             /// <summary>
-            /// Readiness of an aim already held: the best of cashing it now or continuing it.
+            /// Readiness of an aim already held: the gross value per turn of whichever the planner
+            /// would do with it, cash it now or continue it.
             /// </summary>
-            internal float StoredReadiness => Math.Max(0f, Math.Max(ShootNowValue, PreparedRate));
+            internal float StoredReadiness => ShootNow
+                ? Math.Max(0f, ShootNowGross)
+                : Readiness;
         }
 
         // TUNABLE: the ammunition, in magazines, at which a weapon's rounds count as free. Standard
@@ -466,7 +501,7 @@ namespace OnlyWar.Battles
                 target,
                 weapon,
                 projectedRange,
-                weapon.Template.Accuracy + FullAimBonusTurns + 1,
+                AimAccuracy(shooter, weapon.Template) + FullAimBonusTurns + 1,
                 quarrySpeed);
         }
 
@@ -823,7 +858,8 @@ namespace OnlyWar.Battles
                             && soldier.Aim?.Item1 == target.Soldier.Id
                             && soldier.Aim?.Item2.Template.Id == weapon.Template.Id)
                         {
-                            toHitModifier += weapon.Template.Accuracy + soldier.Aim.Value.Item3 + 1;
+                            toHitModifier += AimAccuracy(soldier, weapon.Template)
+                                + soldier.Aim.Value.Item3 + 1;
                         }
 
                         RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
@@ -1134,9 +1170,10 @@ namespace OnlyWar.Battles
 
                 float bulkAndAccMod = 0;
                 bulkAndAccMod -= weapon.Template.Bulk * bulkMultiplier;
-                // base accuracy bonus is the weapon's accuracy plus 1 for aiming making it an all-out attack
+                // base accuracy bonus is the weapon's accuracy (capped by skill, as the engine
+                // applies it) plus 1 for aiming making it an all-out attack
                 bulkAndAccMod += useAccuracy
-                    ? (weapon.Template.Accuracy + 1) * aimMultiplier
+                    ? (AimAccuracy(soldier, weapon.Template) + 1) * aimMultiplier
                     : 0;
                 RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
                     soldier,

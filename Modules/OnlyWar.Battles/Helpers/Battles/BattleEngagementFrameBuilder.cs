@@ -299,10 +299,15 @@ internal static class BattleEngagementFrameBuilder
         // comes out first-order low rather than O(step^2) low. peakRemovalFraction then feeds
         // BattleSquadPlanner.HasNoViableRangedOption, which is a threshold test, so a first-order
         // error there flips squads between engagement postures.
+        // Outgoing is converted into our currency before it is netted against what we lose; see
+        // EngagementCurrency. Until 2026-10-05 the raw difference let the ratio of the two
+        // factions' battle values place the standoff: a Neophyte Hybrid squad facing Scouts worth
+        // ten times as much per soldier found its "best exchange" at contact.
+        float rate = curves.EnemyValueRate;
         float chosen = Math.Clamp(
             RangedEffectivenessCurve.Argmax(
                 band,
-                range => curves.Outgoing.RemovalAt(range)
+                range => (rate * curves.Outgoing.RemovalAt(range))
                     - curves.Incoming.RemovalAt(range)
                     - (meleeThreat
                         / (1f + (Math.Max(0f, range - ContactGap) / speed)))),
@@ -334,6 +339,33 @@ internal static class BattleEngagementFrameBuilder
     /// floor. Recomputing it there cost a second full 50-sample sweep of the same curve for an
     /// answer that cannot have changed -- nothing between the two mutates the curve.
     /// </param>
+    /// <summary>
+    /// Diagnostics: the terms <see cref="CalculateEffectiveEngagementRange"/> maximizes, sampled
+    /// at the given ranges -- our outgoing removal converted to our currency, the opposing force's
+    /// return fire, and its melee arrival threat -- plus the band the argmax runs over. Null in the
+    /// degenerate cases.
+    /// </summary>
+    internal static (float Band, IReadOnlyList<(float Range, float Outgoing, float Incoming, float MeleeThreat)> Samples)?
+        DescribeEngagementCurve(
+            BattleSquad squad,
+            IReadOnlyCollection<BattleSquad> opponents,
+            float reach,
+            IReadOnlyList<float> ranges)
+    {
+        EngagementCurves curves = BuildEngagementCurves(squad, opponents, reach, true, out _);
+        if (curves == null) return null;
+        List<(float, float, float, float)> samples = [];
+        foreach (float range in ranges)
+        {
+            samples.Add((
+                range,
+                curves.EnemyValueRate * curves.Outgoing.RemovalAt(range),
+                curves.Incoming.RemovalAt(range),
+                curves.MeleeThreat / (1f + (Math.Max(0f, range - ContactGap) / curves.ClosingSpeed))));
+        }
+        return (curves.Band, samples);
+    }
+
     private sealed record EngagementCurves(
         RangedEffectivenessCurve Outgoing,
         RangedEffectivenessCurve Incoming,
@@ -344,7 +376,8 @@ internal static class BattleEngagementFrameBuilder
         float OpposingBattleValue,
         float OurBattleValue,
         int OurSoldierCount,
-        float OutgoingSaturationRange);
+        float OutgoingSaturationRange,
+        float EnemyValueRate);
 
     /// <param name="degenerateRange">
     /// What the caller must return when this yields null: <paramref name="reach"/> for "there is
@@ -436,7 +469,11 @@ internal static class BattleEngagementFrameBuilder
             battleValue,
             ourSoldiers.Sum(soldier => Math.Max(1, soldier.EffectiveBattleValue)),
             ourSoldiers.Count,
-            saturationRange);
+            saturationRange,
+            // The outgoing curve prices removal in THEIR representative value and the incoming
+            // curve in OURS; the same mean values the two curves were built on convert one into
+            // the other (EngagementCurrency).
+            EngagementCurrency.Rate(us.BattleValue, them.BattleValue));
     }
 
     // How close the two forces are when the shooting phase ends and the melee begins. Shared with
@@ -701,11 +738,15 @@ internal static class BattleEngagementFrameBuilder
         }
 
         float enemyCeiling = curves.OpposingBattleValue * removalShare * forceShare;
+        // The enemy side of the score (removal, its ceiling and the parsimony tilt, which is quoted
+        // on the opposing battle value) is in enemy currency; convert it before netting it against
+        // our losses. See EngagementCurrency.
+        float rate = curves.EnemyValueRate;
         float bestRange = lower;
         // An opening range at or inside contact buys no turns of approach at all, so its exchange
         // is zero and the parsimony tilt is all that is left of its score -- exactly what the
         // sequential loop returned for a gap that never cleared ContactGap.
-        float bestScore = -parsimony * lower;
+        float bestScore = -rate * parsimony * lower;
         // THE BREAK MUST LAND INSIDE OUR USEFUL BAND. Once this squad's share of the break loss is
         // met, the score above is flat in range except for the fire it takes, so every extra yard
         // looked free and the answer ran out to weapon reach -- but the enemy does not keep coming
@@ -735,9 +776,8 @@ internal static class BattleEngagementFrameBuilder
             float removedUs = ourCumulative[index]
                 - (floorIndex > 0 ? ourCumulative[floorIndex] : 0f);
             float range = ContactGap + (spacing * index);
-            float score = Math.Min(removedEnemy, enemyCeiling)
-                - Math.Min(removedUs, curves.OurBattleValue)
-                - (parsimony * range);
+            float score = (rate * (Math.Min(removedEnemy, enemyCeiling) - (parsimony * range)))
+                - Math.Min(removedUs, curves.OurBattleValue);
             // Strict >, scanning ascending: ties go to the SHORTER range, which is the tie-break
             // RangedEffectivenessCurve.Argmax gave and which ApproachRangeParsimony exists to make
             // meaningful.
@@ -1019,7 +1059,14 @@ internal static class BattleEngagementFrameBuilder
                 ? EngagementOptionKind.RunToward
                 : EngagementOptionKind.JogToward;
         }
-        if (distance < profile.PreferredBandLower - 1) return EngagementOptionKind.StepBack;
+        // Inside its reach a squad holds. There was a StepBack branch here, inside the band's lower
+        // edge (70% of the maximum weapon range), written when MaximumRange was a realistic reach.
+        // Since accuracy falloff limits range and MaximumRange became a 1,000-yard cap, that edge
+        // sat near 700 yards, so nearly every rifle squad defaulted to stepping back. The default
+        // only breaks ties between options the score cannot separate, and those were the squads
+        // losing a firefight at every range: PDF facing marines at 200 yards walked away a yard a
+        // turn, unable to shoot, until they routed (2026-10-10). Whether to open the range is a
+        // judgement the score makes; the default should not make it for the squad.
         return EngagementOptionKind.Hold;
     }
 

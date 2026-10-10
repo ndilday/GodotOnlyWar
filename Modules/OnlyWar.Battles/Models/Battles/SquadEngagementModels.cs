@@ -189,7 +189,9 @@ public sealed record EngagementOptionEvaluation(
     IReadOnlyList<PlannedSoldierAction> RootActions = null,
     float MoralePotentialValue = 0,
     float CommandPotentialValue = 0,
-    float AccessPotentialValue = 0);
+    // How much closing beats standing from the CURRENT state (EngagementPotential.Breakdown
+    // .CloseAdvantage). Positive means there is somewhere more useful to be.
+    float RootCloseAdvantage = 0);
 
 /// <summary>Pure Layer-2 result.  Declaration and action construction happen later.</summary>
 public sealed record SquadEngagementDecision(

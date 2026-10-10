@@ -118,7 +118,7 @@ namespace OnlyWar.Operations.Missions.Ambush
             {
                 Faction = enemyFaction.PlanetFaction.Faction,
                 // Intelligence-discovered ambushes persist this concrete budget when the opportunity
-                // is created. Legacy and non-special ambush orders retain the old execution-time roll.
+                // is created. A mission without one (a culling) rolls it here instead.
                 TargetBattleValue = targetBattleValue,
                 Profile = ForceCompositionProfile.AmbushForce
             };

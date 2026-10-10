@@ -394,7 +394,7 @@ namespace OnlyWar.Battles
             // with the range modifier left OUT so it can be added per sample.
             float baseHitTotal = soldier.Soldier.GetTotalSkillValue(template.RelatedSkill)
                 + 1f
-                + template.Accuracy
+                + RangedTargetSelector.AimAccuracy(soldier, template)
                 + BattleModifiersUtil.CalculateRateOfFireModifier(template.RateOfFire)
                 + BattleModifiersUtil.CalculateSizeModifier(target.Size)
                 - target.RangedEvasion;
@@ -402,16 +402,21 @@ namespace OnlyWar.Battles
             float effectiveArmor = target.Armor * template.ArmorMultiplier;
             float woundMultiplier = Math.Max(0.0001f, template.WoundMultiplier);
             // A single synthetic hit location, which is all the scalar representative profile
-            // supports: K = effectiveArmor + constitution/woundMultiplier is the damage that
-            // disables it, K_zero = effectiveArmor the damage at which it starts taking wounds at
-            // all. Same meaning as TakeOutLocationTerm's fields, so the shared evaluator applies.
+            // supports: a fresh location disabled by one Critical wound (ratio 1), so
+            // K = effectiveArmor + constitution/woundMultiplier is the damage that disables it in
+            // one hit, and the gap is one Critical's worth of Negligible wounds. Same meaning as
+            // TakeOutLocationTerm's fields, so the shared evaluator applies.
+            float damagePerRatio = Math.Max(0f, target.Constitution) / woundMultiplier;
             TakeOutLocationTerm[] locations =
             [
                 new TakeOutLocationTerm(
                     1f,
-                    effectiveArmor + (Math.Max(0f, target.Constitution) / woundMultiplier),
+                    effectiveArmor + damagePerRatio,
                     1f,
-                    effectiveArmor)
+                    effectiveArmor,
+                    effectiveArmor,
+                    damagePerRatio,
+                    RemovalMath.WoundCounterValue((uint)OnlyWar.Domain.Soldiers.WoundLevel.Critical))
             ];
             bool degrades = template.DoesDamageDegradeWithRange;
             return new WeaponCurve

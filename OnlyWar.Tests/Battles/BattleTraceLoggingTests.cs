@@ -59,13 +59,14 @@ public class BattleTraceLoggingTests
     [Fact]
     public void GrenadeThrow_EmitsGrenadeChoiceAndActionRecords()
     {
-        // The cluster scenario from GrenadePlannerTests: four frag-vulnerable bodies make the
+        // The cluster scenario from GrenadePlannerTests: six frag-vulnerable bodies make the
         // throw beat the rifle, so both the decision record and the action record must appear.
+        // (Six since 2026-10-06; see GrenadeBearer_ThrowsAtAClusterWithoutAiming.)
         BattleSquad shooters = CreateSquad("Grenadier", 76_100);
         BattleSoldier shooter = shooters.Soldiers[0];
         ArmWithRifleAndBeltGrenade(shooter);
         BattleSquad enemies = CreateSquad(
-            "Cluster", (76_110, 2), (76_111, 2), (76_112, 2), (76_113, 2));
+            "Cluster", (76_110, 2), (76_111, 2), (76_112, 2), (76_113, 2), (76_114, 2), (76_115, 2));
         foreach (BattleSoldier enemy in enemies.Soldiers)
         {
             MakeFragile(enemy, constitution: 10);
@@ -77,6 +78,8 @@ public class BattleTraceLoggingTests
         Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 76_111), false, 11, 0);
         Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 76_112), false, 10, 1);
         Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 76_113), false, 11, 1);
+        Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 76_114), false, 10, 2);
+        Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 76_115), false, 11, 2);
 
         List<string> log = [];
         List<IAction> shootActions = [];

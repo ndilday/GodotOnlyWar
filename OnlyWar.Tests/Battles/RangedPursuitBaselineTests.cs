@@ -173,20 +173,19 @@ public sealed class RangedPursuitBaselineTests
     }
 
     /// <summary>
-    /// A pursuer that cannot out-run its quarry earns no access value, whatever else the score
-    /// says: the arrival never happens, so there is no delay to buy out. This is the property
-    /// §5.2 records, restated here on the baseline rows so the matrix carries it.
+    /// A pursuer that can barely out-run its quarry, or cannot, must not see its score blow up as
+    /// the closing rate goes to zero (time to arrive divides by it). The arrival never happens at
+    /// equal speed, so it has nothing to buy.
     ///
-    /// <para>IT IS ASSERTED ON THE SIDEARM ROWS, NOT THE RIFLE ONES, and that is the correction
-    /// this fixture was rewritten for. Access is also zero for a squad already at the range it
-    /// wants, because there is no gap left to close, and every rifle row sits inside its desired
-    /// range — <c>EffectiveEngagementRange</c> is 711 yards against a separation of 400. Reading
-    /// those zeroes as evidence about speed would have credited the speed guard with a result that
-    /// the geometry produced on its own. Only the 30-yard sidearm at 300 yards is genuinely
-    /// outside its desired range, so only there does the speed ratio decide the term.</para>
+    /// <para>IT IS ASSERTED ON THE SIDEARM ROWS, NOT THE RIFLE ONES. Every rifle row sits inside
+    /// its desired range — <c>EffectiveEngagementRange</c> is 711 yards against a separation of
+    /// 400 — so it has no gap to close and the speed ratio cannot matter there. Only the 30-yard
+    /// sidearm at 300 yards is genuinely outside its desired range. (This guarded the access
+    /// term until 2026-10-06; the exchange forecast now carries the delay, and the property is
+    /// asserted on the whole score.)</para>
     /// </summary>
     [Fact]
-    public void EqualAndNearlyEqualClosingSpeeds_HaveFiniteScoresWithoutAnAccessSpike()
+    public void EqualAndNearlyEqualClosingSpeeds_HaveFiniteScoresWithoutASpike()
     {
         BaselineMeasurement nearlyEqual = Measure(
             Scenarios.Single(
@@ -197,7 +196,7 @@ public sealed class RangedPursuitBaselineTests
         Assert.All(nearlyEqual.Candidates.Concat(equal.Candidates), candidate =>
         {
             Assert.True(float.IsFinite(candidate.Score));
-            Assert.True(float.IsFinite(candidate.AccessPotential));
+            Assert.True(float.IsFinite(candidate.NetExchangePotential));
         });
         float nearlyEqualRun = nearlyEqual.Candidates.Single(candidate =>
             candidate.Kind == EngagementOptionKind.RunToward).Score;
@@ -232,11 +231,7 @@ public sealed class RangedPursuitBaselineTests
         Assert.True(
             ineffective.Candidates.Single(candidate => candidate.Kind == EngagementOptionKind.RunToward)
                 .RoleTerm > 0);
-        Assert.All(inside.Candidates, candidate =>
-        {
-            Assert.Equal(0, candidate.RoleTerm, 4);
-            Assert.Equal(0, candidate.AccessPotential, 4);
-        });
+        Assert.All(inside.Candidates, candidate => Assert.Equal(0, candidate.RoleTerm, 4));
     }
 
     [Fact]
@@ -427,7 +422,6 @@ public sealed class RangedPursuitBaselineTests
                         - candidate.IncomingNow
                         + candidate.MeleeValue,
                     candidate.RoleTerm,
-                    candidate.AccessPotentialValue,
                     candidate.FutureExchange.Sum() + candidate.ArrivalTimeValue,
                     candidate.ReadinessValue,
                     candidate.FireWindowValue,
@@ -471,7 +465,6 @@ public sealed class RangedPursuitBaselineTests
             + $"score={candidate.Score:F4} "
             + $"immediate_exchange={candidate.ImmediateExchange:F4} "
             + $"role_term={candidate.RoleTerm:F4} "
-            + $"access_potential={candidate.AccessPotential:F4} "
             + $"net_exchange_potential={candidate.NetExchangePotential:F4} "
             + $"readiness={candidate.Readiness:F4} "
             + $"fire_window={candidate.FireWindow:F4} "
@@ -490,7 +483,6 @@ public sealed class RangedPursuitBaselineTests
         float Score,
         float ImmediateExchange,
         float RoleTerm,
-        float AccessPotential,
         float NetExchangePotential,
         float Readiness,
         float FireWindow,

@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.Data.Sqlite;
 using OnlyWar.Persistence.Database.GameState;
 using OnlyWar.Domain.Extensions;
-using OnlyWar.Operations.Missions.Ambush;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Fleets;
 using OnlyWar.Domain.Missions;
@@ -139,8 +138,11 @@ public class MissionSaveTests
         Assert.Contains(loaded, planet.Regions[0].SpecialMissions);
     }
 
+    // Saves older than version 23 are rejected, so the loader no longer invents a target for an
+    // ambush stored without one. Execution rolls it against the enemy's deployed strength instead
+    // (AmbushMissionSizing.ResolveTargetBattleValue).
     [Fact]
-    public void LoadLegacyAmbushMission_DerivesStableTargetBattleValue()
+    public void LoadAmbushMissionWithoutTarget_LoadsWithoutOne()
     {
         Faction faction = CreateFaction();
         Planet planet = CreatePlanet(faction);
@@ -165,9 +167,7 @@ public class MissionSaveTests
                 [faction.Id] = faction
             })[original.Id];
 
-        Assert.Equal(
-            AmbushMissionSizing.EstimateLegacyTargetBattleValue(2),
-            loaded.TargetBattleValue);
+        Assert.Null(loaded.TargetBattleValue);
     }
 
     private static void SavePlanet(SqliteConnection connection, Planet planet)

@@ -16,58 +16,12 @@ using Xunit;
 
 namespace OnlyWar.Tests.Missions;
 
-// "Recommended force: N squads" answers how many of the player's own squads must be committed to
-// reach parity with an ambush target. These cover the counting rule itself; the screen-level wiring
-// (which squads count as available) is in PlanetaryOperationsServiceTests.
+// "Recommended force: N squads" measures an ambush target in the chapter's full-strength reference
+// squad. It is a general statement for the player, not keyed to the squads in the region. These cover
+// the counting rule itself; the screen-level wiring is in PlanetaryOperationsServiceTests.
 public class AmbushForceRecommendationTests
 {
-    private static AmbushForceAvailability Available(params long[] squadBattleValues) =>
-        new(squadBattleValues, ReferenceSquadBattleValue: 100);
-
-    // Listed in the order the roster happens to hold them: taking them in that order would need
-    // three squads (10 + 100 + 60), taking the strongest first needs two (100 + 60).
-    [Fact]
-    public void RecommendSquads_TakesTheStrongestAvailableSquadsFirst()
-    {
-        SquadRecommendation recommendation = AmbushMissionSizing.RecommendSquads(
-            150, Available(10, 100, 60, 30));
-
-        Assert.Equal(2, recommendation.Squads);
-        Assert.False(recommendation.ExceedsAvailable);
-        Assert.True(recommendation.BasedOnAvailableSquads);
-    }
-
-    [Fact]
-    public void RecommendSquads_ParityIsReachedExactlyWhenTheCommittedValueEqualsTheTarget()
-    {
-        Assert.Equal(2, AmbushMissionSizing.RecommendSquads(160, Available(100, 60)).Squads);
-        SquadRecommendation oneShort = AmbushMissionSizing.RecommendSquads(
-            161, Available(100, 60));
-        Assert.True(oneShort.ExceedsAvailable);
-    }
-
-    // The player cannot field more squads than he has, so the answer is a shortfall, not a count
-    // of squads that do not exist.
-    [Fact]
-    public void RecommendSquads_WhenAllAvailableSquadsFallShort_ReportsTheShortfallNotAnInventedCount()
-    {
-        SquadRecommendation recommendation = AmbushMissionSizing.RecommendSquads(
-            1_000, Available(50, 40));
-
-        Assert.True(recommendation.ExceedsAvailable);
-        Assert.Equal(2, recommendation.Squads);
-        Assert.True(recommendation.BasedOnAvailableSquads);
-    }
-
-    [Fact]
-    public void RecommendSquads_IgnoresSquadsWithNoBattleValue()
-    {
-        SquadRecommendation recommendation = AmbushMissionSizing.RecommendSquads(
-            10, Available(0, 0, 10));
-
-        Assert.Equal(1, recommendation.Squads);
-        Assert.False(recommendation.ExceedsAvailable);
-    }
+    private const long ReferenceSquad = 100;
 
     [Theory]
     [InlineData(1L, 1)]
@@ -75,15 +29,19 @@ public class AmbushForceRecommendationTests
     [InlineData(101L, 2)]
     [InlineData(250L, 3)]
     [InlineData(0L, 1)]
-    public void RecommendSquads_WithNothingAvailable_MeasuresTheTargetInReferenceSquads(
+    public void RecommendSquads_MeasuresTheTargetInReferenceSquads(
         long target, long expectedSquads)
     {
-        SquadRecommendation recommendation = AmbushMissionSizing.RecommendSquads(
-            target, Available());
+        Assert.Equal(expectedSquads, AmbushMissionSizing.RecommendSquads(target, ReferenceSquad));
+    }
 
-        Assert.Equal(expectedSquads, recommendation.Squads);
-        Assert.False(recommendation.ExceedsAvailable);
-        Assert.False(recommendation.BasedOnAvailableSquads);
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void RecommendSquads_RequiresAPositiveReferenceSquad(long reference)
+    {
+        Assert.Throws<System.ArgumentOutOfRangeException>(
+            () => AmbushMissionSizing.RecommendSquads(100, reference));
     }
 
     // The reference squad is rules data, so it must follow the database through any future
@@ -100,32 +58,11 @@ public class AmbushForceRecommendationTests
         Assert.True(expected > 0);
         Assert.Equal(expected, AmbushMissionSizing.FullStrengthBattleValue(tactical));
 
-        // ...and an empty roster is measured against exactly that.
-        SquadRecommendation recommendation = AmbushMissionSizing.RecommendSquads(
-            expected * 2 + 1,
-            new AmbushForceAvailability([], AmbushMissionSizing.FullStrengthBattleValue(tactical)));
-        Assert.Equal(3, recommendation.Squads);
-    }
-
-    [Fact]
-    public void SquadBattleValue_SumsTheMembersTemplateBattleValues()
-    {
-        Squad squad = TestModelFactory.CreateSquad(
-            "Valued Squad",
-            TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Sergeant"),
-            TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate, "Marine A"),
-            TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate, "Marine B"));
-
+        // ...and a target is measured against exactly that.
         Assert.Equal(
-            TestModelFactory.SergeantTemplate.BattleValue
-            + 2 * TestModelFactory.MarineTemplate.BattleValue,
-            AmbushMissionSizing.SquadBattleValue(squad));
-    }
-
-    [Fact]
-    public void SquadBattleValue_OfNoSquad_IsZero()
-    {
-        Assert.Equal(0, AmbushMissionSizing.SquadBattleValue(null));
+            3,
+            AmbushMissionSizing.RecommendSquads(
+                expected * 2 + 1, AmbushMissionSizing.FullStrengthBattleValue(tactical)));
     }
 
     // --- the wording: how precise the line may be depends on the intel level alone ---
@@ -135,10 +72,9 @@ public class AmbushForceRecommendationTests
     [InlineData(4f, 150L, "Recommended force: 2–3 squads")]
     [InlineData(1.5f, 150L, "Recommended force: roughly 1–4 squads")]
     [InlineData(0.5f, 150L, "Recommended force: strength too uncertain; recon advised")]
-    [InlineData(7f, 161L, "Recommended force: more than your 2 available squads")]
-    [InlineData(4f, 161L, "Recommended force: more than your 2 available squads")]
-    [InlineData(1.5f, 161L, "Recommended force: more than your 2 available squads")]
-    [InlineData(0.5f, 161L, "Recommended force: strength too uncertain; recon advised")]
+    [InlineData(7f, 250L, "Recommended force: 3 squads")]
+    [InlineData(4f, 250L, "Recommended force: 3–4 squads")]
+    [InlineData(1.5f, 250L, "Recommended force: roughly 1–6 squads")]
     public void FormatRecommendedForce_KeepsTheIntelLevelWording(
         float evidence, long target, string expected)
     {
@@ -146,13 +82,13 @@ public class AmbushForceRecommendationTests
 
         Assert.Equal(
             expected,
-            SpecialMissionPresentation.FormatRecommendedForce(mission, 0, Available(100, 60)));
+            SpecialMissionPresentation.FormatRecommendedForce(mission, 0, ReferenceSquad));
     }
 
     // An Imperial target is always known well enough to name a number, whatever the intel says.
     [Theory]
     [InlineData(150L, "Recommended force: 2 squads")]
-    [InlineData(161L, "Recommended force: more than your 2 available squads")]
+    [InlineData(250L, "Recommended force: 3 squads")]
     public void FormatRecommendedForce_ImperialTargetIsNeverTooUncertain(
         long target, string expected)
     {
@@ -160,17 +96,17 @@ public class AmbushForceRecommendationTests
 
         Assert.Equal(
             expected,
-            SpecialMissionPresentation.FormatRecommendedForce(mission, 0, Available(100, 60)));
+            SpecialMissionPresentation.FormatRecommendedForce(mission, 0, ReferenceSquad));
     }
 
     [Fact]
-    public void FormatRecommendedForce_OneAvailableSquadIsNamedInTheSingular()
+    public void FormatRecommendedForce_OneSquadIsNamedInTheSingular()
     {
-        Mission mission = CreateMission(500, evidence: 7f, imperialTarget: false);
+        Mission mission = CreateMission(100, evidence: 7f, imperialTarget: false);
 
         Assert.Equal(
-            "Recommended force: more than your 1 available squad",
-            SpecialMissionPresentation.FormatRecommendedForce(mission, 0, Available(100)));
+            "Recommended force: 1 squad",
+            SpecialMissionPresentation.FormatRecommendedForce(mission, 0, ReferenceSquad));
     }
 
     // The player is the observer (a default faction), the target a separate hidden-or-public

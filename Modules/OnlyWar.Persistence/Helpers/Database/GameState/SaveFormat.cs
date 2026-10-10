@@ -32,7 +32,10 @@ namespace OnlyWar.Persistence.Database.GameState
         //     expected-return date.
         // 21: GlobalData gains the Mechanicus loan flag.
         // 22: GlobalData gains the standing destination for brothers returning from Mars.
-        public const int CurrentVersion = 22;
+        // 23: ambush targets are a share of the enemy's deployed battle value, and the load-time
+        //     estimate for ambushes saved without a target is gone. No schema change; this is a
+        //     deliberate incompatible save break.
+        public const int CurrentVersion = 23;
         public const int MinimumSupportedVersion = CurrentVersion;
     }
 }

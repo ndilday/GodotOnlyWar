@@ -166,6 +166,10 @@ ahead of the path breaks first-token matching.
   project, `Tools/OnlyWar.Diagnostics` (since 2026-10-04), not part of the correctness suite: run
   them with `dotnet test Tools\OnlyWar.Diagnostics ...`, and see its README for the `RUN_*`
   switches. Its only always-on tests are the fitter's (`ProbitFitTests`, under a second).
+  **It has its own copy of the module DLLs.** `dotnet test OnlyWar.Tests` rebuilds the modules into
+  the test project only, so a following `dotnet test Tools\OnlyWar.Diagnostics --no-build` runs the
+  OLD planner (2026-10-09: a duel repeated an earlier result to the last digit). After changing a
+  module, run `dotnet build` on the solution (or the Tools project) before a `--no-build` diagnostic.
 - The suite **splits cleanly in two**, and as of 2026-09-20 it is `Category!=Slow` at 3177
   and `Category=Slow` at **13 tests**, measured on a machine the user was working on
   (7m45s for the slow half, 42s for the fast one — counts only, those clocks say more about

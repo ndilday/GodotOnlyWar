@@ -78,6 +78,9 @@ namespace OnlyWar.Battles
         public bool MobSuppressionCommitted { get; set; }
 
         public Squad Squad { get; }
+        // Able soldiers at the start of the mission; the morale check's cumulative casualty
+        // fraction is measured against it.
+        internal int MissionStartingAbleSoldierCount => _missionStartingAbleSoldierCount;
         internal int AbleSoldiersGeneration => System.Threading.Volatile.Read(
             ref _ableSoldiersGeneration.Value);
         public List<BattleSoldier> AbleSoldiers

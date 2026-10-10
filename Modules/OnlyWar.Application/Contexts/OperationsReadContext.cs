@@ -102,23 +102,11 @@ internal sealed class OperationsReadContext
             _sector, region, Readiness, mission, contextOrder);
 
     /// <summary>
-    /// The squads the player could commit to <paramref name="mission"/> from this region, valued
-    /// for the "Recommended force" line. Availability is exactly the order workspace's own
-    /// eligibility (the same squads the force tree offers for this mission), plus any squad already
-    /// on <paramref name="contextOrder"/>. The reference squad is the chapter's standard tactical
-    /// squad template, read from the rules data.
+    /// The unit the "Recommended force" line counts in: the chapter's standard tactical squad
+    /// template at full strength, read from the rules data.
     /// </summary>
-    internal AmbushForceAvailability BuildForceAvailability(
-        Region region,
-        AvailableMission mission,
-        Order contextOrder = null) =>
-        new(BuildEligibility(region, mission, contextOrder).Groups
-                .SelectMany(group => group.Candidates)
-                .Where(candidate => SpecialistAvailability.IsMissionSquadFormation(candidate.Squad))
-                .DistinctBy(candidate => candidate.Squad.Id)
-                .Select(candidate => AmbushMissionSizing.SquadBattleValue(candidate.Squad))
-                .ToList(),
-            AmbushMissionSizing.FullStrengthBattleValue(_rules.ChapterDoctrine?.TacticalSquad));
+    internal long ReferenceSquadBattleValue =>
+        AmbushMissionSizing.FullStrengthBattleValue(_rules.ChapterDoctrine?.TacticalSquad);
 
     internal Order FindEquivalentOrder(
         Region region,

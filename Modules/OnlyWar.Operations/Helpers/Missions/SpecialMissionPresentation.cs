@@ -57,36 +57,32 @@ namespace OnlyWar.Operations.Missions
                 : Humanize(missionType.ToString());
 
         /// <summary>
-        /// The "Recommended force" line. The squad count comes from the player's own squads that
-        /// could be committed (see <see cref="AmbushMissionSizing.RecommendSquads"/>); how precise
-        /// the line is allowed to be still depends only on how well the target is known.
+        /// The "Recommended force" line. The squad count is the target measured in full-strength
+        /// reference squads (see <see cref="AmbushMissionSizing.RecommendSquads"/>), a general
+        /// statement that does not depend on which squads are in the region; how precise the line
+        /// is allowed to be depends only on how well the target is known.
         /// </summary>
         public static string FormatRecommendedForce(
             Mission mission,
             int currentWeek,
-            AmbushForceAvailability availability)
+            long referenceSquadBattleValue)
         {
             if (mission == null) return null;
             FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
                 mission.RegionFaction?.Region,
                 mission.RegionFaction?.PlanetFaction?.Faction);
             IntelLevel level = belief?.Level ?? IntelLevel.Rumor;
+            // Only ambushes store a target. For any other special mission the estimate is taken
+            // against what the enemy has deployed; with no presence there is nothing to size.
             long target = mission.TargetBattleValue
-                ?? AmbushMissionSizing.EstimateLegacyTargetBattleValue(mission.MissionSize);
-            SquadRecommendation recommendation =
-                AmbushMissionSizing.RecommendSquads(target, availability);
-            long squads = recommendation.Squads;
+                ?? AmbushMissionSizing.EstimateTargetBattleValue(
+                    mission.RegionFaction?.GetDeployedStrength() ?? 0L);
+            if (target <= 0) return null;
+            long squads = AmbushMissionSizing.RecommendSquads(target, referenceSquadBattleValue);
             string unit = squads == 1 ? "squad" : "squads";
             bool imperial = FactionRelationshipService.IsImperial(
                 mission.RegionFaction?.PlanetFaction?.Faction);
 
-            // Whatever the intel level, no estimate of the target brings it within reach of the
-            // squads on hand, so the useful statement is the shortfall. A rumor still has no
-            // estimate to compare.
-            if (recommendation.ExceedsAvailable && (imperial || level >= IntelLevel.Suspected))
-            {
-                return $"Recommended force: more than your {squads:N0} available {unit}";
-            }
             if (imperial)
             {
                 return $"Recommended force: {squads:N0} {unit}";

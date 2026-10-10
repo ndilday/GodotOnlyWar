@@ -177,10 +177,11 @@ public class MissionTargetStrengthTests
 
     // GenerateAmbushMission sized the mission from Log10(Garrison). Against a horde that is
     // Log10(0) = -infinity, and the cast to int saturates to int.MinValue, so the ambush was created
-    // with a wildly negative size. PositionAmbushMissionStep then raises 10 to it, giving the
-    // opposing force a target battle value of 0: an ambush mission with no ambushers in it.
+    // with a wildly negative size and a target battle value of 0: an ambush mission with no
+    // ambushers in it. The target is now a share of the deployed strength, which a horde has in
+    // its Population.
     [Fact]
-    public void GenerateAmbushMission_AgainstAZeroGarrisonHorde_HasAUsableSize()
+    public void GenerateAmbushMission_AgainstAZeroGarrisonHorde_HasAUsableTarget()
     {
         (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation: 100_000_000, branchZ: AmbushBranchZ, sizeZ: 0.0);
@@ -190,47 +191,117 @@ public class MissionTargetStrengthTests
         Mission ambush = Assert.Single(generated);
         Assert.Equal(MissionType.Ambush, ambush.MissionType);
         Assert.Equal(0, horde.Garrison);
-        Assert.Equal(1, ambush.MissionSize);
+        long target = Assert.NotNull(ambush.TargetBattleValue);
+        Assert.InRange(target, 1L, horde.GetDeployedStrength());
+        Assert.Equal(AmbushMissionSizing.MissionSizeBand(target), ambush.MissionSize);
+        // The recommendation tracks the generated target in reference squads.
+        const long referenceSquadBattleValue = 100;
         Assert.Equal(
-            10 * StrategicCombatRules.PdfTrooperBattleValue,
-            ambush.TargetBattleValue);
-        // The mission is sized to a real target, not to nothing: with no squads to count, a
-        // reference squad worth more than the whole target recommends exactly one squad.
-        Assert.Equal(
-            1,
-            AmbushMissionSizing.RecommendSquads(
-                ambush.TargetBattleValue.Value,
-                new AmbushForceAvailability([], ReferenceSquadBattleValue: 100)).Squads);
+            (target + referenceSquadBattleValue - 1) / referenceSquadBattleValue,
+            AmbushMissionSizing.RecommendSquads(target, referenceSquadBattleValue));
     }
 
-    // The magnitude still has to cap the size: a rolled size of 4 stands against a hive fleet but is
-    // cut to 2 by a 100-strong holding. Under the raw-Garrison read the cap was int.MinValue for both.
+    // The units bug: the old cap read the enemy's battle value as a troop count and the roll then
+    // multiplied troops back into battle value, so a 3,000 BV region could hide a 50,000 BV ambush.
+    // Whatever the margin and the roll, the target is now inside the region's deployed strength.
     [Theory]
-    [InlineData(100L, 2)]
-    [InlineData(100_000_000L, 4)]
-    public void GenerateAmbushMission_SizeIsCappedByTheDefendersMagnitude(
-        long hordePopulation, int expectedSize)
+    [InlineData(0.0, 0.0)]
+    [InlineData(0.5, 0.5)]
+    [InlineData(1.99, 0.999999)]
+    [InlineData(10.0, 0.999999)]
+    [InlineData(-3.0, 0.0)]
+    [InlineData(double.NaN, 0.5)]
+    public void AmbushTarget_NeverExceedsTheDeployedStrength(double margin, double roll)
+    {
+        const long deployed = 3_000;
+
+        long target = AmbushMissionSizing.TargetBattleValue(deployed, margin, roll);
+
+        Assert.InRange(
+            target,
+            (long)(deployed * AmbushMissionSizing.MinimumTargetShare),
+            deployed);
+    }
+
+    // The band runs from the minimum share (bare success, lowest roll) to all of the deployed
+    // strength (full margin, highest roll).
+    [Fact]
+    public void AmbushTarget_SpansTheWholeShareBand()
+    {
+        const long deployed = 1_000_000;
+
+        Assert.Equal(
+            (long)(deployed * AmbushMissionSizing.MinimumTargetShare),
+            AmbushMissionSizing.TargetBattleValue(deployed, 0.0, 0.0));
+        Assert.Equal(
+            deployed,
+            AmbushMissionSizing.TargetBattleValue(
+                deployed, AmbushMissionSizing.FullIntelligenceMargin, 1.0));
+    }
+
+    [Fact]
+    public void AmbushTarget_WithNothingDeployed_IsZero()
+    {
+        Assert.Equal(0L, AmbushMissionSizing.TargetBattleValue(0, 1.0, 0.5));
+    }
+
+    // The same margin and roll catch the same share of any enemy, so the target scales with what
+    // the enemy has deployed rather than with a fixed troop scale.
+    [Fact]
+    public void GenerateAmbushMission_TargetScalesWithTheDefendersDeployedStrength()
+    {
+        (PlanetIntelligenceProcessor smallProcessor, RegionFaction small, List<Mission> smallGenerated) =
+            CreateGenerator(hordePopulation: 10_000, branchZ: AmbushBranchZ, sizeZ: 0.0);
+        (PlanetIntelligenceProcessor largeProcessor, RegionFaction large, List<Mission> largeGenerated) =
+            CreateGenerator(hordePopulation: 10_000_000, branchZ: AmbushBranchZ, sizeZ: 0.0);
+
+        smallProcessor.HandleBeliefIntelligence(ConfirmedBelief(small), specMissionBudget: 1.0f);
+        largeProcessor.HandleBeliefIntelligence(ConfirmedBelief(large), specMissionBudget: 1.0f);
+
+        Mission smallAmbush = Assert.Single(smallGenerated);
+        Mission largeAmbush = Assert.Single(largeGenerated);
+        // Rounding to whole battle value on the small target is the only difference.
+        Assert.InRange(
+            largeAmbush.TargetBattleValue.Value,
+            (smallAmbush.TargetBattleValue.Value - 1) * 1_000,
+            (smallAmbush.TargetBattleValue.Value + 1) * 1_000);
+        Assert.True(largeAmbush.MissionSize > smallAmbush.MissionSize);
+    }
+
+    // A better intelligence roll finds a larger part of the enemy: each of these rolls lands in
+    // the ambush band, and the target grows with how far the roll cleared it.
+    [Fact]
+    public void GenerateAmbushMission_ABetterIntelligenceRollFindsALargerTarget()
+    {
+        long[] targets = new[] { 0.1, 0.9, 1.5 }
+            .Select(branchZ =>
+            {
+                (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
+                    CreateGenerator(hordePopulation: 1_000_000, branchZ, sizeZ: 0.0);
+                processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
+                Mission ambush = Assert.Single(generated);
+                Assert.Equal(MissionType.Ambush, ambush.MissionType);
+                return ambush.TargetBattleValue.Value;
+            })
+            .ToArray();
+
+        Assert.True(targets[0] < targets[1]);
+        Assert.True(targets[1] < targets[2]);
+    }
+
+    // An enemy with nothing deployed - every fighter disorganized - has no force to catch, so the
+    // intelligence finds no ambush rather than one sized to nothing.
+    [Fact]
+    public void GenerateAmbushMission_AgainstNoDeployedStrength_GeneratesNothing()
     {
         (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
-            CreateGenerator(hordePopulation, branchZ: AmbushBranchZ, sizeZ: 3.0);
+            CreateGenerator(hordePopulation: 100_000, branchZ: AmbushBranchZ, sizeZ: 0.0);
+        horde.Organization = 0;
+        Assert.Equal(0L, horde.GetDeployedStrength());
 
         processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
 
-        Mission ambush = Assert.Single(generated);
-        Assert.Equal(MissionType.Ambush, ambush.MissionType);
-        Assert.Equal(expectedSize, ambush.MissionSize);
-        long expectedTargetBattleValue =
-            (long)System.Math.Pow(10, expectedSize)
-            * StrategicCombatRules.PdfTrooperBattleValue;
-        Assert.Equal(expectedTargetBattleValue, ambush.TargetBattleValue);
-        // The recommendation tracks the generated target: a reference squad of 100 BV needs
-        // ceil(target / 100) squads, so the size-4 hive fleet asks for far more than the size-2 cell.
-        const long referenceSquadBattleValue = 100;
-        Assert.Equal(
-            (expectedTargetBattleValue + referenceSquadBattleValue - 1) / referenceSquadBattleValue,
-            AmbushMissionSizing.RecommendSquads(
-                ambush.TargetBattleValue.Value,
-                new AmbushForceAvailability([], referenceSquadBattleValue)).Squads);
+        Assert.Empty(generated);
     }
 
     // GenerateAssassinationMission has the same shape over Population. A horde's Population is
@@ -303,8 +374,9 @@ public class MissionTargetStrengthTests
 
     // --- fixtures ---
 
-    // HandleBeliefIntelligence rolls one z to pick which special mission to generate, then the
-    // generator rolls a second z for the mission's size. These select the branch.
+    // HandleBeliefIntelligence rolls one z to pick which special mission to generate. An ambush
+    // reads that same z as its intelligence margin; the other generators roll a second z for the
+    // mission's size. These select the branch.
     private const double AmbushBranchZ = 0.5;
     private const double AssassinationBranchZ = 2.5;
 

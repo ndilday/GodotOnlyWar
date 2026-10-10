@@ -807,11 +807,18 @@ public class BattleSquadPlannerTests
         // "ProjectsOpeningNotCharging". If the withdrawal distinction genuinely no longer belongs
         // in the potential, that needs an argument and a rename, not an inverted assertion under
         // an unchanged name.
+        //
+        // 2026-10-06: the melee enemy is made twice as strong. With the coupled exchange forecast
+        // a charge that reaches contact fights it out, and two identical unarmed soldiers trade
+        // evenly there, so the charging and withdrawing futures were both exactly 0 -- the
+        // distinction was intact (an enemy marked Bound is never projected to close) but this
+        // fixture could not show it. A charger that wins the melee makes contact a real threat.
         BattleSquad shooters = CreateSquad("Ranged Holder", 90_101);
         BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 90_102);
         EquipAimTestRifle(shooters.Soldiers[0], 99_260);
         meleeEnemy.Soldiers[0].ClearReadiedRangedWeapons();
         meleeEnemy.Soldiers[0].RangedWeapons.Clear();
+        ((Soldier)meleeEnemy.Soldiers[0].Soldier).Strength *= 2;
 
         BattleSquadCapabilityProfile enemyProfile =
             BattleEngagementFrameBuilder.BuildProfile(meleeEnemy);
@@ -910,7 +917,8 @@ public class BattleSquadPlannerTests
         //
         // The rollout has since been removed. The future is now valued by EngagementPotential,
         // which reads the same EffectiveEngagementRange as its useful range, and the test now
-        // measures the potential's future exchange plus access value (see Continuation below). The
+        // measures the potential's future exchange (see Continuation below; it also added the
+        // access value until that term was folded into the coupled forecast on 2026-10-06). The
         // property is unchanged: the score must see the squad's own movement.
         //
         // The "before" arm is reconstructed exactly by forcing EffectiveEngagementRange back onto
@@ -966,7 +974,7 @@ public class BattleSquadPlannerTests
         {
             EngagementOptionEvaluation candidate = decision.Candidates.Single(entry =>
                 entry.Kind == kind);
-            return candidate.FutureExchange[0] + candidate.AccessPotentialValue;
+            return candidate.FutureExchange[0];
         }
 
         float beforeSpread = System.Math.Abs(
@@ -988,13 +996,10 @@ public class BattleSquadPlannerTests
         // the old terminal's formula, not of Phase 2, so asserting it would now pin the shape
         // Phase 5d deliberately removed.
         //
-        // The Phase 2 property itself -- the score can SEE its own movement -- is entirely
-        // carried by the two assertions below, which are unchanged and still discriminate: under
-        // the conflated range every policy projects zero own-motion, so closing and holding are
-        // indistinguishable.
-        Assert.NotEqual(
-            Continuation(before, EngagementOptionKind.Hold),
-            Continuation(after, EngagementOptionKind.Hold));
+        // The Phase 2 property itself -- the score can SEE its own movement -- was carried by two
+        // assertions comparing the arms: Hold's continuation differs between them, and the
+        // RunToward-Hold spread grows from the conflated arm to the honest one.
+        //
         // PHASE 6 DROPPED A THIRD ARM. It asserted `Future(after, CloseToContact) >
         // Future(after, Hold)` -- "closing is now worth strictly more than standing still" -- and
         // it no longer holds, for a reason specific to this fixture rather than to the property
@@ -1011,12 +1016,20 @@ public class BattleSquadPlannerTests
         // ~50 turns it takes to cross 200 yards at this speed. Asserting the sign of a difference
         // between two numbers that are both effectively zero pins fixture noise.
         //
-        // The property this test is named for -- the score can SEE its own movement -- is
-        // carried entirely by the two surviving assertions, and they still discriminate sharply:
-        // the spread widened from 2.15e-9 (conflated) to 1.22e-7 (derived), a factor of ~57.
+        // The property this test is named for was then carried by the two arm comparisons: the
+        // spread widened from 2.15e-9 (conflated) to 1.22e-7 (derived), a factor of ~57.
+        //
+        // 2026-10-06 (coupled exchange forecast). Φ's exchange is now the better of two
+        // continuations, and the Stay continuation is evaluated at the PROJECTED position: a run
+        // that ends five yards closer is priced at those five yards whatever range the profile
+        // reports. So the Phase 2 defect -- reading reach, so that no option projected any own
+        // motion -- can no longer hide movement. Here Stay beats Close in both arms, the two arms
+        // give the same Hold continuation, and the arm comparisons no longer measure the property.
+        // It is asserted directly instead: in BOTH arms, running changes the continuation the
+        // score sees.
         Assert.True(
-            afterSpread > beforeSpread,
-            $"expected movement to be more visible to the engagement score: "
+            beforeSpread > 0 && afterSpread > 0,
+            $"the engagement score did not see the squad's own movement: "
                 + $"before={beforeSpread}, after={afterSpread}");
     }
 
@@ -1259,7 +1272,15 @@ public class BattleSquadPlannerTests
             // discriminating at all. A rifle that can actually threaten its target restores the
             // straddle at exactly the original 1-versus-3 counts, so the property under test is
             // unchanged -- only the point on the damage axis where it lives.
-            baseDamage: 4f,
+            //
+            // RETUNED AGAIN 2026-10-06, rifle 4 -> 5 and claws 0.214 -> 0.45 Strength, when the
+            // graded credit moved onto the engine's wound counter. A claw that only ever leaves
+            // Negligible wounds is now credited as the engine counts them (1/1296 of a Critical),
+            // so three such attackers threatened no more than one and the choice stopped depending
+            // on the count at ANY rifle damage. Claws that actually wound restore the straddle.
+            // Swept that day: at rifle damage 5 the 1-shoots/3-readies split holds for claws 0.4
+            // and 0.5; 0.45 sits between them.
+            baseDamage: 5f,
             maxDistance: 50,
             rof: 1,
             ammo: 5,
@@ -1296,7 +1317,7 @@ public class BattleSquadPlannerTests
             armorMultiplier: 1,
             penetrationMultiplier: 1,
             requiredStrength: 0,
-            strengthMultiplier: 0.2142857f,
+            strengthMultiplier: 0.45f,
             parryMod: 0,
             attackSpeedMultiplier: 1);
 

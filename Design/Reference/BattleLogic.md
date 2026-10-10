@@ -282,37 +282,131 @@ score(s -> s') = ImmediateExchange(s -> s')
 ImmediateExchange = enemy removal - friendly fire - incoming fire + melee now
 ```
 
+**One currency: the squad's own Battle Value (2026-10-05).** Every removal estimate is priced in
+the Battle Value of the soldiers it removes, so a score has two currencies in it: what we take is
+in enemy BV, what we lose is in ours. `EngagementCurrency` converts every enemy-priced term at one
+rate per decision before anything is netted:
+
+```text
+rate = mean BV of this squad's able soldiers / mean BV of the able soldiers of the enemies scored
+```
+
+One average enemy soldier is worth one average soldier of ours (headcount parity between sides, the
+footing the withdrawal and morale shares already use); relative BV *within* a side still decides
+which soldier or squad matters more, so target selection is unchanged. Multiplying either side's BV
+by a constant then multiplies every term by the same factor and cannot move the argmax.
+`EngagementCurrencyScaleFreeTests` holds this for seven real-template frames at ×10 on each side.
+
+| Term | Priced in | Converted |
+|---|---|---|
+| enemy removal, melee now | target BV | × rate |
+| `NetRateValue` enemy BV removed (including enemy breaks), fire window | target BV | × rate |
+| readiness of an `Aim` (projected or stored) | the prepared shot, target BV | × rate |
+| readiness of `Ready` / `Reload` | 2–2.5% of the soldier's own BV | no |
+| incoming fire, friendly fire, contact commitment, morale, command, contact progress | own BV | no |
+| screen holding term | threat melee BV is converted before it is compared with ours | partly |
+
+The indifference floor is `0.05 × own mean soldier BV × horizon fraction` instead of an absolute
+0.1, so it follows the squad's currency (it is still 0.1 for the 2-BV test fixtures). The frame
+builder applies the same rate, from the two representative profiles it already builds, to the
+effective-engagement-range argmax and to the opening-range score, because those two also netted
+enemy-priced outgoing against our incoming. Where both forces have the same mean soldier value the
+rate is exactly 1 and nothing changes.
+
+Not converted, and known: the per-shot `Score` in `RangedShotEvaluator` still nets expected enemy
+removal against expected friendly fire inside one shot, and screen *assignment*
+(`AssignScreens`, `BattleActionPlanningCoordinator`) still compares threat melee BV with protected
+BV directly. Neither decides hold against advance.
+
 `Phi` is `EngagementPotential`, evaluated without an option kind. It contains state-derived
-`NetRateValue`, readiness, role, fire-window, morale, command, and contribution-access terms.
+`NetRateValue`, readiness, role, fire-window, morale, and command terms.
 `EngagementPotentialDiscount` is `1`; the separate `0.65` rollout discount is not used to discount
 the battle-duration potential.
 
-Positive outgoing opportunity is saturated against each enemy Battle Value pool and all incoming
-opportunity is aggregated and saturated once against the friendly pool:
+**`NetRateValue` is a coupled exchange forecast (2026-10-06,
+`EngagementExchangeForecast`).** It is the better of two continuations from the state:
 
 ```text
-finitePool(x, B) = B × (1 - exp(-x / B))
+NetRateValue = max(Stay, Close)
+Stay  = stand where the state leaves the squad and shoot (aiming allowed) for the horizon
+Close = move to the range the squad wants against each enemy -- firing nothing on the way
+        (a fire-preserving pursuer excepted) and shot at as a moving target -- then stand and shoot
+each  = rate × (enemy BV removed) - (own BV lost), forecast turn by turn over T
 ```
 
-This prevents a per-turn removal rate from billing the same target pool indefinitely while
-preserving a continuous positional gradient. Contribution access separately applies a continuous
-tempo cost:
+Because `Phi` does not know which option produced the state, the max is what lets it assume the
+squad acts sensibly afterwards. A hold and a run differ only in their immediate terms (a run fires
+nothing and is shot on the move) and in the state they leave (a run's Close continuation is
+shorter); the run wins only when that is worth the turn.
 
-```text
-access           = -tempoRate × turnsToUsefulRange
-tempoRate        = scale × helplessness × viability
-scale            = targetBattleValue / AccessValueTurns
-helplessness     = negligibleRate / (negligibleRate + currentRate)
-negligibleRate   = targetBattleValue × NegligibleRemovalFraction
-viability        = destinationRate / (scale + destinationRate)
-turnsToUsefulRange = (range - desiredRange) / (ownMoveSpeed - quarrySpeed)
-```
+The forecast steps one lane per enemy squad, turn by turn:
 
-The tempo rate fades as current contribution becomes useful and is zero when the destination cannot
-produce removal. There is no activation branch at the old half-pool/four-pool boundary. `T` is
-derived once per planning turn for each squad and is shared by every candidate in that squad's
-decision. It is the shorter of two clocks, each Battle Value above a withdrawal threshold divided
-by a removal rate, clamped to 1–183 turns:
+- **Coupled.** Each side's fire is scaled by its surviving share, so losses taken while crossing
+  ground cost fire after arrival, and neither side can be wiped out along with the other. It
+  replaced two independent integrals, each from today's full strength and each capped at its own
+  pool (`B × (1 - exp(-x / B))`); over a long horizon both pools saturated together and the net
+  reduced to enemy pool minus own pool, which a closing option could only win.
+- **Breaks.** Each side carries a break hazard from the live morale formula (`MoraleConstants`):
+  shock from this turn's and the cumulative casualty fractions plus the expected leader loss, times
+  `1 + forceDisadvantage` from the two lanes' loss shares; the expected fail fraction against the
+  squad's resolve from Ego, and the rout threshold raised by a leader who would hold. The hazard is
+  the chance the realized fail fraction clears that threshold, with the binomial spread
+  `sqrt(F(1-F)/n)` as the width, so it is deterministic and continuous. Synapse-covered and
+  synapse-providing squads never break, and neither does a lone model (its first casualty is the
+  whole squad). A break counts the broken side's remaining BV as removed from the fight.
+- **Range path.** The separation changes during the forecast: our closing speed in Close, an
+  approaching enemy contact seeker's speed (it walks through our fire band), a fleeing quarry's
+  speed opening it while we stand. Rates are sampled at nine geometrically spaced ranges along the
+  path (dense close in, where fire climbs with `ln(1 / range)`), plus the current and destination
+  ranges, and interpolated linearly. Each part of a turn is priced over the ground it covers: the
+  moving part at the exact average of the interpolated rates from where it starts to where the move
+  ends, the standing part at the arrival point in an arrival turn and over its own drift otherwise.
+  Until 2026-10-09 a turn was read at the range it began, from five evenly spaced samples, and a
+  charge's value was a sawtooth with the period of one turn's run (plus or minus 10 to 15 BV for 30
+  Hormagaunts against 20 PDF). Standing rates are the aimed sustained rates
+  on both sides; moving incoming fire uses our speed as target speed, as the engine's hit modifier
+  does. The forecast assumes an enemy **stands and aims** unless it is charging to contact (a
+  contact seeker's baseline) or fleeing (a Bound, Routing or BreakOff role)
+  (`EngagementExchangeModel.ForecastFiringPosture`). Until 2026-10-09 it read the enemy's baseline
+  posture, a containment fallback, as a prediction: two shooting squads at 260 yards, each inside
+  the other's wide preferred band, each assumed the other would keep stepping back and priced its
+  fire un-aimed and on the move, 20 to 30 times below its standing rate, and both forecast a win.
+- **Contact.** When contact can happen in a lane (an enemy contact seeker charging us, our own
+  contact seeker's Close continuation, or a state already in contact, whatever either squad's
+  doctrine), both sides fight at the contact (melee) rates once the
+  separation reaches 1 yard, and the range rates of that lane are ranged only: sampled from
+  2 yards out, outside the exchange model's melee band (1.5). Each turn is split into the share
+  spent moving (rates at the turn's start), standing (rates where the squad stands, which in an
+  arrival turn is the arrival point) and in contact (the rest of the turn after arrival).
+  Until 2026-10-07 the rate at 1 yard was the melee rate and was interpolated toward the next
+  sample, which put melee-sized fire at 3–8 yards; the arrival turn was read at its start range,
+  and a charge of our own reached contact only through that sample. Where the last step of a
+  charge landed then decided whether the forecast squad broke in the false fire band: the Close
+  value jumped between +62 and −75 over 3 yards of start range, and 30 Hormagaunts slowed to a walk
+  30 yards from a PDF line and routed under its fire.
+  A state is in contact when, with each squad moved as a block to its state centroid, the nearest
+  two soldiers are within the melee band plus the planning contact allowance (1.5 + 1.0 yards),
+  unless the enemy is fleeing (Bound, Routing, BreakOff). Until 2026-10-09 two squads that do not
+  seek contact were priced in contact at the standing rates read at 1 yard, so the defenders' melee
+  never appeared: Neophyte Hybrids ran into Shoota Boyz from 15 yards on their point-blank fire and
+  met melee of 100 to 130 BV a turn against their own 10 to 20. The test is soldier to soldier because
+  no centroid allowance fits both shapes: two blocks in contact keep their centroids 4.8 yards apart,
+  while two lines facing each other are wide but shallow (a mean-spread allowance counted Shoota
+  Boyz in a line as in contact 10 yards away).
+- **Discount.** Each turn's exchange and each break is weighted by `0.97^turn`
+  (`EngagementExchangeForecast.TurnDiscount`). Without it a 183-turn horizon let any positive rate
+  grind the other side to nothing, every option ended in the same place, and the forecast stopped
+  telling them apart.
+
+**There is no access term any more.** Until 2026-10-06 `Phi` also carried a contribution-access
+term, a tempo cost of `targetBattleValue / 5` per turn spent unable to contribute. The exchange
+integral already priced that delay (weak fire while out of range, a shorter useful phase), so it
+was counted twice, at a size the BV ratio between the sides set. The Close continuation now carries
+the case it was written for, a squad that reads as idle where it stands.
+
+`T` is derived once per planning turn for each squad and is shared by every candidate in that
+squad's decision. It is the shorter of two clocks, each Battle Value above a withdrawal threshold
+divided by a removal rate, clamped to 1–183 turns:
 
 ```text
 T          = min(enemyClock, ownClock)
@@ -327,7 +421,9 @@ Until 2026-09-23 `T` was one side-wide value, enemy BV over the side's removal r
 how fast the squad itself was being worn down. The architecture summary is in `OnlyWar_TDD.md`
 §6.6 (*Engagement horizon*).
 
-Two properties of that decomposition are load-bearing and were both wrong until 2026-09-20.
+The next three paragraphs record how the (since removed) access term was corrected on 2026-09-20.
+The lessons carry over: the range path measures closing against the net closing rate, and an
+arrival that never happens buys nothing.
 
 **Helplessness is measured against the plinking floor, not against `scale`.** `scale` is a tempo
 magnitude — the rate that would clear the enemy squad in `AccessValueTurns` — and no real squad
@@ -374,7 +470,8 @@ saturating form has no flat region, so there is a gradient toward the quarry at 
 quarry's speed is deliberately absent from this positional formula: a potential answers "how good
 is this projected state". Candidate states nevertheless project the same one-turn quarry movement,
 so speed changes the resulting separation rather than adding an option-dependent bonus. Arrival
-time outside useful range is priced separately by access. Each term therefore telescopes.
+time outside useful range is priced by the exchange forecast's Close continuation. Each term
+therefore telescopes.
 
 Two consequences are deliberate. The marginal value of a yard RISES as a squad approaches its
 band, rather than tapering; the taper the older form showed was the per-turn bounty, not a
@@ -406,6 +503,14 @@ previous posture should carry the decision. Since 2026-09-23 the floor scales wi
 horizon, `0.1 × T / 183`: `Phi` differences are rates integrated over `T`, so a fixed floor set
 when horizons sat near the cap swallowed real decisions once `T` began ending at the first
 withdrawal point.
+
+**No floor when there is somewhere useful to be (2026-10-06).** The floor is for a squad with no
+shot and nowhere useful to be. When the current state's Close continuation beats Stay
+(`Breakdown.CloseAdvantage > 0`), the squad has somewhere better to be, and a step toward it is
+small only because the arrival is far: under the 0.97 discount one step of a hundred-turn approach
+is worth about a hundredth of the arrival. That gain does not flip from turn to turn, so the floor
+is set to zero and only the fraction-of-best band applies. Without this an autogunner 900 yards
+from an unarmed target held forever.
 
 This was the last of the three defects behind the Grist Nine Epsilon turn-cap battles, and the
 only one of them that was not itself a scoring error. It stayed invisible while the pursuit
@@ -456,10 +561,62 @@ weapon reach and never reads useful reach at all. §5.5 sets out the three range
 which of them each consumer actually uses today, and states the rule the scoring is intended to
 follow.
 
-The graded removal model uses the shared `WoundProgressCreditWeight` (`lambda`, currently 0.5) to
-give partial credit for moving a location toward a wound threshold while keeping take-out as the
-dominant event. `RangedEffectivenessCurve`'s saturation and negligible-removal floors are named
-calibration seams in code, not rules-data facts.
+**Removal per hit is measured on the engine's wound counter (2026-10-06, `RemovalMath`).** A hit
+is credited with its take-out chance plus the softening it does:
+
+```text
+removal per hit = Σ_loc w_loc × P(this hit disables loc)
+                + || w_loc × (E[min(6^level, gap_loc)] / gap_loc - P(disable loc)) ||_q
+```
+
+- A location's wound counter holds at most five wounds of a level, six of which become one of the
+  next, so it is a base-6 number in Negligible units; `gap_loc` is the units left before the
+  location disables. A wound of level L adds `6^L`: a Moderate hit is 1/36 of a Critical, not a
+  quarter of one. The level distribution comes from the damage roll (eight normal CDFs), and any
+  hit that beats the worn armor wounds at least Negligible, as `WoundResolver` does.
+- Disabling follows `Soldier.IsCombatEffective`: a vital location crippled or severed; the last
+  functioning hand group crippled or severed; any other hand-group location severed (an untreated
+  severed limb); a principal motive location crippled, severed or at Massive; a motive extremity
+  (a foot) only when severed.
+- One-hit chances add across locations; softening combines with the q-norm, q = 2
+  (`LocationFillCombineExponent`), because the first location to fill decides. Against the
+  engine's own hits-to-disable, simulated by `HardnessDiagnostics` over 187 weapon-target cells, the
+  estimate's root-mean-square error factor is 1.25 at q = 2.
+
+This replaced Phase 5's `lambda × (fraction of the remaining wound RATIO closed)`, summed over
+locations, with lambda = 0.5. That was several times too generous for many weak hits against
+armour: Neophyte autoguns against Scouts were credited about 22 hits per kill against the engine's
+54–89, and the squads' forecasts claimed fights they lost badly.
+
+**The standing rate is the soldier's own firing plan (2026-10-09, product-owner decision).** The
+removal-rate table captures, for each shooter, the un-aimed shot and the four aimed shots the shot
+planner weighs (one to four turns of aim), each through the same evaluator and bonus as
+`RangedTargetSelector.EvaluateFireTiming`, with the burst the planner chooses for it. At each range
+the sustained rate picks among firing every turn and the four aim-then-fire cycles with the
+planner's own rule (value per turn net of the round charge, scarcity × the best value per round on
+offer × rounds spent) and credits the chosen plan's **gross** removal per turn. The Hold option's
+readiness (`FireTiming.Readiness`) is the gross removal per turn of the same plan, so the forecast
+and the option's immediate term price a standing turn identically. The round charge decides how a
+soldier fires (aim length and burst), not what a turn of it is worth.
+
+History: until 2026-10-06 the rate added the full Accuracy and up to three extra aim turns to the
+un-aimed total at the un-aimed burst, which credited Neophytes with ten-round bursts hitting about
+90% when they fired four rounds and hit 21%. From 2026-10-06 to 2026-10-09 it was one aim turn at
+`min(Accuracy, skill) + 1`. That was wrong in both directions, because the round charge makes most
+soldiers aim four turns: Neophyte Hybrids were credited 13.4 BV a turn and delivered 9.7, Shoota
+Boyz were credited 1.6 and delivered 3.9. Readiness was the net value, about half of the gross, so a
+standing turn was credited 6.5 where the forecast valued it at 13.4. Every step forward looked
+cheap, and the Hybrids crept toward the Orks under fire without shooting.
+
+Every planner prediction of an aimed shot uses the engine's bonus, `min(Accuracy, skill) + aim
+turns + 1` (`RangedTargetSelector.AimAccuracy`, 2026-10-09). Until then the fire timing, sticky and
+stored aims, the target scan, the pursuit and attack-opportunity projections and the effectiveness
+curve added the weapon's full Accuracy, which promised every shooter less skilled than his weapon a
+shot the engine never gave him. Two withdrawal tests had leaned on that: a "genuinely accurate"
+test gun of Accuracy 25 in the hands of a soldier whose skill was far below 25.
+
+`RangedEffectivenessCurve`'s saturation and negligible-removal floors are named calibration seams
+in code, not rules-data facts.
 
 ### 5.4 Planning and execution invariants
 
@@ -475,6 +632,12 @@ calibration seams in code, not rules-data facts.
   screen capacity and counterfactual loss. Cross-turn semantic fields are cloned in snapshots.
 
 ### 5.5 Pursuit range targets — implemented scoring and remaining work
+
+> **2026-10-06.** This section predates the coupled exchange forecast (§5.2). Its access term no
+> longer exists, and its "Implemented formulas" and baseline numbers describe the potential as it
+> was. The range targets still apply: the forecast's Close continuation aims a fire-preserving
+> pursuer at its useful fire range and a contact seeker at contact, and its range path lets the
+> quarry open the range while the pursuer stands.
 
 **STATUS. Useful-fire pursuit scoring and one-turn quarry-motion projection are implemented for the
 fire-preserving `Pursuit` and `Follow` roles. `Press` remains the committed no-fire close and melee
@@ -1150,14 +1313,24 @@ These decisions replace earlier forms and should not be reintroduced during main
 | Earlier form | Current rule |
 |---|---|
 | Geometric `0.65^turns` discount over the whole approach | `0.65` is only a bounded rollout discount; contact arrival uses the state/value model |
-| Hard `min(pool, rate × horizon)` cap | Continuous finite-pool saturation plus continuous access cost |
-| Saturation activated at a threshold | Saturation is continuous for all positive opportunity |
+| Hard `min(pool, rate × horizon)` cap | A coupled turn-by-turn exchange forecast (each side's fire scaled by its survivors, both sides able to break, 0.97 per-turn discount); the finite-pool saturation and access cost that replaced the cap are themselves gone (2026-10-06) |
+| Outgoing and incoming integrated independently, each saturated against its own pool | Coupled: losses taken early cost fire later, and neither side is wiped out along with the other |
+| A separate access (tempo) term for time out of useful range | The exchange forecast's Close continuation; `Phi` takes the better of Stay and Close |
+| Saturation activated at a threshold | No threshold anywhere in the forecast: break hazards and range transitions are continuous |
+| Melee read from the range rates' 1-yard sample and interpolated outward; the arrival turn read at its start range | Explicit contact rates in any lane where contact can happen (either side charging); ranged-only range rates from 2 yards; the arrival turn split into moving, standing at the arrival point, and contact (2026-10-07) |
+| Graded credit as `lambda × fraction of the remaining wound ratio`, summed over locations | Credit in the engine's base-6 wound-counter units, one-hit chances added and softening combined with a q = 2 norm, calibrated against simulated hits-to-disable |
+| Every motive location disables at cripple; a non-last arm never | `IsCombatEffective`'s rules: feet only when severed, legs also at Massive, any severed limb |
+| Aimed rate as un-aimed total + full Accuracy + up to three aim turns, at the un-aimed burst; then one aim turn (2026-10-06) | The plan the shot planner would choose (fire now or one to four aim turns, by its net-of-round-charge rule), credited at its gross removal per turn (2026-10-09) |
+| Aim readiness as the net (round-charged) prepared rate | Gross removal per turn of the plan the round charge picks, the same quantity the forecast's standing rate uses |
+| Burst size by a climb that stops at the first unpaid round | Every burst length scored; exact where the score is not concave |
+| Indifference floor in every decision | No floor when the state's Close continuation beats Stay (somewhere useful to be) |
 | Ranged removal discounted by enemy arrival time | Ranged removal is immediate; only delayed contact payoff is arrival-discounted |
-| Access helplessness referenced to `targetBattleValue / AccessValueTurns` | Referenced to the negligible-removal rate, so a squad whose fire is landing is not priced as helpless |
-| Access delay measured against the pursuer's own move | Measured against the net closing rate; an un-outrunnable quarry yields no access value |
+| Access helplessness referenced to `targetBattleValue / AccessValueTurns` | (Access removed 2026-10-06.) Helplessness was referenced to the negligible-removal rate |
+| Access delay measured against the pursuer's own move | The forecast's range path closes at the net rate; an un-outrunnable quarry is never reached |
 | A `Phi` term scaled by the candidate's speed (pursuit contact progress) | `Phi` is a function of projected state only, so the potential difference telescopes |
 | Pursuit contact progress paying `attainable` per turn of movement | A saturating position value worth `attainable` across the whole approach, once |
 | Jogging as the baseline posture beyond a squad's reach | The fast approach, when the squad can run |
+| The enemy's baseline posture as the posture it fires from in the forecast | Standing and aimed, unless it charges to contact or flees (2026-10-09) |
 | Indifference band as a fraction of the squad's Battle Value | A fraction of the best score, with an absolute floor — stock and rate are not the same dimension |
 | Per-soldier movement vote and weak-ranged fallback tree | Squad semantic options with doctrine masks and executable root policies |
 | A flat dual-wield defense bonus | Weapon `ParryModifier`s only |

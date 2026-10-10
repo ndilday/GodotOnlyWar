@@ -18,8 +18,8 @@ namespace OnlyWar.Battles;
 /// square-law geometric mean sqrt(Offense x Durability) — a unit that kills twice as fast,
 /// or lives twice as long, is worth sqrt(2) line troopers — scaled by a small command
 /// multiplier and anchored so the light-infantry reference profile scores
-/// <see cref="AnchorBattleValue"/> (the PDF trooper's strategic garrison unit scale,
-/// see StrategicCombatRules.PdfTrooperBattleValue).
+/// <see cref="AnchorBattleValue"/>. That anchor sets the scale of the values written to the
+/// rules database (a PDF trooper is 5 there); runtime code reads the database, not this number.
 ///
 /// This is intentionally an offline/data-calibration primitive; the resulting value is
 /// persisted on SoldierTemplate and consumed by force generation.

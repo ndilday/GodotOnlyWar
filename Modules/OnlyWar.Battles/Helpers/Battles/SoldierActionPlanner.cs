@@ -91,7 +91,8 @@ namespace OnlyWar.Battles
                     stickyTarget,
                     stickyAim.Item2,
                     stickyRange,
-                    stickyAim.Item2.Template.Accuracy + stickyAim.Item3 + 1);
+                    RangedTargetSelector.AimAccuracy(soldier, stickyAim.Item2.Template)
+                        + stickyAim.Item3 + 1);
                 RangedTargetSelector.FireTiming stickyTiming = _ranged.EvaluateFireTiming(
                     soldier,
                     stickyTarget,
@@ -213,7 +214,8 @@ namespace OnlyWar.Battles
                 && range <= existingAim.Item2.Template.MaximumRange)
             {
                 float modifier = -(existingAim.Item2.Template.Bulk * bulkMultiplier)
-                    + ((existingAim.Item2.Template.Accuracy + existingAim.Item3 + 1)
+                    + ((RangedTargetSelector.AimAccuracy(soldier, existingAim.Item2.Template)
+                        + existingAim.Item3 + 1)
                         * aimMultiplier);
                 return PlanConventionalShot(
                     soldier,

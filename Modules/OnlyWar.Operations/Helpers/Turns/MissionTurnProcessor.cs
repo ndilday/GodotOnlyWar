@@ -775,17 +775,19 @@ namespace OnlyWar.Operations.Turns
         /// Applies a level delta directly. Used by the NPC development planner, whose build amounts
         /// are already priced against the band they are buying into (FactionStrategyController), so
         /// structural improvements arrive as levels. Reorganization interprets the same amount as
-        /// effort and converts it to a fixed quantity of military BV.
+        /// effort and reforms a share of the disorganized military BV per point.
         /// </summary>
         public static void ApplyConstruction(ConstructionMission mission, double amount)
         {
             double before = GetConstructionLevel(mission);
             if (mission.ConstructionType == DefenseType.Organization)
             {
+                double share = Math.Min(
+                    1.0, amount * StrategicCombatRules.ReorganizationShareOfDisorganizedPerEffort);
                 long requested = amount <= 0
                     ? 0
                     : Math.Max(1L, (long)Math.Round(
-                        amount * StrategicCombatRules.ReorganizationBattleValuePerEffort));
+                        share * mission.RegionFaction.DisorganizedMilitaryStrength));
                 mission.RegionFaction.ReorganizeMilitaryStrength(requested);
             }
             else

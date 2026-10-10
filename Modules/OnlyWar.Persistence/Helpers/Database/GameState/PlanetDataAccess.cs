@@ -136,13 +136,6 @@ namespace OnlyWar.Persistence.Database.GameState
                         && reader[targetBattleValueOrdinal].GetType() != typeof(DBNull)
                             ? Convert.ToInt64(reader[targetBattleValueOrdinal])
                             : null;
-                    if (missionType == MissionType.Ambush
-                        && isRegionMission
-                        && targetBattleValue == null)
-                    {
-                        targetBattleValue =
-                            LegacySaveValueMappers.EstimateLegacyAmbushTargetBattleValue(missionSize);
-                    }
 
                     Region region = regionMap[regionId];
                     region.RegionFactionMap.TryGetValue(factionId, out RegionFaction regionFaction);

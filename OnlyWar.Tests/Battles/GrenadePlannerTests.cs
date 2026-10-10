@@ -51,7 +51,12 @@ public class GrenadePlannerTests
         BattleSquad shooters = CreateSquad("Grenadier", 720);
         BattleSoldier shooter = shooters.Soldiers[0];
         ArmWithRifleAndBeltGrenade(shooter);
-        BattleSquad enemies = CreateSquad("Cluster", (730, 2), (731, 2), (732, 2), (733, 2));
+        // Six bodies, not four (2026-10-06). With removal per hit measured on the engine's wound
+        // counter, a frag burst into four constitution-10 men is worth 1.30 against a 73% marksman
+        // shot's 1.20 -- better, but inside the 0.25 margin a throw must clear -- so four no
+        // longer made the cluster clearly worth the grenade. Six are worth 1.70.
+        BattleSquad enemies = CreateSquad(
+            "Cluster", (730, 2), (731, 2), (732, 2), (733, 2), (734, 2), (735, 2));
         foreach (BattleSoldier enemy in enemies.Soldiers)
         {
             // Frag-vulnerable infantry make catching the whole cluster clearly out-value a lone
@@ -65,6 +70,8 @@ public class GrenadePlannerTests
         Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 731), false, 11, 0);
         Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 732), false, 10, 1);
         Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 733), false, 11, 1);
+        Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 734), false, 10, 2);
+        Place(grid, enemies.Soldiers.Single(s => s.Soldier.Id == 735), false, 11, 2);
         List<IAction> shootActions = [];
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, enemies);
@@ -74,7 +81,7 @@ public class GrenadePlannerTests
         BlastAttackAction blast = Assert.IsType<BlastAttackAction>(Assert.Single(shootActions));
         Assert.Equal(shooter.Soldier.Id, blast.ShooterId);
         Assert.Equal(TestModelFactory.FragGrenadeTemplate.Id, blast.WeaponId);
-        Assert.Contains(blast.TargetId, new[] { 730, 731, 732, 733 });
+        Assert.Contains(blast.TargetId, new[] { 730, 731, 732, 733, 734, 735 });
         Assert.DoesNotContain(shootActions, action => action is AimAction or ShootAction);
     }
 

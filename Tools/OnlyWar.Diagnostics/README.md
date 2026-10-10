@@ -29,7 +29,10 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   table is always from A's point of view. For the first battle of a run, `DUEL_TRACE` writes the
   engine's planning log and `DUEL_WOUND_LOG` writes every wound side A takes (attack kind, weapon,
   damage, hit location, damage-to-Constitution ratio and wound level), a per-weapon summary, and the
-  final wound totals of A's hit locations: the tool for "what actually killed it".
+  final wound totals of A's hit locations: the tool for "what actually killed it". `DUEL_SHOT_LOG`
+  writes every volley of that battle, both sides (rounds planned and fired, aim multiplier, the
+  turns the shooter had just spent aiming at that target, hits, range) and a per-weapon summary split
+  by aimed and un-aimed: the tool for "did the aim reach the shot".
 - All the tools run battles in parallel, `DUEL_WORKERS` at a time (default 8; `1` runs them one after
   another). Each battle has its own seeded random streams and results are summed in seed order, so
   the worker count does not change the result.
@@ -67,7 +70,25 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   per attack and per squad, plus each squad's effectiveness relative to the first entry. Hits, not
   shots: to-hit chance is excluded. Set `RUN_HARDNESS=1` and `HARDNESS_ENTRIES` (`key=spec|...`); the
   other settings (`HARDNESS_TRIALS`, `_RANGE`, `_CAP`, `_OUT`) are documented on the class. No
-  battles, about 20 seconds.
+  battles; a few minutes for seven entries. The report ends with the planner's own estimate of the
+  same hits to disable (`RemovalMath`, averaged over the same targets) at several settings of its
+  location-combining exponent, with the error per setting: the calibration of
+  `RemovalMath.LocationFillCombineExponent`. `HARDNESS_EXPLAIN="attacker:Weapon Name:target"` adds,
+  for one cell, why each simulated target left the fight, the counter value each location gained per
+  hit, and the planner's per-location fill rates.
+- `RateTableDiagnostics` prints the engagement planner's squad-pair removal-rate table for two squads
+  deployed as the duel deploys them, factor by factor: un-aimed and one-aim hit chances, the bursts
+  the shot planner chooses for each, take-out and softening per hit, hits per kill, and the un-aimed
+  and sustained rates. It then prices one standing turn both ways for every squad, shooter by
+  shooter: the table's sustained rate (what the exchange forecast credits) against the readiness of
+  the Hold option's Aim (what the option's immediate term credits), with the shot planner's own aimed
+  shots in between, gross and net of the ammunition charge, the aim length each prefers, and the
+  gross removal of the plan the charge picks. Set `RUN_RATE_TABLE=1` and `RATE_TABLE_SCENARIO`
+  (duel syntax, for example `"26 vs 4 @ 150"`); `RATE_TABLE_SEED` and `RATE_TABLE_OUT` are
+  optional. No battles. The same report prints each squad's options and the curve its effective
+  engagement range is the argmax of. Its second fact, `PhiSweep`, rebuilds the scenario at every
+  opening range in `PHI_SWEEP` (`"from:to:step"`) and prints each side-A squad's root engagement
+  potential and chosen option: the tool for "does the forecast jump". Set `RUN_PHI_SWEEP=1`.
 - `MarineVersusPdfDuelDiagnostics` is the first one-marine-against-N duel, superseded by the duel tool
   and kept for reference.
 

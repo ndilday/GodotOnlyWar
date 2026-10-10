@@ -58,56 +58,44 @@ namespace OnlyWar.Battles
         private const float DeepTailRoll = DamageRollMean + (CertainZ * DamageRollStdDev);
 
         // ===================================================================================
-        // TUNABLE -- lambda, the graded-damage credit weight (Phase 5,
-        // Design/Reference/BattleLogic.md).
+        // GRADED CREDIT FROM THE WOUND LADDER (2026-10-06; replaces Phase 5's lambda).
         //
-        //   removal = BV * [ P(takeout) + lambda * E[woundProgress; no takeout] ]
+        //   removal per hit = P(takeout) + combined location softening per hit
         //
-        // 0 reproduces pre-Phase-5 behaviour exactly (only the finishing blow scores). 1 credits
-        // every hit with the full fraction of the disable threshold it closes. It cannot conjure
-        // value against an impenetrable target at ANY setting -- see CalculateRemovalFractionOnHit.
+        // Phase 5 credited a hit with lambda (0.5) times the fraction of the remaining wound RATIO
+        // it closed, summed over hit locations. Two errors made that several times too generous
+        // for many weak hits against armour: the engine's wound counter is a base-6 number, not a
+        // ratio scale -- a Moderate wound (ratio 0.25) is 1/36 of a Critical, not a quarter of one --
+        // and the sum over locations ignored that a disable needs the wounds in ONE location.
+        // Measured 2026-10-06 (BattleValueCalibration.md section 7.17's follow-up): Neophyte
+        // autoguns against Scouts at 150 yards were credited about 22 hits per Scout; the engine
+        // takes 89 (HardnessDiagnostics).
         //
-        // SWEEP, reference scenario (GradedRemovalCalibrationTests, which regenerates this table):
-        // 30 bolter marines (Gun skill bonus ~1.4, Dex 15.4, BV 9/11) at 200 yards from 1 Hive
-        // Tyrant (BV 84), 1 Lictor (BV 37) and 2 melee Carnifexes (BV 30), all melee-only. Reported
-        // for the lead marine squad; margin = Hold score - CloseToContact score, so positive means
-        // "stand and shoot". Measured with the Phase 5c/5d lookahead in place.
+        // Now each location's fill per hit is the expected wound value of the hit in Negligible
+        // units (6^level, capped at the gap) over the gap left to its cripple or sever value --
+        // exact for the counter, from eight normal CDFs of the damage roll. A disabling hit counts
+        // as the whole gap, i.e. as the take-out chance; the rest of the fill is softening. Expected
+        // hits to disable is about 1 / (take-out + combined softening), so removal per hit is that
+        // sum. How the softening combines across locations is LocationFillCombineExponent below.
         //
-        //   lambda | chosen      | outgoing | future | Hold - Close
-        //   -------+-------------+----------+--------+--------------
-        //     0.00 | StepForward |    0.009 |   1.84 |        2.334
-        //     0.05 | Hold        |    0.170 |  3.742 |        2.471
-        //     0.10 | Hold        |    0.330 |  5.643 |        2.608
-        //     0.15 | Hold        |    0.491 |  7.544 |        2.746
-        //     0.20 | Hold        |    0.652 |  9.445 |        2.883
-        //     0.25 | Hold        |    0.812 | 11.346 |        3.020
-        //     0.35 | Hold        |    1.133 | 15.148 |        3.295
-        //     0.50 | Hold        |    1.615 | 20.851 |        3.706
-        //     0.75 | Hold        |    1.935 | 33.626 |        4.304
-        //     1.00 | Hold        |    2.577 | 44.102 |        4.813
+        // The invariant Phase 5 kept still holds: a target the roll cannot penetrate fills nothing,
+        // so a squad is never paid for firing at it.
         //
-        // WHY 0.5, in order of weight:
-        //  1. lambda = 0 COLLAPSES. With `future` now built from the same honest rate, a squad that
-        //     cannot one-shot anything scores ~0 on both halves and the decision falls to
-        //     ChooseEngagementOption's tie-break -- StepForward, above. Every positive lambda fixes
-        //     the reported behaviour; the sweep is choosing a magnitude, not a direction.
-        //  2. Rate of resolution. 30 marines remove 3 * outgoing BV/turn against 181 BV of
-        //     Tyranids: ~75 turns at 0.25, ~38 at 0.5, ~23 at 1.0. The design doc's stated
-        //     calibration target is "tens of turns, not 183".
-        //  3. woundProgress SUMS across hit locations, but a disable requires the damage to
-        //     concentrate in ONE of them, so the summed figure systematically over-states real
-        //     progress toward a kill. That is an argument for a value clearly below 1, and it is
-        //     the only one of the three that is about physics rather than about tuning.
-        //  4. It leaves `future` (20.9) at nearly the magnitude the surrounding score terms were
-        //     tuned against pre-Phase-5 (22.6), so this phase does not silently re-scale
-        //     commitment, role and readiness costs along with it.
-        // Provisional pending the user's manual Godot verification; the sweep above is recorded
-        // here so revisiting it is a one-line change, not a re-derivation.
-        // The SHIPPED value, and a const like every other tunable in this codebase
-        // (MoraleConstants is all `public const`). Phase 5 shipped this as a settable static so the
-        // sweep could re-run in one process, and said so plainly; Phase 7 removed that. There is no
-        // writable surface on this constant at all.
-        internal const float WoundProgressCreditWeight = 0.5f;
+        /// <summary>
+        /// How the locations' SOFTENING combines into one per-hit removal fraction: the q-norm
+        /// <c>(sum rate_i^q)^(1/q)</c> of each location's fill per hit beyond its one-hit take-out
+        /// chance. One-hit take-out chances simply add (they are separate outcomes of the same hit);
+        /// softening competes, because the first location to fill decides -- q = 1 would add it like
+        /// independent chances, q = infinity would keep only the fastest location. Chosen by
+        /// matching expected hits to disable against the engine's own, simulated hit by hit
+        /// (Tools/OnlyWar.Diagnostics HardnessDiagnostics, which prints both; 2026-10-06, seven
+        /// squads against each other at 60 yards, 187 weapon-target cells, the estimate averaged
+        /// over the same generated targets): root-mean-square error factor 1.39 at q = 1, 1.25 at
+        /// q = 2, 1.27 at q = 4. The worst cells at q = 2 are hits that almost never penetrate (an
+        /// autopistol against power armour, about 20,000 hits measured), where the estimate is
+        /// about 5x pessimistic and no decision turns on it.
+        /// </summary>
+        internal const float LocationFillCombineExponent = 2f;
         // ===================================================================================
 
         /// <summary>
@@ -130,35 +118,20 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// PHASE 5 (Design/Reference/BattleLogic.md). The fraction of a target's battle
-        /// value one landed hit is credited with removing:
-        /// <c>P(takeout) + lambda * E[woundProgress; no takeout]</c>.
+        /// The fraction of a target's battle value one landed hit is credited with removing: about
+        /// 1 / (expected hits to disable it from its current wounds), and never less than the
+        /// chance this hit takes it out.
         ///
-        /// <para>WHY. <see cref="CalculateTakeOutProbabilityOnHit"/> was already wound-state aware
-        /// -- <c>FindMinimumDisablingWoundRatio</c> reads the wounds a location already carries, so
-        /// take-out rises as a target is softened. What was missing was credit for CREATING that
-        /// state: the planner scored only the finishing blow, never the twenty hits that made it
-        /// possible, so a squad that could not one-shot anything scored ~0 for shooting and the
-        /// decision fell entirely to the lookahead. This is a credit-assignment fix, not a new
-        /// accumulator.</para>
-        ///
-        /// <para>The two terms decompose <c>E[progress]</c> exactly:
-        /// <c>E[progress] = P(takeout)*1 + E[progress; no takeout]</c>, where progress is the
-        /// fraction of the remaining gap to the disable threshold that the hit closes. lambda
-        /// therefore interpolates between "only kills count" (0) and "all expected progress counts"
-        /// (1), and the result is bounded by 1 for lambda in [0, 1].
-        ///
-        /// NOTE: the second term is the PARTIAL expectation (integrated over the no-takeout mass),
-        /// not the conditional one the design doc's notation suggests. The conditional form
-        /// diverges as P(takeout) approaches 1 -- a target that is certain to die would be scored
-        /// as worth MORE than its battle value -- and it does not telescope with the first term.
-        /// </para>
+        /// <para>WHY. <see cref="CalculateTakeOutProbabilityOnHit"/> is wound-state aware --
+        /// <c>FindMinimumDisablingWoundRatio</c> reads the wounds a location already carries, so
+        /// take-out rises as a target is softened. Scoring only that finishing blow priced a squad
+        /// that cannot one-shot anything at ~0 for shooting (Phase 5); the graded half credits the
+        /// hits that soften the target, measured on the engine's wound counter (see the block at
+        /// the top of this class).</para>
         ///
         /// <para>INVARIANT (Design doc "Invariants"): squads must not fire at targets they cannot
-        /// damage. When penetration is impossible both the take-out threshold and the
-        /// wound-onset threshold sit far out in the damage roll's tail, so the Gaussian mass
-        /// between them vanishes and BOTH terms go to ~0. lambda cannot buy value against an
-        /// impenetrable target; it only grades the penetrable-but-not-lethal middle.</para>
+        /// damage. A hit that cannot beat the worn armor adds no wound, so its fill is 0 and so is
+        /// its take-out.</para>
         /// </summary>
         internal static float CalculateRemovalFractionOnHit(
             BattleSoldier target,
@@ -195,13 +168,13 @@ namespace OnlyWar.Battles
                 target, effectiveArmor, weaponWoundMultiplier, damageCoefficient, null);
         }
 
-        internal static float CombineRemovalFraction(float takeOut, float woundProgress)
-        {
-            float lambda = WoundProgressCreditWeight;
-            return lambda <= 0f
-                ? Math.Clamp(takeOut, 0f, 1f)
-                : Math.Clamp(takeOut + (lambda * woundProgress), 0f, 1f);
-        }
+        /// <summary>
+        /// The per-hit removal fraction from its two halves: the take-out chance and the graded
+        /// credit beyond it (<c>woundProgress</c>, which the location walk already computes as
+        /// combined fill minus take-out, so the sum is the combined fill).
+        /// </summary>
+        internal static float CombineRemovalFraction(float takeOut, float woundProgress) =>
+            Math.Clamp(takeOut + Math.Max(0f, woundProgress), 0f, 1f);
 
         /// <summary>
         /// Expected fraction of a target's battle value removed by ONE burst, over the joint
@@ -343,27 +316,44 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// PHASE 5. <c>E[woundProgress; no takeout]</c> from the same <c>(w_loc, K_loc)</c> vector
-        /// take-out uses -- see <see cref="CalculateRemovalFractionOnHit"/> for the semantics.
-        /// </summary>
-        /// <summary>
-        /// PHASE 5. Both halves of the graded fraction from ONE pass over the location vector. The
-        /// engagement scorer calls this for every (option, enemy, separation) it projects (the
-        /// original caller was a (policy, ply, enemy) rollout, since removed), and running
-        /// <see cref="EvaluateTakeOutProbability"/> and <see cref="EvaluateWoundProgress"/> back to
-        /// back walked the vector twice and cost ~3x on the degrading-weapon path.
+        /// Both halves of the per-hit removal from ONE pass over the location vector, combined:
+        /// the take-out chance and the location fills (see the block at the top of this class).
+        /// The engagement scorer calls this for every (option, enemy, separation) it projects.
         /// </summary>
         internal static float EvaluateRemovalFraction(
             IReadOnlyList<TakeOutLocationTerm> terms,
             float damageCoefficient)
         {
+            (float takeOut, float progress) = EvaluateRemovalTerms(
+                terms, damageCoefficient, LocationFillCombineExponent);
+            return CombineRemovalFraction(takeOut, progress);
+        }
+
+        /// <summary>
+        /// The graded half alone: combined fill per hit beyond the take-out chance.
+        /// </summary>
+        internal static float EvaluateWoundProgress(
+            IReadOnlyList<TakeOutLocationTerm> terms,
+            float damageCoefficient) =>
+            EvaluateRemovalTerms(terms, damageCoefficient, LocationFillCombineExponent).Progress;
+
+        /// <summary>
+        /// Take-out and graded credit for a location vector at one damage coefficient, with the
+        /// location-combining exponent as a parameter so the calibration can compare settings.
+        /// </summary>
+        internal static (float TakeOut, float Progress) EvaluateRemovalTerms(
+            IReadOnlyList<TakeOutLocationTerm> terms,
+            float damageCoefficient,
+            float combineExponent)
+        {
             if (terms == null || damageCoefficient <= 0)
             {
-                return 0f;
+                return (0f, 0f);
             }
-            bool graded = WoundProgressCreditWeight > 0f;
             float takeOut = 0f;
-            float progress = 0f;
+            float fillNorm = 0f;
+            float fillMax = 0f;
+            bool maximum = float.IsPositiveInfinity(combineExponent);
             for (int index = 0; index < terms.Count; index++)
             {
                 TakeOutLocationTerm term = terms[index];
@@ -371,115 +361,111 @@ namespace OnlyWar.Battles
                 {
                     continue;
                 }
-                takeOut += term.Weight * EvaluateTakeOutLocationTail(term, damageCoefficient);
-                if (graded)
+                float locationTakeOut = EvaluateTakeOutLocationTail(term, damageCoefficient);
+                takeOut += term.Weight * locationTakeOut;
+                float rate = term.Weight * GradualFill(term, damageCoefficient, locationTakeOut);
+                if (maximum)
                 {
-                    progress += term.Weight
-                        * EvaluateWoundProgressTail(term, damageCoefficient);
+                    fillMax = Math.Max(fillMax, rate);
+                }
+                else
+                {
+                    fillNorm += MathF.Pow(rate, combineExponent);
                 }
             }
-            return CombineRemovalFraction(
-                Math.Clamp(takeOut, 0f, 1f), Math.Clamp(progress, 0f, 1f));
+            takeOut = Math.Clamp(takeOut, 0f, 1f);
+            float gradual = maximum
+                ? fillMax
+                : fillNorm > 0f ? MathF.Pow(fillNorm, 1f / combineExponent) : 0f;
+            return (takeOut, Math.Clamp(gradual, 0f, 1f - takeOut));
         }
 
-        internal static float EvaluateWoundProgress(
-            IReadOnlyList<TakeOutLocationTerm> terms,
-            float damageCoefficient)
+        // The part of a location's fill per hit that is NOT a one-hit disable: the capped
+        // expectation counts a disabling hit as the whole gap, i.e. as its take-out chance, so the
+        // rest is softening. One-hit chances add across locations (they are separate chances on
+        // the same hit); softening competes, because the first location to fill decides -- which
+        // is why only this part goes through the location-combining norm.
+        private static float GradualFill(
+            TakeOutLocationTerm term, float damageCoefficient, float locationTakeOut) =>
+            Math.Max(0f, EvaluateLocationFill(term, damageCoefficient) - locationTakeOut);
+
+        // Wound ratio at which levels 1..7 (Minor .. Unsurvivable) begin, and each level's worth in
+        // Negligible wounds: six of a level make one of the next (Body.WOUND_MAX = 5).
+        private static readonly float[] LevelRatios = [0.125f, 0.25f, 0.5f, 1f, 2f, 4f, 8f];
+        private static readonly float[] LevelValues = [1f, 6f, 36f, 216f, 1296f, 7776f, 46656f, 279936f];
+
+        /// <summary>
+        /// The value of a normalized wound counter in Negligible units: its nibbles read as base-6
+        /// digits. Every severity comparison in the engine reads the normalized counter as a plain
+        /// magnitude, which orders exactly as this value does.
+        /// </summary>
+        internal static float WoundCounterValue(uint wounds)
         {
-            if (terms == null || damageCoefficient <= 0)
+            float value = 0f;
+            for (int nibble = 0; nibble < LevelValues.Length; nibble++)
+            {
+                value += ((wounds >> (nibble * 4)) & 0xfu) * LevelValues[nibble];
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// Expected share of one location's remaining gap that one hit landing on it fills:
+        /// <c>E[min(6^level, gap)] / gap</c> over the damage roll. A hit that beats the armor
+        /// wounds at least Negligible; each higher level starts where the affine damage-to-ratio
+        /// map reaches its ratio. Exact for the engine's counter, so a location that needs one
+        /// Critical credits a Moderate hit with 1/36 of it, not a quarter.
+        /// </summary>
+        private static float EvaluateLocationFill(TakeOutLocationTerm term, float damageCoefficient)
+        {
+            float gap = term.Gap;
+            if (gap <= 0f)
             {
                 return 0f;
             }
-            float progress = 0f;
-            for (int index = 0; index < terms.Count; index++)
+            float atLeast = DamageTail(term.EffectiveArmor, damageCoefficient);
+            if (atLeast <= 0f)
             {
-                if (SkipLocation(terms[index], damageCoefficient))
+                return 0f;
+            }
+            float expected = 0f;
+            int level = 0;
+            for (; level < LevelRatios.Length; level++)
+            {
+                float next = DamageTail(
+                    term.ZeroProgressThreshold + (term.DamagePerRatio * LevelRatios[level]),
+                    damageCoefficient);
+                expected += (atLeast - next) * Math.Min(LevelValues[level], gap);
+                atLeast = next;
+                if (atLeast <= 0f)
                 {
-                    continue;
+                    break;
                 }
-                progress += terms[index].Weight
-                    * EvaluateWoundProgressTail(terms[index], damageCoefficient);
             }
-            return Math.Clamp(progress, 0f, 1f);
+            if (atLeast > 0f)
+            {
+                expected += atLeast * Math.Min(LevelValues[LevelValues.Length - 1], gap);
+            }
+            return Math.Clamp(expected / gap, 0f, 1f);
         }
 
-        /// <summary>
-        /// One location's partial expectation of fractional progress toward its disable threshold,
-        /// integrated over the sub-take-out part of the damage roll.
-        ///
-        /// <para>The resolver's damage-to-wound-ratio map is affine in the damage roll, so the
-        /// fraction of the remaining gap closed by a roll <c>R</c> is
-        /// <c>(R - r0) / (r1 - r0)</c> between the wound-onset roll <c>r0 = K_zero / c</c> and the
-        /// disabling roll <c>r1 = K_loc / c</c>. With <c>A</c> and <c>B</c> the standardized forms
-        /// of those two rolls, the partial expectation has the closed form
-        /// <c>[phi(A) - phi(B) - A*(Phi(B) - Phi(A))] / (B - A)</c> -- one exp and two CDFs, no
-        /// quadrature, so the lookahead can afford it.</para>
-        /// </summary>
-        private static float EvaluateWoundProgressTail(
-            TakeOutLocationTerm term,
-            float damageCoefficient)
+        // P(damage roll * c >= threshold); 0 once the threshold is past anything the roll makes.
+        private static float DamageTail(float threshold, float damageCoefficient)
         {
-            float disablingRoll = term.PenetrationThreshold / damageCoefficient;
-            float onsetRoll = term.ZeroProgressThreshold / damageCoefficient;
-            // A location already at (or past) its threshold on any wound at all has no partial
-            // credit to give: every penetrating hit either disables it or does nothing.
-            if (disablingRoll - onsetRoll <= 0.0001f)
+            float requiredRoll = threshold / damageCoefficient;
+            if (requiredRoll >= DeepTailRoll)
             {
                 return 0f;
             }
-            float low = (onsetRoll - DamageRollMean) / DamageRollStdDev;
-            float high = (disablingRoll - DamageRollMean) / DamageRollStdDev;
-            float span = high - low;
-            if (span <= 0.0001f)
-            {
-                return 0f;
-            }
-            // The graded band starts past anything the roll produces: no wound, so no progress.
-            if (low >= CertainZ)
-            {
-                return 0f;
-            }
-            float partial;
-            if (span < NarrowBandSpan)
-            {
-                // A near-degenerate band, where the closed form below differences two nearly equal
-                // values and then divides by the small span that made them nearly equal. The series
-                // integral(A..B) (t-A) phi(t) dt = phi(A)*s^2/2 - A*phi(A)*s^3/6 + O(s^4) has no
-                // such cancellation, and its truncation error at the cutoff is O(s^2) ~ 1e-4
-                // relative. One exp, on a branch that is rare precisely because the band is narrow.
-                partial = NormalPdf(low) * span * span * 0.5f * (1f - (low * span / 3f));
-            }
-            else
-            {
-                // G(A) - G(B) - (B-A)*Q(B), which expands to the pdf/mass form this replaced:
-                // the A*Q terms telescope into -A*(Phi(B) - Phi(A)). See
-                // GaussianCalculator.NormalLoss. Q(B) is taken as Phi(-B) because that is the
-                // branch of the CDF that forms the upper tail directly, without the 1-Phi
-                // cancellation the single-precision path cannot afford.
-                partial = GaussianCalculator.NormalLoss(low)
-                    - GaussianCalculator.NormalLoss(high)
-                    - (span * GaussianCalculator.ApproximateNormalCDF(-high));
-            }
-            return Math.Clamp(partial / span, 0f, 1f);
+            return GaussianCalculator.ApproximateNormalCDF(
+                (DamageRollMean - requiredRoll) / DamageRollStdDev);
         }
 
         /// <summary>
-        /// Below this standardized band width <see cref="EvaluateWoundProgressTail"/> switches to a
-        /// series expansion. Chosen so the series' O(span^2) truncation error and the closed form's
-        /// cancellation-amplified table error cross over well inside the noise of a term that is
-        /// then weighted by a hit-location share and by lambda.
-        /// </summary>
-        private const float NarrowBandSpan = 0.01f;
-
-        /// <summary>
-        /// True when neither term of the graded fraction can be nonzero at this damage coefficient,
-        /// so the whole location can be skipped without evaluating a single tail.
-        ///
-        /// <para>BOTH thresholds must be out of reach, not just one. They are not ordered: a
-        /// location carrying enough accumulated damage that <c>requiredRatio</c> is 0 disables on
-        /// any penetrating hit at all, which puts its take-out threshold BELOW its wound-onset
-        /// threshold. Testing only the onset would silently drop exactly the locations that are
-        /// easiest to take out.</para>
+        /// True when neither term of the per-hit removal can be nonzero at this damage coefficient,
+        /// so the whole location can be skipped without evaluating a single tail: the roll cannot
+        /// beat the worn armor, so no hit wounds it at all. The take-out threshold is armor plus a
+        /// penetration requirement, never below the armor, so it is out of reach too.
         ///
         /// <para>There is deliberately no mirror guard for a certain take-out. Thresholds are
         /// non-negative (they are armor plus a penetration requirement), so the take-out z is at
@@ -487,9 +473,7 @@ namespace OnlyWar.Battles
         /// </summary>
         private static bool SkipLocation(TakeOutLocationTerm term, float damageCoefficient)
         {
-            float cutoff = DeepTailRoll * damageCoefficient;
-            return term.PenetrationThreshold >= cutoff
-                && term.ZeroProgressThreshold >= cutoff;
+            return term.EffectiveArmor >= DeepTailRoll * damageCoefficient;
         }
 
         /// <summary>
@@ -547,19 +531,40 @@ namespace OnlyWar.Battles
                     continue;
                 }
 
-                bool canTakeOut =
-                    template.IsMotive
-                    || template.IsVital
-                    || (lastFunctioningHand.HasValue
-                        && template.HandGroupId == lastFunctioningHand);
-                if (!canTakeOut)
+                // The wound total at which this location takes the soldier out of the fight, as
+                // Soldier.IsCombatEffective decides it (2026-10-06; until then every motive
+                // location counted at cripple and an arm only when it was the last hand):
+                //  - vital: crippled or severed (CanFight);
+                //  - the last functioning hand group: crippled or severed (CanFight);
+                //  - any other hand-group location: severed (an untreated severed limb);
+                //  - a principal motive location: crippled, severed, or the Massive band that
+                //    stops it moving (MotiveImpairment);
+                //  - a motive extremity (a foot): severed only -- it slows, never stops.
+                uint severOrCripple = Math.Min(template.CrippleWound, template.SeverWound);
+                uint disableAt;
+                if (template.IsVital)
+                {
+                    disableAt = severOrCripple;
+                }
+                else if (template.HandGroupId.HasValue)
+                {
+                    disableAt = template.HandGroupId == lastFunctioningHand
+                        ? severOrCripple
+                        : template.SeverWound;
+                }
+                else if (template.IsMotive)
+                {
+                    disableAt = MotiveImpairment.IsPrincipal(body, template)
+                        ? Math.Min(severOrCripple, (uint)WoundLevel.Massive)
+                        : template.SeverWound;
+                }
+                else
                 {
                     continue;
                 }
-
                 float requiredRatio = FindMinimumDisablingWoundRatio(
                     location.Wounds.WoundTotal,
-                    Math.Min(template.CrippleWound, template.SeverWound));
+                    disableAt);
                 if (float.IsPositiveInfinity(requiredRatio))
                 {
                     continue;
@@ -586,7 +591,10 @@ namespace OnlyWar.Battles
                     locationWeight / (float)totalLocationWeight,
                     unitPenetratingDamage,
                     requiredRatio,
-                    template.NaturalArmor));
+                    template.NaturalArmor,
+                    0f,
+                    target.Soldier.Constitution / Math.Max(0.0001f, template.WoundMultiplier),
+                    WoundCounterValue(disableAt) - WoundCounterValue(location.Wounds.WoundTotal)));
             }
             return terms.ToArray();
         }
@@ -606,7 +614,10 @@ namespace OnlyWar.Battles
                 unitTerm.Weight,
                 effectiveArmor + (unitTerm.PenetrationThreshold / weaponWoundMultiplier),
                 unitTerm.RequiredRatio,
-                effectiveArmor + (unitTerm.ZeroProgressThreshold / weaponWoundMultiplier));
+                effectiveArmor + (unitTerm.ZeroProgressThreshold / weaponWoundMultiplier),
+                effectiveArmor,
+                unitTerm.DamagePerRatio / weaponWoundMultiplier,
+                unitTerm.Gap);
         }
 
         /// <summary>
@@ -631,12 +642,10 @@ namespace OnlyWar.Battles
             // Empty for a target that is not combat effective or carries no hit lottery at this
             // stance -- the two early returns the walk used to make.
             IReadOnlyList<TakeOutLocationTerm> unitTerms = target.UnitTakeOutTerms;
-            // Only computed when lambda can actually use it; at lambda = 0 this evaluation is
-            // bitwise identical to the pre-Phase-5 one. Hoisted out of the loop -- the override
-            // scope that can move it is test-only and never runs concurrently with scoring.
-            bool graded = WoundProgressCreditWeight > 0f;
             float probability = 0f;
-            float woundProgress = 0f;
+            float fillNorm = 0f;
+            float fillMax = 0f;
+            bool maximum = float.IsPositiveInfinity(LocationFillCombineExponent);
             for (int index = 0; index < unitTerms.Count; index++)
             {
                 TakeOutLocationTerm term = RescaleToWeapon(
@@ -645,18 +654,26 @@ namespace OnlyWar.Battles
                 if (damageCoefficient.HasValue
                     && !SkipLocation(term, damageCoefficient.Value))
                 {
-                    probability += term.Weight
-                        * EvaluateTakeOutLocationTail(term, damageCoefficient.Value);
-                    if (graded)
+                    float locationTakeOut =
+                        EvaluateTakeOutLocationTail(term, damageCoefficient.Value);
+                    probability += term.Weight * locationTakeOut;
+                    float rate = term.Weight
+                        * GradualFill(term, damageCoefficient.Value, locationTakeOut);
+                    if (maximum)
                     {
-                        woundProgress += term.Weight
-                            * EvaluateWoundProgressTail(term, damageCoefficient.Value);
+                        fillMax = Math.Max(fillMax, rate);
+                    }
+                    else
+                    {
+                        fillNorm += MathF.Pow(rate, LocationFillCombineExponent);
                     }
                 }
             }
-            return (
-                Math.Clamp(probability, 0f, 1f),
-                Math.Clamp(woundProgress, 0f, 1f));
+            probability = Math.Clamp(probability, 0f, 1f);
+            float gradual = maximum
+                ? fillMax
+                : fillNorm > 0f ? MathF.Pow(fillNorm, 1f / LocationFillCombineExponent) : 0f;
+            return (probability, Math.Clamp(gradual, 0f, 1f - probability));
         }
 
         /// <summary>

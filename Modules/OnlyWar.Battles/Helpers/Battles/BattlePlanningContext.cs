@@ -136,7 +136,26 @@ namespace OnlyWar.Battles
         // states the potential compares.
         internal ConcurrentDictionary<(int AttackerSquadId, int TargetSquadId), float>
             MeleeContactRemovalRates { get; } = new();
+
+        // Each squad's morale inputs for the exchange forecast's break hazard (resolve from Ego,
+        // leader, synapse coverage, mission losses so far). Frozen for the planning pass like
+        // everything else here.
+        internal ConcurrentDictionary<int, SquadBreakProfile> SquadBreakProfiles { get; } = new();
+
+        // Each squad's soldier cells, centroid and radius, for the potential's contact test
+        // (EngagementPotential.NearestSoldierSeparation). Soldiers do not move during a pass.
+        internal ConcurrentDictionary<int, SquadCellLayout> SquadCellLayouts { get; } = new();
     }
+
+    /// <summary>
+    /// A squad's placed, able soldiers' cells, their centroid, and the greatest distance of any of
+    /// them from it.
+    /// </summary>
+    internal sealed record SquadCellLayout(
+        (float X, float Y)[] Cells,
+        float CentroidX,
+        float CentroidY,
+        float Radius);
 
     /// <summary>
     /// The inputs and both clocks behind one squad's engagement horizon. See

@@ -123,13 +123,10 @@ namespace OnlyWar.Battles
         /// shot: scarcity 0 (free rounds) fires everything, and on the last magazine only the
         /// most round-efficient burst is worth firing.</para>
         ///
-        /// <para>SEARCH. Climb from the minimum and stop at the first round whose marginal value
-        /// does not cover its cost. That is exact when the score is concave in the round count --
-        /// the bonus step <c>log2((n+1)/n)</c> shrinks and each later hit needs a higher margin --
-        /// and then the best value per round is the first burst's, so the price is known before
-        /// the climb starts. It is only approximate in the deep tail of the hit roll, where the
-        /// score is convex and the climb can stop early on a shot hardly worth taking. A short
-        /// burst costs a few CDF calls, fewer than the fixed-point iteration this replaced.</para>
+        /// <para>SEARCH. Every burst length is scored, the round price is set from the best value
+        /// per round among them, and the length with the best net value wins. (A climb that
+        /// stopped at the first unpaid round was used until 2026-10-06; it is exact only where the
+        /// score is concave in the round count, and the deep tail of the hit roll is not.)</para>
         /// </summary>
         private int ChooseShotsToFire(
             BattleSoldier shooter,
@@ -188,26 +185,37 @@ namespace OnlyWar.Battles
                     : removed;
             }
 
-            int chosen = minShots;
-            float score = Score(minShots);
-            float valuePerRound = Math.Max(0f, score)
-                / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(minShots));
-            while (chosen < maxShots)
+            // Every burst length, then the best net value at the true best value per round. The
+            // climb this replaced (2026-10-06) stopped at the first round that did not pay at the
+            // value per round found SO FAR, which is the global answer only while the score is
+            // concave. Once per-hit removal came from the engine's wound counter, ordinary shots
+            // against armor sat in the convex part -- the log2 rate-of-fire bonus lifting a
+            // deep-tail first round -- and the climb fired a round more than its own price allowed
+            // (BurstSizeSelectionTests.TheClimb_MatchesTheBruteForceBestNetValue). A burst is a
+            // handful of lengths and this evaluation is memoized per shot, so the exact search is
+            // affordable.
+            int count = maxShots - minShots + 1;
+            Span<float> scores = count <= 64 ? stackalloc float[count] : new float[count];
+            float valuePerRound = 0f;
+            for (int shots = minShots; shots <= maxShots; shots++)
             {
-                int nextShots = chosen + 1;
-                float nextScore = Score(nextShots);
-                float roundCost = scarcity * valuePerRound
-                    * (weapon.GetAmmunitionUnitsForAttack(nextShots)
-                        - weapon.GetAmmunitionUnitsForAttack(chosen));
-                if (nextScore - score <= roundCost)
-                {
-                    break;
-                }
-                chosen = nextShots;
-                score = nextScore;
+                float value = Score(shots);
+                scores[shots - minShots] = value;
                 valuePerRound = Math.Max(
                     valuePerRound,
-                    Math.Max(0f, score) / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(chosen)));
+                    Math.Max(0f, value) / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(shots)));
+            }
+            int chosen = minShots;
+            float best = float.MinValue;
+            for (int shots = minShots; shots <= maxShots; shots++)
+            {
+                float net = scores[shots - minShots]
+                    - (scarcity * valuePerRound * weapon.GetAmmunitionUnitsForAttack(shots));
+                if (net > best + 1e-7f)
+                {
+                    best = net;
+                    chosen = shots;
+                }
             }
             return chosen;
         }

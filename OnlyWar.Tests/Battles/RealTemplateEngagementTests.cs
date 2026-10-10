@@ -51,6 +51,14 @@ public class RealTemplateEngagementTests
     private const int EavyNobzSquadTemplateId = 46;
     private const int HeavyBolterWeaponSetId = 5;
     private const int SniperRifleWeaponSetId = 11;
+    private const int ImperialFactionId = 0;
+    private const int TyranidFactionId = 2;
+    // 20 PDF: Sergeant and Troopers with autoguns and a heavy stubber.
+    private const int PdfSquadTemplateId = 34;
+    // 30 Hormagaunts: melee only.
+    private const int HormagauntSquadTemplateId = 17;
+    // 30 Shoota Boyz.
+    private const int ShootaBoyzSquadTemplateId = 39;
 
     // Meeting-engagement distances, from long rifle range down to within one move of contact.
     private static readonly int[] Separations = [300, 150, 60, 20, 6];
@@ -98,6 +106,24 @@ public class RealTemplateEngagementTests
             Assert.Contains(
                 team.Soldiers.SelectMany(soldier => soldier.RangedWeapons),
                 weapon => weapon.Template.Name.Contains("Autocannon", StringComparison.Ordinal));
+            // A team the Scouts destroy within the turn whatever it does (its own clock <= 1:
+            // 20 yards and closer since removal per hit came from the engine's wound counter,
+            // 2026-10-06) has no good choice left; every option ends at about -10 of its 14
+            // battle value, and running is a hair better only because a moving target is harder
+            // to hit this turn and the option set has no fast move AWAY (withdrawal is a separate
+            // system). There, the charge must merely not stand out from holding.
+            if (LastHorizonDiagnostics.OwnWithdrawalTurns <= 1f)
+            {
+                EngagementOptionEvaluation hold = decision.Candidates.Single(
+                    candidate => candidate.Kind == EngagementOptionKind.Hold);
+                float teamValue = team.Soldiers.Sum(
+                    soldier => soldier.Soldier.Template.BattleValue);
+                Assert.True(
+                    decision.Chosen.Score - hold.Score <= 0.02f * teamValue,
+                    $"a doomed autocannon team's {decision.Chosen.Kind} stood out from holding at "
+                        + $"{separation} yards. " + Describe(decision));
+                continue;
+            }
             Assert.False(
                 IsCharge(decision.Chosen.Kind),
                 $"a two-man autocannon team chose {decision.Chosen.Kind} against {scouts.Name} "
@@ -157,6 +183,176 @@ public class RealTemplateEngagementTests
                 or EngagementOptionKind.CloseToContact),
             $"sniper scouts chose {decision.Chosen.Kind} toward 'Eavy Nobz at 975 yards. "
                 + Describe(decision));
+    }
+
+    /// <summary>
+    /// Observed 2026-10-07 in the gauntlet: 30 Hormagaunts ran at 20 PDF for 200 yards and then
+    /// slowed to a walk at about 30 yards, inside the PDF's best fire band, and routed without
+    /// killing anyone. The forecast had read the melee rate at 1 yard into the ranged rates at
+    /// 3-8 yards by interpolation, and priced the turn a charge arrived on at the range the turn
+    /// started at, so whether the forecast squad broke depended on where its last step landed. A
+    /// melee swarm with nothing to shoot keeps running at every range.
+    /// </summary>
+    [Fact]
+    public void HormagauntSwarm_KeepsRunningThroughPdfFire()
+    {
+        GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
+        Faction tyranids = blob.Factions.Single(faction => faction.Id == TyranidFactionId);
+        Faction imperial = blob.Factions.Single(faction => faction.Id == ImperialFactionId);
+        // 200 and 120 since 2026-10-09: once the PDF fire was priced as the standing aimed fire it
+        // is, every continuation forecast a loss from long range and the swarm walked toward the
+        // line for 19 turns. A contact seeker with no fire worth keeping has no walk to choose.
+        foreach (int separation in new[] { 200, 120, 60, 40, 30, 20, 10 })
+        {
+            RNG.Reset(77_000 + separation);
+            OnlyWar.Abstractions.IEntityIdAllocator entityIds =
+                new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
+            BattleSquad gaunts = CreateSquad(tyranids, HormagauntSquadTemplateId, entityIds);
+            BattleSquad pdf = CreateSquad(imperial, PdfSquadTemplateId, entityIds);
+            BattleGridManager grid = new();
+            PlaceLine(grid, gaunts, side: true, x: 0);
+            PlaceLine(grid, pdf, side: false, x: separation);
+
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build([gaunts], [pdf]);
+            BattleSquadPlanner planner = Planner(grid, gaunts, pdf);
+            SquadEngagementDecision decision = planner.ChooseEngagementOption(
+                gaunts,
+                paired.Frames[gaunts.Id],
+                paired.Profiles,
+                paired.Frames,
+                [pdf]);
+            LastHorizon = planner.ExpectedExchangeTurnsFor(gaunts.Id);
+            LastProfile = paired.Profiles[gaunts.Id];
+            LastHorizonDiagnostics = planner.EngagementHorizonDiagnosticsFor(gaunts.Id);
+            LastSquadSummary = $"{gaunts.Name} against {pdf.Name}";
+
+            Assert.True(
+                decision.Chosen.Kind is EngagementOptionKind.RunToward
+                    or EngagementOptionKind.CloseToContact,
+                $"Hormagaunts chose {decision.Chosen.Kind} at {separation} yards from PDF. "
+                    + Describe(decision));
+        }
+    }
+
+    /// <summary>
+    /// Observed 2026-10-09: Neophyte Hybrids and Shoota Boyz at 260 yards each priced the other's
+    /// fire 20 to 30 times below its standing rate, because each read the other's baseline posture
+    /// (StepBack: both were inside the other's wide preferred band) as a prediction that it would
+    /// keep moving and fire un-aimed. Both forecast a win; the Orks lost the firefight four to
+    /// one. The forecast assumes an enemy stands and aims unless it charges to contact or flees.
+    /// </summary>
+    [Fact]
+    public void ExchangeForecast_AssumesAShootingEnemyStandsAndAims_ButAChargeStaysACharge()
+    {
+        GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
+        Faction cult = blob.Factions.Single(faction => faction.Id == GenestealerCultFactionId);
+        Faction orks = blob.Factions.Single(faction => faction.Id == OrkFactionId);
+        Faction tyranids = blob.Factions.Single(faction => faction.Id == TyranidFactionId);
+        RNG.Reset(77_500);
+        OnlyWar.Abstractions.IEntityIdAllocator entityIds =
+            new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
+        BattleSquad hybrids = CreateSquad(cult, NeophyteHybridSquadTemplateId, entityIds);
+        BattleSquad boyz = CreateSquad(orks, ShootaBoyzSquadTemplateId, entityIds);
+        BattleSquad gaunts = CreateSquad(tyranids, HormagauntSquadTemplateId, entityIds);
+        BattleGridManager grid = new();
+        PlaceLine(grid, hybrids, side: true, x: 0);
+        PlaceLine(grid, boyz, side: false, x: 260);
+        PlaceLine(grid, gaunts, side: false, x: 120);
+
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([hybrids], [boyz, gaunts]);
+        SquadEngagementFrame boyzFrame = paired.Frames[boyz.Id];
+        SquadEngagementFrame gauntFrame = paired.Frames[gaunts.Id];
+
+        // Until 2026-10-10 the Boyz' baseline here was StepBack, which made this the case the
+        // forecast posture had to override. A ranged squad in reach now defaults to Hold, so the
+        // forecast posture and the baseline agree; the assertion is that it is Hold either way.
+        Assert.Equal(
+            EngagementOptionKind.Hold,
+            EngagementExchangeModel.ForecastFiringPosture(boyzFrame));
+        Assert.Equal(EngagementOptionKind.CloseToContact, gauntFrame.BaselinePosture);
+        Assert.Equal(
+            EngagementOptionKind.CloseToContact,
+            EngagementExchangeModel.ForecastFiringPosture(gauntFrame));
+    }
+
+    /// <summary>
+    /// Observed 2026-10-09: Neophyte Hybrids 15 yards from Shoota Boyz ran into contact on the
+    /// strength of their point-blank fire. Neither squad seeks contact, so the forecast priced the
+    /// contact state at the standing rates read at 1 yard and never saw the Orks' melee: 100 to
+    /// 130 battle value a turn against the Hybrids' 10 to 20. All three Hybrid squads had routed by
+    /// turn six. A state in contact is now priced at the contact rates whoever's doctrine it is,
+    /// with contact judged by the squads' fronts, not their centroids (a contact option left the
+    /// centroids 4.8 yards apart).
+    /// </summary>
+    [Fact]
+    public void NeophyteHybrids_DoNotCloseToContactWithShootaBoyz()
+    {
+        GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
+        Faction cult = blob.Factions.Single(faction => faction.Id == GenestealerCultFactionId);
+        Faction orks = blob.Factions.Single(faction => faction.Id == OrkFactionId);
+        int offered = 0;
+        foreach (int separation in new[] { 3, 5, 7, 9, 11 })
+        {
+            RNG.Reset(77_600 + separation);
+            OnlyWar.Abstractions.IEntityIdAllocator entityIds =
+                new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
+            // Three Hybrid squads against two mobs, as in the duel that showed it.
+            List<BattleSquad> hybrids =
+            [
+                CreateSquad(cult, NeophyteHybridSquadTemplateId, entityIds),
+                CreateSquad(cult, NeophyteHybridSquadTemplateId, entityIds),
+                CreateSquad(cult, NeophyteHybridSquadTemplateId, entityIds),
+            ];
+            List<BattleSquad> boyz =
+            [
+                CreateSquad(orks, ShootaBoyzSquadTemplateId, entityIds),
+                CreateSquad(orks, ShootaBoyzSquadTemplateId, entityIds),
+            ];
+            BattleGridManager grid = new();
+            for (int index = 0; index < hybrids.Count; index++)
+            {
+                PlaceBlock(grid, hybrids[index], side: true, x: 0, y: index * 12);
+            }
+            for (int index = 0; index < boyz.Count; index++)
+            {
+                PlaceBlock(grid, boyz[index], side: false, x: separation, y: 2 + index * 16);
+            }
+
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build(hybrids, boyz);
+            BattleSquadPlanner planner = Planner(grid, [.. hybrids, .. boyz]);
+            foreach (BattleSquad squad in hybrids)
+            {
+                SquadEngagementDecision decision = planner.ChooseEngagementOption(
+                    squad, paired.Frames[squad.Id], paired.Profiles, paired.Frames, boyz);
+                LastHorizon = planner.ExpectedExchangeTurnsFor(squad.Id);
+                LastProfile = paired.Profiles[squad.Id];
+                LastHorizonDiagnostics = planner.EngagementHorizonDiagnosticsFor(squad.Id);
+                LastSquadSummary = $"{squad.Name} against two Shoota mobs at {separation} yards";
+                if (decision.Candidates.Any(candidate =>
+                    candidate.Kind == EngagementOptionKind.CloseToContact))
+                {
+                    offered++;
+                }
+                Assert.True(
+                    decision.Chosen.Kind != EngagementOptionKind.CloseToContact,
+                    $"{squad.Name} closed to contact at {separation} yards. " + Describe(decision));
+            }
+        }
+        Assert.True(offered > 0, "contact was never offered, so the test proves nothing");
+    }
+
+    /// <summary>A block four wide, so a squad of twenty or thirty stays compact.</summary>
+    private static void PlaceBlock(BattleGridManager grid, BattleSquad squad, bool side, int x, int y)
+    {
+        for (int i = 0; i < squad.Soldiers.Count; i++)
+        {
+            BattleSoldier soldier = squad.Soldiers[i];
+            soldier.TopLeft = (x + (side ? -(i % 4) : i % 4), y + i / 4);
+            grid.PlaceSoldier(soldier, side, [soldier.TopLeft.Value]);
+        }
     }
 
     private static (BattleSquad Cult, BattleSquad Scouts, SquadEngagementDecision Decision) Decide(
@@ -290,7 +486,6 @@ public class RealTemplateEngagementTests
                 + $"role={candidate.RoleTerm:F3} "
                 + $"morale={candidate.MoralePotentialValue:F3} "
                 + $"command={candidate.CommandPotentialValue:F3} "
-                + $"access={candidate.AccessPotentialValue:F3} "
                 + $"commitment={candidate.ContactCommitmentCost:F3} "
                 + $"actions=[{string.Join(",", (candidate.RootActions ?? [])
                     .GroupBy(action => action.Kind)

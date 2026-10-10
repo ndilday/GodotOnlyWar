@@ -109,13 +109,12 @@ public class CombatModelTests
             0, population: 1_000, organization: 0);
 
         horde.AddMilitaryStrength(100);
-        long moved = horde.ReorganizeMilitaryStrength(
-            StrategicCombatRules.ReorganizationBattleValuePerEffort);
+        long moved = horde.ReorganizeMilitaryStrength(50);
 
         Assert.Equal(1_100, horde.MilitaryStrength);
         Assert.Equal(150, horde.OrganizedMilitaryStrength);
         Assert.Equal(950, horde.DisorganizedMilitaryStrength);
-        Assert.Equal(StrategicCombatRules.ReorganizationBattleValuePerEffort, moved);
+        Assert.Equal(50, moved);
     }
 
     [Fact]
@@ -134,21 +133,46 @@ public class CombatModelTests
     }
 
     [Fact]
-    public void ReorganizationConstruction_ConvertsAFixedBattleValuePerEffort()
+    public void ReorganizationConstruction_ReformsAShareOfTheDisorganizedPoolPerEffort()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction horde = fixture.AddConsumptionFaction(
             0, population: 10_000, organization: 0);
         ConstructionMission mission = new(DefenseType.Organization, 1, horde);
+        double share = 2 * StrategicCombatRules.ReorganizationShareOfDisorganizedPerEffort;
+        long firstExpected = (long)System.Math.Round(share * 10_000);
 
         MissionTurnProcessor.ApplyConstruction(mission, amount: 2);
 
-        Assert.Equal(
-            2 * StrategicCombatRules.ReorganizationBattleValuePerEffort,
-            horde.OrganizedMilitaryStrength);
-        Assert.Equal(
-            10_000 - 2 * StrategicCombatRules.ReorganizationBattleValuePerEffort,
-            horde.DisorganizedMilitaryStrength);
+        Assert.Equal(firstExpected, horde.OrganizedMilitaryStrength);
+        Assert.Equal(10_000 - firstExpected, horde.DisorganizedMilitaryStrength);
+
+        // The same effort again reforms the same share of what is left, so it moves less: the rate
+        // is a share of the pool, not a fixed amount.
+        long secondExpected = (long)System.Math.Round(share * (10_000 - firstExpected));
+        MissionTurnProcessor.ApplyConstruction(mission, amount: 2);
+
+        Assert.True(secondExpected < firstExpected);
+        Assert.Equal(firstExpected + secondExpected, horde.OrganizedMilitaryStrength);
+    }
+
+    // Scale-free: a pool a hundred times larger reforms a hundred times more for the same effort.
+    [Fact]
+    public void ReorganizationConstruction_ScalesWithThePool()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction small = fixture.AddConsumptionFaction(
+            0, population: 10_000, organization: 0);
+        RegionFaction large = fixture.AddConsumptionFaction(
+            0, population: 1_000_000, organization: 0);
+
+        MissionTurnProcessor.ApplyConstruction(
+            new ConstructionMission(DefenseType.Organization, 1, small), amount: 1);
+        MissionTurnProcessor.ApplyConstruction(
+            new ConstructionMission(DefenseType.Organization, 1, large), amount: 1);
+
+        Assert.True(small.OrganizedMilitaryStrength > 0);
+        Assert.Equal(100 * small.OrganizedMilitaryStrength, large.OrganizedMilitaryStrength);
     }
 
     [Fact]

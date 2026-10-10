@@ -255,10 +255,12 @@ public class SquadDuelDiagnostics
         // so that battle runs on its own before the others start.
         string tracePath = Environment.GetEnvironmentVariable("DUEL_TRACE");
         string woundLogPath = Environment.GetEnvironmentVariable("DUEL_WOUND_LOG");
+        string shotLogPath = Environment.GetEnvironmentVariable("DUEL_SHOT_LOG");
         int start = 0;
-        if (!string.IsNullOrWhiteSpace(tracePath) || !string.IsNullOrWhiteSpace(woundLogPath))
+        if (!string.IsNullOrWhiteSpace(tracePath) || !string.IsNullOrWhiteSpace(woundLogPath)
+            || !string.IsNullOrWhiteSpace(shotLogPath))
         {
-            foreach (string path in new[] { tracePath, woundLogPath }.Where(p => !string.IsNullOrWhiteSpace(p)))
+            foreach (string path in new[] { tracePath, woundLogPath, shotLogPath }.Where(p => !string.IsNullOrWhiteSpace(p)))
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
             }
@@ -268,7 +270,7 @@ public class SquadDuelDiagnostics
             {
                 records[0] = RunBattle(
                     blob, specsA, specsB, range, firstSeed, aggression, planningWorkers, roles.AAttacksOn(firstSeed),
-                    woundLogPath);
+                    woundLogPath, shotLogPath);
             }
             finally
             {
@@ -371,7 +373,8 @@ public class SquadDuelDiagnostics
         Aggression aggression,
         int planningWorkers,
         bool aAttacks = true,
-        string woundLogPath = null)
+        string woundLogPath = null,
+        string shotLogPath = null)
     {
         // Squad building and the battle each start a fresh stream from the same seed, as the
         // static RNG did when it was reset before each of them.
@@ -470,7 +473,75 @@ public class SquadDuelDiagnostics
         {
             WriteWoundLog(woundLogPath, resolver, sideA, idsA);
         }
+        if (!string.IsNullOrWhiteSpace(shotLogPath))
+        {
+            WriteShotLog(shotLogPath, resolver, idsA);
+        }
         return new BattleRecord(modelsA, modelsB, aLeft, bLeft, turns, holder, reason, statsA, statsB);
+    }
+
+    /// <summary>
+    /// DUEL_SHOT_LOG: every ShootAction in one battle, both sides: turn, side, shooter, target, weapon
+    /// template id, rounds planned and fired, the aim multiplier, how many consecutive turns that
+    /// shooter had just spent aiming at THAT target (0 when it fired without aiming, or aimed at
+    /// someone else), the hits, and the range. Then per side and weapon: volleys, rounds, hits per
+    /// round, and the same split by whether the volley followed an aim at its target. It answers
+    /// "did the aim reach the shot".
+    /// </summary>
+    private static void WriteShotLog(string path, BattleTurnResolver resolver, HashSet<int> idsA)
+    {
+        StringBuilder log = new();
+        log.AppendLine("turn\tside\tshooter\ttarget\tweapon\tplanned\tfired\taimMult\taimTurns\thits\trange");
+        Dictionary<int, (int Target, int Turns)> aiming = [];
+        Dictionary<(string Side, int Weapon, bool Aimed), (int Volleys, int Rounds, int Hits)> summary = [];
+        for (int turn = 0; turn < resolver.BattleHistory.Turns.Count; turn++)
+        {
+            HashSet<int> acted = [];
+            foreach (OnlyWar.Battles.Actions.IAction action in resolver.BattleHistory.Turns[turn].Actions)
+            {
+                if (action is OnlyWar.Battles.Actions.AimAction aim)
+                {
+                    acted.Add(aim.ActorId);
+                    aiming[aim.ActorId] = aiming.TryGetValue(aim.ActorId, out var prior) && prior.Target == aim.TargetId
+                        ? (aim.TargetId, prior.Turns + 1)
+                        : (aim.TargetId, 1);
+                }
+                else if (action is OnlyWar.Battles.Actions.ShootAction shot)
+                {
+                    acted.Add(shot.ShooterId);
+                    string side = idsA.Contains(shot.ShooterId) ? "A" : "B";
+                    int aimTurns = aiming.TryGetValue(shot.ShooterId, out var held) && held.Target == shot.TargetId
+                        ? held.Turns
+                        : 0;
+                    aiming.Remove(shot.ShooterId);
+                    log.AppendLine(string.Join('\t', turn, side, shot.ShooterId, shot.TargetId, shot.WeaponId,
+                        shot.NumberOfShots, shot.CommittedShots, shot.AimMultiplier.ToString("F2"), aimTurns,
+                        shot.HitCount, shot.Range.ToString("F0")));
+                    var key = (side, shot.WeaponId, aimTurns > 0);
+                    var sum = summary.GetValueOrDefault(key);
+                    summary[key] = (sum.Volleys + 1, sum.Rounds + shot.CommittedShots, sum.Hits + shot.HitCount);
+                }
+                else
+                {
+                    acted.Add(action.ActorId);
+                }
+            }
+            // An aim that was not renewed this turn by an AimAction or spent by a shot has lapsed.
+            foreach (int shooter in aiming.Keys.Where(id => !acted.Contains(id)).ToList())
+            {
+                aiming.Remove(shooter);
+            }
+        }
+        log.AppendLine();
+        log.AppendLine("SUMMARY side\tweapon\taimed\tvolleys\trounds\thits\thitsPerRound\thitsPerVolley");
+        foreach (var entry in summary.OrderBy(e => e.Key.Side).ThenBy(e => e.Key.Weapon).ThenBy(e => e.Key.Aimed))
+        {
+            log.AppendLine(string.Join('\t', "SUMMARY " + entry.Key.Side, entry.Key.Weapon, entry.Key.Aimed,
+                entry.Value.Volleys, entry.Value.Rounds, entry.Value.Hits,
+                (entry.Value.Rounds > 0 ? (double)entry.Value.Hits / entry.Value.Rounds : 0).ToString("F3"),
+                ((double)entry.Value.Hits / entry.Value.Volleys).ToString("F2")));
+        }
+        File.WriteAllText(path, log.ToString());
     }
 
     /// <summary>

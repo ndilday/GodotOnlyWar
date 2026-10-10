@@ -761,29 +761,25 @@ internal sealed class OperationsScreenProjector
     private MissionOptionView BuildMissionOption(
         Region target, AvailableMission mission, IReadOnlyList<Order> active)
     {
-        // The squads already on this mission's order are counted by its recommendation, exactly as
-        // the active-order row for the same mission counts them, so the two never disagree.
         Order existing = active.FirstOrDefault(order => mission.RepresentsOrder(order));
         return new(mission.IdentityKey,
             mission.Label,
             MissionIconKeys.ForAvailable(mission),
-            BuildMissionTooltip(target, mission, existing),
+            BuildMissionTooltip(mission),
             mission.Kind == MissionAvailabilityKind.Special,
-            RecommendedForce(target, mission, existing),
+            RecommendedForce(mission),
             existing != null);
     }
 
-    // The squads counted are those this region's order workspace would offer for the mission, so
-    // the recommendation and the force tree always agree about what is available. A squad already
-    // on the order being described still counts: it is committed, not unavailable.
-    private string RecommendedForce(
-        Region target, AvailableMission mission, Order contextOrder = null) =>
+    // Counted in the chapter's reference squad, not in the squads in this region, so the line is a
+    // general measure of the target that reads the same wherever it is shown.
+    private string RecommendedForce(AvailableMission mission) =>
         mission?.SpecialMission == null
             ? null
             : SpecialMissionPresentation.FormatRecommendedForce(
                 mission.SpecialMission,
                 CurrentWeek,
-                _read.BuildForceAvailability(target, mission, contextOrder));
+                _read.ReferenceSquadBattleValue);
 
     private static OrderEditorView BuildEditor(
         Order order, IReadOnlyList<SpecialistOption> specialists)
@@ -826,11 +822,10 @@ internal sealed class OperationsScreenProjector
                 candidate.Exclusion, candidate.IsAssignedToContext)).ToList();
     }
 
-    private string BuildMissionTooltip(
-        Region target, AvailableMission mission, Order contextOrder = null)
+    private string BuildMissionTooltip(AvailableMission mission)
     {
         if (mission?.SpecialMission == null) return mission?.Label ?? "";
-        return $"{mission.Label}\n{RecommendedForce(target, mission, contextOrder)}";
+        return $"{mission.Label}\n{RecommendedForce(mission)}";
     }
 
     private string BuildMissionTooltip(Order order, IReadOnlyList<AvailableMission> options)
@@ -838,7 +833,7 @@ internal sealed class OperationsScreenProjector
         Region region = order?.Mission?.RegionFaction?.Region;
         AvailableMission mission = options?.FirstOrDefault(
             option => option.RepresentsOrder(order));
-        if (mission != null) return BuildMissionTooltip(region, mission, order);
+        if (mission != null) return BuildMissionTooltip(mission);
 
         // Keep the active row useful if an already-created order is no longer represented by
         // the current availability snapshot (for example, after intelligence changes).
@@ -848,10 +843,10 @@ internal sealed class OperationsScreenProjector
             candidate => candidate?.Id == orderMission.Id) == true;
         if (!isSpecial) return MissionAvailability.GetOrderLabel(orderMission);
 
-        return BuildMissionTooltip(region, new AvailableMission(
+        return BuildMissionTooltip(new AvailableMission(
             SpecialMissionPresentation.Format(orderMission, region),
             MissionAvailabilityKind.Special,
-            orderMission), order);
+            orderMission));
     }
 
     // ---------------------------------------------------------------- dossier cards

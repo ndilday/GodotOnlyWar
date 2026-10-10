@@ -9,14 +9,14 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 5 of Design/Reference/BattleLogic.md: the graded damage metric
-/// <c>removal = BV * [ P(takeout) + lambda * E[woundProgress; no takeout] ]</c>.
+/// The graded damage metric: removal per hit is the take-out chance plus credit for the hits that
+/// soften a target, measured on the engine's wound counter (RemovalMath; Phase 5 of
+/// Design/Reference/BattleLogic.md introduced the credit, 2026-10-06 replaced its lambda-weighted
+/// ratio estimate).
 ///
-/// <para>These tests are written against the two component quantities rather than against a
-/// particular lambda, so they hold at every setting of
-/// <see cref="RemovalMath.WoundProgressCreditWeight"/> -- including the 0 that makes the
-/// whole phase behaviour-neutral. The first of them is the invariant the phase must not trade
-/// away: a squad must not be paid for firing at something it cannot damage.</para>
+/// <para>These tests are written against the two component quantities. The first of them is the
+/// invariant the credit must not trade away: a squad must not be paid for firing at something it
+/// cannot damage.</para>
 /// </summary>
 public class GradedRemovalTests
 {
@@ -56,9 +56,8 @@ public class GradedRemovalTests
     {
         // THE INVARIANT (design doc, "Invariants"): take-out probability replaced raw to-hit
         // scoring precisely so squads would stop firing at targets they cannot hurt. The graded
-        // term must not reopen that door -- when the damage roll cannot reach even the
-        // wound-ONSET threshold, the Gaussian mass between onset and disable is nil and both
-        // terms vanish, at any lambda.
+        // term must not reopen that door -- when the damage roll cannot beat the armor no hit
+        // wounds, so both terms vanish.
         BattleSoldier armoured = Target("Impenetrable", 30_401, constitution: 20);
 
         (float takeOut, float progress) = Components(
@@ -91,8 +90,12 @@ public class GradedRemovalTests
         Assert.True(
             takeOut < 0.05f,
             $"the scenario needs a target that is hard to one-shot; take-out was {takeOut:0.#####}");
+        // Positive is the property. Its size is the engine's (2026-10-06): most of these hits leave
+        // Negligible wounds, each 1/1296 of the Critical that disables a fresh location, so the
+        // credit is about 0.002 a hit. The 0.01 this asserted before measured the lambda-weighted
+        // ratio estimate, which was several times too generous.
         Assert.True(
-            progress > 0.01f,
+            progress > 0f,
             $"expected positive credit for wounding a penetrable target, got {progress:0.#####}");
     }
 
@@ -134,11 +137,8 @@ public class GradedRemovalTests
     [Fact]
     public void GradedRemoval_NeverExceedsTheTargetsWholeBattleValue()
     {
-        // lambda interpolates a decomposition of E[progress], so for lambda in [0, 1] the bracket
-        // is bounded by 1 and a single hit can never be credited with removing more than the
-        // target is worth. (The conditional expectation the design doc's notation suggests would
-        // NOT have this property, which is why the partial expectation is used instead.)
-        Assert.InRange(RemovalMath.WoundProgressCreditWeight, 0f, 1f);
+        // A location's fill per hit is capped at its whole remaining gap, so a single hit can
+        // never be credited with removing more than the target is worth.
         BattleSoldier weak = Target("Soft", 30_405, constitution: 1);
 
         float removal = RemovalMath.CalculateRemovalFractionOnHit(

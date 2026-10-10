@@ -112,8 +112,181 @@ public class HardnessDiagnostics
                     .ToString("G3", CultureInfo.InvariantCulture).PadLeft(10))));
         }
 
+        // The planner's own estimate of the same quantity (RemovalMath: 1 / removal per hit against
+        // a fresh target), at each setting of the location-combining exponent, beside the measured
+        // value. This is the calibration of RemovalMath.LocationFillCombineExponent.
+        report.AppendLine();
+        report.AppendLine("Planner estimate of hits to disable (1 / removal per hit, fresh target), "
+            + "measured | q=1 | q=2 | q=4 | q=inf; worst ratio estimate/measured per q at the end.");
+        float[] exponents = [1f, 2f, 4f, float.PositiveInfinity];
+        double[] worstLog = new double[exponents.Length];
+        double[] sumSquaredLog = new double[exponents.Length];
+        int cells = 0;
+        foreach ((string attackerKey, _) in entries)
+        {
+            foreach (Attack attack in attacks[attackerKey])
+            {
+                foreach ((string targetKey, string targetSpec) in entries)
+                {
+                    double measured = MeanHitsToDisable(blob, targetSpec, attack, range, trials, cap);
+                    if (measured >= cap)
+                    {
+                        continue;
+                    }
+                    double[] model = exponents.Select(q => ModelHitsToDisable(blob, targetSpec, attack, range, q, trials)).ToArray();
+                    report.AppendLine(
+                        $"  {attackerKey,-6} {attack.Weapon,-22} vs {targetKey,-6} {measured,9:F1} | "
+                        + string.Join(" | ", model.Select(value => value.ToString("F1", CultureInfo.InvariantCulture).PadLeft(9))));
+                    for (int index = 0; index < exponents.Length; index++)
+                    {
+                        double logRatio = Math.Log(model[index] / measured);
+                        worstLog[index] = Math.Max(worstLog[index], Math.Abs(logRatio));
+                        sumSquaredLog[index] += logRatio * logRatio;
+                    }
+                    cells++;
+                }
+            }
+        }
+        for (int index = 0; index < exponents.Length; index++)
+        {
+            report.AppendLine(
+                $"  q={exponents[index]}: worst factor {Math.Exp(worstLog[index]):F2}, "
+                + $"rms factor {Math.Exp(Math.Sqrt(sumSquaredLog[index] / Math.Max(1, cells))):F2} over {cells} cells");
+        }
+
+        string explain = Environment.GetEnvironmentVariable("HARDNESS_EXPLAIN");
+        if (!string.IsNullOrWhiteSpace(explain))
+        {
+            report.AppendLine();
+            report.Append(Explain(blob, attacks, entries, explain, range, trials, cap));
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output)));
         File.WriteAllText(output, report.ToString());
+    }
+
+    /// <summary>
+    /// HARDNESS_EXPLAIN="attackerKey:Weapon Name:targetKey": for that one cell, why each simulated
+    /// target left the fight (which vital crippled, no functioning hand, cannot move, severed
+    /// limb) and the planner's per-location fill rate -- the comparison that shows which route
+    /// the engine takes and which one the estimate assumes.
+    /// </summary>
+    private static string Explain(
+        GameRulesBlob blob, Dictionary<string, List<Attack>> attacks, List<(string Key, string Spec)> entries,
+        string request, int range, int trials, int cap)
+    {
+        string[] parts = request.Split(':');
+        Attack attack = attacks[parts[0]].Single(a => a.Weapon == parts[1]);
+        string targetSpec = entries.Single(e => e.Key == parts[2]).Spec;
+        StringBuilder text = new($"EXPLAIN {request}{Environment.NewLine}");
+        Dictionary<string, int> causes = [];
+        SeededRNG random = new(12_345);
+        WoundResolver resolver = new();
+        resolver.OnSoldierDeath += (_, _) => { };
+        resolver.OnSoldierFall += (_, _) => { };
+        resolver.OnSoldierWounded += (_, _) => { };
+        WeaponTemplate weapon = (WeaponTemplate)attack.Ranged ?? attack.Melee;
+        Dictionary<string, (int Hits, double Added)> perLocation = [];
+        for (int trial = 0; trial < trials; trial++)
+        {
+            BattleSoldier target = SquadDuelDiagnostics.BuildSquads(
+                    blob, SquadDuelDiagnostics.ParseSide(targetSpec),
+                    new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator(), "T", new SeededRNG(90_000 + trial))
+                .SelectMany(s => s.Soldiers).OrderBy(s => s.Soldier.Template.IsSquadLeader).First();
+            int hits = 0;
+            while (target.IsCombatEffective && hits < cap)
+            {
+                hits++;
+                HitLocation location = HitLocationCalculator.DetermineHitLocation(target, random);
+                if (location.IsSevered) continue;
+                float before = RemovalMath.WoundCounterValue(location.Wounds.WoundTotal);
+                var tally = perLocation.GetValueOrDefault(location.Template.Name);
+                perLocation[location.Template.Name] = (tally.Hits + 1, tally.Added);
+                try
+                {
+                float roll = 3.5f + ((float)random.NextRandomZValue() * 1.75f);
+                float damage = attack.Ranged != null
+                    ? BattleModifiersUtil.CalculateDamageAtRange(attack.Ranged, range) * roll
+                    : attack.Strength * attack.Melee.StrengthMultiplier * roll;
+                float penetrating = damage - (target.Armor?.Template.ArmorProvided ?? 0) * weapon.ArmorMultiplier;
+                if (penetrating <= 0) continue;
+                resolver.WoundQueue.Add(new WoundResolution(null, weapon, target, penetrating * weapon.WoundMultiplier, location));
+                resolver.Resolve();
+                }
+                finally
+                {
+                    var after = perLocation[location.Template.Name];
+                    perLocation[location.Template.Name] = (after.Hits,
+                        after.Added + RemovalMath.WoundCounterValue(location.Wounds.WoundTotal) - before);
+                }
+            }
+            ISoldier soldier = target.Soldier;
+            string cause = soldier.HasUntreatedSeveredLimb ? "severed limb: " + string.Join(",",
+                    soldier.Body.HitLocations.Where(l => l.IsSevered && (l.Template.IsMotive || l.Template.HandGroupId.HasValue)).Select(l => l.Template.Name))
+                : !soldier.CanMove ? "cannot move"
+                : soldier.Body.HitLocations.Any(l => l.Template.IsVital && (l.IsCrippled || l.IsSevered))
+                    ? "vital: " + string.Join(",", soldier.Body.HitLocations.Where(l => l.Template.IsVital && (l.IsCrippled || l.IsSevered)).Select(l => l.Template.Name))
+                : soldier.FunctioningHands == 0 ? "no functioning hand"
+                : hits >= cap ? "cap" : "other";
+            causes[cause] = causes.GetValueOrDefault(cause) + 1;
+        }
+        foreach (var cause in causes.OrderByDescending(c => c.Value))
+        {
+            text.AppendLine($"  {cause.Value,4}  {cause.Key}");
+        }
+        text.AppendLine("  engine: hits landed and mean counter value added per hit, by location");
+        foreach (var entry in perLocation.OrderBy(e => e.Key))
+        {
+            text.AppendLine($"    {entry.Key,-14} hits {entry.Value.Hits,7}  mean added {entry.Value.Added / Math.Max(1, entry.Value.Hits),8:F2}");
+        }
+        BattleSoldier fresh = SquadDuelDiagnostics.BuildSquads(
+                blob, SquadDuelDiagnostics.ParseSide(targetSpec),
+                new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator(), "T", new SeededRNG(90_000))
+            .SelectMany(s => s.Soldiers).OrderBy(s => s.Soldier.Template.IsSquadLeader).First();
+        float damageCoefficient = attack.Ranged != null
+            ? BattleModifiersUtil.CalculateDamageAtRange(attack.Ranged, range)
+            : attack.Strength * attack.Melee.StrengthMultiplier;
+        IReadOnlyList<TakeOutLocationTerm> terms = RemovalMath.BuildTakeOutLocationTerms(
+            fresh, (fresh.Armor?.Template.ArmorProvided ?? 0) * weapon.ArmorMultiplier, weapon.WoundMultiplier);
+        text.AppendLine("  planner locations: weight, gap, fill rate per hit (weight x fill / gap)");
+        foreach (TakeOutLocationTerm term in terms)
+        {
+            float rate = RemovalMath.EvaluateRemovalTerms([term], damageCoefficient, 1f) is var pair
+                ? pair.TakeOut + pair.Progress
+                : 0;
+            text.AppendLine($"    w={term.Weight:F3} gap={term.Gap,8:F0} armor={term.EffectiveArmor:F1} dmg/ratio={term.DamagePerRatio:F1} rate={rate:E3} (hits {1 / rate:F0}) mean added per hit here {rate / term.Weight * term.Gap:F2}");
+        }
+        return text.ToString();
+    }
+
+    // Averaged over the same generated targets MeanHitsToDisable fights: soldiers of one template
+    // differ in Constitution, and a monster's spread is wide (one seed's Carnifex had 185 against a
+    // mean nearer 224), so comparing one target's estimate with the mean of many is not a test.
+    private static double ModelHitsToDisable(
+        GameRulesBlob blob, string targetSpec, Attack attack, int range, float exponent, int trials)
+    {
+        WeaponTemplate weapon = (WeaponTemplate)attack.Ranged ?? attack.Melee;
+        float damageCoefficient = attack.Ranged != null
+            ? BattleModifiersUtil.CalculateDamageAtRange(attack.Ranged, range)
+            : attack.Strength * attack.Melee.StrengthMultiplier;
+        double total = 0;
+        for (int trial = 0; trial < trials; trial++)
+        {
+            BattleSoldier target = SquadDuelDiagnostics.BuildSquads(
+                    blob, SquadDuelDiagnostics.ParseSide(targetSpec),
+                    new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator(), "T", new SeededRNG(90_000 + trial))
+                .SelectMany(s => s.Soldiers)
+                .OrderBy(s => s.Soldier.Template.IsSquadLeader)
+                .First();
+            IReadOnlyList<TakeOutLocationTerm> terms = RemovalMath.BuildTakeOutLocationTerms(
+                target,
+                (target.Armor?.Template.ArmorProvided ?? 0) * weapon.ArmorMultiplier,
+                weapon.WoundMultiplier);
+            (float takeOut, float progress) = RemovalMath.EvaluateRemovalTerms(terms, damageCoefficient, exponent);
+            float perHit = Math.Clamp(takeOut + progress, 0f, 1f);
+            total += perHit > 0 ? 1.0 / perHit : 1e9;
+        }
+        return total / trials;
     }
 
     /// <summary>

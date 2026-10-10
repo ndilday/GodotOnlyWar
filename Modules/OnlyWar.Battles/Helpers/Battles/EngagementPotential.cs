@@ -16,16 +16,6 @@ namespace OnlyWar.Battles
     internal sealed class EngagementPotential
     {
         private const float ContactSeekerRangedRelevanceFraction = 0.02f;
-        private const float FinitePoolEpsilon = 0.0001f;
-        // Access is tempo rather than casualty value: it prices how long a squad remains unable to
-        // contribute. Five turns keeps that signal material without letting it recreate the
-        // whole-horizon multiplication removed from the finite exchange component.
-        //
-        // This sets the MAGNITUDE of the tempo signal only. Whether a squad counts as unable to
-        // contribute is a separate question, and is measured against the negligible-removal floor
-        // -- see EvaluateContinuousAccessValue for why reusing this constant for that test made a
-        // shooting squad read as helpless.
-        internal const float AccessValueTurns = 5f;
 
         /// <summary>
         /// How far beyond the range it wants a squad must be for the pursuit contact-progress
@@ -68,6 +58,10 @@ namespace OnlyWar.Battles
         /// A frozen engagement state. <see cref="Actions"/> describes the pure actions that have
         /// already been projected into this state; it is not an engagement option and carries no
         /// policy decision by itself.
+        ///
+        /// <para><see cref="EnemyValueRate"/> converts enemy battle value into the squad's own
+        /// (<see cref="EngagementCurrency"/>). Every component of <see cref="Breakdown"/> is in the
+        /// squad's own currency; the default of 1 leaves both currencies equal.</para>
         /// </summary>
         internal sealed record State(
             BattleSquad Squad,
@@ -81,14 +75,28 @@ namespace OnlyWar.Battles
             BattleSquad Primary = null,
             IReadOnlyList<PlannedSoldierAction> Actions = null,
             IReadOnlyCollection<BattleSquad> FriendlySquads = null,
-            ValueTuple<float, float>? PrimaryCentroid = null);
+            ValueTuple<float, float>? PrimaryCentroid = null,
+            float EnemyValueRate = 1f);
 
         /// <summary>
-        /// The auditable decomposition of Φ. Net-rate value conserves finite casualty pools;
-        /// access value prices time before useful contribution. Readiness and screen values are
-        /// stored future value of the resulting state. The role and fire-window pieces remain
-        /// separate for trace readability while together forming the screen potential family.
+        /// The auditable decomposition of Φ. Net-rate value is the coupled exchange forecast
+        /// (<see cref="EngagementExchangeForecast"/>), which also prices the time a squad spends
+        /// out of useful range. Readiness and screen values are stored future value of the
+        /// resulting state. The role and fire-window pieces remain separate for trace readability
+        /// while together forming the screen potential family.
+        ///
+        /// <para>There used to be an access term here, a per-turn charge of a fifth of the
+        /// target's battle value for each turn spent unable to contribute. The exchange already
+        /// prices that delay -- weak fire while out of range and a shorter standing phase inside
+        /// the horizon -- so the term counted it twice, at a size the BV ratio between the sides
+        /// set. It was removed on 2026-10-06 when the exchange became coupled; the forecast's
+        /// standing continuation (shoot from here, aiming) took over the case it was written for,
+        /// a squad that reads as idle where it stands.</para>
         /// </summary>
+        /// <para><see cref="CloseAdvantage"/> is how much the Close continuation beats Stay in this
+        /// state (0 when it does not). It is not part of <see cref="Total"/>: it tells the option
+        /// selector that there is somewhere more useful to be, so a small but steady gain from
+        /// moving there is a decision and not noise.</para>
         internal readonly record struct Breakdown(
             float NetRateValue,
             float ReadinessValue,
@@ -96,7 +104,7 @@ namespace OnlyWar.Battles
             float FireWindowValue,
             float MoraleValue,
             float CommandValue,
-            float AccessValue = 0)
+            float CloseAdvantage = 0)
         {
             internal float ScreenValue => RoleValue + FireWindowValue;
 
@@ -106,8 +114,7 @@ namespace OnlyWar.Battles
                 + RoleValue
                 + FireWindowValue
                 + MoraleValue
-                + CommandValue
-                + AccessValue;
+                + CommandValue;
         }
 
         /// <summary>
@@ -118,16 +125,17 @@ namespace OnlyWar.Battles
         internal Breakdown Evaluate(State state)
         {
             ArgumentNullException.ThrowIfNull(state);
-            (float finiteExchangeValue, float accessValue) = EvaluateExchangePotential(state);
+            (float exchange, float closeAdvantage) = EvaluateExchangePotential(state);
             return new Breakdown(
-                finiteExchangeValue,
+                exchange,
                 EvaluateReadiness(state),
                 EvaluateScreenRole(state)
                     + EvaluatePursuitContactProgress(state),
-                EvaluateFireWindow(state),
+                // Shots at the quarry: enemy battle value, converted like the outgoing exchange.
+                EnemyRate(state) * EvaluateFireWindow(state),
                 EvaluateMorale(state),
                 EvaluateCommandAura(state),
-                accessValue);
+                closeAdvantage);
         }
 
         internal static float ScoreTransition(
@@ -148,17 +156,36 @@ namespace OnlyWar.Battles
         // lands one or more turns in the future.
         internal const float EngagementPotentialDiscount = 1f;
 
-        private (float FiniteExchangeValue, float AccessValue) EvaluateExchangePotential(State state)
+        /// <summary>
+        /// The net exchange of the state, in the squad's own currency: the better of two
+        /// continuations from here, each forecast with both sides' losses coupled and both sides
+        /// able to break (<see cref="EngagementExchangeForecast"/>).
+        ///
+        /// <para><b>Stay</b>: stand where the state leaves the squad and shoot, aiming, for the
+        /// whole horizon. <b>Close</b>: move to the range the squad wants against each enemy --
+        /// firing nothing on the way and shot at as a moving target -- then stand and shoot. The
+        /// value is a function of the state alone (it does not know which option produced it), so
+        /// the max over continuations is what lets it assume the squad acts sensibly afterwards. A
+        /// hold differs from a run only in its immediate term and in the state it leaves: a run
+        /// gives up this turn's fire and is shot on the move, and in return its Close continuation
+        /// is shorter. It wins only when that is worth the turn.</para>
+        ///
+        /// <para>Each continuation follows the separation as it changes (see
+        /// <see cref="ExchangeLane"/>): an enemy contact seeker charging through our fire band, a
+        /// pursuit quarry opening the range while we stand.</para>
+        /// </summary>
+        private (float Value, float CloseAdvantage) EvaluateExchangePotential(State state)
         {
-            float outgoingValue = 0;
-            float incomingOpportunity = 0;
-            float accessValue = 0;
             float expectedExchangeTurns = _context?.ExpectedExchangeTurnsFor(state.Squad.Id)
                 ?? EngagementHorizonModel.MaximumExchangeTurns;
+            List<ExchangeLane> stay = [];
+            List<ExchangeLane> close = [];
+            bool anyApproach = false;
             foreach (BattleSquad enemy in (state.Enemies ?? []).OrderBy(candidate => candidate.Id))
             {
                 if (!state.Profiles.TryGetValue(enemy.Id, out BattleSquadCapabilityProfile opposing)
-                    || !state.Frames.ContainsKey(enemy.Id))
+                    || !state.Frames.ContainsKey(enemy.Id)
+                    || opposing.TotalAbleBattleValue <= 0)
                 {
                     continue;
                 }
@@ -168,6 +195,26 @@ namespace OnlyWar.Battles
                     EngagementExchangeModel.Distance(
                         state.Centroid,
                         EnemyCentroid(state, enemy)));
+                // A state in which the two squads' nearest soldiers are within melee reach is a state
+                // in contact, whoever closed it and whatever either squad's doctrine: price it at
+                // the contact rates. Measured soldier to soldier with each squad shifted to its
+                // state centroid, not centroid to centroid: two blocks in contact keep their
+                // centroids apart by their depth (4.8 yards for Hybrids against Boyz), and two lines
+                // facing each other are wide but shallow, so no centroid allowance fits both. Not
+                // against an enemy that is running away (Bound, Routing, BreakOff): it is leaving
+                // the contact, not fighting it.
+                bool enemyFleeing = state.Frames.GetValueOrDefault(enemy.Id)?.Role
+                    is EngagementSquadRole.Bound
+                        or EngagementSquadRole.Routing
+                        or EngagementSquadRole.BreakOff;
+                bool inContact = !enemyFleeing
+                    && NearestSoldierSeparation(
+                        state.Squad, state.Centroid, enemy, EnemyCentroid(state, enemy), range)
+                        <= MeleeBand + BattleContactRules.MeleeContactAllowance;
+                if (inContact)
+                {
+                    range = Math.Min(range, ContactRange);
+                }
                 bool firePreservingPursuit = state.Frame != null
                     && IsFirePreservingPursuitRole(state.Frame.Role)
                     && !state.Profile.IsContactSeeking;
@@ -176,8 +223,6 @@ namespace OnlyWar.Battles
                     : firePreservingPursuit
                         ? Math.Max(1f, state.Profile.UsefulFireRange)
                         : Math.Max(1f, state.Profile.EffectiveEngagementRange);
-                float turnsToUsefulRange = TurnsToUsefulRange(
-                    state, range, desiredRange, EnemyApproachSpeed(state, enemy, opposing));
                 // Pursuit fire-support saturates at the useful band's boundary. Once it is inside
                 // that band, moving still changes the live shot but does not create a new arrival
                 // opportunity worth buying with a whole-battle horizon. Other doctrines retain
@@ -190,219 +235,275 @@ namespace OnlyWar.Battles
                     : state.Frame != null && IsPursuitRole(state.Frame.Role)
                         ? Math.Max(1f, desiredRange)
                         : Math.Min(range, Math.Max(desiredRange, 0));
-                float currentOutgoingRate = _exchange.EvaluateOutgoingExchangeRate(
-                    state.Squad,
-                    enemy,
-                    state.Profile,
-                    opposing,
-                    state.Frames,
-                    range);
-                float destinationOutgoingRate = _exchange.EvaluateOutgoingExchangeRate(
-                    state.Squad,
-                    enemy,
-                    state.Profile,
-                    opposing,
-                    state.Frames,
-                    destinationRange);
-                float currentIncomingRate = _exchange.EvaluateIncomingExchangeRate(
-                    state.Squad,
-                    enemy,
-                    state.Profile,
-                    state.Frames,
+                SquadEngagementFrame opposingFrame = state.Frames.GetValueOrDefault(enemy.Id);
+                // An enemy contact seeker closes on us whatever we do; a fleeing quarry opens the
+                // range while we stand.
+                float enemyApproach = IsApproachingContactSeeker(opposing, opposingFrame)
+                    ? Math.Max(0, opposing.MoveSpeed)
+                    : 0f;
+                float quarryOpening = state.Frame == null
+                    ? 0f
+                    : EngagementExchangeModel.QuarryWithdrawalRate(state.Frame, opposingFrame?.Role);
+                float standingClosing = enemyApproach - quarryOpening;
+                float ownMove = Math.Max(0, state.Profile.MoveSpeed);
+                bool moves = destinationRange < range - 0.01f;
+                // Contact comes from either side: an enemy contact seeker charging us, our own
+                // Close continuation running in to contact, or a state already in contact. Until
+                // 2026-10-09 the last case was priced, between two squads neither of which seeks
+                // contact, at the standing rates read at 1 yard: Neophyte Hybrids ran into Shoota
+                // Boyz from 15 yards on the strength of their point-blank fire, met melee of 100 to
+                // 130 battle value a turn against their own 10 to 20, and routed by turn six.
+                bool contactReachable = enemyApproach > 0
+                    || inContact
+                    || (state.Profile.IsContactSeeking && destinationRange <= ContactRange);
+                float contactIncoming = contactReachable
+                    ? _exchange.EvaluateContactRemovalRate(enemy, state.Squad)
+                    : 0f;
+                float contactOutgoing = contactReachable
+                    ? _exchange.EvaluateContactRemovalRate(state.Squad, enemy)
+                    : 0f;
+                bool contactPossible = contactIncoming > 0 || contactOutgoing > 0;
+                // How far a quarry can open the range while it matters: the discount has spent
+                // most of a turn's weight after about sixty turns.
+                float maximumRange = range + Math.Max(0, -standingClosing) * 60f;
+                // With contact in the lane, contact is priced by the contact rates and the range
+                // rates stay ranged: sampled from outside the melee band, never at it. The
+                // exchange model's rate at 1 yard IS the melee rate, and interpolating it toward
+                // the next sample put melee-sized fire at 3-8 yards, so the turn a charge arrived
+                // on decided whether the forecast squad broke there (Hormagaunts walked into PDF
+                // fire at 30 yards, 2026-10-07).
+                float minimumRange = contactPossible
+                    ? Math.Min(range, RangedSampleFloor)
+                    : Math.Min(range, moves ? destinationRange : range);
+                IReadOnlyList<float> samples = RangeSamples(
+                    minimumRange, maximumRange, range, destinationRange);
+
+                RangeRates standing = RangeRates.Sample(
+                    samples,
+                    sample => _exchange.EvaluateSustainedOutgoingRate(
+                        state.Squad, enemy, opposing, state.Frames, sample),
+                    sample => _exchange.EvaluateSustainedIncomingRate(
+                        state.Squad, enemy, state.Profile, state.Frames, sample));
+                ExchangeLane standHere = new(
+                    opposing.TotalAbleBattleValue,
+                    BreakProfileOf(enemy, state.Enemies),
                     range,
-                    targetSpeed: 0f);
-                float destinationIncomingRate = _exchange.EvaluateIncomingExchangeRate(
-                    state.Squad,
-                    enemy,
-                    state.Profile,
-                    state.Frames,
-                    destinationRange,
-                    targetSpeed: 0f);
-                float turnsAtCurrentRate = Math.Min(
-                    turnsToUsefulRange,
-                    expectedExchangeTurns);
-                float turnsAtDestinationRate = Math.Max(
-                    0,
-                    expectedExchangeTurns - turnsToUsefulRange);
-                float targetValue = Math.Max(0, opposing.TotalAbleBattleValue);
-                float outgoingOpportunity = IntegrateOpportunity(
-                    currentOutgoingRate,
-                    destinationOutgoingRate,
-                    turnsAtCurrentRate,
-                    turnsAtDestinationRate);
-                outgoingValue += SaturateFinitePool(outgoingOpportunity, targetValue);
-                incomingOpportunity += IntegrateOpportunity(
-                    currentIncomingRate,
-                    destinationIncomingRate,
-                    turnsAtCurrentRate,
-                    turnsAtDestinationRate);
-                incomingOpportunity += EvaluateProjectedMeleeOpportunity(
-                    state,
-                    enemy,
-                    opposing,
+                    false,
                     range,
-                    expectedExchangeTurns);
-                // A shooting squad's access reads the rate WITH aiming: one that can aim and then
-                // fire from here is not waiting for access. See
-                // SquadPairRemovalRate.SustainedRateAtRange. A contact seeker's access is the
-                // time to contact, and it closes on the move, un-aimed, so it keeps the plain rate.
-                bool standsToShoot = !state.Profile.IsContactSeeking;
-                accessValue += EvaluateContinuousAccessValue(
-                    standsToShoot
-                        ? _exchange.EvaluateSustainedOutgoingRate(
-                            state.Squad, enemy, opposing, state.Frames, range)
-                        : currentOutgoingRate,
-                    standsToShoot
-                        ? _exchange.EvaluateSustainedOutgoingRate(
-                            state.Squad, enemy, opposing, state.Frames, destinationRange)
-                        : destinationOutgoingRate,
-                    turnsToUsefulRange,
-                    targetValue,
-                    firePreservingPursuit ? expectedExchangeTurns : float.PositiveInfinity,
-                    firePreservingPursuit);
+                    ownMove + standingClosing,
+                    standingClosing,
+                    maximumRange,
+                    RangeRates.None,
+                    standing,
+                    contactPossible,
+                    ContactRange,
+                    contactOutgoing,
+                    contactIncoming);
+                if (standing.IsZero && !contactPossible && !moves)
+                {
+                    continue;
+                }
+                stay.Add(standHere);
+
+                if (!moves)
+                {
+                    close.Add(standHere);
+                    continue;
+                }
+                anyApproach = true;
+                close.Add(standHere with
+                {
+                    Moves = true,
+                    StopRange = destinationRange,
+                    Moving = RangeRates.Sample(
+                        samples,
+                        // Only a fire-preserving pursuer shoots on the move; anyone else closing
+                        // fires nothing until it stands.
+                        sample => firePreservingPursuit
+                            ? _exchange.EvaluateOutgoingExchangeRate(
+                                state.Squad, enemy, state.Profile, opposing, state.Frames, sample)
+                            : 0f,
+                        // A moving target is harder to hit: the engine adds its speed to the range
+                        // in the hit modifier (BattleModifiersUtil.CalculateRangeModifier).
+                        sample => _exchange.EvaluateIncomingExchangeRate(
+                            state.Squad,
+                            enemy,
+                            state.Profile,
+                            state.Frames,
+                            sample,
+                            targetSpeed: ownMove)),
+                });
             }
-            float friendlyPool = Math.Max(0, state.Profile.TotalAbleBattleValue);
-            float incomingValue = SaturateFinitePool(incomingOpportunity, friendlyPool);
-            return (outgoingValue - incomingValue, accessValue);
+
+            if (stay.Count == 0)
+            {
+                return (0, 0);
+            }
+
+            float ownPool = Math.Max(0, state.Profile.TotalAbleBattleValue);
+            SquadBreakProfile ownBreak = BreakProfileOf(state.Squad, state.FriendlySquads);
+            // Removal is in the enemy's battle value and losses in ours. Convert before netting,
+            // never after: a net of two currencies is a number the ratio between the factions'
+            // values decides.
+            float rate = EnemyRate(state);
+            float Value(IReadOnlyList<ExchangeLane> lanes)
+            {
+                EngagementExchangeForecast.Result result = EngagementExchangeForecast.Run(
+                    ownPool, ownBreak, lanes, expectedExchangeTurns);
+                return rate * result.EnemyValueRemoved - result.OwnValueLost;
+            }
+
+            float stayValue = Value(stay);
+            if (!anyApproach)
+            {
+                return (stayValue, 0);
+            }
+            float closeValue = Value(close);
+            return (Math.Max(stayValue, closeValue), Math.Max(0, closeValue - stayValue));
         }
 
-        private float EvaluateProjectedMeleeOpportunity(
-            State state,
+        /// <summary>
+        /// The distance between the nearest soldiers of two squads, each moved as a block so that
+        /// its centroid is at the given state centroid (a projected state moves a squad as a
+        /// block). <paramref name="centroidRange"/> when either squad has no placed soldier.
+        /// </summary>
+        private float NearestSoldierSeparation(
+            BattleSquad squad,
+            ValueTuple<float, float> squadCentroid,
             BattleSquad enemy,
-            BattleSquadCapabilityProfile opposing,
-            float range,
-            float expectedExchangeTurns)
+            ValueTuple<float, float> enemyCentroid,
+            float centroidRange)
         {
-            SquadEngagementFrame opposingFrame = state.Frames.GetValueOrDefault(enemy.Id);
-            if (!IsApproachingContactSeeker(opposing, opposingFrame))
+            SquadCellLayout ours = LayoutOf(squad);
+            SquadCellLayout theirs = LayoutOf(enemy);
+            if (ours.Cells.Length == 0 || theirs.Cells.Length == 0)
             {
-                return 0;
+                return centroidRange;
             }
-
-            float contactRate = _exchange.EvaluateContactRemovalRate(enemy, state.Squad);
-            if (contactRate <= 0)
+            // No pair can be nearer than the centroids less both radii: far apart, that decides.
+            float lowerBound = centroidRange - ours.Radius - theirs.Radius;
+            if (lowerBound > MeleeBand + BattleContactRules.MeleeContactAllowance)
             {
-                return 0;
+                return lowerBound;
             }
+            float ourShiftX = squadCentroid.Item1 - ours.CentroidX;
+            float ourShiftY = squadCentroid.Item2 - ours.CentroidY;
+            float theirShiftX = enemyCentroid.Item1 - theirs.CentroidX;
+            float theirShiftY = enemyCentroid.Item2 - theirs.CentroidY;
+            float nearest = float.MaxValue;
+            foreach ((float x, float y) in ours.Cells)
+            {
+                foreach ((float ex, float ey) in theirs.Cells)
+                {
+                    float dx = (x + ourShiftX) - (ex + theirShiftX);
+                    float dy = (y + ourShiftY) - (ey + theirShiftY);
+                    nearest = Math.Min(nearest, dx * dx + dy * dy);
+                }
+            }
+            return MathF.Sqrt(nearest);
+        }
 
-            float turnsToContact = Math.Max(0, range - 1f)
-                / Math.Max(0.1f, opposing.MoveSpeed);
-            float contactTurns = Math.Max(
-                0,
-                expectedExchangeTurns - turnsToContact);
-            return contactRate * contactTurns;
+        private SquadCellLayout LayoutOf(BattleSquad squad) =>
+            _context == null || squad == null
+                ? BuildLayout(squad)
+                : _context.SquadCellLayouts.GetOrAdd(squad.Id, _ => BuildLayout(squad));
+
+        private SquadCellLayout BuildLayout(BattleSquad squad)
+        {
+            List<(float X, float Y)> cells = [];
+            foreach (BattleSoldier soldier in squad?.AbleSoldiers ?? [])
+            {
+                if (soldier.TopLeft is ValueTuple<int, int> cell
+                    && (_grid == null || _grid.IsSoldierPlaced(soldier.Soldier.Id)))
+                {
+                    cells.Add((cell.Item1, cell.Item2));
+                }
+            }
+            if (cells.Count == 0)
+            {
+                return new SquadCellLayout([], 0, 0, 0);
+            }
+            float centroidX = cells.Average(cell => cell.X);
+            float centroidY = cells.Average(cell => cell.Y);
+            float radius = cells.Max(cell => MathF.Sqrt(
+                (cell.X - centroidX) * (cell.X - centroidX)
+                + (cell.Y - centroidY) * (cell.Y - centroidY)));
+            return new SquadCellLayout([.. cells], centroidX, centroidY, radius);
+        }
+
+
+        // Separation at which an arriving contact seeker is in melee, as in the exchange model's
+        // melee rate (range <= 1.5).
+        private const float ContactRange = 1f;
+        // The exchange model's melee band (EngagementExchangeModel.MeleeRemovalRate: range <= 1.5).
+        private const float MeleeBand = 1.5f;
+        // Just outside the exchange model's melee band (range <= 1.5): the nearest range at which
+        // a lane with contact in it reads ranged rates.
+        private const float RangedSampleFloor = 2f;
+        private const int RangeSampleCount = 9;
+
+        /// <summary>
+        /// Where along a lane's path to read the exchange rates: evenly spaced over the ranges the
+        /// path can reach, plus the current and destination ranges exactly.
+        /// </summary>
+        private static IReadOnlyList<float> RangeSamples(
+            float minimum,
+            float maximum,
+            float current,
+            float destination)
+        {
+            List<float> samples = [current];
+            if (destination >= minimum && destination <= maximum)
+            {
+                samples.Add(destination);
+            }
+            if (maximum - minimum > 0.5f)
+            {
+                // Geometric, not even: fire climbs steeply in the last yards, as the range modifier
+                // goes with ln(1 / range), and the rates are linear between samples. Evenly spaced
+                // samples put a straight line from point blank to a quarter of the way out, far above
+                // the true curve, which the forecast's exact average over a turn's movement then
+                // charged in full: 30 Hormagaunts charging 20 PDF from 100 yards read a loss of 109
+                // where the duels say they win most such fights (2026-10-09).
+                float low = Math.Max(1f, minimum);
+                float high = Math.Max(low, maximum);
+                for (int index = 0; index < RangeSampleCount; index++)
+                {
+                    samples.Add(low * MathF.Pow(high / low, index / (float)(RangeSampleCount - 1)));
+                }
+            }
+            return samples;
         }
 
         /// <summary>
-        /// Maps accumulated positive removal opportunity into one finite battle-value pool. The
-        /// mapping is continuous and monotonic, applies at every magnitude, and never exposes a
-        /// threshold where nearly identical geometries use different value scales.
+        /// A squad's break profile, memoized for the planning pass when the friendly squads that
+        /// decide synapse coverage are known.
         /// </summary>
-        internal static float SaturateFinitePool(
-            float opportunity,
-            float battleValuePool)
+        private SquadBreakProfile BreakProfileOf(
+            BattleSquad squad,
+            IReadOnlyCollection<BattleSquad> friendlySquads)
         {
-            if (float.IsNaN(opportunity)
-                || opportunity <= 0
-                || !float.IsFinite(battleValuePool)
-                || battleValuePool <= 0)
+            if (friendlySquads == null || _context == null)
             {
-                return 0;
+                return EngagementExchangeForecast.ProfileOf(squad, friendlySquads, _grid);
             }
-
-            if (float.IsPositiveInfinity(opportunity))
-            {
-                return battleValuePool;
-            }
-
-            return battleValuePool * (1f - (float)Math.Exp(
-                -opportunity / Math.Max(FinitePoolEpsilon, battleValuePool)));
+            return _context.SquadBreakProfiles.GetOrAdd(
+                squad.Id,
+                _ => EngagementExchangeForecast.ProfileOf(squad, friendlySquads, _grid));
         }
 
-        private static float IntegrateOpportunity(
-            float currentRate,
-            float destinationRate,
-            float currentTurns,
-            float destinationTurns)
-        {
-            float currentOpportunity = float.IsFinite(currentRate) && currentRate > 0
-                ? currentRate * Math.Max(0, currentTurns)
-                : 0;
-            float destinationOpportunity = float.IsFinite(destinationRate) && destinationRate > 0
-                ? destinationRate * Math.Max(0, destinationTurns)
-                : 0;
-            return currentOpportunity + destinationOpportunity;
-        }
+        private static float EnemyRate(State state) =>
+            float.IsFinite(state.EnemyValueRate) && state.EnemyValueRate > 0
+                ? state.EnemyValueRate
+                : 1f;
 
-        /// <summary>
-        /// How long before this squad reaches the range at which it wants to be shooting,
-        /// measured against the NET closing rate rather than the squad's own move.
-        ///
-        /// <para>WHY NET. A chase closes at the difference of the two speeds, because the quarry
-        /// is running as well. Dividing the raw gap by the pursuer's own move prices a full step
-        /// against a stationary target, and the next turn re-prices the shortened gap the same
-        /// way, so the access term pays the same tempo bonus every turn for an arrival that keeps
-        /// receding. Observed 2026-09-20 (Grist Nine Epsilon): 315 marines pursued 20 routing
-        /// orks for the last 700 turns of a 1000-turn battle. The access delta held at ~10 battle
-        /// value per turn while the separation fell from 323 to 104 -- a stock that should have
-        /// been depleting did not move -- and it outbid a standing shot worth ~3 on 1112 of 1112
-        /// squad-turns. <see cref="BattleContactRules.CanReachContactThisTurn"/> carries the same
-        /// correction for the contact-break tests, made after a 2026-08-04 stern chase ran to the
-        /// turn cap for the same reason.</para>
-        ///
-        /// <para>A quarry the squad cannot out-run returns positive infinity, which
-        /// <see cref="EvaluateContinuousAccessValue"/>'s non-finite guard turns into no access
-        /// value at all. That is the right answer rather than a degenerate one: the arrival never
-        /// happens, so there is no delay to buy out, and the squad should shoot from where it
-        /// stands. The exchange integral reads the same infinity as "stay at the current rate for
-        /// the whole horizon", which is also correct.</para>
-        ///
-        /// <para>Only a pursuit frame carries a quarry speed. A Normal-role squad facing an enemy
-        /// that is itself closing on it adds that enemy's approach speed to its own (see
-        /// <see cref="EnemyApproachSpeed"/>); every other role sees the unchanged raw-move
-        /// behaviour.</para>
-        ///
-        /// <para>WHY THE ENEMY'S APPROACH COUNTS. Dividing the gap by the squad's own move prices
-        /// every step as if the enemy were standing still. Observed 2026-10-01 (ork shootas against
-        /// Genestealers, start range 200): the orks ran for the first ten turns because each step
-        /// bought a whole turn off a wait that was really a third as long, since the Genestealers
-        /// cover the rest of the gap themselves. With the mutual rate a step buys only
-        /// own/(own+enemy) of a turn, so holding to aim wins once aiming is worth more than that.
-        /// An enemy that is not approaching (a shooter holding its ground, a withdrawing squad)
-        /// contributes nothing, so a squad still advances on one.</para>
-        /// </summary>
-        private static float TurnsToUsefulRange(
-            State state, float range, float desiredRange, float enemyApproachSpeed = 0)
-        {
-            float gap = Math.Max(0, range - desiredRange);
-            if (gap <= 0) return 0;
-            bool pursuit = state.Frame != null && IsPursuitRole(state.Frame.Role);
-            float quarrySpeed = pursuit ? Math.Max(0, state.Frame.QuarryRunSpeed) : 0;
-            float closingRate = state.Profile.MoveSpeed - quarrySpeed
-                + (pursuit ? 0 : Math.Max(0, enemyApproachSpeed));
-            return closingRate <= 0 ? float.PositiveInfinity : gap / closingRate;
-        }
-
-        /// <summary>
-        /// How fast this enemy squad is closing on the squad being scored, for a squad in the
-        /// Normal role. Only a contact-seeking enemy that is not withdrawing, routing or covering
-        /// counts; a ranged enemy is not assumed to walk into our range. Zero for every other role,
-        /// which keeps the pursuit and withdrawal pricing exactly as it was.
-        /// </summary>
-        private static float EnemyApproachSpeed(
-            State state, BattleSquad enemy, BattleSquadCapabilityProfile opposing)
-        {
-            if (state.Frame != null && state.Frame.Role != EngagementSquadRole.Normal)
-            {
-                return 0;
-            }
-
-            SquadEngagementFrame opposingFrame = state.Frames.GetValueOrDefault(enemy.Id);
-            return IsApproachingContactSeeker(opposing, opposingFrame)
-                ? Math.Max(0, opposing.MoveSpeed)
-                : 0;
-        }
-
+        // Two lessons the lane's range path carries (EvaluateExchangePotential): time to arrive is
+        // measured against the NET closing rate. A chase closes at the difference of the speeds;
+        // pricing each step against a stationary quarry bought the same arrival again every turn
+        // (Grist Nine Epsilon, 2026-09-20: 315 marines chased 20 routing orks for 700 turns; see
+        // also BattleContactRules.CanReachContactThisTurn). And an enemy that is itself closing
+        // covers part of the gap: ork shootas ran at approaching Genestealers for ten turns at
+        // 200 yards (2026-10-01) because each step was priced as a whole turn off the wait.
         private static bool IsApproachingContactSeeker(
             BattleSquadCapabilityProfile opposing, SquadEngagementFrame opposingFrame) =>
             opposingFrame != null
@@ -413,65 +514,20 @@ namespace OnlyWar.Battles
                 or EngagementSquadRole.Cover
                 or EngagementSquadRole.RearGuard);
 
-        /// <summary>
-        /// Prices delay before a squad can contribute without a hard useful/useless branch. The
-        /// weight approaches zero smoothly as current fire becomes useful, and is exactly zero
-        /// when the destination geometry cannot produce removal either.
-        /// </summary>
-        internal static float EvaluateContinuousAccessValue(
-            float currentRate,
-            float destinationRate,
-            float turnsToUsefulRange,
-            float targetBattleValue,
-            float maximumDelayTurns = float.PositiveInfinity,
-            bool destinationDefinesUsefulFire = false)
-        {
-            if (!float.IsFinite(currentRate)
-                || !float.IsFinite(destinationRate)
-                || !float.IsFinite(turnsToUsefulRange)
-                || !float.IsFinite(targetBattleValue)
-                || destinationRate <= 0
-                || turnsToUsefulRange <= 0
-                || targetBattleValue <= 0)
-            {
-                return 0;
-            }
-
-            float scale = targetBattleValue / AccessValueTurns;
-            float nonNegativeCurrent = Math.Max(0, currentRate);
-            float helplessness;
-            if (destinationDefinesUsefulFire)
-            {
-                // The useful-range boundary supplies the rate that ends the access deficit. This
-                // smoothstep is exactly zero at and inside that boundary; improvements after
-                // arrival belong solely to the exchange curve. It therefore cannot pay twice for
-                // closing within useful fire.
-                float deficitFraction = Math.Clamp(
-                    (destinationRate - nonNegativeCurrent) / destinationRate,
-                    0,
-                    1);
-                helplessness = deficitFraction * deficitFraction
-                    * (3f - 2f * deficitFraction);
-            }
-            else
-            {
-                // Preserve the existing non-pursuit definition: access there is the inability to
-                // contribute above the shared plinking floor, not arrival at a pursuit fire band.
-                float negligibleRate =
-                    targetBattleValue * RangedEffectivenessCurve.NegligibleRemovalFraction;
-                helplessness = negligibleRate / (negligibleRate + nonNegativeCurrent);
-            }
-            float viability = destinationRate / (scale + destinationRate);
-            float tempoRate = scale * helplessness * viability;
-            float boundedDelay = Math.Min(turnsToUsefulRange, maximumDelayTurns);
-            return -tempoRate * boundedDelay;
-        }
-
         private float EvaluateReadiness(State state)
         {
             if (state.Actions != null)
             {
-                float readiness = state.Actions.Sum(action => action?.ReadinessValue ?? 0f);
+                // Two currencies again. An Aim's readiness is the prepared SHOT, priced in the
+                // target's battle value (RangedTargetSelector.EvaluateFireTiming); Ready and Reload
+                // are a fraction of the soldier's OWN value (SoldierActionPlanner), because they
+                // prepare no particular shot.
+                float rate = EnemyRate(state);
+                float readiness = state.Actions.Sum(action => action == null
+                    ? 0f
+                    : action.Kind == PlannedSoldierActionKind.Aim
+                        ? rate * action.ReadinessValue
+                        : action.ReadinessValue);
                 bool pursuitPreparation = state.Frame != null
                     && IsFirePreservingPursuitRole(state.Frame.Role)
                     && state.Actions.Any(IsFirePreparation);
@@ -488,7 +544,8 @@ namespace OnlyWar.Battles
             // in a live aim here instead, so abandoning that aim is a real potential loss rather
             // than something the legality mask must forbid. The projected Aim action uses the
             // same removal-conditioned calculation below, which makes the value telescope.
-            return state.Squad.AbleSoldiers.Sum(shooter =>
+            // A stored aim is a prepared shot, so enemy battle value like the projected Aim above.
+            return EnemyRate(state) * state.Squad.AbleSoldiers.Sum(shooter =>
                 EvaluateStoredAimReadiness(state, shooter));
         }
 
@@ -517,7 +574,7 @@ namespace OnlyWar.Battles
                 target,
                 aim.Item2,
                 range,
-                aim.Item2.Template.Accuracy + aim.Item3 + 1);
+                RangedTargetSelector.AimAccuracy(shooter, aim.Item2.Template) + aim.Item3 + 1);
             // A stored aim is worth the best per-turn value it can still be cashed for: fire it now,
             // or keep aiming at the rate the planner would price that Aim at, both net of the
             // rounds they spend. This is the same currency as outgoing fire and as the projected
@@ -661,18 +718,22 @@ namespace OnlyWar.Battles
                 BattleEngagementFrameBuilder.Centroid(threat));
             float turnsUntilThreatReachesInterceptPoint = interceptDistance
                 / Math.Max(0.1f, threatProfile.MoveSpeed);
+            // The threat's melee value is enemy battle value; the screen and the protected squad
+            // are ours. Convert once, so both the holding ratio and the min below compare like
+            // with like.
+            float threatMelee = EnemyRate(state) * threatProfile.UsableMeleeBattleValue;
             float holding = Math.Min(
                 1f,
                 (state.Profile.UsableMeleeBattleValue
                     + state.Profile.TotalAbleBattleValue * 0.25f)
-                    / Math.Max(1, threatProfile.UsableMeleeBattleValue));
+                    / Math.Max(EnemyRate(state), threatMelee));
             float capacity = Math.Min(
                 1f,
                 state.Profile.ContactCapacity
                     / (float)Math.Max(1, threatProfile.ContactCapacity));
             float interceptDiscount = 1f / (1f + turnsUntilThreatReachesInterceptPoint);
             return Math.Min(
-                    threatProfile.UsableMeleeBattleValue,
+                    threatMelee,
                     protectedProfile.TotalAbleBattleValue)
                 * holding
                 * capacity

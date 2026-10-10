@@ -91,6 +91,84 @@ public sealed class PreparedShotRateTests
                 + $"{plentifulTiming.ShootNowValue}");
     }
 
+    /// <summary>
+    /// The round charge decides how the soldier fires; it does not decide what the aim is worth.
+    /// Readiness is compared in the engagement potential with the forecast's standing rate, which
+    /// is gross removal, so readiness is the gross removal per turn of the plan the charge picks.
+    /// Until 2026-10-09 it was the net value, about half, and every step toward the enemy looked
+    /// cheaper than a standing turn the forecast itself valued twice as high.
+    /// </summary>
+    [Fact]
+    public void ReadinessIsTheGrossRemovalOfThePlanTheRoundChargePicks()
+    {
+        Fixture scarce = CreateFixture(distance: 60, targetSpeed: 0, typedAmmunition: true);
+        scarce.Weapon.ReserveAmmo = 0;
+
+        RangedTargetSelector.FireTiming timing = scarce.Timing(null, scarce.ShootNow());
+
+        Assert.True(RangedTargetSelector.AmmunitionScarcity(scarce.Weapon) > 0.5f);
+        Assert.False(timing.ShootNow, "the scarce shooter should prefer to aim at 60 yards");
+        Assert.True(
+            timing.Readiness > timing.PreparedRate,
+            $"readiness {timing.Readiness} should be the gross rate, above the net {timing.PreparedRate}");
+        // The gross rate of the prepared shot with the best NET rate, not the best gross rate.
+        float bestNet = float.MinValue;
+        float grossOfBestNet = 0;
+        float valuePerRound = 0;
+        List<(RangedTargetEvaluation Shot, int Turns)> prepared = [];
+        for (int bonus = 0; bonus <= RangedTargetSelector.FullAimBonusTurns; bonus++)
+        {
+            RangedTargetEvaluation shot = scarce.Selector.EvaluateRangedTarget(
+                scarce.Shooter, scarce.Target, scarce.Weapon, scarce.Range,
+                scarce.Weapon.Template.Accuracy + bonus + 1);
+            prepared.Add((shot, bonus + 2));
+            valuePerRound = System.Math.Max(
+                valuePerRound, System.Math.Max(0, shot.Score) / System.Math.Max(1, shot.ShotsToFire));
+        }
+        RangedTargetEvaluation now = scarce.ShootNow();
+        valuePerRound = System.Math.Max(
+            valuePerRound, System.Math.Max(0, now.Score) / System.Math.Max(1, now.ShotsToFire));
+        float scarcity = RangedTargetSelector.AmmunitionScarcity(scarce.Weapon);
+        foreach ((RangedTargetEvaluation shot, int turns) in prepared)
+        {
+            float net = (shot.Score - scarcity * valuePerRound * System.Math.Max(1, shot.ShotsToFire))
+                / turns;
+            if (net > bestNet)
+            {
+                bestNet = net;
+                grossOfBestNet = shot.Score / turns;
+            }
+        }
+        Assert.Equal(grossOfBestNet, timing.Readiness, 4);
+    }
+
+    /// <summary>
+    /// The exchange forecast's standing rate and the Hold option's readiness price the same turn.
+    /// They must agree: the removal-rate table picks the soldier's firing plan with the shot
+    /// planner's own rule and credits its gross removal, exactly as readiness does. When they
+    /// disagreed (2026-10-09: one aim turn in the table, net value in readiness) Neophyte Hybrids
+    /// crept toward Shoota Boyz under fire without shooting.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheTablesStandingRateIsTheReadinessOfTheShootersOwnPlan(bool scarceAmmunition)
+    {
+        Fixture fixture = CreateFixture(distance: 60, targetSpeed: 0, typedAmmunition: true);
+        fixture.Weapon.ReserveAmmo = scarceAmmunition
+            ? 0
+            : (RangedTargetSelector.PlentifulMagazines - 1) * fixture.Weapon.Template.AmmoCapacity;
+        PairRemovalRateTable table = new(fixture.Services, fixture.Selector);
+
+        PairRemovalTerm term = Assert.Single(
+            Assert.Single(table.GetPairRemovalRates(fixture.Shooter.BattleSquad)).Value.Terms);
+        RangedTargetSelector.FireTiming timing = fixture.Timing(null, fixture.ShootNow());
+        float planned = timing.ShootNow ? timing.ShootNowGross : timing.Readiness;
+
+        Assert.True(planned > 0);
+        Assert.Equal(planned, term.SustainedRateAt(term.ReferenceRange), 3);
+    }
+
     [Fact]
     public void UntypedReloadIsNeverScarce()
     {
@@ -208,7 +286,8 @@ public sealed class PreparedShotRateTests
             target,
             weapon,
             distance,
-            new RangedTargetSelector(new RangedTargetingServices(services)));
+            new RangedTargetSelector(new RangedTargetingServices(services)),
+            services);
     }
 
     private static void Place(BattleGridManager grid, BattleSoldier soldier, bool firstSide, int x)
@@ -222,7 +301,8 @@ public sealed class PreparedShotRateTests
         BattleSoldier Target,
         RangedWeapon Weapon,
         float Range,
-        RangedTargetSelector Selector)
+        RangedTargetSelector Selector,
+        SquadPlanningServices Services)
     {
         internal float Rate(int? currentAimBonus) => Timing(currentAimBonus).PreparedRate;
 

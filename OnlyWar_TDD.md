@@ -169,13 +169,13 @@ than claiming that every host source is compiler-isolated from every Domain or P
 Compatibility is local to the owner. Cross-module compatibility surfaces are limited to external
 formats or boundary identity:
 
-- Persistence keeps the exact save-format guard and save-catalog classification, maps values that older
-  saves did not persist, and reads legacy rules layouts into the current Domain catalog. The legacy
+- Persistence keeps the exact save-format guard and save-catalog classification, and reads legacy
+  rules layouts into the current Domain catalog. The legacy
   equipment and faction-rule readers are storage adapters, not live gameplay policy. Canonical event
   payload registration preserves readable legacy event/history payloads during load; old free-text
   history tables are not imported.
 - Representative owner-local adapters are `SaveFormat`/`SaveGameCatalog`,
-  `LegacySaveValueMappers`, `LegacyEquipmentCatalogBuilder`, and
+  `LegacyEquipmentCatalogBuilder`, and
   `LegacyFactionBehaviorRulesDataAccess`; each translates persisted or rules data into current
   structures at the Persistence boundary.
 - `OnlyWar.Operations` contains `OperationsBoundaryTypeForwarders`, an assembly-level type-forwarder
@@ -439,7 +439,7 @@ Relationship records such as `PresenceRequestRecord`, `OrderCharacterRecord`, an
 rebuilds session state, while Operations and Campaign bind order, posting, relationship, narrative,
 and chronicle projections after the domain graph exists. SQL access does not own those policies.
 
-`SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 22 and are written to
+`SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 23 and are written to
 `GlobalData.SaveVersion`. Missing saves are opened in neither create nor write mode, and the chooser
 retains compatible, incompatible, and corrupt entries with an explicit reason.
 

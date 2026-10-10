@@ -288,12 +288,12 @@ namespace OnlyWar.Campaign.Turns
                     double defenseTotal = RegionDefenses.GetShared(current, DefenseType.Entrenchment)
                         + RegionDefenses.GetShared(current, DefenseType.ListeningPost)
                         + RegionDefenses.GetShared(current, DefenseType.AntiAir);
-                    if (defenseTotal <= 0) GenerateAmbushMission(current);
+                    if (defenseTotal <= 0) GenerateAmbushMission(current, chance);
                     else GenerateSabotageMission(current, defenseTotal);
                 }
                 else if (chance >= 0)
                 {
-                    GenerateAmbushMission(current);
+                    GenerateAmbushMission(current, chance);
                 }
             }
         }
@@ -310,28 +310,35 @@ namespace OnlyWar.Campaign.Turns
             double chance = _turn.Random.NextRandomZValue();
             if (chance < zScore)
             {
-                int size = Math.Max((int)(zScore - chance), 1);
+                double margin = zScore - chance;
+                long targetBattleValue = AmbushMissionSizing.RollTargetBattleValue(
+                    enemyRegionFaction.GetDeployedStrength(), margin, _turn.Random);
+                // A cell with no deployed fighters has nobody in it to ambush.
+                if (targetBattleValue <= 0) return;
+                int size = Math.Max((int)margin, 1);
                 Mission hiddenCellAmbush = new Mission(
                     _turn.Identity.GetNextMissionId(),
                     MissionType.Extermination,
                     enemyRegionFaction,
-                    size);
+                    size,
+                    targetBattleValue);
                 enemyRegionFaction.Region.SpecialMissions.Add(hiddenCellAmbush);
                 _specialMissions.Add(hiddenCellAmbush);
             }
         }
 
-        private void GenerateAmbushMission(RegionFaction enemyRegionFaction)
+        // The intelligence roll's margin decides how much of the region's deployed strength the
+        // ambush catches (AmbushMissionSizing). Nothing deployed means nothing to catch.
+        private void GenerateAmbushMission(RegionFaction enemyRegionFaction, double intelligenceMargin)
         {
-            int maxSize = (int)MissionStealthDifficulty.TroopMagnitude(
-                enemyRegionFaction.MilitaryStrength);
-            int size = ClampMissionSize((int)_turn.Random.NextRandomZValue() + 1, maxSize);
-            long targetBattleValue = AmbushMissionSizing.RollTargetBattleValue(size, _turn.Random);
+            long targetBattleValue = AmbushMissionSizing.RollTargetBattleValue(
+                enemyRegionFaction.GetDeployedStrength(), intelligenceMargin, _turn.Random);
+            if (targetBattleValue <= 0) return;
             Mission ambush = new Mission(
                 _turn.Identity.GetNextMissionId(),
                 MissionType.Ambush,
                 enemyRegionFaction,
-                size,
+                AmbushMissionSizing.MissionSizeBand(targetBattleValue),
                 targetBattleValue);
             enemyRegionFaction.Region.SpecialMissions.Add(ambush);
             _specialMissions.Add(ambush);

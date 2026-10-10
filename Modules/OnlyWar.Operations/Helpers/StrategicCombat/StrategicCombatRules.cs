@@ -9,13 +9,6 @@ namespace OnlyWar.Operations.StrategicCombat
         public const int MaxTacticalActors = 120;
         public const int MaxGeneratedSquads = 24;
 
-        // Battle-value anchors from the shipped rules database (OnlyWar.s3db): used to keep strategic
-        // thresholds tied to real soldiers rather than the old implicit "10 BV per trooper" rule of
-        // thumb. Calibrated from simulated battles on 2026-10-05 (Design/Active/
-        // BattleValueCalibration.md, section 7.14): a Tactical Marine is worth about seventeen PDF
-        // troopers, not the 9 the old formula gave. Keep these equal to the database.
-        public const long PdfTrooperBattleValue = 5;
-
         // These strategic thresholds retain the pre-recalculation unit scale. BattleValues are
         // deliberately compressed to that same scale so garrison growth, force pools, and
         // tactical/strategic handoff decisions remain comparable.
@@ -45,9 +38,10 @@ namespace OnlyWar.Operations.StrategicCombat
         // unchanged - an overrun is cheap, not free.
         public const double OverrunForceRatio = 10.0;
 
-        // One point of reorganization effort reforms this much disorganized military BV. Anchored
-        // to a ten-trooper PDF squad so the rate is expressed in the same currency as force pools.
-        public const long ReorganizationBattleValuePerEffort = 10 * PdfTrooperBattleValue;
+        // One point of reorganization effort reforms this share of the region faction's current
+        // disorganized military BV. A share rather than a fixed amount, so the rate is the same for a
+        // hive world and an outpost, and each point does less as the pool empties.
+        public const double ReorganizationShareOfDisorganizedPerEffort = 0.01;
 
         // Each undefended day of an assault destroys this multiple of the surviving assaulting
         // force's BV. An unopposed assault is a rampage: the capacity below is spent on the
@@ -60,9 +54,9 @@ namespace OnlyWar.Operations.StrategicCombat
         public const double OrganizedResistanceFactor = 0.5;
 
         // Capacity the fighting did not absorb falls on the population. This is not massacre as
-        // policy - it is the chaos of an overrun - so every attacker inflicts it. Anchored on the
-        // Imperium, where a PDF trooper is 5 BV for one man, so a point of capacity is about a
-        // person. A faction whose numbers ARE its army has no civilians and so loses none.
+        // policy - it is the chaos of an overrun - so every attacker inflicts it. A tuning value, not
+        // a conversion: one point of capacity kills one civilian, and the daily ceiling below is what
+        // bounds the total. A faction whose numbers ARE its army has no civilians and so loses none.
         public const double CiviliansPerBattleValue = 1.0;
 
         // Ceiling on how much of a region's remaining civilian population one day of rampage can

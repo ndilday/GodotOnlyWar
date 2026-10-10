@@ -48,8 +48,11 @@ public class GradedRemovalCalibrationTests
         internal float Margin => HoldScore - ApproachScore;
     }
 
+    // Renamed 2026-10-06 from ShippedLambda_*: the graded credit is now measured on the engine's
+    // wound counter rather than weighted by lambda (RemovalMath), and these properties are the
+    // ones that change must keep.
     [Fact]
-    public void ShippedLambda_MakesTheBolterSquadStandAndShootAt200Yards()
+    public void GradedRemoval_MakesTheBolterSquadStandAndShootAt200Yards()
     {
         // The reported defect: at 200 yards from melee-only Carnifexes the marines walked into
         // contact because the immediate fire term was ~0 and the lookahead's capability proxy
@@ -57,7 +60,7 @@ public class GradedRemovalCalibrationTests
         ScenarioResult result = RunReferenceScenario();
 
         _output.WriteLine(
-            $"lambda {RemovalMath.WoundProgressCreditWeight}: chosen {result.Chosen}, "
+            $"chosen {result.Chosen}, "
                 + $"outgoing {result.Outgoing:0.###}, future {result.Future:0.###}, "
                 + $"Hold - Run {result.Margin:0.###}");
         Assert.NotEqual(EngagementOptionKind.RunToward, result.Chosen);
@@ -67,12 +70,12 @@ public class GradedRemovalCalibrationTests
     }
 
     [Fact]
-    public void ShippedLambda_StillRefusesToPlinkAtAnImpenetrableTarget()
+    public void GradedRemoval_StillRefusesToPlinkAtAnImpenetrableTarget()
     {
         // The invariant, exercised through the whole scoring stack rather than the wound model
         // alone: the same geometry against a target this weapon simply cannot hurt must not
-        // produce immediate fire value. Otherwise lambda has bought exactly the bug take-out
-        // probability was introduced to fix.
+        // produce immediate fire value. Otherwise graded credit has bought exactly the bug
+        // take-out probability was introduced to fix.
         ScenarioResult penetrable = RunReferenceScenario();
         ScenarioResult impenetrable = RunReferenceScenario(enemyArmor: 255);
 
@@ -134,9 +137,17 @@ public class GradedRemovalCalibrationTests
     /// still has toughness binding, so only the top pair is still asserted -- the 400/800 and
     /// 800/1600 cases were dropped because the property genuinely does not hold there any more, NOT
     /// because the numbers moved. If the floor is ever lowered again, restore them.</para>
+    ///
+    /// <para>THE BINDING REGION MOVED DOWN on 2026-10-06, when removal per hit came from the
+    /// engine's wound counter instead of lambda-weighted ratio progress. Bolters now take several
+    /// times longer to put a Carnifex down, so the opening range reaches the weapon-reach cap (996)
+    /// far sooner. Measured that day at constitution 50 / 100 / 200 / 400 / 800 / 1600 / 3200:
+    /// 606 / 506 / 989 / 996 / 996 / 996 / 996. The 1600/3200 pair is now flat at the cap, so
+    /// toughness no longer binds there; 100 -> 200 is the pair where it does. (50 -> 100 falls: the
+    /// saturation floor decides there.)</para>
     /// </summary>
     [Theory]
-    [InlineData(1600f, 3200f)]
+    [InlineData(100f, 200f)]
     public void PreferredOpeningRange_RisesWithOpposingConstitution(float softer, float tougher)
     {
         int softRange = OpeningRangeAgainstCarnifexHerd("Softer", 92_000, softer);

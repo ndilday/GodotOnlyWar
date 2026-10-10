@@ -308,9 +308,9 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// <see cref="EvaluateOutgoingExchangeRate"/> for a squad that stands and may aim. For the
-        /// access potential only -- see <see cref="SquadPairRemovalRate.SustainedRateAtRange"/>
-        /// for why the exchange forecast does not read it.
+        /// <see cref="EvaluateOutgoingExchangeRate"/> for a squad that stands and may aim: the rate
+        /// of the standing phases of <see cref="EngagementExchangeForecast"/>. See
+        /// <see cref="SquadPairRemovalRate.SustainedRateAtRange"/>.
         /// </summary>
         internal float EvaluateSustainedOutgoingRate(
             BattleSquad squad,
@@ -351,8 +351,7 @@ namespace OnlyWar.Battles
                     ? theirFrame.PairWeights.GetValueOrDefault(squad.Id)
                     : 0f;
             float incomingBulk = PostureBulkMultiplier(
-                frames.GetValueOrDefault(enemy.Id)?.BaselinePosture
-                    ?? EngagementOptionKind.Hold);
+                ForecastFiringPosture(frames.GetValueOrDefault(enemy.Id)));
             return float.IsPositiveInfinity(incomingBulk)
                 ? 0
                 : incomingAllocation * Math.Min(
@@ -364,6 +363,69 @@ namespace OnlyWar.Battles
                             targetSpeed,
                             incomingBulk),
                         MeleeRemovalRate(enemy, squad, range)));
+        }
+
+        /// <summary>
+        /// The posture the exchange forecast assumes an enemy shoots from: standing, so its fire
+        /// is the aimed sustained rate, unless it is charging to contact (a contact seeker's
+        /// baseline) or running away (a fleeing role), when its own baseline still decides.
+        ///
+        /// <para>WHY NOT THE BASELINE. The baseline posture is the enemy's fallback option, a
+        /// containment rule ("inside my preferred band's lower edge, step back"), not a prediction
+        /// of how it will fight. Read as one, it said that two shooting squads at 260 yards, each
+        /// inside the other's wide band, would both keep stepping back, so each priced the other's
+        /// fire un-aimed and on the move -- 20 to 30 times below the standing rate. Both forecast a
+        /// win; the Shoota Boyz believed a firefight they lost at four to one cost them almost
+        /// nothing (2026-10-09, Design/Active/BattleValueCalibration.md 7.22). The squads stood and
+        /// aimed.</para>
+        /// </summary>
+        internal static EngagementOptionKind ForecastFiringPosture(SquadEngagementFrame enemyFrame)
+        {
+            if (enemyFrame == null)
+            {
+                return EngagementOptionKind.Hold;
+            }
+            return enemyFrame.Role is EngagementSquadRole.Bound
+                    or EngagementSquadRole.Routing
+                    or EngagementSquadRole.BreakOff
+                || enemyFrame.BaselinePosture == EngagementOptionKind.CloseToContact
+                    ? enemyFrame.BaselinePosture
+                    : EngagementOptionKind.Hold;
+        }
+
+        /// <summary>
+        /// <see cref="EvaluateIncomingExchangeRate"/> against a stationary squad, with the enemy
+        /// aiming when it stands (<see cref="ForecastFiringPosture"/>): the incoming half of the
+        /// forecast's standing phases, so both sides of a standing exchange may aim. An enemy
+        /// charging to contact or running away keeps its own posture's rate.
+        /// </summary>
+        internal float EvaluateSustainedIncomingRate(
+            BattleSquad squad,
+            BattleSquad enemy,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            float range)
+        {
+            float incomingBulk = PostureBulkMultiplier(
+                ForecastFiringPosture(frames.GetValueOrDefault(enemy.Id)));
+            if (incomingBulk != 0f)
+            {
+                return EvaluateIncomingExchangeRate(squad, enemy, profile, frames, range, 0f);
+            }
+
+            float incomingAllocation = frames.TryGetValue(
+                enemy.Id, out SquadEngagementFrame theirFrame)
+                    ? theirFrame.PairWeights.GetValueOrDefault(squad.Id)
+                    : 0f;
+            float ranged = 0f;
+            foreach (SquadPairRemovalRate rate in
+                _removalRates.GetPairRemovalRates(enemy).Values)
+            {
+                ranged += rate.SustainedRateAtRange(range);
+            }
+            return incomingAllocation * Math.Min(
+                profile.TotalAbleBattleValue,
+                Math.Max(ranged, MeleeRemovalRate(enemy, squad, range)));
         }
 
         /// <summary>

@@ -103,7 +103,9 @@ public class PrepareAssaultMissionStepTests
         // Sized so the reserve is comfortably squad-capable. With nothing visible next door the reserve is
         // the 20% floor, so a garrison of only a handful of troopers would reserve less than one squad's
         // worth and mobilise nothing at all - which is correct behaviour, but tests nothing here.
-        target.Garrison = StrategicCombatRules.PdfTrooperBattleValue * 200;
+        // 1,000 BV is many PDF squads in the rules data; Assert.NotEmpty below fails if a
+        // recalibration ever makes it too small.
+        target.Garrison = 1_000;
 
         long reserve = FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(target);
 
