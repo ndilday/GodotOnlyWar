@@ -89,7 +89,7 @@ internal sealed class ForceTaskBuilder
 
         if (!defensiveOnly)
         {
-            AddOffensiveTasks(faction, offensives, tasks);
+            AddOffensiveTasks(faction, states, offensives, tasks);
             if (faction.GrowthType == GrowthType.Consumption)
             {
                 AddConsumptionTasks(faction, states, tasks);
@@ -99,7 +99,7 @@ internal sealed class ForceTaskBuilder
         {
             // A purely defensive faction never assaults, but it does scout the ground massing on its
             // borders so its garrison sizing is not blind (PRD §4.24).
-            AddOffensiveTasks(faction, offensives, tasks, reconOnly: true);
+            AddOffensiveTasks(faction, states, offensives, tasks, reconOnly: true);
         }
 
         return tasks;
@@ -537,6 +537,7 @@ internal sealed class ForceTaskBuilder
 
     private void AddOffensiveTasks(
         Faction faction,
+        IReadOnlyList<RegionForceState> states,
         IReadOnlyList<PotentialOffensive> offensives,
         List<ForceTask> tasks,
         bool reconOnly = false)
@@ -544,6 +545,24 @@ internal sealed class ForceTaskBuilder
         if (offensives.Count == 0) return;
 
         long scoutSquad = Math.Max(1L, FactionReconPatrolPlanner.CheapestScoutSquadBattleValue(faction));
+
+        // Unscouted targets the faction can carry even if the worst case is true. The estimate on
+        // unscouted ground is already an upper bound (FactionOffensiveEvaluator.CautiousDefenderEstimate),
+        // so when the staging regions can field the force ratio against it, a sweep cannot change the
+        // decision - it can only delay it a week and spend scouts doing so.
+        //
+        // Grist Nine, 2026-10-12: the Tyranids put 3,080 of 4,711 into recon in one week and 221 into
+        // assaults. Among the sweeps were a 385-point Ravener pack sent to learn about a region believed
+        // to hold at most 2, and two 593-point Lictors sent against regions believed at most 64 and 50.
+        //
+        // Not for a defensive faction: it launches no offensive however cheap, so for it the sweep is
+        // the only task and must stay.
+        HashSet<PotentialOffensive> affordableBlind = reconOnly
+            ? []
+            : offensives
+                .Where(offensive => !FactionOffensiveEvaluator.IsWellReconnoitred(offensive, faction.Id)
+                    && CarryPoint(offensive, faction) <= ReachableOffensiveForce(offensive, states))
+                .ToHashSet();
 
         // ONE SWEEP PER REGION, not one per enemy. Region awareness belongs to the REGION, so two
         // hostile factions sharing one region used to raise two recon tasks against a single awareness
@@ -557,6 +576,10 @@ internal sealed class ForceTaskBuilder
             .Where(offensive => NeedsSweep(offensive, faction))
             .GroupBy(offensive => offensive.TargetRegion))
         {
+            // The sweep is skipped only when EVERY enemy on that ground can be carried blind. One
+            // that cannot still needs the region scouted, and the sweep learns about all of them.
+            if (group.All(affordableBlind.Contains)) continue;
+
             // Which enemy the sweep is nominally aimed at does not change what it learns: the stealth
             // check aggregates every hostile presence in the region (MissionStealthDifficulty), the
             // spotter is drawn from the region, and the awareness gain is recorded against the region.
@@ -626,17 +649,17 @@ internal sealed class ForceTaskBuilder
                 // squads, so the smallest bid is already a large fraction of it.
                 Shape = bv => ForceValueCurves.Concave(bv / (double)saturation)
             });
-            // Attacking ground nobody has scouted stays off the table: an unoccupied region under the
-            // threshold appears in this loop and NOT in the assault loop below, so it gets a sweep and
-            // nothing else. The pessimistic prior in CautiousDefenderEstimate would price it out
-            // anyway, but the two loops state the recon-first rule outright.
+            // Attacking ground nobody has scouted stays off the table unless the worst case is
+            // affordable: an unoccupied region under the threshold appears in this loop and NOT in the
+            // assault loop below, so it gets a sweep and nothing else. The exception is
+            // affordableBlind above, where the sweep is dropped and the assault offered instead.
             //
             // A region we OCCUPY appears in both, which is the point: the sweep sharpens next week's
             // estimate while the assault stays available this week.
         }
 
         foreach (PotentialOffensive offensive in offensives.Where(
-            candidate => CanAssault(candidate, faction)))
+            candidate => CanAssault(candidate, faction) || affordableBlind.Contains(candidate)))
         {
             // A defensive posture launches no offensive of its own - but retaking ground the enemy has
             // walked away from is not an offensive, it is restoring the line. A planetary defence force
@@ -648,31 +671,8 @@ internal sealed class ForceTaskBuilder
             bool retakingOpenGround = offensive.EstimatedDefenderBattleValue <= 0L;
             if (reconOnly && !retakingOpenGround) continue;
 
-            double ratio = FactionCapabilities.GeneratesInvasions(faction)
-                ? (_behaviorRules?.DefendedLandingRatio ?? 2.0)
-                : FactionOffensiveEvaluator.OffensiveForceRatioThreshold;
-            // Floored at one WHOLE squad's price, not at the minimum-strength one. Force generation
-            // cannot honour a smaller request, so an assault sized off a near-dead garrison would be
-            // allocated a few points of battle value and then silently produce no force at all, and
-            // the target would never be attacked.
-            //
-            // MinimumForceRequest is the wrong figure here and was quietly failing: the generic
-            // generator's main loop gates on the template's FULL price and only falls through to a
-            // partial squad, which can build nothing. Grist Nine, 2026-09-18: two Ork advances sized
-            // at 30 against near-dead defenders generated no force at all, while advances at 60, 100
-            // and 142 all mustered. Reconnaissance already prices its tasking off the full squad
-            // (CheapestScoutSquadBattleValue); this is the same rule for the offensive profiles.
-            long squadFloor = Math.Max(
-                1L, Math.Max(faction.MinimumForceRequest, faction.MinimumFullSquadRequest));
-            // What carries the region. It is the LAUNCH threshold and nothing beyond it: a fraction of
-            // this is a defeat, and the committer refuses one.
-            //
-            // The launch threshold used to be AssaultKnee (0.7) of this, which let an assault go at
-            // 1.05x the believed defender - parity, before entrenchment. The force ratio IS the minimum:
-            // AssaultKnee now shapes the value curve only.
-            long carryPoint = Math.Max(
-                squadFloor,
-                (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * ratio));
+            long squadFloor = SquadFloor(faction);
+            long carryPoint = CarryPoint(offensive, faction);
             // What finishes the defenders, which is a different and larger number. Measured exactly as
             // the resolver measures it - the believed defender behind the same entrenchment curve the
             // fight itself uses (StrategicCombatResolver's overrun test) - so works are as protective
@@ -767,6 +767,60 @@ internal sealed class ForceTaskBuilder
             }
         }
     }
+
+    /// <summary>
+    /// The smallest assault force generation can actually honour for this faction.
+    /// </summary>
+    /// <remarks>
+    /// Floored at one WHOLE squad's price, not at the minimum-strength one. Force generation cannot
+    /// honour a smaller request, so an assault sized off a near-dead garrison would be allocated a few
+    /// points of battle value and then silently produce no force at all, and the target would never be
+    /// attacked.
+    ///
+    /// MinimumForceRequest is the wrong figure here and was quietly failing: the generic generator's
+    /// main loop gates on the template's FULL price and only falls through to a partial squad, which
+    /// can build nothing. Grist Nine, 2026-09-18: two Ork advances sized at 30 against near-dead
+    /// defenders generated no force at all, while advances at 60, 100 and 142 all mustered.
+    /// Reconnaissance already prices its tasking off the full squad (CheapestScoutSquadBattleValue);
+    /// this is the same rule for the offensive profiles.
+    /// </remarks>
+    private static long SquadFloor(Faction faction) =>
+        Math.Max(1L, Math.Max(faction.MinimumForceRequest, faction.MinimumFullSquadRequest));
+
+    /// <summary>
+    /// What carries the region: the force ratio against the believed defender, never below a squad.
+    /// </summary>
+    /// <remarks>
+    /// It is the LAUNCH threshold and nothing beyond it: a fraction of this is a defeat, and the
+    /// committer refuses one.
+    ///
+    /// The launch threshold used to be AssaultKnee (0.7) of this, which let an assault go at 1.05x the
+    /// believed defender - parity, before entrenchment. The force ratio IS the minimum: AssaultKnee now
+    /// shapes the value curve only.
+    /// </remarks>
+    private long CarryPoint(PotentialOffensive offensive, Faction faction)
+    {
+        double ratio = FactionCapabilities.GeneratesInvasions(faction)
+            ? (_behaviorRules?.DefendedLandingRatio ?? 2.0)
+            : FactionOffensiveEvaluator.OffensiveForceRatioThreshold;
+        return Math.Max(
+            SquadFloor(faction),
+            (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * ratio));
+    }
+
+    /// <summary>
+    /// What the staging regions beside a target could send against it, leaving each its garrison floor.
+    /// </summary>
+    /// <remarks>
+    /// Read only to decide whether a target is worth scouting first, never to price it: the same troops
+    /// are counted for every target they border, and the auction settles which one actually gets them.
+    /// </remarks>
+    private static long ReachableOffensiveForce(
+        PotentialOffensive offensive,
+        IReadOnlyList<RegionForceState> states) =>
+        states
+            .Where(state => offensive.AttackingRegions.Contains(state.RegionFaction.Region))
+            .Sum(state => Math.Max(0L, state.SpareTroops - state.OffensiveGarrisonFloor));
 
     /// <summary>
     /// Whether this region is still worth scouting, which depends on AWARENESS and nothing else.

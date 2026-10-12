@@ -190,11 +190,12 @@ public class FactionStrategyControllerTests
 
         List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
-        StrategicCombatMission assault = orders
-            .Select(o => o.Mission)
-            .OfType<StrategicCombatMission>()
-            .Single();
-        Assert.Same(localTarget, assault.RegionFaction);
+        // Contains, not Single. The adjacent region is unscouted, and it used to be excluded for that
+        // reason alone. Its worst-case estimate is now within the attacker's reach, so it may be
+        // assaulted in the same week; what this test protects is that the local enemy is engaged.
+        Assert.Contains(
+            orders.Select(o => o.Mission).OfType<StrategicCombatMission>(),
+            mission => ReferenceEquals(mission.RegionFaction, localTarget));
     }
 
     [Fact]
@@ -366,7 +367,9 @@ public class FactionStrategyControllerTests
         Region target = staging.GetAdjacentRegions().First();
 
         AddRegionFaction(planet, staging, attacker, population: 100_000, organization: 100);
-        AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 100);
+        // Large enough that the worst-case estimate (5% of ten million) is beyond the attacker, so the
+        // target must be scouted rather than assaulted blind.
+        AddRegionFaction(planet, target, defender, population: 10_000_000, organization: 100, garrison: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
@@ -389,6 +392,32 @@ public class FactionStrategyControllerTests
             Assert.Equal(swarmSquad.Id, squad.SquadTemplate.Id);
             Assert.NotNull(squad.SquadLeader);
         });
+    }
+
+    // The estimate on unscouted ground is an upper bound, so a faction that can carry the target even
+    // if that bound is true learns nothing useful from a sweep. Grist Nine, 2026-10-12: the Tyranids
+    // spent 65% of a week's force scouting regions believed to hold at most 2, 50 and 64.
+    [Fact]
+    public void GenerateFactionOrders_UnscoutedTargetAffordableOnTheWorstCaseIsAssaultedWithoutASweep()
+    {
+        RNG.Reset(1234);
+        Faction attacker = BuildFaction(20, "Swarm", isPlayer: false, isDefault: false, GrowthType.Consumption);
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region staging = planet.Regions[0];
+        Region target = staging.GetAdjacentRegions().First();
+
+        AddRegionFaction(planet, staging, attacker, population: 50_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 10_000, organization: 100, garrison: 100);
+        Assert.False(FactionOffensiveEvaluator.IsWellReconnoitred(
+            new PlanningPotentialOffensive { TargetRegion = target }, attacker.Id));
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
+
+        Assert.DoesNotContain(orders, order => order.Mission.MissionType == MissionType.Recon);
+        Assert.Contains(orders, order => order.Mission.MissionType == MissionType.Advance
+            && order.Mission.RegionFaction.Region == target);
     }
 
     [Fact]

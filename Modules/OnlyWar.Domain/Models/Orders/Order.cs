@@ -47,6 +47,13 @@ namespace OnlyWar.Domain.Orders
         // Not serialized, for the same reason as StrategicInvasionForceId above: planning and mission execution
         // are phases 1 and 2 of a single ProcessTurn, so no save can land between them.
         public bool OpensWithAmbush { get; set; }
+        // The share of an NPC assault force's survivors that is real battle value. Force generation can
+        // build more than the award, because it fields whole squads; the excess is drawn from the staging
+        // regions, and when they cannot pay all of it, only this share of the survivors is credited back.
+        // Without it an attack returned more than it took (MissionAftermathProcessor.ResolveOffensiveSurvivors).
+        //
+        // Not serialized, for the same reason as OpensWithAmbush.
+        public double SurvivorCreditFraction { get; set; } = 1.0;
 
         public OrderForce Force => new(this);
 

@@ -70,6 +70,65 @@ public sealed class FactionOffensiveOrderBuilderTests
         Assert.Equal(98, source.MilitaryStrength);
     }
 
+    // Generation fields whole squads, so it can build more than the award. The staging region pays the
+    // difference; before, nobody did, and the survivors credited back created battle value.
+    [Fact]
+    public void IssueAllocatedOffensive_WhenTacticalGenerationOvershoots_DrawsExcessFromStaging()
+    {
+        (Faction attacker, RegionFaction source, PotentialOffensive offensive) = CreateScenario();
+        Squad largeSquad = CreateMarineSquad("Large assault", soldiers: 10);
+        FactionOffensiveOrderBuilder builder = new((request, random) => [largeSquad]);
+        List<Order> orders = [];
+
+        bool issued = builder.IssueAllocatedOffensive(
+            attacker,
+            offensive,
+            [(source, 4L)],
+            totalBattleValue: 4,
+            MissionType.Advance,
+            Aggression.Normal,
+            orders,
+            new FixedRNG());
+
+        Order order = Assert.Single(orders);
+        Assert.True(issued);
+        // 100 held, 4 awarded, 20 fielded: the region pays all 20.
+        Assert.Equal(80, source.MilitaryStrength);
+        Assert.Equal(1.0, order.SurvivorCreditFraction);
+    }
+
+    [Fact]
+    public void IssueAllocatedOffensive_WhenStagingCannotPayTheOvershoot_CreditsOnlyThePaidShare()
+    {
+        (Faction attacker, RegionFaction source, PotentialOffensive offensive) = CreateScenario();
+        source.Population = 10;
+        Squad largeSquad = CreateMarineSquad("Large assault", soldiers: 10);
+        FactionOffensiveOrderBuilder builder = new((request, random) => [largeSquad]);
+        List<Order> orders = [];
+
+        builder.IssueAllocatedOffensive(
+            attacker,
+            offensive,
+            [(source, 4L)],
+            totalBattleValue: 4,
+            MissionType.Advance,
+            Aggression.Normal,
+            orders,
+            new FixedRNG());
+
+        Order order = Assert.Single(orders);
+        // 10 held: 4 awarded and 6 more drawn, against 20 fielded.
+        Assert.Equal(0, source.MilitaryStrength);
+        Assert.Equal(0.5, order.SurvivorCreditFraction, precision: 6);
+    }
+
+    private static Squad CreateMarineSquad(string name, int soldiers) =>
+        TestModelFactory.CreateSquad(
+            name,
+            Enumerable.Range(0, soldiers)
+                .Select(_ => TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate))
+                .ToArray());
+
     private static (Faction attacker, RegionFaction source, PotentialOffensive offensive) CreateScenario()
     {
         Faction attacker = CreateFaction(2, "Attacker", isPlayer: false);

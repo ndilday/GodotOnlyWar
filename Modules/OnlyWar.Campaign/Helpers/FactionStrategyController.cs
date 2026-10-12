@@ -279,9 +279,14 @@ public class FactionStrategyController
         IReadOnlyList<ForceTask> tasks,
         IReadOnlyList<ForceTaskAward> awards)
     {
-        int attackable = offensives.Count(offensive =>
-            FactionOffensiveEvaluator.IsWellReconnoitred(offensive, faction.Id)
-            || offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id));
+        // Counted from the tasks rather than re-derived: a target is attackable when it was offered an
+        // assault, which covers scouted ground, occupied ground, and unscouted ground the faction can
+        // carry on the worst case.
+        int attackable = tasks
+            .Where(task => task.Kind == ForceTaskKind.Assault)
+            .Select(task => task.Offensive)
+            .Distinct()
+            .Count();
         HashSet<ForceTask> funded = awards.Select(award => award.Task).ToHashSet();
 
         int Count(ForceTaskKind kind, bool onlyFunded) => onlyFunded

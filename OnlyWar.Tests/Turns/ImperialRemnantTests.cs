@@ -331,6 +331,35 @@ public class ImperialRemnantTests
         Assert.False(region.RegionFactionMap.ContainsKey(fixture.Sector.PlayerForce.Faction.Id));
     }
 
+    // A presence wiped out to nobody but kept for its works used to stay public, and so stayed a target:
+    // on Grist Nine the Tyranids assaulted the same empty cult presences every week.
+    [Fact]
+    public void SettleRegion_HidesAnEmptyPresenceKeptOnlyByItsWorks()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction empty = fixture.AddConsumptionFaction(0, population: 0, organization: 100);
+        empty.ListeningPost = 0.5;
+
+        new RegionControlTurnProcessor().SettleRegion(region);
+
+        Assert.Same(empty, region.RegionFactionMap[empty.PlanetFaction.Faction.Id]);
+        Assert.False(empty.IsPublic);
+    }
+
+    [Fact]
+    public void SettleRegion_LeavesAPopulatedPresencePublic()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction held = fixture.AddConsumptionFaction(0, population: 500, organization: 100);
+        held.ListeningPost = 0.5;
+
+        new RegionControlTurnProcessor().SettleRegion(region);
+
+        Assert.True(held.IsPublic);
+    }
+
     [Fact]
     public void GoverningRemnant_GrowsAndDraftsGarrison()
     {

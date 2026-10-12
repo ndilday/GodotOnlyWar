@@ -157,7 +157,42 @@ namespace OnlyWar.Campaign.Turns
                 {
                     region.RegionFactionMap.Remove(regionFaction.PlanetFaction.Faction.Id);
                 }
+                else if (ShouldHideEmptyPresence(regionFaction))
+                {
+                    // Nobody is left, but the works are, so the presence cannot be removed. It goes to
+                    // ground instead, as PlanetForceMovementService.CleanupVacatedPresence does for a
+                    // vacated presence; DecayUnmannedDefenses then wears the works down under any
+                    // occupier, and the presence is removed once they are gone.
+                    regionFaction.IsPublic = false;
+                    GameLog.Debug(() =>
+                        $"Empty presence hidden {DescribeRegionFaction(regionFaction)}: no population "
+                        + "or squads left, works remain");
+                }
             }
+        }
+
+        /// <summary>
+        /// A public presence with nobody in it that is kept only because of its works.
+        /// </summary>
+        /// <remarks>
+        /// Without this such a presence stayed public, and so stayed a target. Grist Nine, 2026-10-12: the
+        /// Genestealer Cult had built listening posts in nearly every region, and once the Tyranids wiped
+        /// out a cell its 0-strength presence remained on the map. The Tyranids assaulted the same empty
+        /// presences in Pi, Lambda and Theta week after week, and the cult read as present in 15 regions
+        /// while holding 845 battle value.
+        ///
+        /// The default faction is left to UpdateImperialRemnantState, which owns Imperial visibility, and a
+        /// player presence is never touched here.
+        /// </remarks>
+        internal static bool ShouldHideEmptyPresence(RegionFaction regionFaction)
+        {
+            Faction faction = regionFaction?.PlanetFaction?.Faction;
+            if (faction == null || !regionFaction.IsPublic) return false;
+            if (faction.IsDefaultFaction || faction.IsPlayerFaction) return false;
+            if (faction.HasBehavior(FactionBehavior.Indelible)) return false;
+            return regionFaction.Population <= 0
+                && regionFaction.Garrison <= 0
+                && regionFaction.LandedSquads.Count == 0;
         }
 
         internal static bool CanRemoveRegionFaction(RegionFaction regionFaction)

@@ -182,7 +182,9 @@ public sealed class FactionStrategyCharacterizationTests
         Region staging = planet.Regions[0];
         Region target = staging.GetAdjacentRegions().First();
         AddRegionFaction(planet, staging, attacker, 2_000);
-        AddRegionFaction(planet, target, defender, 100, garrison: 100);
+        // Populous enough that the worst-case estimate is beyond the attacker: a target it could carry
+        // blind is assaulted without a sweep, and this test needs the sweep.
+        AddRegionFaction(planet, target, defender, 1_000_000, garrison: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
         RecordingRng random = new();
 

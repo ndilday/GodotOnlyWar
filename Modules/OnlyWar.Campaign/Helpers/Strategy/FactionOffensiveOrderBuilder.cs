@@ -173,6 +173,31 @@ internal sealed class FactionOffensiveOrderBuilder
             committedBattleValue = generatedBattleValue;
         }
 
+        // The opposite case used to be ignored: generation fields whole squads, so it can build far more
+        // than the award, and nobody paid for the difference. The survivors were then credited back in
+        // full, so the attack CREATED battle value. Grist Nine, 2026-10-12: Tyranid assaults committed 40
+        // and fielded 403 against empty cult presences, and each one banked about 363 when it won
+        // unopposed; the cult's 32-point raids fielded 79 and banked about 47 each.
+        //
+        // The staging regions pay the excess while they can. What they cannot pay is not real force, so
+        // only the paid share of the survivors comes back.
+        double survivorCreditFraction = 1.0;
+        if (generatedBattleValue > committedBattleValue)
+        {
+            long excess = generatedBattleValue - committedBattleValue;
+            long paid = DrawCommittedForceExcess(contributions, excess);
+            committedBattleValue += paid;
+            if (paid < excess)
+            {
+                survivorCreditFraction = committedBattleValue / (double)generatedBattleValue;
+            }
+            long creditedBattleValue = committedBattleValue;
+            GameLog.Debug(() =>
+                $"AI {missionType} {faction.Name}: target={DescribeOffensive(chosenOffensive)}, tactical generation overshoot="
+                + $"{excess}; drawnFromStaging={paid}, generatedBV={generatedBattleValue}, "
+                + $"credited={creditedBattleValue}");
+        }
+
         // Record the staging region on the assault force so its survivors know where to withdraw to
         // (raid) — see MissionAftermathProcessor.ResolveOffensiveSurvivors. The primary contributing
         // region stands in for the whole staging effort.
@@ -197,7 +222,8 @@ internal sealed class FactionOffensiveOrderBuilder
             newMission,
             faction)
         {
-            OpensWithAmbush = opensWithAmbush
+            OpensWithAmbush = opensWithAmbush,
+            SurvivorCreditFraction = survivorCreditFraction
         };
         allOrders.Add(newOrder);
         GameLog.Debug(() =>
@@ -258,6 +284,29 @@ internal sealed class FactionOffensiveOrderBuilder
             .OrderByDescending(c => c.BattleValue)
             .FirstOrDefault();
         largest?.StagingFaction?.AddMilitaryStrength(excess);
+    }
+
+    /// <summary>
+    /// Draws a generated force's excess over its award out of the staging regions, largest contributor
+    /// first, and returns how much they could pay.
+    /// </summary>
+    private static long DrawCommittedForceExcess(
+        IEnumerable<StrategicCombatContribution> contributions,
+        long excess)
+    {
+        long paid = 0;
+        foreach (StrategicCombatContribution contribution in contributions
+            .OrderByDescending(c => c.BattleValue))
+        {
+            RegionFaction staging = contribution.StagingFaction;
+            if (staging == null) continue;
+            long drawn = Math.Min(excess - paid, staging.MilitaryStrength);
+            if (drawn <= 0) continue;
+            staging.RemoveMilitaryStrength(drawn);
+            paid += drawn;
+            if (paid >= excess) break;
+        }
+        return paid;
     }
 
     private static int EstimateGeneratedSquadCount(Faction faction, long targetBattleValue)

@@ -498,7 +498,9 @@ namespace OnlyWar.Operations.Turns
             OperationalMissionElement first = context.MissionSquads.FirstOrDefault();
             if (first == null || first.IsPlayerSquad) return;
 
-            long survivors = AbleBattleValue(context.MissionSquads);
+            // Only the share of the force the faction actually paid for comes back (Order.SurvivorCreditFraction).
+            double creditFraction = Math.Clamp(context.Order.SurvivorCreditFraction, 0.0, 1.0);
+            long survivors = (long)Math.Floor(AbleBattleValue(context.MissionSquads) * creditFraction);
             if (survivors <= 0) return;
 
             Faction attacker = first.Faction;
