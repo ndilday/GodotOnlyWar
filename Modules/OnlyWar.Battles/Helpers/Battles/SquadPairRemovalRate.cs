@@ -136,7 +136,8 @@ namespace OnlyWar.Battles
         internal IReadOnlyList<AimPlan> AimPlans { get; }
         /// <summary>
         /// The ammunition scarcity the planner's round charge uses
-        /// (<see cref="RangedTargetSelector.AmmunitionScarcity"/>), captured with the term.
+        /// (<see cref="RangedTargetSelector.Scarcity"/>: the rounds carried against the shooter's
+        /// share of the work), captured with the term.
         /// </summary>
         internal float AmmunitionScarcity { get; }
         /// <summary>
@@ -144,6 +145,12 @@ namespace OnlyWar.Battles
         /// weapon whose supply never runs down, 1 for a consumable item.
         /// </summary>
         internal int? FixedRoundsPerShot { get; }
+        /// <summary>
+        /// The un-aimed shot a standing shooter would fire now, its burst chosen at the same round
+        /// price as <see cref="AimPlans"/> (Turns = 1). Null when the weapon cannot be aimed; then
+        /// <see cref="SustainedRateAt"/> reads the reference shot, as <see cref="RemovalAt"/> does.
+        /// </summary>
+        internal AimPlan? StandingShot { get; }
 
         internal PairRemovalTerm(
             int shooterId,
@@ -160,8 +167,10 @@ namespace OnlyWar.Battles
             IReadOnlyList<TakeOutLocationTerm> takeOutTerms,
             IReadOnlyList<AimPlan> aimPlans = null,
             float ammunitionScarcity = 0,
-            int? fixedRoundsPerShot = null)
+            int? fixedRoundsPerShot = null,
+            AimPlan? standingShot = null)
         {
+            StandingShot = standingShot;
             ShooterId = shooterId;
             TargetId = targetId;
             WeaponTemplate = weaponTemplate;
@@ -290,9 +299,11 @@ namespace OnlyWar.Battles
             }
             float removalFraction = RemovalFractionAt(range);
             float shift = HitTotalAt(range, ReferenceTargetSpeed) - ReferenceHitTotal;
+            AimPlan standing = StandingShot
+                ?? new AimPlan(ReferenceHitTotal, ReferenceShotsToFire, 1);
             float shootNow = RemovalMath.ExpectedBurstRemovalFraction(
-                ReferenceHitTotal + shift,
-                ReferenceShotsToFire,
+                standing.HitTotal + shift,
+                standing.ShotsToFire,
                 WeaponTemplate.Recoil,
                 removalFraction) * TargetBattleValue;
             if (AimPlans.Count == 0)
@@ -301,7 +312,7 @@ namespace OnlyWar.Battles
             }
 
             Span<float> gross = stackalloc float[AimPlans.Count];
-            float valuePerRound = PerRound(shootNow, ReferenceShotsToFire);
+            float valuePerRound = PerRound(shootNow, standing.ShotsToFire);
             for (int index = 0; index < AimPlans.Count; index++)
             {
                 AimPlan plan = AimPlans[index];
@@ -314,7 +325,7 @@ namespace OnlyWar.Battles
             }
 
             float shootNowNet = shootNow
-                - AmmunitionScarcity * valuePerRound * RoundsUsed(ReferenceShotsToFire);
+                - AmmunitionScarcity * valuePerRound * RoundsUsed(standing.ShotsToFire);
             float bestPreparedNet = float.MinValue;
             float bestPreparedGross = 0f;
             for (int index = 0; index < AimPlans.Count; index++)

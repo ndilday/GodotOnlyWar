@@ -30,6 +30,10 @@ namespace OnlyWar.Battles
         // probability so the Phase 4 removal-rate table can carry the graded term without a
         // second hit-location walk. See RemovalMath.CalculateRemovalFractionOnHit.
         public float WoundProgressOnHit { get; }
+        // The move-and-aim modifier the shot was evaluated with, so a decision that compares it
+        // with other plans can re-evaluate the same shot with the burst priced at the common round
+        // value (RangedTargetSelector.EvaluateFireTiming).
+        public float AdditionalToHitModifier { get; }
         public float Score => ExpectedEnemyBattleValueRemoved - ExpectedFriendlyBattleValueLost;
 
         public RangedTargetEvaluation(
@@ -43,9 +47,11 @@ namespace OnlyWar.Battles
             float expectedFriendlyBattleValueLost,
             float preRollHitTotal = 0f,
             float targetSpeed = 0f,
-            float woundProgressOnHit = 0f)
+            float woundProgressOnHit = 0f,
+            float additionalToHitModifier = 0f)
         {
             WoundProgressOnHit = woundProgressOnHit;
+            AdditionalToHitModifier = additionalToHitModifier;
             Target = target;
             Weapon = weapon;
             Range = range;

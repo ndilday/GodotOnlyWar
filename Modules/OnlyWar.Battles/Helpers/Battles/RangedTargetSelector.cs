@@ -185,11 +185,11 @@ namespace OnlyWar.Battles
         /// the prepared rate is <see cref="float.MinValue"/>, which always favours firing.
         ///
         /// <para>Net value charges each shot for the rounds it spends: Score − scarcity × (value of
-        /// a round) × rounds. A round is worth the best score per round among the shots being
-        /// compared, since that is what the round could buy instead, and scarcity rises from 0
-        /// with plenty of ammunition to 1 on an empty weapon (<see cref="AmmunitionScarcity"/>).
-        /// With plenty the comparison is pure expected value per turn; on the last magazine only
-        /// the most round-efficient shot on offer is worth taking. Without this the rate rule
+        /// a round) × rounds (<see cref="RoundPrice"/>). A round is worth the best score per round
+        /// among the shots being compared, since that is what the round could buy instead, and
+        /// scarcity rises from 0 while the rounds carried outlast the soldier's share of the work to
+        /// 1 on an empty weapon (<see cref="Scarcity"/>). With enough rounds the comparison is pure
+        /// expected value per turn; when they are short, the most round-efficient shot gains. Without this the rate rule
         /// treated rounds as free and pursuing marines emptied four magazines each on 7% bursts
         /// within 80 turns (Grist Nine Epsilon, 2026-09-22, third run).</para>
         ///
@@ -216,7 +216,7 @@ namespace OnlyWar.Battles
             float bulkMultiplier,
             float aimMultiplier)
         {
-            List<(RangedTargetEvaluation Shot, int Turns)> prepared = [];
+            List<(float Range, float Modifier, int Turns)> preparedPlans = [];
             if (soldier != null && target != null && aimWeapon != null && aimMultiplier > 0)
             {
                 float rangeChange = ProjectedRangeChangePerTurn(target);
@@ -236,40 +236,74 @@ namespace OnlyWar.Battles
                     }
                     float modifier = -(aimWeapon.Template.Bulk * bulkMultiplier)
                         + ((AimAccuracy(soldier, aimWeapon.Template) + bonus + 1) * aimMultiplier);
-                    prepared.Add((
-                        _shotEvaluator.EvaluateRangedTarget(
-                            soldier,
-                            target,
-                            aimWeapon,
-                            projectedRange,
-                            modifier),
-                        aimTurns + 1));
+                    preparedPlans.Add((projectedRange, modifier, aimTurns + 1));
                 }
             }
 
-            // What a round could buy instead: the best score per round on offer in this decision.
-            float valuePerRound = 0;
-            if (shootNow != null) valuePerRound = Math.Max(valuePerRound, ScorePerRound(shootNow));
-            foreach ((RangedTargetEvaluation shot, _) in prepared)
+            // One price for a round in this whole decision (RoundPrice): every plan at its most
+            // round-efficient burst sets the value a round could buy and the pace of the fastest
+            // plan, and the soldier's share of the work sets how scarce rounds are. Each plan's
+            // burst is then chosen at this one price, the price the comparison below charges it
+            // (2026-10-11). Before, each plan chose its burst at its own best value per round, and
+            // an un-aimed shot came back with a long burst charged at the aimed shot's price.
+            List<PlanEfficiency> efficiencies = [];
+            if (shootNow != null && soldier != null)
             {
-                valuePerRound = Math.Max(valuePerRound, ScorePerRound(shot));
+                efficiencies.Add(Efficiency(
+                    soldier, shootNow.Target, shootNow.Weapon, shootNow.Range,
+                    shootNow.AdditionalToHitModifier, shootNow.TargetSpeed, 1));
+            }
+            foreach ((float planRange, float modifier, int turns) in preparedPlans)
+            {
+                efficiencies.Add(Efficiency(
+                    soldier, target, aimWeapon, planRange, modifier, null, turns));
+            }
+            float aimPrice = RoundPrice(soldier, aimWeapon, efficiencies, out _);
+            float shootPrice = shootNow == null || shootNow.Weapon == aimWeapon
+                ? aimPrice
+                : RoundPrice(soldier, shootNow.Weapon, efficiencies, out _);
+
+            if (shootNow != null && soldier != null)
+            {
+                shootNow = _shotEvaluator.EvaluateRangedTarget(
+                    soldier,
+                    shootNow.Target,
+                    shootNow.Weapon,
+                    shootNow.Range,
+                    shootNow.AdditionalToHitModifier,
+                    shootNow.TargetSpeed,
+                    roundPrice: shootPrice);
+            }
+            List<(RangedTargetEvaluation Shot, int Turns)> prepared = [];
+            foreach ((float planRange, float modifier, int turns) in preparedPlans)
+            {
+                prepared.Add((
+                    _shotEvaluator.EvaluateRangedTarget(
+                        soldier,
+                        target,
+                        aimWeapon,
+                        planRange,
+                        modifier,
+                        roundPrice: aimPrice),
+                    turns));
             }
 
             float shootNowValue = shootNow == null
                 ? float.MinValue
-                : NetShotValue(shootNow, valuePerRound);
+                : NetShotValue(shootNow, shootPrice);
             float preparedRate = float.MinValue;
             float preparedGrossRate = 0;
             foreach ((RangedTargetEvaluation shot, int turns) in prepared)
             {
-                float rate = NetShotValue(shot, valuePerRound) / turns;
+                float rate = NetShotValue(shot, aimPrice) / turns;
                 if (rate > preparedRate)
                 {
                     preparedRate = rate;
                     preparedGrossRate = shot.Score / turns;
                 }
             }
-            return new FireTiming(shootNowValue, preparedRate, shootNow?.Score ?? 0, preparedGrossRate);
+            return new FireTiming(
+                shootNowValue, preparedRate, shootNow?.Score ?? 0, preparedGrossRate, shootNow);
         }
 
         /// <summary>
@@ -296,11 +330,15 @@ namespace OnlyWar.Battles
         /// standing turn was credited half what the forecast said it was worth, and every step
         /// toward the enemy looked cheap (Neophyte Hybrids crept toward Shoota Boyz without firing;
         /// Design/Active/BattleValueCalibration.md, 7.21).</para>
+        /// <param name="ShootNowShot">The shot to fire now, its burst chosen at the decision's
+        /// common round price; fire this one, not the shot passed in, when <see cref="ShootNow"/>.
+        /// </param>
         internal readonly record struct FireTiming(
             float ShootNowValue,
             float PreparedRate,
             float ShootNowGross = 0,
-            float PreparedGrossRate = 0)
+            float PreparedGrossRate = 0,
+            RangedTargetEvaluation ShootNowShot = null)
         {
             internal bool ShootNow => ShootNowValue >= PreparedRate;
 
@@ -321,41 +359,138 @@ namespace OnlyWar.Battles
                 : Readiness;
         }
 
-        // TUNABLE: the ammunition, in magazines, at which a weapon's rounds count as free. Standard
-        // issue is the loaded magazine plus EquipmentRulesCatalog.StandardSpareMagazines (3), so
-        // a fresh weapon starts at scarcity 1 - 4/6 = 1/3: marginal bursts already cost something,
-        // and the cost grows as the pouches empty. Raise it to make soldiers thriftier. It also
-        // sets burst length (RangedShotEvaluator.ChooseShotsToFire): a round is fired only while
-        // its marginal value beats scarcity x the value of a round.
-        internal const int PlentifulMagazines = 6;
+        /// <summary>
+        /// A weapon whose supply never runs down -- unlimited, self-regenerating, or reloaded from
+        /// no counted reserve -- is never scarce, and its rounds are free.
+        /// </summary>
+        internal static bool IsNeverScarce(RangedWeapon weapon) =>
+            weapon == null
+            || weapon.IsUnlimited
+            || weapon.IsSelfRegenerating
+            || (weapon.HasSoldierReload && weapon.Template.AmmunitionType == null);
+
+        /// <summary>Rounds a soldier has for this weapon: loaded and in the pouches, or items.</summary>
+        internal static float RoundsCarried(RangedWeapon weapon) =>
+            weapon.IsConsumableItem
+                ? weapon.ConsumableQuantity
+                : weapon.LoadedAmmo + weapon.ReserveAmmo;
 
         /// <summary>
-        /// How scarce a weapon's ammunition is, 0 (plentiful) to 1 (empty). Weapons whose supply
-        /// never runs down -- unlimited, self-regenerating, or reloaded from no counted reserve --
-        /// are never scarce.
+        /// How scarce a soldier's rounds are for the work in front of him, 0 (they will last) to 1
+        /// (none left). The work is his share of the enemy battle value his weapon can hurt
+        /// (<see cref="RangedShotEvaluator.WorkPerShooter"/>). At the pace of his fastest plan as
+        /// fired with free rounds, <paramref name="fastValuePerRound"/> battle value a round, that
+        /// work needs
+        /// <c>N = work / value</c> rounds. With <c>R</c> rounds carried the scarcity is
+        /// <c>1 - R / N</c>, clamped: 0 whenever the rounds outlast the work, so the soldier fires
+        /// for the most removal per turn, and rising as the shortfall grows.
+        ///
+        /// <para>WHY THE WORK. Until 2026-10-11 scarcity was the rounds carried against a fixed six
+        /// magazines, so a marine with standard issue (four) was always a third scarce: against
+        /// twenty PDF he aimed four turns for every shot to save rounds he would never need, and
+        /// his squad removed about 30% less a turn than one aim turn would have. A turn spent
+        /// aiming is a turn under fire; only a fight longer than the pouches is worth saving
+        /// rounds for (product owner).</para>
         /// </summary>
-        internal static float AmmunitionScarcity(RangedWeapon weapon)
+        internal static float Scarcity(float roundsCarried, float workPerShooter, float fastValuePerRound)
         {
-            if (weapon == null
-                || weapon.IsUnlimited
-                || weapon.IsSelfRegenerating
-                || (weapon.HasSoldierReload && weapon.Template.AmmunitionType == null))
+            if (roundsCarried <= 0)
             {
-                return 0;
+                return 1f;
             }
-            float remaining;
-            float plentiful;
-            if (weapon.IsConsumableItem)
+            if (workPerShooter <= 0 || fastValuePerRound <= 0)
             {
-                remaining = weapon.ConsumableQuantity;
-                plentiful = PlentifulMagazines;
+                return 0f;
             }
-            else
+            float roundsNeeded = workPerShooter / fastValuePerRound;
+            return Math.Clamp(1f - (roundsCarried / roundsNeeded), 0f, 1f);
+        }
+
+        /// <summary>
+        /// One plan in a firing decision: its best value per round over every burst length, the
+        /// burst it fires when rounds are free (score and rounds), and the turns the plan takes.
+        /// </summary>
+        internal readonly record struct PlanEfficiency(
+            float ValuePerRound, float FreeScore, int FreeRounds, int Turns);
+
+        /// <summary>
+        /// The price of a round in one firing decision: scarcity x the best value per round on
+        /// offer (what the round could buy instead). Scarcity is set by the decision's FASTEST plan
+        /// AS FIRED WITH FREE ROUNDS -- the most removal per turn, at the burst it would then fire
+        /// -- because that is the pace, and the rate of spending, the soldier would keep if rounds
+        /// did not matter. (Priced at its most round-efficient burst instead, a marine aiming once
+        /// looked to need a third of the rounds his nine-round bursts would really spend.)
+        /// </summary>
+        internal float RoundPrice(
+            BattleSoldier soldier,
+            RangedWeapon weapon,
+            IReadOnlyList<PlanEfficiency> plans,
+            out float scarcity)
+        {
+            scarcity = 0f;
+            if (soldier == null || IsNeverScarce(weapon) || plans == null || plans.Count == 0)
             {
-                remaining = weapon.LoadedAmmo + weapon.ReserveAmmo;
-                plentiful = PlentifulMagazines * Math.Max(1, (int)weapon.Template.AmmoCapacity);
+                return 0f;
             }
-            return Math.Clamp(1f - (remaining / plentiful), 0f, 1f);
+            float bestValue = 0f;
+            float fastestRate = float.MinValue;
+            float fastValue = 0f;
+            foreach (PlanEfficiency plan in plans)
+            {
+                bestValue = Math.Max(bestValue, plan.ValuePerRound);
+                float rate = plan.FreeScore / Math.Max(1, plan.Turns);
+                if (rate > fastestRate)
+                {
+                    fastestRate = rate;
+                    fastValue = Math.Max(0f, plan.FreeScore) / Math.Max(1, plan.FreeRounds);
+                }
+            }
+            scarcity = Scarcity(
+                RoundsCarried(weapon),
+                _shotEvaluator.WorkPerShooter(soldier, weapon),
+                fastValue);
+            return scarcity * bestValue;
+        }
+
+        /// <summary>
+        /// The round price for a STANDING shooter at a fixed range: the plans are firing now with
+        /// <paramref name="referenceModifier"/> and every aim-then-fire cycle. The removal-rate
+        /// table prices its plans with this, so its standing rate uses the planner's own charge.
+        /// </summary>
+        internal float StandingRoundPrice(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            float referenceModifier,
+            float? targetSpeed,
+            out float scarcity)
+        {
+            List<PlanEfficiency> plans =
+            [
+                Efficiency(soldier, target, weapon, range, referenceModifier, targetSpeed, 1)
+            ];
+            for (int bonus = 0; bonus <= FullAimBonusTurns; bonus++)
+            {
+                plans.Add(Efficiency(
+                    soldier, target, weapon, range,
+                    AimAccuracy(soldier, weapon.Template) + bonus + 1f, targetSpeed, bonus + 2));
+            }
+            return RoundPrice(soldier, weapon, plans, out scarcity);
+        }
+
+        private PlanEfficiency Efficiency(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            float modifier,
+            float? targetSpeed,
+            int turns)
+        {
+            (float valuePerRound, float freeScore, int freeRounds) = _shotEvaluator.BurstProfile(
+                soldier, target, weapon, range, modifier, targetSpeed);
+            return new PlanEfficiency(valuePerRound, freeScore, freeRounds, turns);
         }
 
         private static int RoundsUsed(RangedTargetEvaluation shot) =>
@@ -365,15 +500,8 @@ namespace OnlyWar.Battles
                     ? 1
                     : Math.Max(1, shot.ShotsToFire);
 
-        private static float ScorePerRound(RangedTargetEvaluation shot)
-        {
-            int rounds = RoundsUsed(shot);
-            return rounds == 0 ? 0 : Math.Max(0, shot.Score) / rounds;
-        }
-
-        private static float NetShotValue(RangedTargetEvaluation shot, float valuePerRound) =>
-            shot.Score
-            - (AmmunitionScarcity(shot.Weapon) * valuePerRound * RoundsUsed(shot));
+        private static float NetShotValue(RangedTargetEvaluation shot, float roundPrice) =>
+            shot.Score - (roundPrice * RoundsUsed(shot));
 
         /// <summary>
         /// Expected change in range to <paramref name="target"/> per turn, from the speed it moved
@@ -1002,7 +1130,8 @@ namespace OnlyWar.Battles
             float range,
             float additionalToHitModifier,
             float? targetSpeed = null,
-            int? availableAmmo = null)
+            int? availableAmmo = null,
+            float? roundPrice = null)
             => _shotEvaluator.EvaluateRangedTarget(
                 soldier,
                 target,
@@ -1010,7 +1139,11 @@ namespace OnlyWar.Battles
                 range,
                 additionalToHitModifier,
                 targetSpeed,
-                availableAmmo);
+                availableAmmo,
+                roundPrice);
+
+        internal float WorkPerShooter(BattleSoldier soldier, RangedWeapon weapon) =>
+            _shotEvaluator.WorkPerShooter(soldier, weapon);
 
         private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(
             BattleSoldier shooter,

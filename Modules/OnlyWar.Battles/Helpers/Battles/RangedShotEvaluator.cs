@@ -30,6 +30,12 @@ namespace OnlyWar.Battles
             _context = services.Context;
         }
 
+        /// <param name="roundPrice">
+        /// The price of a round the burst is chosen at (see <see cref="ChooseShotsToFire"/>). Null
+        /// prices it as if this shot were the only one on offer. A decision that compares several
+        /// plans passes the one price it charges them all
+        /// (<see cref="RangedTargetSelector.RoundPrice"/>).
+        /// </param>
         internal RangedTargetEvaluation EvaluateRangedTarget(
             BattleSoldier soldier,
             BattleSoldier target,
@@ -37,7 +43,8 @@ namespace OnlyWar.Battles
             float range,
             float additionalToHitModifier,
             float? targetSpeed = null,
-            int? availableAmmo = null)
+            int? availableAmmo = null,
+            float? roundPrice = null)
         {
             float evaluatedTargetSpeed = targetSpeed ?? target.CurrentSpeed;
             int evaluatedAmmo = availableAmmo ?? weapon.LoadedAmmo;
@@ -48,7 +55,8 @@ namespace OnlyWar.Battles
                 BitConverter.SingleToInt32Bits(range),
                 BitConverter.SingleToInt32Bits(additionalToHitModifier),
                 BitConverter.SingleToInt32Bits(evaluatedTargetSpeed),
-                evaluatedAmmo);
+                evaluatedAmmo,
+                BitConverter.SingleToInt32Bits(roundPrice ?? float.NaN));
             if (_context.RangedEvaluations.TryGetValue(cacheKey, out RangedTargetEvaluation cached))
             {
                 return cached;
@@ -65,7 +73,8 @@ namespace OnlyWar.Battles
                     range,
                     additionalToHitModifier,
                     evaluatedTargetSpeed,
-                    evaluatedAmmo);
+                    evaluatedAmmo,
+                    roundPrice);
             float clampedTakeOutProbability = Math.Clamp(takeOutProbability, 0, 1);
 
             // This is the expected battle value removed THIS TURN. It is deliberately
@@ -98,15 +107,171 @@ namespace OnlyWar.Battles
                 friendlyBattleValueLost,
                 preRollHitTotal,
                 evaluatedTargetSpeed,
-                woundProgressOnHit);
+                woundProgressOnHit,
+                additionalToHitModifier);
             _context.RangedEvaluations[cacheKey] = result;
             return result;
         }
 
         /// <summary>
+        /// The share of the fight's work that falls on one shooter with this weapon: the battle
+        /// value of the able enemies the weapon can hurt at all, over the able soldiers on the
+        /// shooter's side who carry a reloadable ranged weapon. Enemies the weapon cannot damage
+        /// are not its work -- a lasgun facing a Carnifex has nothing to save rounds for. Head
+        /// count, not firepower: a heavy weapon is not given a larger share. Once per side and
+        /// weapon per planning pass.
+        /// </summary>
+        internal float WorkPerShooter(BattleSoldier shooter, RangedWeapon weapon)
+        {
+            if (shooter == null || weapon == null || !_grid.IsSoldierPlaced(shooter.Soldier.Id))
+            {
+                return 0f;
+            }
+            bool side = _grid.GetSoldierSide(shooter.Soldier.Id);
+            return _context.RangedWorkPerShooter.GetOrAdd(
+                (side, weapon.Template.Id),
+                _ => CalculateWorkPerShooter(side, weapon));
+        }
+
+        private float CalculateWorkPerShooter(bool side, RangedWeapon weapon)
+        {
+            float enemyValue = 0f;
+            int shooters = 0;
+            foreach (BattleSoldier soldier in _soldierMap.Values)
+            {
+                if (!soldier.IsCombatEffective || !_grid.IsSoldierPlaced(soldier.Soldier.Id))
+                {
+                    continue;
+                }
+                if (_grid.GetSoldierSide(soldier.Soldier.Id) == side)
+                {
+                    if (soldier.RangedWeapons.Any(carried => !carried.IsConsumableItem))
+                    {
+                        shooters++;
+                    }
+                    continue;
+                }
+                float armor = soldier.Armor?.Template.ArmorProvided ?? 0;
+                if (CalculateRangedRemovalFraction(soldier, weapon, 1f, armor) > 0f)
+                {
+                    enemyValue += RangedTargetingServices.BattleValueOf(soldier);
+                }
+            }
+            return enemyValue / Math.Max(1, shooters);
+        }
+
+        /// <summary>
+        /// What this shot offers a firing decision (<see cref="RangedTargetSelector.RoundPrice"/>):
+        /// the best value per round over every burst length (the most a round spent on it could
+        /// buy), and the burst it fires when rounds are free -- its score and the rounds it spends,
+        /// which set the pace. All zero when the shot removes nothing.
+        /// </summary>
+        internal (float BestValuePerRound, float FreeScore, int FreeRounds) BurstProfile(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            float additionalToHitModifier,
+            float? targetSpeed = null,
+            int? availableAmmo = null)
+        {
+            float evaluatedTargetSpeed = targetSpeed ?? target.CurrentSpeed;
+            int ammunitionAvailable = availableAmmo ?? weapon.LoadedAmmo;
+            float armor = target.Armor?.Template.ArmorProvided ?? 0;
+            (float takeOut, float progress) = CalculateRangedHitRemoval(target, weapon, range, armor);
+            float removalFractionPerHit = RemovalMath.CombineRemovalFraction(
+                Math.Clamp(takeOut, 0f, 1f), progress);
+            if (removalFractionPerHit <= 0f)
+            {
+                return (0f, 0f, 0);
+            }
+            bool firingIntoMelee = _grid.IsTargetEngagedWithShootersAllies(
+                soldier.Soldier.Id,
+                target.Soldier.Id);
+            RangedHitEstimateContext hitContext = new(
+                soldier,
+                target,
+                weapon,
+                range,
+                additionalToHitModifier,
+                firingIntoMelee,
+                evaluatedTargetSpeed);
+            (int minShots, int maxShots) = BurstBounds(weapon, ammunitionAvailable);
+            float[] scores = ScoreBursts(
+                soldier, target, weapon, range, hitContext, firingIntoMelee,
+                removalFractionPerHit, minShots, maxShots);
+            float best = 0f;
+            float freeScore = float.MinValue;
+            int freeShots = minShots;
+            for (int shots = minShots; shots <= maxShots; shots++)
+            {
+                float score = scores[shots - minShots];
+                best = Math.Max(
+                    best,
+                    Math.Max(0f, score) / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(shots)));
+                // Free rounds: the burst ChooseShotsToFire picks at price 0.
+                if (score > freeScore + 1e-7f)
+                {
+                    freeScore = score;
+                    freeShots = shots;
+                }
+            }
+            return (best, freeScore, weapon.GetAmmunitionUnitsForAttack(freeShots));
+        }
+
+        private static (int Min, int Max) BurstBounds(RangedWeapon weapon, int ammunitionAvailable)
+        {
+            int maxShots = Math.Max(
+                1,
+                Math.Min((int)weapon.Template.RateOfFire, Math.Max(0, ammunitionAvailable)));
+            int minShots = 1;
+            // Assume all machine guns have to fire at least one quarter of their maximum.
+            if (weapon.Template.RateOfFire > 10)
+            {
+                minShots = Math.Min(weapon.Template.RateOfFire / 4, maxShots);
+            }
+            return (minShots, Math.Max(minShots, maxShots));
+        }
+
+        /// <summary>
+        /// The score of every burst length from <paramref name="minShots"/> to
+        /// <paramref name="maxShots"/>: expected battle value removed by one roll, less the
+        /// expected friendly loss of a stray when firing into a melee.
+        /// </summary>
+        private float[] ScoreBursts(
+            BattleSoldier shooter,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            in RangedHitEstimateContext hitContext,
+            bool firingIntoMelee,
+            float removalFractionPerHit,
+            int minShots,
+            int maxShots)
+        {
+            float targetValue = RangedTargetingServices.BattleValueOf(target);
+            float friendlyLossOnStray = firingIntoMelee
+                ? CalculateExpectedFriendlyLossOnStray(shooter, target, weapon, range)
+                : 0f;
+            float recoil = weapon.Template.Recoil;
+            float[] scores = new float[maxShots - minShots + 1];
+            for (int shots = minShots; shots <= maxShots; shots++)
+            {
+                float preRollHitTotal = hitContext.CalculatePreRollHitTotal(shots);
+                float removed = targetValue * RemovalMath.ExpectedBurstRemovalFraction(
+                    preRollHitTotal, shots, recoil, removalFractionPerHit);
+                scores[shots - minShots] = friendlyLossOnStray > 0f
+                    ? removed - (RangedFriendlyFireRules.CalculateNearMissProbability(preRollHitTotal)
+                        * friendlyLossOnStray)
+                    : removed;
+            }
+            return scores;
+        }
+
+        /// <summary>
         /// The burst to fire: the round count with the best net value, where net value is the
         /// burst's expected battle value removed, less friendly strays, less the rounds it spends
-        /// at <c>scarcity × (value of a round)</c> each.
+        /// at the round price each (<see cref="RangedTargetSelector.RoundPrice"/>).
         ///
         /// <para>WHY. This used to fire enough rounds to reach 75% take-out confidence, treating
         /// each round as an independent chance to kill. <see cref="Actions.ShootAction"/> does
@@ -120,8 +285,8 @@ namespace OnlyWar.Battles
         /// <para>Without a price on rounds the answer is always the full rate of fire -- another
         /// round never lowers the expected removal -- so the round cost is what shortens a burst.
         /// It is priced exactly as <see cref="RangedTargetSelector.EvaluateFireTiming"/> prices a
-        /// shot: scarcity 0 (free rounds) fires everything, and on the last magazine only the
-        /// most round-efficient burst is worth firing.</para>
+        /// shot: scarcity 0 (rounds that outlast the work) fires everything, and on the last
+        /// rounds only the most round-efficient burst is worth firing.</para>
         ///
         /// <para>SEARCH. Every burst length is scored, the round price is set from the best value
         /// per round among them, and the length with the best net value wins. (A climb that
@@ -136,53 +301,30 @@ namespace OnlyWar.Battles
             in RangedHitEstimateContext hitContext,
             bool firingIntoMelee,
             float removalFractionPerHit,
-            int ammunitionAvailable)
+            int ammunitionAvailable,
+            float? roundPrice)
         {
-            int maxShots = Math.Max(
-                1,
-                Math.Min((int)weapon.Template.RateOfFire, Math.Max(0, ammunitionAvailable)));
-            int minShots = 1;
-            // Assume all machine guns have to fire at least one quarter of their maximum.
-            if (weapon.Template.RateOfFire > 10)
-            {
-                minShots = Math.Min(weapon.Template.RateOfFire / 4, maxShots);
-            }
+            (int minShots, int maxShots) = BurstBounds(weapon, ammunitionAvailable);
             if (maxShots <= minShots)
             {
                 return minShots;
             }
 
-            float scarcity = RangedTargetSelector.AmmunitionScarcity(weapon);
-            if (scarcity <= 0f && !firingIntoMelee)
+            if (!firingIntoMelee
+                && (RangedTargetSelector.IsNeverScarce(weapon) || removalFractionPerHit <= 0f))
             {
-                // Free rounds and no friend in the line of fire: every round adds, none costs.
-                // Checked before the zero-removal case on purpose. PairRemovalRateTable keeps this
+                // Free rounds and no friend in the line of fire: every round adds, none costs. A
+                // shot that removes nothing prices its rounds at nothing too (a round is worth
+                // what it buys), so it also reports the full rate. PairRemovalRateTable keeps this
                 // count and rescales the shot to other ranges, so a far-range capture that removes
                 // nothing must still report the burst the weapon fires once it can penetrate;
-                // otherwise the stored count jumps from the minimum to the full rate at the
-                // penetration range, and the engagement potential shows a cliff there.
+                // otherwise the stored count jumps at the penetration range, and the engagement
+                // potential shows a cliff there.
                 return maxShots;
             }
             if (removalFractionPerHit <= 0f)
             {
                 return minShots;
-            }
-
-            float targetValue = RangedTargetingServices.BattleValueOf(target);
-            float friendlyLossOnStray = firingIntoMelee
-                ? CalculateExpectedFriendlyLossOnStray(shooter, target, weapon, range)
-                : 0f;
-            float recoil = weapon.Template.Recoil;
-            RangedHitEstimateContext context = hitContext;
-            float Score(int shots)
-            {
-                float preRollHitTotal = context.CalculatePreRollHitTotal(shots);
-                float removed = targetValue * RemovalMath.ExpectedBurstRemovalFraction(
-                    preRollHitTotal, shots, recoil, removalFractionPerHit);
-                return friendlyLossOnStray > 0f
-                    ? removed - (RangedFriendlyFireRules.CalculateNearMissProbability(preRollHitTotal)
-                        * friendlyLossOnStray)
-                    : removed;
             }
 
             // Every burst length, then the best net value at the true best value per round. The
@@ -194,23 +336,53 @@ namespace OnlyWar.Battles
             // (BurstSizeSelectionTests.TheClimb_MatchesTheBruteForceBestNetValue). A burst is a
             // handful of lengths and this evaluation is memoized per shot, so the exact search is
             // affordable.
-            int count = maxShots - minShots + 1;
-            Span<float> scores = count <= 64 ? stackalloc float[count] : new float[count];
-            float valuePerRound = 0f;
-            for (int shots = minShots; shots <= maxShots; shots++)
+            float[] scores = ScoreBursts(
+                shooter, target, weapon, range, hitContext, firingIntoMelee,
+                removalFractionPerHit, minShots, maxShots);
+            // The round price. A decision that compares plans passes the one price it charges them
+            // all (roundPrice), so every plan's burst is chosen at the price it is then charged.
+            // Until 2026-10-11 each plan was priced at its OWN best value per round: an un-aimed
+            // shot, whose rounds are worth little, found them cheap and chose a nine-round burst,
+            // and the fire-timing comparison then charged those nine rounds at the fully aimed
+            // shot's value -- so firing without aim could almost never win. Alone, the shot is its
+            // own decision: its best value per round is the value of a round, and its free-rounds
+            // burst (the highest score) is the pace.
+            float price;
+            if (roundPrice is float common)
             {
-                float value = Score(shots);
-                scores[shots - minShots] = value;
-                valuePerRound = Math.Max(
-                    valuePerRound,
-                    Math.Max(0f, value) / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(shots)));
+                price = Math.Max(0f, common);
+            }
+            else
+            {
+                float valuePerRound = 0f;
+                float freeScore = float.MinValue;
+                int freeShots = minShots;
+                for (int shots = minShots; shots <= maxShots; shots++)
+                {
+                    float score = scores[shots - minShots];
+                    valuePerRound = Math.Max(
+                        valuePerRound,
+                        Math.Max(0f, score) / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(shots)));
+                    if (score > freeScore + 1e-7f)
+                    {
+                        freeScore = score;
+                        freeShots = shots;
+                    }
+                }
+                float pace = Math.Max(0f, freeScore)
+                    / Math.Max(1, weapon.GetAmmunitionUnitsForAttack(freeShots));
+                price = RangedTargetSelector.Scarcity(
+                        RangedTargetSelector.RoundsCarried(weapon),
+                        WorkPerShooter(shooter, weapon),
+                        pace)
+                    * valuePerRound;
             }
             int chosen = minShots;
             float best = float.MinValue;
             for (int shots = minShots; shots <= maxShots; shots++)
             {
                 float net = scores[shots - minShots]
-                    - (scarcity * valuePerRound * weapon.GetAmmunitionUnitsForAttack(shots));
+                    - (price * weapon.GetAmmunitionUnitsForAttack(shots));
                 if (net > best + 1e-7f)
                 {
                     best = net;
@@ -229,7 +401,8 @@ namespace OnlyWar.Battles
             float range,
             float moveAndAimMod,
             float? targetSpeed = null,
-            int? availableAmmo = null)
+            int? availableAmmo = null,
+            float? roundPrice = null)
         {
             int ammunitionAvailable = availableAmmo ?? weapon.LoadedAmmo;
             float armor = target.Armor?.Template.ArmorProvided ?? 0;
@@ -259,7 +432,8 @@ namespace OnlyWar.Battles
                 RemovalMath.CombineRemovalFraction(
                     Math.Clamp(takeOutProbability, 0f, 1f),
                     woundProgress),
-                ammunitionAvailable);
+                ammunitionAvailable,
+                roundPrice);
             (float HitProbability, float TakeOutProbabilityOnHit, float PreRollHitTotal) estimate =
                 EstimateHitAndDamage(hitContext, takeOutProbability, shotsToFire);
             return (

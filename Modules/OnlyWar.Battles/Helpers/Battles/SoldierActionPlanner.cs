@@ -111,7 +111,7 @@ namespace OnlyWar.Battles
                         >= LikelyTakeOutProbability
                     || stickyTiming.ShootNow;
                 return shoot
-                    ? PlanConventionalShot(soldier, stickyShot, 0, 1)
+                    ? PlanConventionalShot(soldier, stickyTiming.ShootNowShot ?? stickyShot, 0, 1)
                     : new PlannedSoldierAction(
                         soldier.Soldier.Id,
                         PlannedSoldierActionKind.Aim,
@@ -266,9 +266,11 @@ namespace OnlyWar.Battles
                 aimMultiplier);
             if (shootNow != null && (aimNow == null || timing.ShootNow))
             {
+                // The shot as the decision priced it: its burst chosen at the round price that
+                // every plan in the comparison was charged.
                 return PlanConventionalShot(
                     soldier,
-                    shootNow,
+                    timing.ShootNowShot ?? shootNow,
                     bulkMultiplier,
                     aimMultiplier);
             }

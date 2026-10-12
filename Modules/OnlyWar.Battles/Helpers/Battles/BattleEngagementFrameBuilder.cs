@@ -40,11 +40,11 @@ internal static class BattleEngagementFrameBuilder
         Dictionary<int, BattleSquadCapabilityProfile> profiles = [];
         foreach (BattleSquad squad in firstActive)
         {
-            profiles[squad.Id] = BuildProfile(squad, secondActive);
+            profiles[squad.Id] = BuildProfile(squad, secondActive, firstActive);
         }
         foreach (BattleSquad squad in secondActive)
         {
-            profiles[squad.Id] = BuildProfile(squad, firstActive);
+            profiles[squad.Id] = BuildProfile(squad, firstActive, secondActive);
         }
         Dictionary<int, SquadEngagementFrame> frames = [];
 
@@ -90,9 +90,15 @@ internal static class BattleEngagementFrameBuilder
                 : PursuitDoctrine.Mixed;
     }
 
+    /// <param name="friendlySquads">
+    /// The squad's own side, itself included or not. The effective engagement range gives the
+    /// squad only its share of the enemy's fire (<see cref="ForceShare"/>). Null means it fights
+    /// alone.
+    /// </param>
     internal static BattleSquadCapabilityProfile BuildProfile(
         BattleSquad squad,
-        IReadOnlyCollection<BattleSquad> opponents = null)
+        IReadOnlyCollection<BattleSquad> opponents = null,
+        IReadOnlyCollection<BattleSquad> friendlySquads = null)
     {
         List<BattleSoldier> able = squad?.AbleSoldiers
             .Where(soldier => soldier.TopLeft.HasValue)
@@ -157,7 +163,8 @@ internal static class BattleEngagementFrameBuilder
             opponents,
             upper,
             out float usefulFireRange,
-            out float peakRemovalFraction);
+            out float peakRemovalFraction,
+            friendlySquads: friendlySquads);
         return new BattleSquadCapabilityProfile(
             squad.Id,
             total,
@@ -261,7 +268,8 @@ internal static class BattleEngagementFrameBuilder
         float reach,
         out float usefulFireRange,
         out float peakRemovalFraction,
-        bool requirePlacement = true)
+        bool requirePlacement = true,
+        IReadOnlyCollection<BattleSquad> friendlySquads = null)
     {
         usefulFireRange = 0;
         peakRemovalFraction = 0;
@@ -270,7 +278,15 @@ internal static class BattleEngagementFrameBuilder
         if (curves == null) return degenerateRange;
 
         float band = curves.Band;
-        float meleeThreat = curves.MeleeThreat;
+        // The squad takes its share of the enemy's fire, not all of it (2026-10-11). The curves
+        // price the WHOLE opposing force firing at this one squad, so a squad that is one of ten
+        // found every range a loss -- least at maximum range -- and the Close continuation that
+        // moves to this range never priced an advance: ten Insurrectionist Mobs stood 200 yards from
+        // one Tactical squad for 400 turns, out-shot 45 to 1, where at point blank the ten would
+        // have out-shot it. The same share the opening range uses (ForceShare), on the ranged fire
+        // and the melee threat alike; the exchange forecast still decides whether the walk in pays.
+        float incomingShare = ForceShare(squad, friendlySquads);
+        float meleeThreat = curves.MeleeThreat * incomingShare;
         float speed = curves.ClosingSpeed;
         // The PEAK of the outgoing curve, not its value at `chosen`. `chosen` is the argmax of
         // removal - incoming, which degenerates to maximum range whenever the outgoing curve is
@@ -308,7 +324,7 @@ internal static class BattleEngagementFrameBuilder
             RangedEffectivenessCurve.Argmax(
                 band,
                 range => (rate * curves.Outgoing.RemovalAt(range))
-                    - curves.Incoming.RemovalAt(range)
+                    - (incomingShare * curves.Incoming.RemovalAt(range))
                     - (meleeThreat
                         / (1f + (Math.Max(0f, range - ContactGap) / speed)))),
             0,
@@ -341,27 +357,30 @@ internal static class BattleEngagementFrameBuilder
     /// </param>
     /// <summary>
     /// Diagnostics: the terms <see cref="CalculateEffectiveEngagementRange"/> maximizes, sampled
-    /// at the given ranges -- our outgoing removal converted to our currency, the opposing force's
-    /// return fire, and its melee arrival threat -- plus the band the argmax runs over. Null in the
-    /// degenerate cases.
+    /// at the given ranges -- our outgoing removal converted to our currency, our share of the
+    /// opposing force's return fire, and our share of its melee arrival threat -- plus the band the
+    /// argmax runs over. Null in the degenerate cases.
     /// </summary>
     internal static (float Band, IReadOnlyList<(float Range, float Outgoing, float Incoming, float MeleeThreat)> Samples)?
         DescribeEngagementCurve(
             BattleSquad squad,
             IReadOnlyCollection<BattleSquad> opponents,
             float reach,
-            IReadOnlyList<float> ranges)
+            IReadOnlyList<float> ranges,
+            IReadOnlyCollection<BattleSquad> friendlySquads = null)
     {
         EngagementCurves curves = BuildEngagementCurves(squad, opponents, reach, true, out _);
         if (curves == null) return null;
+        float share = ForceShare(squad, friendlySquads);
         List<(float, float, float, float)> samples = [];
         foreach (float range in ranges)
         {
             samples.Add((
                 range,
                 curves.EnemyValueRate * curves.Outgoing.RemovalAt(range),
-                curves.Incoming.RemovalAt(range),
-                curves.MeleeThreat / (1f + (Math.Max(0f, range - ContactGap) / curves.ClosingSpeed))));
+                share * curves.Incoming.RemovalAt(range),
+                share * curves.MeleeThreat
+                    / (1f + (Math.Max(0f, range - ContactGap) / curves.ClosingSpeed))));
         }
         return (curves.Band, samples);
     }

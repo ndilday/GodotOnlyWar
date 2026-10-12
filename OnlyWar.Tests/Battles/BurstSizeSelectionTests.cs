@@ -12,22 +12,25 @@ namespace OnlyWar.Tests.Battles;
 
 /// <summary>
 /// Burst length (RangedShotEvaluator.ChooseShotsToFire): the round count with the best expected
-/// removal net of the rounds it spends, priced by ammunition scarcity. Free rounds fire the full
-/// rate; scarce rounds shorten the burst, because the later rounds of a recoiling burst mostly buy
-/// the rate-of-fire bonus rather than extra hits.
+/// removal net of the rounds it spends, priced by ammunition scarcity -- the rounds carried against
+/// the shooter's share of the work (RangedTargetSelector.Scarcity). Rounds that outlast the work
+/// fire the full rate; scarce rounds shorten the burst, because the later rounds of a recoiling
+/// burst mostly buy the rate-of-fire bonus rather than extra hits.
 /// </summary>
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public sealed class BurstSizeSelectionTests
 {
     private const int BoltgunRateOfFire = 9;
     private const ushort BoltgunMagazine = 30;
+    // Enough enemies that the work outlasts the pouches (the number of enemies sets the rounds
+    // needed, not their worth).
+    private const int Horde = 400;
 
     [Fact]
-    public void PlentifulAmmunition_FiresTheFullRateOfFire()
+    public void RoundsThatOutlastTheWork_FireTheFullRateOfFire()
     {
-        Fixture fixture = CreateFixture(spareMagazines: RangedTargetSelector.PlentifulMagazines - 1);
+        Fixture fixture = CreateFixture(spareMagazines: EquipmentRulesCatalog.StandardSpareMagazines);
 
-        Assert.Equal(0f, RangedTargetSelector.AmmunitionScarcity(fixture.Weapon));
         Assert.Equal(BoltgunRateOfFire, fixture.ShootNow().ShotsToFire);
     }
 
@@ -40,9 +43,10 @@ public sealed class BurstSizeSelectionTests
     }
 
     [Fact]
-    public void StandardIssue_FiresAShorterBurstThanTheFullRate()
+    public void StandardIssueAgainstMoreWorkThanItCanDo_FiresAShorterBurstThanTheFullRate()
     {
-        Fixture fixture = CreateFixture(spareMagazines: EquipmentRulesCatalog.StandardSpareMagazines);
+        Fixture fixture = CreateFixture(
+            spareMagazines: EquipmentRulesCatalog.StandardSpareMagazines, hordeSize: Horde);
 
         int shots = fixture.ShootNow().ShotsToFire;
 
@@ -53,9 +57,10 @@ public sealed class BurstSizeSelectionTests
     public void EmptyingPouches_NeverLengthenTheBurst()
     {
         int previous = int.MaxValue;
-        for (int spares = RangedTargetSelector.PlentifulMagazines - 1; spares >= 0; spares--)
+        for (int spares = 5; spares >= 0; spares--)
         {
-            int shots = CreateFixture(spareMagazines: spares).ShootNow().ShotsToFire;
+            int shots = CreateFixture(spareMagazines: spares, hordeSize: Horde)
+                .ShootNow().ShotsToFire;
             Assert.True(
                 shots <= previous,
                 $"{spares} spare magazines fired {shots}, more than the {previous} fired with one more");
@@ -71,8 +76,7 @@ public sealed class BurstSizeSelectionTests
     {
         // The climb stops at the first round that does not pay for itself, which is only the
         // global best when the score is concave. Check it against every burst length directly.
-        Fixture fixture = CreateFixture(spareMagazines: spareMagazines);
-        float scarcity = RangedTargetSelector.AmmunitionScarcity(fixture.Weapon);
+        Fixture fixture = CreateFixture(spareMagazines: spareMagazines, hordeSize: Horde);
         float removalPerHit = RangedShotEvaluator.CalculateRangedRemovalFraction(
             fixture.Target, fixture.Weapon, fixture.Range, armor: 0);
         float[] score = Enumerable.Range(1, BoltgunRateOfFire)
@@ -90,6 +94,17 @@ public sealed class BurstSizeSelectionTests
                 removalPerHit))
             .ToArray();
         float valuePerRound = score.Select((value, index) => value / (index + 1)).Max();
+        // A lone shot is its own decision: its best value per round is the value of a round, and
+        // its free-rounds burst (the highest score) is the pace.
+        int freeShots = Enumerable.Range(1, BoltgunRateOfFire)
+            .OrderByDescending(shots => score[shots - 1])
+            .ThenBy(shots => shots)
+            .First();
+        float scarcity = RangedTargetSelector.Scarcity(
+            RangedTargetSelector.RoundsCarried(fixture.Weapon),
+            fixture.Selector.WorkPerShooter(fixture.Shooter, fixture.Weapon),
+            score[freeShots - 1] / freeShots * RangedTargetingServices.BattleValueOf(fixture.Target));
+        Assert.True(scarcity > 0f, "the case only tests the climb when rounds cost something");
         int best = Enumerable.Range(1, BoltgunRateOfFire)
             .OrderByDescending(shots => score[shots - 1] - (scarcity * valuePerRound * shots))
             .ThenBy(shots => shots)
@@ -118,7 +133,8 @@ public sealed class BurstSizeSelectionTests
         int spareMagazines,
         bool typedAmmunition = true,
         byte rateOfFire = BoltgunRateOfFire,
-        ushort magazine = BoltgunMagazine)
+        ushort magazine = BoltgunMagazine,
+        int hordeSize = 0)
     {
         const int idBase = 98_600;
         SoldierTemplate shooterTemplate = new(
@@ -195,6 +211,7 @@ public sealed class BurstSizeSelectionTests
             [shooter.Soldier.Id] = shooter,
             [target.Soldier.Id] = target
         };
+        PreparedShotRateTests.AddHorde(grid, soldiers, targetTemplate, hordeSize, idBase + 1_000);
         SquadPlanningServices services = new(
             grid,
             soldiers,

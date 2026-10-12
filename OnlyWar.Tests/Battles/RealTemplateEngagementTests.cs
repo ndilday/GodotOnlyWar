@@ -59,6 +59,11 @@ public class RealTemplateEngagementTests
     private const int HormagauntSquadTemplateId = 17;
     // 30 Shoota Boyz.
     private const int ShootaBoyzSquadTemplateId = 39;
+    private const int InsurrectionistFactionId = 5;
+    // 1 Ringleader + 29 Insurrectionists with autoguns.
+    private const int InsurrectionistMobSquadTemplateId = 36;
+    // 1 Sergeant + 9 Tactical Marines.
+    private const int TacticalSquadTemplateId = 1;
 
     // Meeting-engagement distances, from long rifle range down to within one move of contact.
     private static readonly int[] Separations = [300, 150, 60, 20, 6];
@@ -342,6 +347,52 @@ public class RealTemplateEngagementTests
             }
         }
         Assert.True(offered > 0, "contact was never offered, so the test proves nothing");
+    }
+
+    /// <summary>
+    /// Observed 2026-10-11: ten Insurrectionist Mobs stood 200 yards from one Tactical squad for 400
+    /// turns, out-shot 45 to 1, though at point blank the ten together out-shoot it. Each Mob's
+    /// effective engagement range -- where the Close option walks to -- priced the WHOLE marine
+    /// squad firing at that one Mob, so every range was a loss, least at maximum range, and an
+    /// advance was never priced. A squad now takes its share of the enemy's fire there, as the
+    /// opening range already did. One Mob alone still stands off; one of a host wants point blank.
+    /// (Twenty here: these fixture Mobs are raised with a static RNG and shoot weaker than the
+    /// duel's, so one of ten only breaks even at point blank.)
+    /// </summary>
+    [Fact]
+    public void OneMobOfAHost_WantsPointBlankAgainstMarinesWhereAMobAloneStandsOff()
+    {
+        GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
+        Faction insurrectionists = blob.Factions.Single(faction => faction.Id == InsurrectionistFactionId);
+        Faction marines = blob.Factions.Single(faction => faction.Id == SpaceMarineFactionId);
+        RNG.Reset(77_700);
+        OnlyWar.Abstractions.IEntityIdAllocator entityIds =
+            new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
+        List<BattleSquad> mobs = Enumerable.Range(0, 20)
+            .Select(_ => CreateSquad(insurrectionists, InsurrectionistMobSquadTemplateId, entityIds))
+            .ToList();
+        BattleSquad tactical = CreateSquad(marines, TacticalSquadTemplateId, entityIds);
+        BattleGridManager grid = new();
+        for (int index = 0; index < mobs.Count; index++)
+        {
+            PlaceBlock(grid, mobs[index], side: true, x: 4, y: index * 10);
+        }
+        PlaceLine(grid, tactical, side: false, x: 204);
+
+        float alone = BattleEngagementFrameBuilder.Build([mobs[0]], [tactical])
+            .Profiles[mobs[0].Id].EffectiveEngagementRange;
+        float oneOfHost = BattleEngagementFrameBuilder.Build(mobs, [tactical])
+            .Profiles[mobs[0].Id].EffectiveEngagementRange;
+
+        var curve = BattleEngagementFrameBuilder.DescribeEngagementCurve(
+            mobs[0], [tactical], 1000, [1, 10, 50, 200, 823], mobs);
+        string described = curve is { } c
+            ? string.Join("; ", c.Samples.Select(s => $"r={s.Range} out={s.Outgoing:F3} in={s.Incoming:F3}"))
+            : "none";
+        Assert.True(alone > 400, $"a Mob alone should stand off; its range was {alone}");
+        Assert.True(
+            oneOfHost < 50,
+            $"one Mob of twenty should want to close; its range was {oneOfHost}. {described}");
     }
 
     /// <summary>A block four wide, so a squad of twenty or thirty stays compact.</summary>

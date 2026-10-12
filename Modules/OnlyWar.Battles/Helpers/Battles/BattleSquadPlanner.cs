@@ -422,9 +422,24 @@ namespace OnlyWar.Battles
             RangedWeapon weapon,
             float range,
             float additionalToHitModifier,
-            float? targetSpeed = null) =>
+            float? targetSpeed = null,
+            float? roundPrice = null) =>
             _ranged.EvaluateRangedTarget(
-                soldier, target, weapon, range, additionalToHitModifier, targetSpeed);
+                soldier, target, weapon, range, additionalToHitModifier, targetSpeed,
+                roundPrice: roundPrice);
+
+        /// <summary>The round price a standing shooter's firing decision charges; see
+        /// <see cref="RangedTargetSelector.StandingRoundPrice"/>.</summary>
+        internal float StandingRoundPrice(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            out float scarcity) =>
+            _ranged.StandingRoundPrice(soldier, target, weapon, range, 0f, null, out scarcity);
+
+        internal float WorkPerShooter(BattleSoldier soldier, RangedWeapon weapon) =>
+            _ranged.WorkPerShooter(soldier, weapon);
 
         private bool IsPlaced(BattleSoldier soldier) => _services.IsPlaced(soldier);
 

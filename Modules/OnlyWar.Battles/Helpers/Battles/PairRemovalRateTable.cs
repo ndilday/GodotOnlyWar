@@ -313,9 +313,30 @@ namespace OnlyWar.Battles
             // evaluator and with the same bonus (RangedTargetSelector.EvaluateFireTiming), so each
             // carries the burst the planner would really choose for it. The term picks among them
             // with the planner's own rule at every range (PairRemovalTerm.SustainedRateAt).
+            //
+            // Every plan's burst is chosen at the one round price the rule charges them all
+            // (RangedTargetSelector.StandingRoundPrice, 2026-10-11), and the term keeps the
+            // scarcity behind it. The standing un-aimed shot is one of the plans; the reference
+            // shot keeps the burst it was evaluated with, because RemovalAt (fire on the move,
+            // where no aim is on offer) reads it.
             List<AimPlan> aimPlans = [];
+            AimPlan? standingShot = null;
+            float scarcity = 0f;
             if (!template.IsTemplateWeapon)
             {
+                float referenceModifier = evaluation.AdditionalToHitModifier;
+                float roundPrice = _ranged.StandingRoundPrice(
+                    shooter, evaluation.Target, evaluation.Weapon, evaluation.Range,
+                    referenceModifier, evaluation.TargetSpeed, out scarcity);
+                RangedTargetEvaluation standing = _ranged.EvaluateRangedTarget(
+                    shooter,
+                    evaluation.Target,
+                    evaluation.Weapon,
+                    evaluation.Range,
+                    referenceModifier,
+                    evaluation.TargetSpeed,
+                    roundPrice: roundPrice);
+                standingShot = new AimPlan(standing.PreRollHitTotal, standing.ShotsToFire, 1);
                 for (int bonus = 0; bonus <= RangedTargetSelector.FullAimBonusTurns; bonus++)
                 {
                     RangedTargetEvaluation aimed = _ranged.EvaluateRangedTarget(
@@ -324,7 +345,8 @@ namespace OnlyWar.Battles
                         evaluation.Weapon,
                         evaluation.Range,
                         RangedTargetSelector.AimAccuracy(shooter, template) + bonus + 1f,
-                        evaluation.TargetSpeed);
+                        evaluation.TargetSpeed,
+                        roundPrice: roundPrice);
                     aimPlans.Add(new AimPlan(aimed.PreRollHitTotal, aimed.ShotsToFire, bonus + 2));
                 }
             }
@@ -356,8 +378,9 @@ namespace OnlyWar.Battles
                 BattleModifiersUtil.GetEffectiveMaxRange(shooter.Soldier, template),
                 takeOutTerms,
                 aimPlans,
-                RangedTargetSelector.AmmunitionScarcity(weapon),
-                fixedRounds);
+                scarcity,
+                fixedRounds,
+                standingShot);
         }
     }
 }

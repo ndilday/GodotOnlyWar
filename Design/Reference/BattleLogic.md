@@ -255,8 +255,12 @@ is its normal opening; and a pursuit standoff cannot run without a meaningful sp
 The baseline answers "am I roughly in the fight" from reach, not from the sharply derived
 effective engagement range — feeding the derivation into the fallback would make the fallback carry
 the judgement the score is meant to make. A contact-seeker closes unless it is already in contact;
-a squad inside its band holds; one that has closed past the near edge steps back; and one beyond
-its own reach takes the fast approach if it can run. That last case was a jog until 2026-09-20, and
+a squad in reach holds; and one beyond its own reach takes the fast approach if it can run. Until
+2026-10-10 a squad inside the band's near edge (70% of its maximum weapon range) stepped back. With
+MaximumRange a 1,000-yard cap that edge sat near 700 yards, so nearly every rifle squad defaulted
+to stepping back, and the squads the default actually decides for, those losing a firefight at every
+range, walked away from fights they could have stood in (PDF facing marines; BattleValueCalibration
+§7.24). Whether to open the range is the score's call. That last case was a jog until 2026-09-20, and
 it only ever shows when the scored options sit inside the indifference band — which is exactly the
 far-away case, where every option is worth about the same. Against a quarry of equal speed a jog
 does not merely close more slowly; it does not close at all.
@@ -1331,6 +1335,10 @@ These decisions replace earlier forms and should not be reintroduced during main
 | Pursuit contact progress paying `attainable` per turn of movement | A saturating position value worth `attainable` across the whole approach, once |
 | Jogging as the baseline posture beyond a squad's reach | The fast approach, when the squad can run |
 | The enemy's baseline posture as the posture it fires from in the forecast | Standing and aimed, unless it charges to contact or flees (2026-10-09) |
+| StepBack as the baseline inside 70% of the maximum weapon range (about 700 yards for any rifle) | Hold anywhere in reach; opening the range is the score's decision (2026-10-10) |
+| Each fire-timing plan's burst priced at its own best value per round (an un-aimed shot bought nine cheap rounds, then was charged the aimed price for them) | One round value per decision, the best over every plan and burst length; every plan's burst, the one fired included, is chosen at it (2026-10-11) |
+| The effective engagement range (where the Close continuation walks to) priced against the whole opposing force firing at this one squad, so one squad of many lost at every range and an advance was never priced | The squad's share of the enemy's ranged fire and melee threat, by battle value, the same `ForceShare` the opening range uses (2026-10-11) |
+| Ammunition scarcity from the rounds carried against a fixed six magazines (standard issue was always a third scarce, so marines aimed four turns against twenty PDF) | Scarcity from the work: the shooter's share of the enemy battle value his weapon can hurt (head count of reloadable shooters), the rounds his fastest plan would spend on it with free rounds, against the rounds he carries: `1 - carried / needed`, clamped (2026-10-11, product owner) |
 | Indifference band as a fraction of the squad's Battle Value | A fraction of the best score, with an absolute floor — stock and rate are not the same dimension |
 | Per-soldier movement vote and weak-ranged fallback tree | Squad semantic options with doctrine masks and executable root policies |
 | A flat dual-wield defense bonus | Weapon `ParryModifier`s only |

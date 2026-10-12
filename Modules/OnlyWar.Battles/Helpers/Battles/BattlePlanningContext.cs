@@ -85,8 +85,14 @@ namespace OnlyWar.Battles
              int RangeBits,
              int ModifierBits,
              int TargetSpeedBits,
-             int LoadedAmmo),
+             int LoadedAmmo,
+             int RoundValueBits),
             RangedTargetEvaluation> RangedEvaluations { get; } = new();
+
+        // (Side, WeaponTemplateId) -> one shooter's share of the enemy battle value that weapon can
+        // hurt (RangedShotEvaluator.WorkPerShooter), which sets how scarce rounds are this turn.
+        internal ConcurrentDictionary<(bool Side, int WeaponTemplateId), float>
+            RangedWorkPerShooter { get; } = new();
 
         // (ShooterId, MovementDirection) -> nearest in-range enemy squads. Previously the single
         // largest self-time cost: it rescanned every enemy for the same soldier multiple times per
