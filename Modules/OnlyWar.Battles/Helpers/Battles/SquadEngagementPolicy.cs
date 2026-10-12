@@ -104,7 +104,7 @@ namespace OnlyWar.Battles
                 primary,
                 profile);
             // One rate per decision, so every option and both potentials convert alike.
-            float enemyValueRate = EngagementCurrency.EnemyValueRate(squad, enemies);
+            float enemyValueRate = EngagementCurrency.EnemyValueRate;
             List<EngagementOptionEvaluation> evaluations = legal
                 .Select(kind => EvaluateEngagementOption(
                     squad,

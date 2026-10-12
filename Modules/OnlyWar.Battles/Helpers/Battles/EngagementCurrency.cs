@@ -9,28 +9,35 @@ namespace OnlyWar.Battles
     ///
     /// <para>WHY THERE ARE TWO CURRENCIES. Every removal estimate is priced in the battle value of
     /// the soldiers it removes: what we take from the enemy is in ENEMY battle value, what they take
-    /// from us is in OURS. Battle value is calibrated within a faction against the PDF reference, so
-    /// it says honestly which of our soldiers matters more and which of theirs -- but comparing a
-    /// sum in one currency with a sum in the other lets the ratio between the two factions' values
-    /// decide the option. Recalibrating Space Marines from about 9 to 86 per soldier (2026-10,
-    /// Design/Active/BattleValueCalibration.md §7.16) multiplied every term priced in Scout battle
-    /// value by ten against every term priced in the Neophyte Hybrids' own, and the cult started
-    /// running at Scouts it had been shooting at.</para>
+    /// from us is in OURS. Whether the two are one currency depends on whether battle value is
+    /// calibrated ACROSS factions.</para>
     ///
-    /// <para>THE RULE. A decision is scored in the planning squad's own currency. Every term priced
-    /// in enemy battle value is converted at <see cref="EnemyValueRate"/>: the planning squad's
-    /// mean soldier value over the opposing force's mean soldier value. One average enemy soldier is
-    /// worth one average soldier of ours -- headcount parity between the sides, the same footing
-    /// the withdrawal and morale shares stand on (see ForceShareScaleFreeTests) -- while relative
-    /// value WITHIN each side still decides which soldier, or which enemy squad, matters more.
-    /// Multiplying either side's battle values by a constant then multiplies every term of a score
-    /// by the same factor, and cannot change which option wins.</para>
+    /// <para>THE RULE (2026-10-12, product owner): battle value parity. One unit of enemy battle value
+    /// is worth one unit of ours, so <see cref="EnemyValueRate"/> is 1, and an exchange is valued by
+    /// the battle value each side loses. Battle value is now calibrated across factions from fights
+    /// (the gauntlet: what an exchange is worth is exactly what it measures), so a trade that the
+    /// calibration calls even is even to the planner.</para>
     ///
-    /// <para>Where two forces have the same mean soldier value the rate is exactly 1, so every
-    /// fixture built from one template family scores exactly as it did before the conversion.</para>
+    /// <para>HISTORY. From 2026-10-05 to 2026-10-12 the rate was headcount parity: the planning
+    /// squad's mean soldier value over the enemy's, so one average enemy soldier was worth one of
+    /// ours. It was introduced while cross-faction values were still uncalibrated -- recalibrating
+    /// Space Marines from about 9 to 86 per soldier had set the cult running at Scouts it had been
+    /// shooting at (Design/Active/BattleValueCalibration.md §7.16). Once values were calibrated it
+    /// made every cheap, numerous force refuse trades the calibration calls fair: an Insurrectionist
+    /// Mob valued a marine (100) as one Insurrectionist (5), so standing and running in were both
+    /// heavy losses, and ten Mobs stood 200 yards from one Tactical squad for 400 turns (§7.24).</para>
+    ///
+    /// <para><see cref="ScoreUnit"/> still quotes thresholds per average soldier of the planning
+    /// squad, so a fixed band means the same thing to a marine squad and a PDF one.</para>
     /// </summary>
     internal static class EngagementCurrency
     {
+        /// <summary>
+        /// Own battle value per unit of enemy battle value: multiply an enemy-priced term by this
+        /// to put it in the planning squad's currency. Battle value parity: 1.
+        /// </summary>
+        internal const float EnemyValueRate = 1f;
+
         /// <summary>
         /// Mean battle value of the able soldiers of <paramref name="squads"/>, in the
         /// <see cref="SquadPlanningServices.BattleValueOf"/> pricing the removal estimates use.
@@ -51,19 +58,8 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// Own battle value per unit of enemy battle value: multiply an enemy-priced term by this
-        /// to put it in the planning squad's currency. 1 when either side has no positive value,
-        /// since there is then nothing on that side to convert.
-        /// </summary>
-        internal static float EnemyValueRate(
-            BattleSquad squad,
-            IEnumerable<BattleSquad> enemies) =>
-            Rate(MeanSoldierValue([squad]), MeanSoldierValue(enemies));
-
-        /// <summary>
-        /// One average soldier of the currency a decision is scored in: the planning squad's own
-        /// mean soldier value. When the squad has no value, <see cref="EnemyValueRate"/> leaves
-        /// enemy terms unconverted, so the score is in enemy battle value and so is its unit.
+        /// One average soldier of the planning squad, the unit decision thresholds are quoted in.
+        /// When the squad has no value, the enemy's average soldier.
         /// </summary>
         internal static float ScoreUnit(
             BattleSquad squad,
@@ -72,13 +68,5 @@ namespace OnlyWar.Battles
             float own = MeanSoldierValue([squad]);
             return own > 0 ? own : MeanSoldierValue(enemies);
         }
-
-        internal static float Rate(float ownMeanValue, float enemyMeanValue) =>
-            float.IsFinite(ownMeanValue)
-                && float.IsFinite(enemyMeanValue)
-                && ownMeanValue > 0
-                && enemyMeanValue > 0
-                    ? ownMeanValue / enemyMeanValue
-                    : 1f;
     }
 }

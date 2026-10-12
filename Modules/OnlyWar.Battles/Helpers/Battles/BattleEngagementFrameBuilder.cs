@@ -489,10 +489,9 @@ internal static class BattleEngagementFrameBuilder
             ourSoldiers.Sum(soldier => Math.Max(1, soldier.EffectiveBattleValue)),
             ourSoldiers.Count,
             saturationRange,
-            // The outgoing curve prices removal in THEIR representative value and the incoming
-            // curve in OURS; the same mean values the two curves were built on convert one into
-            // the other (EngagementCurrency).
-            EngagementCurrency.Rate(us.BattleValue, them.BattleValue));
+            // The outgoing curve prices removal in THEIR battle value and the incoming curve in
+            // OURS; EngagementCurrency converts one into the other (battle value parity).
+            EngagementCurrency.EnemyValueRate);
     }
 
     // How close the two forces are when the shooting phase ends and the melee begins. Shared with
@@ -660,7 +659,7 @@ internal static class BattleEngagementFrameBuilder
     /// the share, a squad plans its proportional part of the kill, and takes its proportional part
     /// of the enemy's fire -- as if the enemy spreads its fire across the force by value.
     /// </summary>
-    private static float ForceShare(
+    internal static float ForceShare(
         BattleSquad squad,
         IReadOnlyCollection<BattleSquad> friendlySquads)
     {

@@ -49,6 +49,34 @@ internal static class TestModelFactory
         HumanBodyTemplate.Instance,
         DefaultUnarmedWeapon);
 
+    /// <summary>
+    /// <see cref="HumanSpecies"/> with a different median Constitution. The planner judges a
+    /// target's toughness by its species median (RemovalMath.PerceivedConstitution), so a fixture
+    /// that wants a tough or a frail target must give the species that toughness, not only the
+    /// soldier.
+    /// </summary>
+    public static Species HumanSpeciesWithConstitution(float constitution) => new(
+        1,
+        "Test Human",
+        Value(10),
+        Value(10),
+        Value(constitution),
+        Value(10),
+        Value(10),
+        Value(10),
+        Value(10),
+        Value(0),
+        Value(10),
+        Value(6),
+        Value(1),
+        1,
+        1,
+        0f,
+        0f,
+        SpeciesAbilities.None,
+        HumanBodyTemplate.Instance,
+        DefaultUnarmedWeapon);
+
     public static SoldierTemplate MarineTemplate { get; } = new(
         1,
         HumanSpecies,

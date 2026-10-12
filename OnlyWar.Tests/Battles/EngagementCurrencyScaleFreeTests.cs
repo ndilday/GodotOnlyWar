@@ -16,15 +16,19 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// The engagement option a squad chooses must not depend on how one side's battle value compares
-/// with the other's. Battle value is a currency internal to each side: it says which of OUR
-/// soldiers matters more, and which of THEIRS, but a recalibration that moves one faction's
-/// templates against another's (Space Marines went from about 9 to 86 per soldier in 2026-10 while
-/// PDF stayed at 5) must not by itself turn a hold into a charge. See
-/// <see cref="ForceShareScaleFreeTests"/> for the same property in withdrawal and morale.
+/// The engagement option a squad chooses must not depend on the SCALE of battle value: multiplying
+/// every soldier on both sides by the same factor changes no decision. Battle value is one
+/// currency across factions (battle value parity, EngagementCurrency, 2026-10-12), so the RATIO
+/// between the sides does decide -- a cheap force trades with an elite one at the calibrated
+/// rate -- but its unit must not.
+///
+/// <para>Until 2026-10-12 this asserted the opposite, stronger property: that ONE side's values at
+/// ten times could not change a decision (headcount parity, when cross-faction values were not
+/// yet calibrated). See <see cref="ForceShareScaleFreeTests"/> for withdrawal and morale, which
+/// still stand on headcount shares.</para>
 ///
 /// <para>Each frame is a real squad pair from the rules database, planned once at the database's
-/// values and again with one side's soldier templates at ten times their battle value. These
+/// values and again with both sides' soldier templates at ten times their battle value. These
 /// fixtures load rules without a sector, so a soldier's effective battle value is exactly its
 /// template's and the rescale is exact.</para>
 /// </summary>
@@ -75,7 +79,7 @@ public class EngagementCurrencyScaleFreeTests
     // The cult-against-scouts frames that RealTemplateEngagementTests guards.
     [InlineData(GenestealerCultFactionId, NeophyteHybridSquad, SpaceMarineFactionId, ScoutSquad, 150)]
     [InlineData(GenestealerCultFactionId, BroodBrotherWeaponSquad, SpaceMarineFactionId, ScoutSquad, 300)]
-    public void ChosenOption_DoesNotChangeWhenOneSidesBattleValueIsRescaled(
+    public void ChosenOption_DoesNotChangeWhenBothSidesBattleValueIsRescaledAlike(
         int plannerFactionId,
         int plannerTemplateId,
         int enemyFactionId,
@@ -91,7 +95,7 @@ public class EngagementCurrencyScaleFreeTests
             baseline.CandidateCount >= 2,
             "only one engagement option was offered. " + baseline.Description);
 
-        foreach ((int ownScale, int enemyScale) in new[] { (Scale, 1), (1, Scale) })
+        foreach ((int ownScale, int enemyScale) in new[] { (Scale, Scale) })
         {
             Outcome rescaled = Decide(
                 plannerFactionId, plannerTemplateId, enemyFactionId, enemyTemplateId, separation,

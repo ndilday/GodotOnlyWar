@@ -518,6 +518,7 @@ namespace OnlyWar.Battles
             int? lastFunctioningHand = functioningHands.Count == 1
                 ? functioningHands[0]
                 : null;
+            float constitution = PerceivedConstitution(target);
             List<TakeOutLocationTerm> terms = [];
             foreach (HitLocation location in body.HitLocations)
             {
@@ -579,7 +580,7 @@ namespace OnlyWar.Battles
                 // order, so the rescaled value is bit-identical to computing it here.
                 float unitPenetratingDamage = requiredRatio <= 0f
                     ? 0f
-                    : (target.Soldier.Constitution * requiredRatio)
+                    : (constitution * requiredRatio)
                         / Math.Max(0.0001f, template.WoundMultiplier)
                         + template.NaturalArmor;
                 // K_loc at the unit weapon. Range-independent: the numerator of requiredRoll
@@ -593,11 +594,27 @@ namespace OnlyWar.Battles
                     requiredRatio,
                     template.NaturalArmor,
                     0f,
-                    target.Soldier.Constitution / Math.Max(0.0001f, template.WoundMultiplier),
+                    constitution / Math.Max(0.0001f, template.WoundMultiplier),
                     WoundCounterValue(disableAt) - WoundCounterValue(location.Wounds.WoundTotal)));
             }
             return terms.ToArray();
         }
+
+        /// <summary>
+        /// A target's toughness as a shooter can judge it: the median Constitution of its species,
+        /// not the soldier's own (2026-10-12, product owner). What can be seen across a battlefield
+        /// is the species, the size (the hit chance reads each soldier's real size: a bigger target
+        /// may fairly draw more fire), the armour and the weapons -- an ork nob looks different from
+        /// a boy -- and the wounds a soldier has visibly taken, which this estimate still reads. It
+        /// cannot tell which marine of ten has the weakest constitution. Before, target selection
+        /// chose exactly that marine, and the engagement forecast then priced the whole fight at
+        /// the softest target's rate: autoguns against Tactical Marines were credited about 357 hits
+        /// a kill where the engine averages 629 (Design/Active/BattleValueCalibration.md §7.24).
+        /// The engine still resolves every wound with the soldier's real Constitution.
+        /// </summary>
+        internal static float PerceivedConstitution(BattleSoldier target) =>
+            target.Soldier.Template?.Species?.Constitution?.BaseValue
+                ?? target.Soldier.Constitution;
 
         /// <summary>
         /// One unit-weapon term put back into a specific weapon's currency:

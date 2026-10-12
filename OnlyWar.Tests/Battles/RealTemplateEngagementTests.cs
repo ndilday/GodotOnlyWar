@@ -355,9 +355,10 @@ public class RealTemplateEngagementTests
     /// effective engagement range -- where the Close option walks to -- priced the WHOLE marine
     /// squad firing at that one Mob, so every range was a loss, least at maximum range, and an
     /// advance was never priced. A squad now takes its share of the enemy's fire there, as the
-    /// opening range already did. One Mob alone still stands off; one of a host wants point blank.
-    /// (Twenty here: these fixture Mobs are raised with a static RNG and shoot weaker than the
-    /// duel's, so one of ten only breaks even at point blank.)
+    /// opening range already did. Against five Tactical squads one Mob alone loses at every range
+    /// and stands off; one of twenty wants point blank. (Five squads since battle value parity,
+    /// 2026-10-12: valued in battle value, one Mob at point blank out-trades a single Tactical
+    /// squad even alone.)
     /// </summary>
     [Fact]
     public void OneMobOfAHost_WantsPointBlankAgainstMarinesWhereAMobAloneStandsOff()
@@ -371,21 +372,26 @@ public class RealTemplateEngagementTests
         List<BattleSquad> mobs = Enumerable.Range(0, 20)
             .Select(_ => CreateSquad(insurrectionists, InsurrectionistMobSquadTemplateId, entityIds))
             .ToList();
-        BattleSquad tactical = CreateSquad(marines, TacticalSquadTemplateId, entityIds);
+        List<BattleSquad> tacticals = Enumerable.Range(0, 5)
+            .Select(_ => CreateSquad(marines, TacticalSquadTemplateId, entityIds))
+            .ToList();
         BattleGridManager grid = new();
         for (int index = 0; index < mobs.Count; index++)
         {
             PlaceBlock(grid, mobs[index], side: true, x: 4, y: index * 10);
         }
-        PlaceLine(grid, tactical, side: false, x: 204);
+        for (int index = 0; index < tacticals.Count; index++)
+        {
+            PlaceBlock(grid, tacticals[index], side: false, x: 204, y: index * 10);
+        }
 
-        float alone = BattleEngagementFrameBuilder.Build([mobs[0]], [tactical])
+        float alone = BattleEngagementFrameBuilder.Build([mobs[0]], tacticals)
             .Profiles[mobs[0].Id].EffectiveEngagementRange;
-        float oneOfHost = BattleEngagementFrameBuilder.Build(mobs, [tactical])
+        float oneOfHost = BattleEngagementFrameBuilder.Build(mobs, tacticals)
             .Profiles[mobs[0].Id].EffectiveEngagementRange;
 
         var curve = BattleEngagementFrameBuilder.DescribeEngagementCurve(
-            mobs[0], [tactical], 1000, [1, 10, 50, 200, 823], mobs);
+            mobs[0], tacticals, 1000, [1, 10, 50, 200, 823], mobs);
         string described = curve is { } c
             ? string.Join("; ", c.Samples.Select(s => $"r={s.Range} out={s.Outgoing:F3} in={s.Incoming:F3}"))
             : "none";

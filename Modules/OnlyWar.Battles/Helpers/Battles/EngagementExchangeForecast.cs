@@ -197,12 +197,32 @@ namespace OnlyWar.Battles
 
         internal readonly record struct Result(float EnemyValueRemoved, float OwnValueLost);
 
+        /// <summary>
+        /// Diagnostics: one turn of a forecast, summed over its lanes (range is the first lane's at
+        /// the turn's end). Rates are per turn before survival and strength scaling; the flows are
+        /// what the turn actually moved; hazards are this turn's break chances.
+        /// </summary>
+        internal readonly record struct TurnTrace(
+            int Turn,
+            float Range,
+            float OutRate,
+            float InRate,
+            float Outgoing,
+            float Incoming,
+            float OwnRemaining,
+            float OwnSurvival,
+            float OwnHazard,
+            float EnemyRemaining,
+            float EnemySurvival,
+            float EnemyHazard);
+
         internal static Result Run(
             float ownPool,
             SquadBreakProfile own,
             IReadOnlyList<ExchangeLane> lanes,
             float horizonTurns,
-            float turnDiscount = TurnDiscount)
+            float turnDiscount = TurnDiscount,
+            Action<TurnTrace> trace = null)
         {
             if (lanes == null || lanes.Count == 0 || ownPool <= 0
                 || !float.IsFinite(horizonTurns) || horizonTurns <= 0)
@@ -244,6 +264,10 @@ namespace OnlyWar.Battles
                 float incoming = 0;
                 float outgoingTotal = 0;
                 bool rangeMoved = false;
+                float traceOutRate = 0;
+                float traceInRate = 0;
+                float traceOwnHazard = 0;
+                float traceEnemyHazard = 0;
                 for (int index = 0; index < count; index++)
                 {
                     ExchangeLane lane = lanes[index];
@@ -254,6 +278,8 @@ namespace OnlyWar.Battles
                     }
 
                     (float outRate, float inRate, float nextRange) = Step(lane, range[index]);
+                    traceOutRate += outRate;
+                    traceInRate += inRate;
                     rangeMoved |= Math.Abs(nextRange - range[index]) > RangeEpsilon;
                     range[index] = nextRange;
 
@@ -311,6 +337,7 @@ namespace OnlyWar.Battles
                         disadvantage);
                     lost += discount * ownSurvival * hazard * ownRemaining;
                     ownSurvival *= 1 - hazard;
+                    traceOwnHazard = hazard;
                 }
 
                 for (int index = 0; index < count; index++)
@@ -333,10 +360,25 @@ namespace OnlyWar.Battles
                         removed += discount * ownSurvival * survival[index] * hazard
                             * remaining[index];
                         survival[index] *= 1 - hazard;
+                        traceEnemyHazard = Math.Max(traceEnemyHazard, hazard);
                     }
                     previousLoss[index] = outgoing[index];
                 }
                 ownPreviousLoss = ownLossThisTurn;
+                if (trace != null)
+                {
+                    float enemySurvival = 0;
+                    for (int index = 0; index < count; index++)
+                    {
+                        enemySurvival += lanesPool > 0
+                            ? survival[index] * Math.Max(0, lanes[index].EnemyPool) / lanesPool
+                            : 0;
+                    }
+                    trace(new TurnTrace(
+                        turn, range[0], traceOutRate, traceInRate, outgoingTotal, ownLoss,
+                        ownRemaining, ownSurvival, traceOwnHazard, lanesAfter, enemySurvival,
+                        traceEnemyHazard));
+                }
             }
 
             return new Result(removed, lost);

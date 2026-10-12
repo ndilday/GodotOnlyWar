@@ -24,7 +24,9 @@ public class GradedRemovalTests
     {
         SoldierTemplate template = new(
             30_000 + soldierId,
-            TestModelFactory.HumanSpecies,
+            // The species median, because that is the toughness the planner reads
+            // (RemovalMath.PerceivedConstitution); the soldier's own is set below as well.
+            TestModelFactory.HumanSpeciesWithConstitution(constitution),
             $"{name} Template",
             1,
             1,

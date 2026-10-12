@@ -181,6 +181,17 @@ namespace OnlyWar.Battles
             List<ExchangeLane> stay = [];
             List<ExchangeLane> close = [];
             bool anyApproach = false;
+            // The squad fights its share of each enemy, not all of it (2026-10-11). Each lane's
+            // enemy pool is the enemy's battle value times this squad's share of its own force
+            // (BattleEngagementFrameBuilder.ForceShare, the same share the opening range and the
+            // effective engagement range use), so the enemy is worn down -- and its fire fades and
+            // its morale breaks -- at the pace the whole force's fire would set, as if the other
+            // squads fight as this one does. Until then each squad forecast the enemy worn down by
+            // its own fire alone: one Insurrectionist Mob of ten saw a 200-yard run at a Tactical
+            // squad as a loss, though the ten together out-shoot it at point blank, and the Mobs
+            // stood and lost a 400-turn firefight. Removal is capped at the same share: the squad's
+            // proportional part of the kill. A squad that fights alone has a share of 1.
+            float forceShare = BattleEngagementFrameBuilder.ForceShare(state.Squad, state.FriendlySquads);
             foreach (BattleSquad enemy in (state.Enemies ?? []).OrderBy(candidate => candidate.Id))
             {
                 if (!state.Profiles.TryGetValue(enemy.Id, out BattleSquadCapabilityProfile opposing)
@@ -285,7 +296,7 @@ namespace OnlyWar.Battles
                     sample => _exchange.EvaluateSustainedIncomingRate(
                         state.Squad, enemy, state.Profile, state.Frames, sample));
                 ExchangeLane standHere = new(
-                    opposing.TotalAbleBattleValue,
+                    opposing.TotalAbleBattleValue * forceShare,
                     BreakProfileOf(enemy, state.Enemies),
                     range,
                     false,
@@ -356,10 +367,67 @@ namespace OnlyWar.Battles
             float stayValue = Value(stay);
             if (!anyApproach)
             {
+                TraceForecast(state, "stay", stay, ownPool, ownBreak, expectedExchangeTurns, rate);
                 return (stayValue, 0);
             }
             float closeValue = Value(close);
+            TraceForecast(state, "stay", stay, ownPool, ownBreak, expectedExchangeTurns, rate);
+            TraceForecast(state, "close", close, ownPool, ownBreak, expectedExchangeTurns, rate);
             return (Math.Max(stayValue, closeValue), Math.Max(0, closeValue - stayValue));
+        }
+
+        /// <summary>
+        /// Diagnostics only (RateTableDiagnostics): when set, the root state's forecasts for the
+        /// squad <see cref="ForecastTraceSquadId"/> are written here turn by turn. A root state is
+        /// one with no planned actions, as the policy builds it before projecting options.
+        /// </summary>
+        [ThreadStatic]
+        internal static Action<string> ForecastTraceSink;
+
+        [ThreadStatic]
+        internal static int ForecastTraceSquadId;
+
+        private static void TraceForecast(
+            State state,
+            string name,
+            IReadOnlyList<ExchangeLane> lanes,
+            float ownPool,
+            SquadBreakProfile ownBreak,
+            float horizon,
+            float rate)
+        {
+            Action<string> sink = ForecastTraceSink;
+            if (sink == null || state.Squad.Id != ForecastTraceSquadId || state.Actions != null)
+            {
+                return;
+            }
+            foreach (ExchangeLane lane in lanes)
+            {
+                sink(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"  {name} lane: enemyPool={lane.EnemyPool:F1} start={lane.StartRange:F1} "
+                    + $"moves={lane.Moves} stop={lane.StopRange:F1} movingClosing={lane.MovingClosing:F2} "
+                    + $"standingClosing={lane.StandingClosing:F2} contact={lane.ContactPossible} "
+                    + $"contactOut={lane.ContactOutgoing:F2} contactIn={lane.ContactIncoming:F2}"));
+            }
+            EngagementExchangeForecast.Result result = EngagementExchangeForecast.Run(
+                ownPool, ownBreak, lanes, horizon,
+                trace: turn =>
+                {
+                    if (turn.Turn < 60 || turn.Turn % 10 == 0)
+                    {
+                        sink(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                            $"    {name} t={turn.Turn,3} r={turn.Range,6:F1} outRate={turn.OutRate,7:F3} "
+                            + $"inRate={turn.InRate,7:F3} out={turn.Outgoing,7:F3} in={turn.Incoming,7:F3} "
+                            + $"own={turn.OwnRemaining,7:F1} ownSurv={turn.OwnSurvival:F3} "
+                            + $"ownHaz={turn.OwnHazard:F3} enemy={turn.EnemyRemaining,7:F1} "
+                            + $"enemySurv={turn.EnemySurvival:F3} enemyHaz={turn.EnemyHazard:F3}"));
+                    }
+                });
+            sink(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"  {name} TOTAL: removed={result.EnemyValueRemoved:F2} (x rate {rate:F3} = "
+                + $"{rate * result.EnemyValueRemoved:F2}) lost={result.OwnValueLost:F2} "
+                + $"value={rate * result.EnemyValueRemoved - result.OwnValueLost:F2} "
+                + $"ownPool={ownPool:F1} horizon={horizon:F1}"));
         }
 
         /// <summary>
