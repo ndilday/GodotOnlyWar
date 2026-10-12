@@ -286,7 +286,7 @@ namespace OnlyWar.Battles
         /// turns of aim for most soldiers, so Neophyte Hybrids were credited 13.4 battle value a
         /// turn and delivered 9.7, and Shoota Boyz were credited 1.6 and delivered 3.9. The
         /// planner then believed the Hybrids out-shot the Orks several times over, and they crept
-        /// forward under fire without shooting (Design/Active/BattleValueCalibration.md, 7.21).</para>
+        /// forward under fire without shooting (Design/Reference/BattleLogic.md §5.3).</para>
         ///
         /// <para>The plans are captured at the reference range and rescaled, so the choice can
         /// change with range: closer in, a shorter aim or firing every turn usually wins.</para>

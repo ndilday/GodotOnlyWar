@@ -54,9 +54,25 @@ distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is
 §4.28) was implemented and checked in Godot, distilled into TDD §6.14, and deleted on 2026-09-30.
 Active design work currently retained here is:
 
-- `RangedCombatFollowUps.md` — narrow ranged-combat backlog described below.
 - `CyberneticRepair.md` — Techmarine repair of cybernetic parts (weekly time budget, requisition
   cost, built-in armor and constitution). Decisions settled 2026-10-03; no code yet.
+
+**Audited 2026-10-12.** Two plans were removed:
+
+- `RangedCombatFollowUps.md` was deleted. Nothing in it was built, but every item was blocked or
+  duplicated elsewhere: krak grenades under PRD §5.8 *Vehicles*, cone/blast terrain under *Battle
+  Visuals Phase 3*, the complete pursuit fixture under *Pursuit Overwatch / Advance*. The three items
+  tracked nowhere else (line of fire through friendly formations, Space Marine launchers, the
+  pursuit preparation-window approximation) moved to PRD §5.8 *Ranged combat follow-ups*. Its
+  indifference-floor item was stale (the floor and the BV scale had both changed) and was dropped.
+- `BattleValueCalibration.md` (never committed) was deleted. It had grown into a 1,600-line run log
+  of the October 2026 Battle Value calibration. Tier 1 (a measured value for every template) is
+  done. The method, weighting rules and findings are in `Reference/BattleLogic.md` §4; the planner
+  changes made during the work are in `Reference/BattleLogic.md` §5 and §8 and TDD §6.6; ambush
+  sizing and reorganization are in TDD §6.2; the player-facing rules are in PRD §4.14; tier 2 and
+  the open planner questions are in PRD §5.8; tool usage, the standard gauntlet command and the
+  harness placement finding are in `Tools/OnlyWar.Diagnostics/README.md`. Run-by-run fits
+  (`full1`–`full8`) were not kept: each was superseded by the next.
 
 Audited 2026-08-16 against the code. The equipment/ammunition foundation is implemented and its
 active plan was removed under the promotion rule; the narrow pooled `WeaponSet` compatibility
@@ -67,9 +83,7 @@ engagement-scoring derivations, tactical combat decisions, and strategic NPC-com
 were previously split across several phase plans. The remaining live battle work is intentionally
 narrow:
 
-- `RangedCombatFollowUps.md` — **backlog** for friendly line-of-fire tracing, krak grenades,
-  launcher expansion, and template/terrain interaction gated on Battle Visuals Phase 3. Closed
-  scatter-pricing and delivery-confidence items remain recorded there only as short decisions.
+- Ranged follow-ups — now in PRD §5.8 (see the 2026-10-12 audit above).
 - Calibration/measurement debt that is not a new player-facing rules plan — real transition
   telescoping and a few named scoring seams. **The former pointer to "TDD §8.16" was stale:** no such
   section exists (§8 stops at 8.4) and §8 explicitly disclaims being a backlog. Residual calibration
@@ -87,7 +101,8 @@ the architecture in TDD §6.6. It was **not** promoted to `Reference/`: the only
 to retain was its four rejected turn orders, and four bullets fold into TDD §6.6 without making it
 unreadable — so under the citation test a `Reference/` file holding them would have earned no place.
 Its one residual, recalibrating `MeleeClosingFactor` now that closing costs an extra turn, moved to
-PRD §5.8 before the file was deleted. Everything else in it was scoping, corrections to that scoping,
+PRD §5.8 before the file was deleted (and became moot on 2026-10-12, when stored Battle Value moved
+from the calculator to fight measurements). Everything else in it was scoping, corrections to that scoping,
 and test counts, which the rule names explicitly as delete-on-promotion.
 
 `UnifiedForceAllocation.md` was implemented, verified in play, and **promoted and deleted on
@@ -119,8 +134,7 @@ motive-speed curve in the first, and the resolved detachment sub-questions plus 
 trap in the second. The administrative-formation and character-as-battle-element architecture that
 superseded the organizational half of the second is now distilled into `OnlyWar_TDD.md`; its open
 join/leave governance question remains in PRD §5.8. Their other residual items did **not** move with
-them: stance/prone combat is in PRD §5.8, and the active ranged backlog remains in
-`RangedCombatFollowUps.md`.
+them: stance/prone combat is in PRD §5.8, and so, since 2026-10-12, is the ranged backlog.
 
 Implemented mission scheduling, engagement range and posture, squad engagement planning, take-out-probability combat scoring,
 evasion/burrowing, morale, withdrawal/pursuit, scatter-aware targeting, civil stability, strategic NPC

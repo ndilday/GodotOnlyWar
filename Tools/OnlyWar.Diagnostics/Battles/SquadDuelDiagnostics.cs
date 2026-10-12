@@ -347,7 +347,7 @@ public class SquadDuelDiagnostics
     /// on the code (the gauntlet's) stop reusing battles fought under the old setup.
     /// 1: original hand-rolled placement, which put the near side's squad leaders in the rear column
     ///    and the far side's in the front; identical squads gave the near (Attacker) slot 53-60% of
-    ///    the wins (Design/Active/BattleValueCalibration.md, 7.8).
+    ///    the wins (Tools/OnlyWar.Diagnostics/README.md, "Placement").
     /// 2: the same placement with the far side's columns mirrored (2026-10-04).
     /// 3: the game's AnnihilationPlacer, as meeting engagements use (2026-10-04).
     /// </summary>

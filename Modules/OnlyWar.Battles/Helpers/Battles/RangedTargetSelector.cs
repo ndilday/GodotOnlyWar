@@ -329,7 +329,7 @@ namespace OnlyWar.Battles
         /// 2026-10-09 readiness was the net value: the round charge took about half of it, so a
         /// standing turn was credited half what the forecast said it was worth, and every step
         /// toward the enemy looked cheap (Neophyte Hybrids crept toward Shoota Boyz without firing;
-        /// Design/Active/BattleValueCalibration.md, 7.21).</para>
+        /// Design/Reference/BattleLogic.md §5.3).</para>
         /// <param name="ShootNowShot">The shot to fire now, its burst chosen at the decision's
         /// common round price; fire this one, not the shot passed in, when <see cref="ShootNow"/>.
         /// </param>

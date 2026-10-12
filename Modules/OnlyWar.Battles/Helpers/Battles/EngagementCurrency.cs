@@ -22,10 +22,10 @@ namespace OnlyWar.Battles
     /// squad's mean soldier value over the enemy's, so one average enemy soldier was worth one of
     /// ours. It was introduced while cross-faction values were still uncalibrated -- recalibrating
     /// Space Marines from about 9 to 86 per soldier had set the cult running at Scouts it had been
-    /// shooting at (Design/Active/BattleValueCalibration.md §7.16). Once values were calibrated it
+    /// shooting at (Design/Reference/BattleLogic.md §5.2). Once values were calibrated it
     /// made every cheap, numerous force refuse trades the calibration calls fair: an Insurrectionist
     /// Mob valued a marine (100) as one Insurrectionist (5), so standing and running in were both
-    /// heavy losses, and ten Mobs stood 200 yards from one Tactical squad for 400 turns (§7.24).</para>
+    /// heavy losses, and ten Mobs stood 200 yards from one Tactical squad for 400 turns.</para>
     ///
     /// <para><see cref="ScoreUnit"/> still quotes thresholds per average soldier of the planning
     /// squad, so a fixed band means the same thing to a marine squad and a PDF one.</para>

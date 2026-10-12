@@ -7,8 +7,8 @@ run by default are the fitter's unit tests (`ProbitFitTests`, well under a secon
 
 They share two files with the test suite by link rather than copy: the rules-database locator
 (`OnlyWar.Tests/Fixtures/RulesDatabaseFixture.cs`) and the `SharedState` collection
-(`OnlyWar.Tests/SharedStateCollection.cs`). Design background and results:
-`Design/Active/BattleValueCalibration.md`.
+(`OnlyWar.Tests/SharedStateCollection.cs`). Calibration method and the rules it follows:
+`Design/Reference/BattleLogic.md` §4; open calibration work: `OnlyWar_PRD.md` §5.8.
 
 Run from the repository root, for example:
 
@@ -93,6 +93,35 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   and kept for reference.
 
 A full gauntlet is several hours of battles; run it in a terminal while the machine is idle.
+
+The standard core gauntlet (seven entries against five references, 200 yards, Aggressive, roles
+alternating). Set `GAUNTLET_PRIOR` to the previous run's fitted values and give each run a new tag:
+
+```powershell
+dotnet test Tools\OnlyWar.Diagnostics --no-build --nologo -v q --filter "FullyQualifiedName~SquadGauntletDiagnostics.Gauntlet_FightsAndFits" --logger trx -e RUN_GAUNTLET=1 -e GAUNTLET_TAG=full9 -e "GAUNTLET_ENTRIES=pdf=34|tac=1|hyb=26|ork=39|gaunt=18|gs=16|carn=29" -e "GAUNTLET_REFS=pdf,ork,tac,gs,carn" -e "GAUNTLET_PRIOR=pdf=5|tac=84.2|hyb=7.33|ork=9.43|gaunt=11.08|gs=24.22|carn=577" -e GAUNTLET_REFINE=0 -e GAUNTLET_CAP=300 -e DUEL_WORKERS=8
+```
+
+New templates are measured in faction stages: each entry only against references from other
+factions (the Cult and the Tyranids count as one side), so stages share battles through the cache.
+
+## Placement
+
+`SquadDuelDiagnostics.HarnessVersion` 1 rolled its own placement, which put the near side's squad
+leader in the rear column and the far side's in the front, and stacked a side's squads in a column the
+game never produces. Mirror battles (identical squads, 800 battles) gave the Attacker slot 56.5% of
+the wins (z ≈ 3.7). Version 3 calls the game's `AnnihilationPlacer`; the same mirrors give 50.0%, and
+the gauntlet's attacker-role coefficient has come out at zero in every run since. Results from before
+version 3 carry about ×1.15 in force ratio toward side A.
+
+## Measurement caveats
+
+- The ladder's probe cache has no code key; delete `probes-*.tsv` after any battle-relevant code
+  change. The gauntlet's code hash is the byte hash of `OnlyWar.Battles.dll`, which is too strict (an
+  attribute changes it) and too loose (it ignores `Runtime` and `Domain`).
+- All calibration runs use one start range (200 yards), open ground and no line of sight. Terrain
+  will need a rerun.
+- Small forces behave differently from large ones; measure with full-size squads. A side of one to
+  three monsters is close to all-or-nothing (probit σ about 0.75 against 0.1–0.2 for infantry).
 
 ## Pursuit scale probes
 

@@ -668,8 +668,51 @@ Before this rework every soldier got exactly one melee attack action per turn, s
 - **Unarmed combat.** Soldiers without a melee weapon fight with their species' data-selected default unarmed weapon for both attack and defense; that weapon's `RelatedSkill` determines the skill used. The current Space Marine species selects the Fist/Fist-skill profile, while the other shipped species select the stat-identical Fist/Generic-Melee profile to preserve their current training and balance. Neither profile is Astartes- or faction-restricted—an ordinary-human species can select either in rules data. Basic unarmed-combat competence is data, not a code fallback: every Space Marine template carries a point of Fist MOS training, so a marine caught weaponless fights trained—below his blade-work, above helpless. A future refinement may replace bare fists with a default *close combat weapon* (knife/bayonet).
 - **Non-goal.** AttackSpeed affects attack count only; melee *defense* remains a function of skill, evasion, stance, and parry — a fast creature is not additionally harder to hit.
 - **Data fixes.** The Ork Warboss's `AttackSpeed` was 3.06 — equal to his Size, a mislinked attribute template — and his default weapon set was the Space Marine "Bolter + Bolt Pistol". Both are corrected: AttackSpeed 30, a new "Slugga + Big Choppa" weapon set, and Generic Melee/Ranged training.
-- **Balance targets.** Tabletop lethality is a guide, not a spec: base marines are deliberately "two-wound" soldiers where tabletop made them one-wound. Concretely: a lone Hormagaunt loses to a marine well over 95% of the time, and one-shot marine kills are rare (lucky head hits only); a Genestealer is roughly even money against a marine in melee; a Carnifex defeats ~8–10 PDF troopers head-to-head.
-- **BattleValue recompute.** `SoldierTemplate.BattleValue` is recomputed from the engine-math valuation model (per-template offense × durability against a reference threat panel, BV = k·√(O×D), implemented in `Helpers/Battles/BattleValueCalculator.cs`), and the strategic constants calibrated in BV-space (`StrategicCombatRules` anchors, mass-combat floor, NPC recon cap, §4.24 invasion budgets) track the recomputed scale. Player-soldier BV deliberately remains the template guideline rather than a live skill-tracking value: enemies size their responses by *estimating* the player force, not by concrete data on every marine, so a veteran chapter over-performs its paper strength by design.
+- **Balance targets.** Tabletop lethality is a guide, not a spec: base marines are deliberately "two-wound" soldiers where tabletop made them one-wound. Concretely: a lone Hormagaunt loses to a marine well over 95% of the time, and one-shot marine kills are rare (lucky head hits only); a Genestealer is roughly even money against a marine in melee. (The 0.7 target "a Carnifex defeats ~8–10 PDF troopers" no longer holds: in measured fights a Carnifex beats hundreds of autogun-armed PDF, because small arms rarely beat its armour; see *Battle Value calibration*.)
+- **BattleValue recompute (0.7; superseded).** The 0.7 rework recomputed `SoldierTemplate.BattleValue` from the engine-math valuation model. Since October 2026 the values are measured from fights instead (*Battle Value calibration* below). Player-soldier BV deliberately remains the template guideline rather than a live skill-tracking value: enemies size their responses by *estimating* the player force, not by concrete data on every marine, so a veteran chapter over-performs its paper strength by design.
+
+**Battle Value calibration (October 2026, implemented)**
+
+Battle Value is the number that turns population into military force and sizes generated battles, so
+it must say how strong a soldier really is in a fight. The formula-derived values were off by up to
+×20 (a Tactical Marine was 9 PDF-trooper units where fights put him near 90). The values are now set
+from fights.
+
+- **Measured, not derived.** Every soldier template is measured at full squad size against reference
+  squads from other factions over many seeded battles, and its value is fitted with the same model
+  the strategic resolver uses. The PDF trooper stays at 5; values are integers in the rules database.
+- **Weighting.** An enemy template's value weighs its results against PDF and against Tactical
+  Marines equally, because those are the forces it meets. A lone monster that beats any PDF force
+  the tools can field is weighted against Tactical Marines and Orks instead. The product owner sets
+  the value of the large monsters (Carnifex, Hive Tyrant, Tyrant Guard, Warboss) directly, guided by
+  their results against marines, because player experience matters most there.
+- **Squad leaders** carry their squad's per-soldier value, so enemy fire does not all go to the
+  Sergeant.
+- **The AI does not compare Battle Value across sides to decide to flee.** Withdrawal and rout use
+  each side's share of its own strength lost, so a small elite force does not panic before contact
+  merely because it is outnumbered; stress starts when it loses a larger share than the enemy.
+- **One currency in the planner.** A squad values an exchange by the Battle Value each side loses, at
+  parity across factions. A cheap, numerous force will trade bodies for an elite enemy when the
+  calibrated values call the trade fair.
+- **Known limit.** One number per template cannot express matchups: marines do better than their
+  value against PDF and hybrids and worse against Orks and Genestealers, and a Carnifex is about ten
+  times stronger against light weapons than against Orks. Matchup-aware battle sizing is backlog
+  (§5.8).
+
+**Engagement behaviour rules (October 2026).** These are player-visible consequences of planner
+fixes made during calibration:
+
+- A squad in weapon reach holds by default; it does not drift backward from a fight it is losing.
+- A melee-only squad that must close charges; it never walks or jogs forward under fire.
+- A squad expects an enemy shooter to stand and aim, not to keep moving.
+- Soldiers judge an enemy's toughness from what they can see (species, size, armour, weapons,
+  visible wounds), not from each soldier's hidden Constitution.
+- Soldiers save ammunition only when the fight in front of them is longer than their pouches.
+
+**Ambush sizing (October 2026, implemented).** An ambush catches a share of the enemy faction's
+deployed force in the region, from 1% to all of it; a better intelligence result finds a larger part
+of the enemy's main body. The mission shows a recommended force in full-strength Tactical Squads; it
+is a general statement and does not count the squads in the region.
 
 **Template Weapons — Flamers (0.7, implemented)**
 
@@ -689,7 +732,7 @@ Flamer-type weapons were previously modeled as ordinary single-target guns diffe
 
 **Template Weapons — Grenades (0.7.1, implemented)**
 
-Blast templates extend the cone-template machinery with a second delivery mode: a circular blast of `AreaRadius` centered on an **impact point**, delivered either **thrown** (frag grenades) or **launched** (the Grenade Launcher, currently a Genestealer Cult weapon). The implementation architecture is documented in TDD §6.6; remaining follow-ups are tracked in `Design/Active/RangedCombatFollowUps.md`.
+Blast templates extend the cone-template machinery with a second delivery mode: a circular blast of `AreaRadius` centered on an **impact point**, delivered either **thrown** (frag grenades) or **launched** (the Grenade Launcher, currently a Genestealer Cult weapon). The implementation architecture is documented in TDD §6.6; remaining follow-ups are tracked in §5.8 (*Ranged combat follow-ups*, *Vehicles*, *Battle Visuals Phase 3*).
 
 - **Margin-driven scatter.** The throw/launch makes the standard normal-curve skill check. A success lands the grenade on the aimed cell; a failure deviates the impact point by a distance proportional to the margin of failure, in a random direction — since the underlying roll is already a normal curve, deviation distance is naturally half-normal. Scatter *replaces* the near-miss/stray-shot rule for blasts; there is no separate mishap mechanic. Range and movement (`Bulk`) modify the check; target size, `RangedEvasion`, aim, and rate-of-fire modifiers do not (a grenade is thrown at a spot, not a person, and blasts cannot be aimed).
 - **Auto-hit inside the blast, with realistic falloff.** Everyone whose footprint falls inside the circle — friend, foe, and **the thrower himself** (unlike the flamer's shooter exclusion, danger-close is legal and self-inflicted casualties are possible) — is struck, with the damage roll scaled down quadratically from full at the impact center to zero at the template rim. Armor and wound resolution are otherwise unchanged per victim.
@@ -699,7 +742,7 @@ Blast templates extend the cone-template machinery with a second delivery mode: 
 - **Ubiquitous via weapon sets, no UI.** Weapon sets gain a third ranged slot for the grenade; all Space Marine sets, the Imperial/PDF sets, and the human-tier Genestealer Cult sets carry frag grenades. No squad-screen changes.
 - **Frag only.** Krak grenades (thrown single-target anti-armor, not a blast template) are deferred to the Vehicles backlog item (§5.8), where they matter.
 - **Decision logic.** The planner scores a throw exactly like a flamer firing line — expected enemy BV removed (falloff-scaled) minus expected friendly BV lost, with the thrower's own expected loss included — and throws only when that beats the soldier's best conventional action, keeping lone targets on the rifle and clusters on the grenade.
-- **Battle Value.** Blast weapons are valued by a sibling of the cone-template branch: auto-hit density-scaled victims per blast (same bodies-per-template panel densities as the flamer — the 6m circle's area roughly matches the cone's, and centered placement offsets the cone's raking reach), an average quadratic-falloff factor (`BlastAverageFalloffFactor` 0.5, splitting the range between the uniform-disc average of 1/6 and a centered hit at 1.0 — placement quality and the throw's skill roll fold into this one tunable), the shots-per-magazine/reload duty cycle (frag ½, launcher ⅘), and Strength-scaled thrown reach in the standoff term. The grenade is valued as a *sidearm*: per panel profile the ranged rate is max(primary, grenade), never the sum, matching the planner's throw-or-shoot choice. Regeneration confirmed the model's verdict that a frag grenade on a soldier with a working gun adds real but sub-rounding value — **no shipped `SoldierTemplate.BattleValue` changed** (the Grenade Launcher's new nonzero valuation landed the Brood Brother exactly on its already-stored 7), and the `StrategicCombatRules` anchors are untouched (PDF Trooper regenerates to exactly 5).
+- **Battle Value.** Blast weapons are valued by a sibling of the cone-template branch: auto-hit density-scaled victims per blast (same bodies-per-template panel densities as the flamer — the 6m circle's area roughly matches the cone's, and centered placement offsets the cone's raking reach), an average quadratic-falloff factor (`BlastAverageFalloffFactor` 0.5, splitting the range between the uniform-disc average of 1/6 and a centered hit at 1.0 — placement quality and the throw's skill roll fold into this one tunable), the shots-per-magazine/reload duty cycle (frag ½, launcher ⅘), and Strength-scaled thrown reach in the standoff term. The grenade is valued as a *sidearm*: per panel profile the ranged rate is max(primary, grenade), never the sum, matching the planner's throw-or-shoot choice. Regeneration confirmed the model's verdict that a frag grenade on a soldier with a working gun adds real but sub-rounding value — **no shipped `SoldierTemplate.BattleValue` changed** (the Grenade Launcher's new nonzero valuation landed the Brood Brother exactly on its already-stored 7), and PDF Trooper regenerated to exactly 5. (Stored values have since been measured from fights; see *Battle Value calibration*.)
 
 **Wounds in Battle**
 - All wound rules from the Soldier Lifecycle apply during battle.
@@ -759,7 +802,7 @@ Blast templates extend the cone-template machinery with a second delivery mode: 
 
 **Construction**
 - Remaining spare troops (after offensive commitments) are converted to build points.
-- Factions spend build points on regional reorganization or infrastructure. Reorganization transfers a fixed amount of surviving military BV from the disorganized pool into the organized pool; Listening Posts feed defensive regional intel, Entrenchment increases defensive strength, and Anti-Air resists aerial assaults.
+- Factions spend build points on regional reorganization or infrastructure. Reorganization transfers surviving military BV from the disorganized pool into the organized pool, each build point reforming 1% of the current disorganized pool; Listening Posts feed defensive regional intel, Entrenchment increases defensive strength, and Anti-Air resists aerial assaults.
 - Each upgrade tier costs exponentially more than the previous.
 
 **Patrol**
@@ -1218,7 +1261,7 @@ behavior changed.
   - **Winnable by construction.** Combined with the stranded-fleet premise (below), the swarm cannot grow without limit; the campaign is a race to break it before it has drawn down enough of the world to become unstoppable. Longer pre-arrival delays therefore mean both a larger swarm *and* a more blighted world to inherit.
 
 **Tyranid Troop AI**
-- The mobile combat force is the region's concrete `OrganizedMilitaryStrength` pool. The disorganized remainder still exists and can be caught in an ambush; after an assault destroys the organized defence, continuing undefended assault days destroy disorganized BV at a tunable multiple of surviving attacker BV. Reorganization explicitly transfers BV back into the organized pool rather than applying a percentage multiplier.
+- The mobile combat force is the region's concrete `OrganizedMilitaryStrength` pool. The disorganized remainder still exists and can be caught in an ambush; after an assault destroys the organized defence, continuing undefended assault days destroy disorganized BV at a tunable multiple of surviving attacker BV. Reorganization explicitly transfers BV back into the organized pool (a share of the disorganized pool per effort point) rather than applying a percentage multiplier to total strength.
 - Each turn the AI allocates `organizedTroops` by priority. This is **one budget**, drawn down in order: every step spends from the same per-region residual, so a swarm committed to defending and attacking has correspondingly less left to eat with.
   1. **Fight** — commit force to any in-region military threat (a PDF garrison, or a Cult fighting the swarm); the swarm is drawn to resistance first. This also reserves the region's own defensive minimum.
   2. **Expand** — send a share of the remainder to neighbors, biased toward the richest / most-resistant region. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
@@ -1507,26 +1550,59 @@ formation-quota interactions remain stable; migrate that remaining pooled menu a
 tables to kit ids in a later cleanup, then remove the compatibility type. This residual is intentionally
 tracked here rather than kept as an active design document.
 
-**Melee closing tax recalibration.** `BattleValueCalculator.MeleeClosingFactor` is 0.75 and is now
-optimistic. Reaching contact no longer buys a blow in the same turn (§4.14), so every closer waits one
-more turn to land anything, per engagement rather than per battle. The factor is a flat multiplier
-standing in for the fraction of a soldier's turns spent swinging, so nothing breaks and no corrected
-value follows from the rules change — it abstracts away the very turn count that moved. Two properties
-make this a balance pass rather than a dial: the extra turn is a fixed +1 regardless of speed, so it is
-a larger share of a fast unit's short approach than a slow unit's long one, while the existing speed
-term keeps rewarding fast movers as though it were not; and the fast melee templates are the strategic
-anchors (Genestealer, Melee Carnifex), so a uniform scaling would fix the average and leave the anchors'
-relationship to each other wrong. **Status (2026-09-30):** the closing term is now turn-indexed
-(`BattleValueCalculator.CalculateMeleeSwingFraction`: `N / (N + D/MoveSpeed + 1)`, speed uncapped, the
-`+1` being the contact turn). `D` = 30 and `N` = 6 are placeholders, not measurements. Still open:
-measure `D`/`N` from play and traces, then regenerate `SoldierTemplate.BattleValue` and
-`MeleeFraction` — the monster in the reference panel also pays the new term, so every template's
-durability shifts slightly. The offline generation script is gone, so regeneration needs a rebuilt
-tool that first reproduces the stored values. Burrowers are
-unaffected: `BurrowPlacer` erupts them adjacent, so they are in contact when turn one opens. Do not
-chase this before the new turn structure has been played in Godot — if the extra turn feels wrong, the
-rule moves and the factor moves with it. This residual is intentionally tracked here rather than kept
-as an active design document.
+**Battle Value tier 2 — matchups, hard targets, kit.** Tier 1 (one measured value per template, §4.14
+*Battle Value calibration*) is done for every template. Method and findings: `Design/Reference/BattleLogic.md`
+§4. Open, in rough order:
+
+1. **Hard targets.** Weight `HardnessDiagnostics`' hits-to-disable by each attack's expected hits per
+   turn, and check that one "anti-hard share" axis explains the Carnifex's ×0.3–×3 matchup spread.
+   Then price hard entities (monsters, later vehicles) as a base value × a curve of the enemy's
+   anti-hard share, measured by a gauntlet that varies the opponent's anti-tank weapons. Design
+   decisions first: the reference opposition that defines a base value, and whether small arms
+   disabling a monster through its eyes and arms is the intended way it dies.
+2. **Matchup term for battle sizing.** Fit the hard-target axis, then a low-rank remainder if the
+   infantry residuals still need it; validate on held-out direct pairs. Battle sizing uses the
+   matchup-aware prediction; strategic code keeps the scalar.
+3. **Few-model variance.** A side of one to three monsters is close to all-or-nothing. Decide whether
+   the strategic resolver's σ grows when a side has few models, and fit `CombatSigma` and the 0.65
+   loss exponent from gauntlet data.
+4. **Kit.** Measure player loadout options as changes to a template's measured profile, replacing the
+   armor/2 and weapon terms of `EffectiveBattleValueCalculator`, which cannot see target dependence
+   (a lascannon is worth little against PDF and much against a Carnifex).
+5. **Start range and terrain.** All measurements use 200 yards on open ground; use the game's opening
+   range as a covariate, and rerun when terrain arrives.
+6. **Unexplained:** Tactical : Genestealer breaks even at 1.85 Genestealers per marine at about 290
+   models against 2.0 at 30, with a nearly deterministic outcome.
+
+Related planner questions found during calibration, each needing a product decision before code:
+- **Fear before contact.** Morale no longer senses being outnumbered before losses start (withdrawal
+  and rout compare loss shares, not BV). If wanted, it needs a term that is not BV, for example the
+  enemy's expected removal rate against us.
+- **Combined advance.** Each squad forecasts its own lane alone, so an advance that pays only through
+  the other squads' fire is never chosen. PDF masses now stand and fire but do not advance together.
+- **Mob run-in.** The forecast predicts no break on an Insurrectionist Mob's run-in, where real Mob
+  squads routed at 20–30% losses with the leader dead.
+- **Out-ranged shooters.** Shoota Boyz facing a squad that out-ranges them hold rather than close or
+  charge, and the battles run to 200+ turns. Decide whether they should charge, and whether hordes
+  should trade bodies for elites as doctrine (an option-mask or doctrine term, never the BV ratio).
+- **Hormagaunts** lose to PDF at every size measured now that PDF hold their ground. Decide whether
+  that is the intended balance.
+
+`BattleValueCalculator.CalculateMeleeSwingFraction`'s `D` = 30 and `N` = 6 are still placeholders, but
+the calculator no longer writes stored values, so they matter only to that offline tool.
+
+**Ranged combat follow-ups.** The ranged architecture is in TDD §6.6. Still open, and tracked only here:
+- **Line of fire through friendly formations.** Trace fire lanes so allies standing on a shot's path
+  can be hit, and pair it with formation behaviour that keeps allies out of those lanes. The current
+  friendly-fire model covers melee scrums only. Lane *spread* (`LaneSpreadPenaltyFraction`) is a
+  targeting bias, not occlusion, and does not satisfy this item.
+- **Space Marine grenade launchers**, with a dedicated launcher skill, if they become player equipment.
+- **Pursuit preparation window.** Replace the centroid separation delta with exact projected target
+  cells once obstacle/path projection exists; it now applies the same one-turn quarry displacement to
+  every candidate target.
+Krak grenades are part of *Vehicles*; cover and terrain for cones and blasts are part of *Battle
+Visuals Phase 3*. Any change must keep planning/resolution parity, deterministic replay,
+friendly-fire attribution, and the shared Battle Value currency.
 
 **Pursuit Overwatch / Advance.** Per-squad Follow/Press posture is shipped (TDD §6, "Morale,
 withdrawal, and pursuit"). Not built: splitting *Following* squads into **Overwatch** (holds at the
@@ -1546,7 +1622,7 @@ squad's own posture. Validation: a resolver fixture that starts before the withd
 ranged-effective pursuer (measure turns to end, shots per pursuer per turn, displacement per turn), then
 rerun Grist Nine Epsilon and look for the pursuit ending in tens of turns.
 
-**Battle Visuals Phase 3.** *(Moved here from 0.7.3.)* Terrain and cover representation; line of sight; elevation-based fire advantage. Also the deferred battle-replay *motion* work carried over from the 0.7 visual overhaul (§5.2): smooth position interpolation/tweening of formation markers between round end-states, in-flight projectile and charge-path animation, and timed reveal of casualty/rout overlays at the moment they occur, replacing the current discrete round-by-round redraw. Note the dependents that move out with it: the cover/terrain interaction for cone and blast templates (§4.14 gated follow-ons, `Design/Active/RangedCombatFollowUps.md`) is gated on the line-of-sight system landing here.
+**Battle Visuals Phase 3.** *(Moved here from 0.7.3.)* Terrain and cover representation; line of sight; elevation-based fire advantage. Also the deferred battle-replay *motion* work carried over from the 0.7 visual overhaul (§5.2): smooth position interpolation/tweening of formation markers between round end-states, in-flight projectile and charge-path animation, and timed reveal of casualty/rout overlays at the moment they occur, replacing the current discrete round-by-round redraw. Note the dependents that move out with it: the cover/terrain interaction for cone and blast templates (§4.14 gated follow-ons) is gated on the line-of-sight system landing here.
 
 **Mission System Expansion.** *(Moved here from 0.7.3.)* Talent recruitment missions; IG support missions; Chaos cult investigation; STC hunt; prisoner recovery. The intelligence/hook request outcome in §4.23 surfaces mission opportunities that these mission types would consume, and remains a lead without a destination until they exist.
 
@@ -1755,7 +1831,7 @@ A smaller open piece sits inside this one: `RegionWorthReferencePopulation` is 1
 |---|---|
 | Armory Inventory | (Proposed, §4.23/§6.9) A finite, per-pattern pool of weapons and armor held by the chapter, depleted as brothers fall and replenished by wargear pledges. Not yet committed; wargear replacement may instead stay abstracted against Requisition. |
 | Battle Brother | A full Space Marine belonging to the player's chapter. |
-| Battle Value | A numeric score representing the approximate combat power of a squad template. Used to generate balanced opposing forces. |
+| Battle Value | A numeric score for the combat power of a soldier template, measured from fights against reference squads (PDF trooper = 5). A squad's value is the sum of its members'. Converts population into military force and sizes generated opposing forces. |
 | Chapter | The player's Space Marine organization: nominally 1,000 Battle Brothers organized into ten companies. |
 | Combat Pace | The Jog movement tier. The soldier moves at half their MoveSpeed. Shooting is permitted only within 90 degrees of the movement direction, with the full weapon `Bulk` penalty and no aim bonus. Entering Jog resets accumulated aim. |
 | Contentment | A per-region 0–100 scalar on the default-Imperial RegionFaction representing civilian loyalty/stability. Eroded by overcrowding, war-weariness, hidden-faction drain, thin garrison, and governor temperament; low Contentment drives revolt (§4.20). Presented at planet level as a population-weighted rollup. |

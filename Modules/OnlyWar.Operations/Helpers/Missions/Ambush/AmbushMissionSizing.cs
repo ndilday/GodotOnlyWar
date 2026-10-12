@@ -28,7 +28,7 @@ namespace OnlyWar.Operations.Missions.Ambush
         // This replaced a size band read as "10^size PDF-trooper equivalents" and converted to battle
         // value at 5 BV each. The cap on that band was taken from the enemy's battle value as if it
         // were a headcount, so the conversion counted the enemy twice: a 3,000 BV region could
-        // produce a 50,000 BV ambush target (Design/Active/BattleValueCalibration.md, 7.15).
+        // produce a 50,000 BV ambush target (OnlyWar_TDD.md §6.2, "Ambush sizing").
         public const double MinimumTargetShare = 0.01;
         public const double MaximumTargetShare = 1.0;
 

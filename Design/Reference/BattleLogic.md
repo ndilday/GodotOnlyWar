@@ -16,8 +16,8 @@ battle engine itself:
 - `CasualtyRealism.md` contains the detailed wound-band, healing, and Apothecary decision tables.
 - `SpecialistAttachment.md` contains the historical order-level personnel-attachment decisions and
   save/load rationale; current posting architecture is in `OnlyWar_TDD.md` §5.3, §5.6, and §6.10.
-- `../Active/RangedCombatFollowUps.md` is the live backlog for terrain/line-of-fire, krak grenades,
-  launcher expansion, and other intentionally unshipped ranged work.
+- `OnlyWar_PRD.md` §5.8 holds the open battle work: ranged follow-ups (line of fire, launchers),
+  krak grenades under Vehicles, terrain under Battle Visuals Phase 3, and Battle Value tier 2.
 
 ## 1. System boundary and turn lifecycle
 
@@ -143,9 +143,14 @@ Three terms shape which shot a soldier takes, and when (`RangedTargetSelector`, 
   matures. A retained aim is kept while the target can reach the shooter, while the kill chance is at
   least `LikelyTakeOutProbability`, or while the rate rule still says to shoot.
 - **Ammunition.** Both sides of that comparison charge the shot for its rounds: net value = score −
-  scarcity × (best score per round on offer) × rounds. Scarcity is 0 at `PlentifulMagazines` (6)
-  magazines' worth of loaded plus reserve rounds and rises to 1 on an empty weapon, so a soldier
-  running dry saves rounds for better shots.
+  scarcity × (best score per round on offer) × rounds. One round price per decision, and every
+  plan's burst is chosen at it. Scarcity comes from the work in front of the shooter
+  (`RangedTargetSelector.Scarcity`, 2026-10-11): his share of the enemy battle value his weapon can
+  hurt, the rounds his fastest plan would spend on it with free rounds (`N = work / value per
+  round`), against the rounds he carries, `1 − carried / N`, clamped to 0–1. It is 0 while the rounds
+  outlast the work, so a marine with standard issue against one PDF squad aims once and fires, and it
+  is 1 on an empty weapon. Until 2026-10-11 it was the rounds carried against a fixed six magazines,
+  so standard issue was always a third scarce and marines aimed four turns for every shot.
 
 A planned aim is priced in `Phi` at that same per-turn rate (`FireTiming.Readiness`), as is a stored
 aim at the root (`FireTiming.StoredReadiness`). It replaced 5% of the shooter's battle value times the removal fraction, which was
@@ -218,19 +223,77 @@ returned wounded outcomes.
 ## 4. Battle Value and capability profiles
 
 Battle Value is the shared currency for force sizing, ranged/melee comparison, movement choices,
-screening, continuation, and strategic strength. `BattleValueCalculator` replays engine-faithful
-to-hit, damage, reload, melee, closing, and survival math against a weighted reference panel:
-swarm chaff, light infantry, elite infantry, and a monster.
+screening, continuation, and strategic strength. The persisted `SoldierTemplate.BattleValue` is a
+template guideline, not a live skill-tracking rating, and it is an integer. The rules database is the
+source of truth for the values; they are deliberately not copied here.
 
-```text
-BV = 5 × sqrt(expected offense × expected durability) × command multiplier
-```
+### 4.1 Calibration from fights (October 2026)
 
-The persisted `SoldierTemplate.BattleValue` is a template guideline, not a live skill-tracking
-rating. The PDF trooper anchor is 5; current strategic anchors include Tactical Marine 9,
-Genestealer 13, and Melee Carnifex 30. A soldier's `MeleeFraction` is generated beside BV and feeds
-doctrine/capability profiles, while current loadout, ammunition, functioning hands, wounds, and
-movement capacity determine the runtime profile.
+Stored BV is **measured from battles**, not computed from a formula. `BattleValueCalculator`
+(`BV = 5 × sqrt(offense × durability) × command`, against a four-profile reference panel) is now an
+offline primitive only: its numbers disagreed with fights by up to ×20 (a Tactical Marine at 9 where
+fights put him at about 90–120 PDF-trooper units), because single-target overkill saturates its
+offense, the monster profile dominates its durability average, and it scores point-blank shooting.
+The script that once wrote the stored values from it was never committed and is gone.
+
+The method, run with `Tools/OnlyWar.Diagnostics` (its README has the commands):
+
+1. **Gauntlet, not round-robin.** Each entry (a squad template at full size, with its default loadout)
+   fights each reference squad at several force ratios, roles alternating, 200 yards, open ground,
+   Aggressive. Cost is entries × references, not N²/2.
+2. **Probit on every battle.** `StrategicCombatResolver` compares log BV sums under lognormal noise,
+   so BV is fitted with the same model: `P(A holds) = Φ(κ·(u_A − u_B − ln(models B / models A)))`.
+   Every battle is a data point; there is no search for the 50% point. Per-cell slopes give a fight
+   noise of σ ≈ 0.06–0.25, typically 0.14, so `CombatSigma = 0.12` suits infantry.
+3. **Linear BV sums hold** within about 10–20% from 1× to 3× size, small against the matchup
+   residuals (×1.4–1.7), so no `n^α` term.
+4. **Anchor and weighting.** The PDF trooper is 5. An enemy template's value is the geometric mean of
+   its per-model value against PDF (50%) and against Tactical Marines (50%), each read in both
+   orientations. A single monster whose PDF cell is only a bound (it beats the 300-model cap) is
+   weighted Tactical 50% / Ork 50% instead. Marine templates take one factor on their pre-calibration
+   values. Product-owner decisions override the weighting for monsters where player experience
+   matters most (the Carnifex, Hive Tyrant, Tyrant Guard, Warboss); the stored values record them.
+5. **Leaders at squad value.** Sergeant and Scout Sergeant carry their squad's per-soldier value. When
+   toughness is equal, a higher leader value made every shooter target the leader (all 30 autoguns of
+   a Mob on one Sergeant). Nobs, the Runtherd and HQ squads look different and keep their own values.
+6. **The AI must not read BV across sides before calibrating.** Withdrawal and rout use headcount
+   shares (§6), and the engagement score treats an exchange at BV parity (§5.2), so a recalibration
+   does not change behaviour through a feedback loop. Targeting still weighs BV within a side.
+
+Each planner change that moves behaviour invalidates the fitted values; the core gauntlet is rerun
+and the faction stages follow. The values in the database are from the run after the 2026-10-11
+planner fixes (core `full8`, faction stages `tyr8`, `cult8`, `orks8`, `insur8`).
+
+What the data shows and one value per template cannot hold:
+
+- **Matchup structure is real** (deviance test p far below 10⁻¹⁰⁰ in every full run). Marines do
+  better than their value against PDF and hybrids and worse against Orks and Genestealers.
+- **Some cells are only bounds.** Single monsters beat 300 PDF; Rippers and Gretchin lose to the
+  smallest marine force fought. Read these cells by hand.
+- **Large battles are nearly deterministic.** Tactical : Genestealer at about 290 models breaks even
+  at 1.85 Genestealers per marine, against 2.0 at 30 models, with a probit slope of about 18. The
+  cause is not known.
+
+### 4.2 Entities that small arms barely hurt
+
+The Melee Carnifex is about 3× stronger than its scalar value against PDF, hybrids and Termagaunts
+and about 0.3× against Orks: a 10× spread. The axis is weapon strength against Constitution, not
+armour (its armour equals power armour; its Constitution is 224 against a marine's 30). Every hit
+that beats the armour adds at least one Negligible wound, and six wounds of a level make one of the
+next, so against weak weapons Constitution saturates at the Negligible floor and durability becomes a
+**count of penetrating hits on the weakest decisive locations**. A traced death against 15 PDF squads:
+about 2,000 autogun hits, eyes severed and both arms crippled, vitals never reached.
+
+`HardnessDiagnostics` measures that count per weapon and target through the engine's own hit
+pipeline (an autogun needs about 12,000 hits to disable a Carnifex, a lascannon about 4), and
+`RemovalMath` now estimates it within a root-mean-square factor of 1.25 over 187 cells. The proposed
+pricing for this class (hardness from engine math, value as a function of the enemy's anti-hard
+share) is open work in `OnlyWar_PRD.md` §5.8.
+
+### 4.3 Runtime capability
+
+A soldier's `MeleeFraction` is stored beside BV and feeds doctrine/capability profiles, while current
+loadout, ammunition, functioning hands, wounds, and movement capacity determine the runtime profile.
 
 `BattleSquadCapabilityProfile` summarizes the able roster, usable weapons and ammo, functioning
 grips, range/removal curves, movement, footprint/contact capacity, and melee/ranged mode. A lost
@@ -249,7 +312,9 @@ The normal candidate set is semantic rather than a raw movement enum: `Hold`, `S
 `StepForward`, `JogToward`, `RunToward`, `CloseToContact`, and, where assigned, `MoveToInterpose`.
 `Bound`, `Cover`, `RearGuard`, `Routing`, `Pursuit`, `Standoff`, and `BreakOff` roles mask this set
 before scoring. A contact-seeking squad with no ranged answer worth preserving cannot hold or give
-ground beyond contact; a ranged squad outside its own useful band cannot pretend that a close charge
+ground beyond contact, and one with no ranged weapon that must close is offered only the charge, not
+a walk or a jog (2026-10-09: 30 Hormagaunts walked under PDF fire for 19 turns on scraps of the
+potential, then routed; a slow walk under fire is worse than committing or holding back); a ranged squad outside its own useful band cannot pretend that a close charge
 is its normal opening; and a pursuit standoff cannot run without a meaningful speed advantage.
 
 The baseline answers "am I roughly in the fight" from reach, not from the sharply derived
@@ -259,8 +324,8 @@ a squad in reach holds; and one beyond its own reach takes the fast approach if 
 2026-10-10 a squad inside the band's near edge (70% of its maximum weapon range) stepped back. With
 MaximumRange a 1,000-yard cap that edge sat near 700 yards, so nearly every rifle squad defaulted
 to stepping back, and the squads the default actually decides for, those losing a firefight at every
-range, walked away from fights they could have stood in (PDF facing marines; BattleValueCalibration
-§7.24). Whether to open the range is the score's call. That last case was a jog until 2026-09-20, and
+range, walked away from fights they could have stood in (PDF facing marines: with the default
+fixed, 5 marines against 300 PDF went from 16 marine wins in 16 to 16 PDF wins). Whether to open the range is the score's call. That last case was a jog until 2026-09-20, and
 it only ever shows when the scored options sit inside the indifference band — which is exactly the
 far-away case, where every option is worth about the same. Against a quarry of equal speed a jog
 does not merely close more slowly; it does not close at all.
@@ -286,41 +351,31 @@ score(s -> s') = ImmediateExchange(s -> s')
 ImmediateExchange = enemy removal - friendly fire - incoming fire + melee now
 ```
 
-**One currency: the squad's own Battle Value (2026-10-05).** Every removal estimate is priced in
-the Battle Value of the soldiers it removes, so a score has two currencies in it: what we take is
-in enemy BV, what we lose is in ours. `EngagementCurrency` converts every enemy-priced term at one
-rate per decision before anything is netted:
+**One currency: Battle Value parity (2026-10-12, product owner).** Every removal estimate is
+priced in the Battle Value of the soldiers it removes, so what we take is in enemy BV and what we
+lose is in ours. Since BV is calibrated across factions from fights (§4), the two are one currency:
+`EngagementCurrency.EnemyValueRate` is 1, and an exchange is worth the BV each side loses. A trade the
+calibration calls even is even to the planner.
 
-```text
-rate = mean BV of this squad's able soldiers / mean BV of the able soldiers of the enemies scored
-```
+History. From 2026-10-05 to 2026-10-12 the rate was headcount parity, own mean soldier BV over the
+enemy's, so one average enemy soldier was worth one of ours. It went in when the first calibrated
+values multiplied marine BV about tenfold while cult values hardly moved: the score added terms in
+Scout BV (outgoing, aim readiness) to terms in cult BV (incoming), and Neophyte Hybrids and a
+two-man autocannon team ran at Scouts they had been shooting. Once every faction was calibrated,
+headcount parity made every cheap, numerous force refuse fair trades: an Insurrectionist Mob valued a
+marine (100) as one Insurrectionist (5), and ten Mobs stood 200 yards from one Tactical squad for 400
+turns.
 
-One average enemy soldier is worth one average soldier of ours (headcount parity between sides, the
-footing the withdrawal and morale shares already use); relative BV *within* a side still decides
-which soldier or squad matters more, so target selection is unchanged. Multiplying either side's BV
-by a constant then multiplies every term by the same factor and cannot move the argmax.
-`EngagementCurrencyScaleFreeTests` holds this for seven real-template frames at ×10 on each side.
+Thresholds are still quoted per average soldier of the planning squad (`EngagementCurrency.ScoreUnit`):
+the indifference floor is `0.05 × own mean soldier BV × horizon fraction`, so a fixed band means the
+same thing to a marine squad and a PDF one (it is 0.1 for the 2-BV test fixtures).
 
-| Term | Priced in | Converted |
-|---|---|---|
-| enemy removal, melee now | target BV | × rate |
-| `NetRateValue` enemy BV removed (including enemy breaks), fire window | target BV | × rate |
-| readiness of an `Aim` (projected or stored) | the prepared shot, target BV | × rate |
-| readiness of `Ready` / `Reload` | 2–2.5% of the soldier's own BV | no |
-| incoming fire, friendly fire, contact commitment, morale, command, contact progress | own BV | no |
-| screen holding term | threat melee BV is converted before it is compared with ours | partly |
-
-The indifference floor is `0.05 × own mean soldier BV × horizon fraction` instead of an absolute
-0.1, so it follows the squad's currency (it is still 0.1 for the 2-BV test fixtures). The frame
-builder applies the same rate, from the two representative profiles it already builds, to the
-effective-engagement-range argmax and to the opening-range score, because those two also netted
-enemy-priced outgoing against our incoming. Where both forces have the same mean soldier value the
-rate is exactly 1 and nothing changes.
-
-Not converted, and known: the per-shot `Score` in `RangedShotEvaluator` still nets expected enemy
-removal against expected friendly fire inside one shot, and screen *assignment*
-(`AssignScreens`, `BattleActionPlanningCoordinator`) still compares threat melee BV with protected
-BV directly. Neither decides hold against advance.
+Planning shares across a side: the effective engagement range, the opening range and each lane of
+the exchange forecast fight only the squad's **share** of the enemy (`BattleEngagementFrameBuilder.ForceShare`,
+by battle value), worn down at the pace of the whole force's fire. Before 2026-10-11 the effective
+engagement range priced one squad of many against the whole enemy's fire, so it lost at every range
+and an advance was never priced. The limit that remains: each squad forecasts its own lane alone, so
+a combined advance pays off only through the other squads' fire, which no single forecast sees.
 
 `Phi` is `EngagementPotential`, evaluated without an option kind. It contains state-derived
 `NetRateValue`, readiness, role, fire-window, morale, and command terms.
@@ -591,6 +646,13 @@ This replaced Phase 5's `lambda × (fraction of the remaining wound RATIO closed
 locations, with lambda = 0.5. That was several times too generous for many weak hits against
 armour: Neophyte autoguns against Scouts were credited about 22 hits per kill against the engine's
 54–89, and the squads' forecasts claimed fights they lost badly.
+
+**Toughness is judged by what can be seen (2026-10-12, product owner).** The estimate reads the
+species' median Constitution (`RemovalMath.PerceivedConstitution`), not the target soldier's own;
+size, armour, weapons, template and visible wounds are still read. With each soldier's own value,
+target selection found the softest marine of ten and the forecast priced the whole fight at that
+soldier's rate (about 357 autogun hits a kill where the engine averages 629). The engine still
+resolves every wound with the real Constitution.
 
 **The standing rate is the soldier's own firing plan (2026-10-09, product-owner decision).** The
 removal-rate table captures, for each shooter, the un-aimed shot and the four aimed shots the shot
@@ -1380,6 +1442,6 @@ For implementation changes, start here:
   behind §5.5: it measures rather than judges, so add scenarios to its matrix rather than writing a
   fresh fixture when a pursuit change needs before/after evidence.
 
-The active ranged backlog is intentionally not repeated here. Changes to it must preserve planning /
+The open ranged work is in `OnlyWar_PRD.md` §5.8 and is intentionally not repeated here. Changes to it must preserve planning /
 resolution parity, deterministic replay, friendly-fire attribution, and the shared Battle Value
 currency.

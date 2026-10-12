@@ -67,7 +67,7 @@ namespace OnlyWar.Battles
         // for many weak hits against armour: the engine's wound counter is a base-6 number, not a
         // ratio scale -- a Moderate wound (ratio 0.25) is 1/36 of a Critical, not a quarter of one --
         // and the sum over locations ignored that a disable needs the wounds in ONE location.
-        // Measured 2026-10-06 (BattleValueCalibration.md section 7.17's follow-up): Neophyte
+        // Measured 2026-10-06 (Design/Reference/BattleLogic.md §5.3): Neophyte
         // autoguns against Scouts at 150 yards were credited about 22 hits per Scout; the engine
         // takes 89 (HardnessDiagnostics).
         //
@@ -609,7 +609,7 @@ namespace OnlyWar.Battles
         /// cannot tell which marine of ten has the weakest constitution. Before, target selection
         /// chose exactly that marine, and the engagement forecast then priced the whole fight at
         /// the softest target's rate: autoguns against Tactical Marines were credited about 357 hits
-        /// a kill where the engine averages 629 (Design/Active/BattleValueCalibration.md §7.24).
+        /// a kill where the engine averages 629 (Design/Reference/BattleLogic.md §5.3).
         /// The engine still resolves every wound with the soldier's real Constitution.
         /// </summary>
         internal static float PerceivedConstitution(BattleSoldier target) =>

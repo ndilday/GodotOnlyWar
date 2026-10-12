@@ -37,7 +37,7 @@ namespace OnlyWar.Diagnostics.Battles;
 /// squad figure, the rate at which the whole squad disables that target per hit it lands
 /// (sum over its attacks of carriers / hits-to-disable). Comparing a squad's figure against a soft
 /// target with its figure against a hard one is the "anti-hard share" of
-/// Design/Active/BattleValueCalibration.md, section 7.12.
+/// Design/Reference/BattleLogic.md §4.2 (open work: OnlyWar_PRD.md §5.8, Battle Value tier 2).
 /// </summary>
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class HardnessDiagnostics

@@ -376,7 +376,7 @@ namespace OnlyWar.Battles
         /// inside the other's wide band, would both keep stepping back, so each priced the other's
         /// fire un-aimed and on the move -- 20 to 30 times below the standing rate. Both forecast a
         /// win; the Shoota Boyz believed a firefight they lost at four to one cost them almost
-        /// nothing (2026-10-09, Design/Active/BattleValueCalibration.md 7.22). The squads stood and
+        /// nothing (2026-10-09, Design/Reference/BattleLogic.md §5.2). The squads stood and
         /// aimed.</para>
         /// </summary>
         internal static EngagementOptionKind ForecastFiringPosture(SquadEngagementFrame enemyFrame)
