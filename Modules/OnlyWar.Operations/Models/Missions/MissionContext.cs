@@ -212,6 +212,13 @@ namespace OnlyWar.Operations.Missions
         /// them carry the same report. The treatment itself ran exactly once.
         /// </summary>
         public FieldCareReport FieldCare { get; set; }
+
+        /// <summary>
+        /// What cybernetic repair did for this mission's order (OnlyWar_TDD.md §6.6.1).
+        /// Order-wide, like <see cref="FieldCare"/>: every element of the order
+        /// carries the same report object, and the repair ran once.
+        /// </summary>
+        public CyberneticRepairReport CyberneticRepair { get; set; }
         private readonly HashSet<int> _friendlyDeadIds = [];
         private readonly HashSet<int> _friendlyIncapacitatedIds = [];
 

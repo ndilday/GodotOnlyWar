@@ -41,15 +41,15 @@ namespace OnlyWar.Battles.Resolutions
                 bool wasCrippled = wound.HitLocation.IsCrippled;
                 bool wasFunctionallyDisabled = wound.HitLocation.IsSevered || wasCrippled;
                 bool hadUntreatedSeveredLimb = wound.Suffererer.HasUntreatedSeveredLimb;
+                // wound.Damage is already past worn and natural armor: the attack actions subtract
+                // both, scaled by the weapon's armor multiplier, before the penetration check.
                 float totalDamage = wound.Damage;
                 WoundLevel woundLevel;
-                // check wound.HitLocation for natural armor
-                totalDamage -= wound.HitLocation.Template.NaturalArmor;
-                // for now, natural armor reducing the damange below 0 will still cause a Negligible injury
                 // multiply damage by wound.HitLocation modifier
                 totalDamage *= wound.HitLocation.Template.WoundMultiplier;
-                // compare total damage to soldier Constitution
-                float ratio = totalDamage / wound.Suffererer.Soldier.Constitution;
+                // compare total damage to the constitution that applies at this location
+                float ratio = totalDamage
+                    / wound.HitLocation.EffectiveConstitution(wound.Suffererer.Soldier);
                 if (ratio >= 8.0f)
                 {
                     woundLevel = WoundLevel.Unsurvivable;

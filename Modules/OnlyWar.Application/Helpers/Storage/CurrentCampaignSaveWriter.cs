@@ -58,7 +58,8 @@ namespace OnlyWar.Application.Storage
                 strategicInvasionForces: session.Sector.StrategicInvasionForces,
                 chapterOperationalDoctrine: force.Army.ChapterOperationalDoctrine,
                 mechanicusLoanActive: force.IsMechanicusLoanActive,
-                marsReturnDestination: force.MarsReturnDestination);
+                marsReturnDestination: force.MarsReturnDestination,
+                cyberneticRepairJobs: force.Army.CyberneticRepairJobs);
             // A current-format save has committed successfully at this point. SaveData is
             // atomic, so reaching this line is the success boundary.
             if (session is GameSession applicationSession)

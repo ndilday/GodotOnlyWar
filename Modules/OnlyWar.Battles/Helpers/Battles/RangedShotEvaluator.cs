@@ -617,7 +617,8 @@ namespace OnlyWar.Battles
             return RemovalMath.CalculateRemovalTermsOnHit(
                 target,
                 damageCoefficient,
-                armor * weapon.Template.ArmorMultiplier,
+                armor,
+                weapon.Template.ArmorMultiplier,
                 weapon.Template.WoundMultiplier);
         }
     }

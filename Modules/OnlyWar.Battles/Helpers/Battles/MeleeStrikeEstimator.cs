@@ -711,8 +711,8 @@ namespace OnlyWar.Battles
             return RemovalMath.CalculateRemovalFractionOnHit(
                 target,
                 attacker.Soldier.Strength * weapon.Template.StrengthMultiplier,
-                (target.Armor?.Template.ArmorProvided ?? 0)
-                    * weapon.Template.ArmorMultiplier,
+                target.Armor?.Template.ArmorProvided ?? 0,
+                weapon.Template.ArmorMultiplier,
                 weapon.Template.WoundMultiplier);
         }
     }

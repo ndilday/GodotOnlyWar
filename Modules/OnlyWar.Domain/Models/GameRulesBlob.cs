@@ -43,6 +43,8 @@ namespace OnlyWar.Domain
         public IReadOnlyList<FactionBehaviorRulesProfile> FactionBehaviorRulesProfiles { get; set; }
         // One allocation-doctrine row per faction, keyed by faction id. See ForceDoctrineWeights.
         public IReadOnlyDictionary<int, ForceDoctrineWeights> FactionDoctrines { get; set; }
+        // Installed augmetic tiers (OnlyWar_TDD.md §5.3), by Id.
+        public IReadOnlyList<CyberneticOption> CyberneticOptions { get; set; }
 
     }
 

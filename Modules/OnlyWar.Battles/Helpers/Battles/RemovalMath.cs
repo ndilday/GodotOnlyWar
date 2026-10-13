@@ -102,11 +102,15 @@ namespace OnlyWar.Battles
         /// Probability that one landed hit removes the target from the fight. This mirrors the
         /// resolver's location lottery, armor and normal damage roll, wound-level conversion,
         /// accumulated wound carry, motive/vital thresholds, and last-functioning-hand rule.
+        /// <paramref name="wornArmor"/> is the target's worn armor before penetration; each
+        /// location adds its natural armor to it and the sum is scaled by
+        /// <paramref name="armorMultiplier"/>, as the attack actions do.
         /// </summary>
         internal static float CalculateTakeOutProbabilityOnHit(
             BattleSoldier target,
             float damageCoefficient,
-            float effectiveArmor,
+            float wornArmor,
+            float armorMultiplier,
             float weaponWoundMultiplier)
         {
             if (damageCoefficient <= 0)
@@ -114,7 +118,8 @@ namespace OnlyWar.Battles
                 return 0f;
             }
             return AccumulateTakeOutTerms(
-                target, effectiveArmor, weaponWoundMultiplier, damageCoefficient, null).TakeOut;
+                target, wornArmor, armorMultiplier, weaponWoundMultiplier, damageCoefficient, null)
+                .TakeOut;
         }
 
         /// <summary>
@@ -130,13 +135,14 @@ namespace OnlyWar.Battles
         /// the top of this class).</para>
         ///
         /// <para>INVARIANT (Design doc "Invariants"): squads must not fire at targets they cannot
-        /// damage. A hit that cannot beat the worn armor adds no wound, so its fill is 0 and so is
+        /// damage. A hit that cannot beat the armor adds no wound, so its fill is 0 and so is
         /// its take-out.</para>
         /// </summary>
         internal static float CalculateRemovalFractionOnHit(
             BattleSoldier target,
             float damageCoefficient,
-            float effectiveArmor,
+            float wornArmor,
+            float armorMultiplier,
             float weaponWoundMultiplier)
         {
             if (damageCoefficient <= 0)
@@ -144,7 +150,7 @@ namespace OnlyWar.Battles
                 return 0f;
             }
             (float takeOut, float progress) = AccumulateTakeOutTerms(
-                target, effectiveArmor, weaponWoundMultiplier, damageCoefficient, null);
+                target, wornArmor, armorMultiplier, weaponWoundMultiplier, damageCoefficient, null);
             return CombineRemovalFraction(takeOut, progress);
         }
 
@@ -157,7 +163,8 @@ namespace OnlyWar.Battles
         internal static (float TakeOut, float WoundProgress) CalculateRemovalTermsOnHit(
             BattleSoldier target,
             float damageCoefficient,
-            float effectiveArmor,
+            float wornArmor,
+            float armorMultiplier,
             float weaponWoundMultiplier)
         {
             if (damageCoefficient <= 0)
@@ -165,7 +172,7 @@ namespace OnlyWar.Battles
                 return (0f, 0f);
             }
             return AccumulateTakeOutTerms(
-                target, effectiveArmor, weaponWoundMultiplier, damageCoefficient, null);
+                target, wornArmor, armorMultiplier, weaponWoundMultiplier, damageCoefficient, null);
         }
 
         /// <summary>
@@ -264,7 +271,7 @@ namespace OnlyWar.Battles
         /// <summary>
         /// The range-INDEPENDENT half of <see cref="CalculateTakeOutProbabilityOnHit"/>: one
         /// <c>(w_loc, K_loc)</c> pair per hit location that can take the target out, where
-        /// <c>K_loc = effectiveArmor + requiredPenetratingDamage</c>. Combined with
+        /// <c>K_loc = (wornArmor + naturalArmor_loc) * armorMultiplier + requiredPenetratingDamage</c>. Combined with
         /// <see cref="EvaluateTakeOutProbability"/> this reproduces the full function at any damage
         /// coefficient without walking hit locations or wound state again -- the Phase 4 lookahead
         /// path (Design/Reference/BattleLogic.md). Both entry points run the SAME loop
@@ -272,12 +279,13 @@ namespace OnlyWar.Battles
         /// </summary>
         internal static IReadOnlyList<TakeOutLocationTerm> BuildTakeOutLocationTerms(
             BattleSoldier target,
-            float effectiveArmor,
+            float wornArmor,
+            float armorMultiplier,
             float weaponWoundMultiplier)
         {
             List<TakeOutLocationTerm> terms = [];
             AccumulateTakeOutTerms(
-                target, effectiveArmor, weaponWoundMultiplier, null, terms);
+                target, wornArmor, armorMultiplier, weaponWoundMultiplier, null, terms);
             return terms;
         }
 
@@ -477,17 +485,19 @@ namespace OnlyWar.Battles
         }
 
         /// <summary>
-        /// The hit-location walk, evaluated at the UNIT weapon: <c>effectiveArmor = 0</c> and
+        /// The hit-location walk, evaluated at the UNIT weapon: no armor and
         /// <c>weaponWoundMultiplier = 1</c>. This is the whole expensive half of the removal
         /// estimate -- the body traversal, the motive/vital/last-hand filter, the wound-ladder
         /// search -- and NONE of it depends on the shooter, the weapon, or the range.
         ///
         /// <para>WHY THIS SPLIT EXISTS. Look at what the walk produces per location:
-        /// <c>K_loc = A + X/m</c> and <c>K_zero = A + naturalArmor/m</c>, where <c>A</c> is
-        /// effective armor, <c>m</c> is the weapon's wound multiplier, and
-        /// <c>X = constitution * ratio / woundMultiplier + naturalArmor</c>. The weapon enters as
-        /// one additive offset and one divisor, so a single vector captured at <c>A = 0, m = 1</c>
-        /// rescales to any weapon in two multiply-adds -- see <see cref="RescaleToWeapon"/>.
+        /// <c>K_loc = A_loc + X/m</c> and <c>K_zero = A_loc</c>, where
+        /// <c>A_loc = (wornArmor + naturalArmor_loc) * armorMultiplier</c>, <c>m</c> is the
+        /// weapon's wound multiplier, and <c>X = constitution * ratio / woundMultiplier</c>. The
+        /// weapon enters as one armor multiplier, one additive offset and one divisor, so a single
+        /// vector captured with no armor at <c>m = 1</c> (carrying each location's natural armor
+        /// unscaled) rescales to any weapon in a few multiply-adds -- see
+        /// <see cref="RescaleToWeapon"/>.
         /// Before this split every (shooter, weapon, range, candidate option) combination re-walked
         /// the same body: an instrumented seed-1 sector generation ran the walk 9.0e6 times, for
         /// 7.0e8 <c>HitLocation.Template</c> reads and 3.7e8 wound-ladder carry steps, all of it
@@ -518,7 +528,7 @@ namespace OnlyWar.Battles
             int? lastFunctioningHand = functioningHands.Count == 1
                 ? functioningHands[0]
                 : null;
-            float constitution = PerceivedConstitution(target);
+            float perceivedConstitution = PerceivedConstitution(target);
             List<TakeOutLocationTerm> terms = [];
             foreach (HitLocation location in body.HitLocations)
             {
@@ -571,31 +581,41 @@ namespace OnlyWar.Battles
                     continue;
                 }
 
-                // Execution first requires weapon penetration, then the resolver subtracts
-                // natural armor and applies the hit-location multiplier before classifying the
-                // wound. A carried Negligible wound only requires positive weapon penetration.
+                // What a shooter can judge, not the part's real values (OnlyWar_TDD.md §5.3,
+                // settled 2026-10-12): a bionic limb inside power armor is not
+                // visible, so every location -- cybernetic or not -- is estimated with the species
+                // median constitution and its template's natural armor. Only WoundResolver and the
+                // attack actions read a cybernetic part's own constitution and armor.
+                float constitution = perceivedConstitution;
+                float naturalArmor = location.PerceivedNaturalArmor;
+
+                // Execution first requires penetration of the worn plus natural armor, both scaled
+                // by the weapon's armor multiplier; the resolver then applies the hit-location
+                // multiplier before classifying the wound. A carried Negligible wound only
+                // requires positive penetration.
                 //
                 // X, the unit-weapon numerator. The division by the weapon's wound multiplier and
-                // the addition of effective armor are what RescaleToWeapon puts back, in that
-                // order, so the rescaled value is bit-identical to computing it here.
+                // the addition of the scaled armor are what RescaleToWeapon puts back, in that
+                // order.
                 float unitPenetratingDamage = requiredRatio <= 0f
                     ? 0f
                     : (constitution * requiredRatio)
-                        / Math.Max(0.0001f, template.WoundMultiplier)
-                        + template.NaturalArmor;
-                // K_loc at the unit weapon. Range-independent: the numerator of requiredRoll
-                // carries no range term, which is what lets the Phase 4 table rescale take-out in
-                // closed form. K_zero (Phase 5): the same expression evaluated at ratio -> 0+, i.e.
-                // the damage at which this location first takes a wound at all. The gap between the
-                // two is the graded band the woundProgress term integrates over.
+                        / Math.Max(0.0001f, template.WoundMultiplier);
+                // K_loc at the unit weapon with no armor. Range-independent: the numerator of
+                // requiredRoll carries no range term, which is what lets the Phase 4 table rescale
+                // take-out in closed form. K_zero (Phase 5): the same expression evaluated at
+                // ratio -> 0+, i.e. the damage at which this location first takes a wound at all --
+                // nothing beyond the armor. The gap between the two is the graded band the
+                // woundProgress term integrates over.
                 terms.Add(new TakeOutLocationTerm(
                     locationWeight / (float)totalLocationWeight,
                     unitPenetratingDamage,
                     requiredRatio,
-                    template.NaturalArmor,
+                    0f,
                     0f,
                     constitution / Math.Max(0.0001f, template.WoundMultiplier),
-                    WoundCounterValue(disableAt) - WoundCounterValue(location.Wounds.WoundTotal)));
+                    WoundCounterValue(disableAt) - WoundCounterValue(location.Wounds.WoundTotal),
+                    naturalArmor));
             }
             return terms.ToArray();
         }
@@ -617,16 +637,44 @@ namespace OnlyWar.Battles
                 ?? target.Soldier.Constitution;
 
         /// <summary>
+        /// One constitution for the whole soldier, for the scalar estimates that have no hit
+        /// location to ask: the squad and force target profiles behind
+        /// <see cref="RangedEffectivenessCurve"/> (<see cref="BattleSquad"/> statistics,
+        /// <see cref="BattleEngagementFrameBuilder"/>'s representative profile, and the withdrawal
+        /// reach forecast). Those profiles also carry worn armor only, with no natural armor.
+        /// </summary>
+        /// <remarks>
+        /// Decided 2026-10-12 (OnlyWar_TDD.md §5.3): the whole-soldier value ignores
+        /// cybernetic parts. It is the soldier's organic constitution, and the scalar squad and
+        /// force profiles take no cybernetic armor. Only the per-location paths (resolution, and
+        /// the removal walk's perceived values) see individual locations.
+        /// </remarks>
+        internal static float RepresentativeConstitution(BattleSoldier soldier) =>
+            soldier.Soldier.Constitution;
+
+        /// <summary>
+        /// The armor a hit on one location must beat: worn armor plus the location's natural armor
+        /// (a cybernetic part's own armor replaces the template's -- see
+        /// <see cref="HitLocation.NaturalArmor"/>), both scaled by the weapon's armor multiplier.
+        /// Every attack action and the removal estimate's rescaling call this one expression.
+        /// </summary>
+        internal static float EffectiveArmor(
+            float wornArmor, float naturalArmor, float armorMultiplier) =>
+            (wornArmor + naturalArmor) * armorMultiplier;
+
+        /// <summary>
         /// One unit-weapon term put back into a specific weapon's currency:
-        /// <c>K = effectiveArmor + unit / weaponWoundMultiplier</c> for both thresholds. Bit-identical
-        /// to forming them inside the walk, because that is the same expression in the same
-        /// association -- see <see cref="BuildUnitTakeOutTerms"/>.
+        /// <c>K = effectiveArmor + unit / weaponWoundMultiplier</c> for both thresholds, where
+        /// <c>effectiveArmor = (wornArmor + naturalArmor) * armorMultiplier</c> -- the same
+        /// expression, in the same association, as the attack actions use at execution.
         /// </summary>
         private static TakeOutLocationTerm RescaleToWeapon(
             in TakeOutLocationTerm unitTerm,
-            float effectiveArmor,
+            float wornArmor,
+            float armorMultiplier,
             float weaponWoundMultiplier)
         {
+            float effectiveArmor = EffectiveArmor(wornArmor, unitTerm.NaturalArmor, armorMultiplier);
             return new TakeOutLocationTerm(
                 unitTerm.Weight,
                 effectiveArmor + (unitTerm.PenetrationThreshold / weaponWoundMultiplier),
@@ -634,7 +682,8 @@ namespace OnlyWar.Battles
                 effectiveArmor + (unitTerm.ZeroProgressThreshold / weaponWoundMultiplier),
                 effectiveArmor,
                 unitTerm.DamagePerRatio / weaponWoundMultiplier,
-                unitTerm.Gap);
+                unitTerm.Gap,
+                unitTerm.NaturalArmor);
         }
 
         /// <summary>
@@ -646,7 +695,8 @@ namespace OnlyWar.Battles
         /// </summary>
         private static (float TakeOut, float WoundProgress) AccumulateTakeOutTerms(
             BattleSoldier target,
-            float effectiveArmor,
+            float wornArmor,
+            float armorMultiplier,
             float weaponWoundMultiplier,
             float? damageCoefficient,
             List<TakeOutLocationTerm> collector)
@@ -666,7 +716,7 @@ namespace OnlyWar.Battles
             for (int index = 0; index < unitTerms.Count; index++)
             {
                 TakeOutLocationTerm term = RescaleToWeapon(
-                    unitTerms[index], effectiveArmor, weaponWoundMultiplier);
+                    unitTerms[index], wornArmor, armorMultiplier, weaponWoundMultiplier);
                 collector?.Add(term);
                 if (damageCoefficient.HasValue
                     && !SkipLocation(term, damageCoefficient.Value))

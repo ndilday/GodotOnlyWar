@@ -48,4 +48,12 @@ public sealed class MedicalScreenApplication : CampaignScreenApplication,
             return new(false, "The campaign changed. Review the current recovery plan.");
         return Commands.ConfirmRecovery(command);
     }
+
+    public RecoveryPlanCommitResult QueueCyberneticRepair(QueueCyberneticRepairCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (Read == null || command.SessionToken != SessionToken)
+            return new(false, "The campaign changed. Review the current repair queue.");
+        return Commands.QueueCyberneticRepair(command);
+    }
 }

@@ -430,7 +430,10 @@ namespace OnlyWar.Battles.Actions
             {
                 float damage = attacker.Soldier.Strength * weapon.Template.StrengthMultiplier
                     * (3.5f + ((float)_random.NextRandomZValue() * 1.75f));
-                float effectiveArmor = (target.Armor?.Template.ArmorProvided ?? 0) * weapon.Template.ArmorMultiplier;
+                float effectiveArmor = RemovalMath.EffectiveArmor(
+                    target.Armor?.Template.ArmorProvided ?? 0,
+                    hitLocation.NaturalArmor,
+                    weapon.Template.ArmorMultiplier);
                 float penDamage = damage - effectiveArmor;
                 if (penDamage > 0)
                 {

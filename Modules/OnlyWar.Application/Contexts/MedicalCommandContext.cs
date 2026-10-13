@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Domain;
+using OnlyWar.Campaign.Medical;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Fleets;
 using OnlyWar.Domain.Planets;
@@ -56,6 +56,22 @@ internal sealed class MedicalCommandContext
             ResolveLocation(command.Destination),
             command.Movement,
             _currentDate);
+    }
+
+    internal RecoveryPlanCommitResult QueueCyberneticRepair(QueueCyberneticRepairCommand command)
+    {
+        PlayerForce force = _sector.PlayerForce;
+        PlayerSoldier patient = force?.Army?.PlayerSoldierMap
+            .GetValueOrDefault(command.SoldierId);
+        if (patient == null) return new(false, "The patient is no longer available.");
+
+        ProcedureRequisite unmet = CyberneticRepairService
+            .EvaluateQueueRequisites(force, patient, command.HitLocationId)
+            .FirstOrDefault(requisite => !requisite.IsMet);
+        if (unmet != null) return new(false, $"Repair cannot be queued: {unmet.Label}.");
+        return CyberneticRepairService.TryQueueRepair(force, patient, command.HitLocationId)
+            ? new(true, "Repair queued.")
+            : new(false, "The repair could not be queued.");
     }
 
     private CampaignLocation ResolveLocation(MedicalLocationId id)

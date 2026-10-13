@@ -1,4 +1,6 @@
 using OnlyWar.Medical.Readiness;
+using OnlyWar.Medical.Abstractions;
+using OnlyWar.Campaign.Medical;
 using OnlyWar.Campaign.Turns;
 using OnlyWar.Medical.Treatment;
 using OnlyWar.Domain.Missions;
@@ -111,6 +113,14 @@ namespace OnlyWar.Campaign
                 ApplyDailyFieldCare = (order, report, skills, day, ratings) =>
                     FieldCareService.ApplyDailyFieldCare(
                         _turn.Random, order, report, skills, day, ratings),
+                ApplyDailyCyberneticRepair = (order, report, day, missionStepToday) =>
+                    CyberneticRepairService.ApplyDailyFieldRepair(
+                        order,
+                        _turn.Sector.PlayerForce,
+                        report,
+                        CyberneticRepairService.ResolveCyberneticsSkill(_turn.Rules.BaseSkillMap),
+                        day,
+                        missionStepToday),
                 RecordIntelGain = _planetIntelligenceProcessor.RecordIntelGain,
                 RecordTargetObservation = _planetIntelligenceProcessor.RecordTargetObservation,
                 RecordScenarioPdfLost = ScenarioMetricsCollector.RecordScenarioPdfLost,
@@ -228,10 +238,13 @@ namespace OnlyWar.Campaign
                 sector, _lastResult.MissionContexts);
             _factionCapabilityCampaignProcessor.ResolveTacticalLeaderDeaths(
                 sector, _lastResult.MissionContexts);
-            _chapterUpkeepProcessor.ProcessMedical(sector);
+            IReadOnlyList<CyberneticRepairReport> garrisonRepairs =
+                _chapterUpkeepProcessor.ProcessMedical(sector);
             // Days a mission did not need become training credit, so the upkeep pass needs to know how
-            // long each squad was actually committed for.
-            _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector, BuildMissionDaysBySquad());
+            // long each squad was actually committed for. Hours a Techmarine spent on repair come out
+            // of that credit too.
+            _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(
+                sector, BuildMissionDaysBySquad(), BuildRepairHoursBySoldier(garrisonRepairs));
             // After training, so a returnee's last week on Mars counts. Before fleet movement, so a
             // brother reporting to the flagship travels with it.
             _lastResult.MechanicusReturns = new MechanicusReturnService(_commitments)
@@ -402,6 +415,27 @@ namespace OnlyWar.Campaign
                 }
             }
             return daysBySquad;
+        }
+
+        // Repair hours per Techmarine this turn, from the field (one report per order, shared by
+        // every element of it, so counted once) and from the garrison.
+        private Dictionary<int, float> BuildRepairHoursBySoldier(
+            IEnumerable<CyberneticRepairReport> garrisonRepairs)
+        {
+            Dictionary<int, float> hours = new();
+            IEnumerable<CyberneticRepairReport> fieldRepairs = _lastResult.MissionContexts
+                .Select(context => context.CyberneticRepair)
+                .Where(report => report != null)
+                .Distinct();
+            foreach (CyberneticRepairReport report in fieldRepairs.Concat(garrisonRepairs ?? []))
+            {
+                foreach (KeyValuePair<int, float> entry in report.HoursByProvider)
+                {
+                    if (entry.Key == CyberneticRepairConstants.LoanProviderId) continue;
+                    hours[entry.Key] = hours.GetValueOrDefault(entry.Key) + entry.Value;
+                }
+            }
+            return hours;
         }
 
         private void EnsureSessionSector(Sector sector)

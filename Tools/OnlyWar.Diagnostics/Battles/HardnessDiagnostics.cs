@@ -208,7 +208,8 @@ public class HardnessDiagnostics
                 float damage = attack.Ranged != null
                     ? BattleModifiersUtil.CalculateDamageAtRange(attack.Ranged, range) * roll
                     : attack.Strength * attack.Melee.StrengthMultiplier * roll;
-                float penetrating = damage - (target.Armor?.Template.ArmorProvided ?? 0) * weapon.ArmorMultiplier;
+                float penetrating = damage
+                    - ((target.Armor?.Template.ArmorProvided ?? 0) + location.NaturalArmor) * weapon.ArmorMultiplier;
                 if (penetrating <= 0) continue;
                 resolver.WoundQueue.Add(new WoundResolution(null, weapon, target, penetrating * weapon.WoundMultiplier, location));
                 resolver.Resolve();
@@ -247,7 +248,7 @@ public class HardnessDiagnostics
             ? BattleModifiersUtil.CalculateDamageAtRange(attack.Ranged, range)
             : attack.Strength * attack.Melee.StrengthMultiplier;
         IReadOnlyList<TakeOutLocationTerm> terms = RemovalMath.BuildTakeOutLocationTerms(
-            fresh, (fresh.Armor?.Template.ArmorProvided ?? 0) * weapon.ArmorMultiplier, weapon.WoundMultiplier);
+            fresh, fresh.Armor?.Template.ArmorProvided ?? 0, weapon.ArmorMultiplier, weapon.WoundMultiplier);
         text.AppendLine("  planner locations: weight, gap, fill rate per hit (weight x fill / gap)");
         foreach (TakeOutLocationTerm term in terms)
         {
@@ -280,7 +281,8 @@ public class HardnessDiagnostics
                 .First();
             IReadOnlyList<TakeOutLocationTerm> terms = RemovalMath.BuildTakeOutLocationTerms(
                 target,
-                (target.Armor?.Template.ArmorProvided ?? 0) * weapon.ArmorMultiplier,
+                target.Armor?.Template.ArmorProvided ?? 0,
+                weapon.ArmorMultiplier,
                 weapon.WoundMultiplier);
             (float takeOut, float progress) = RemovalMath.EvaluateRemovalTerms(terms, damageCoefficient, exponent);
             float perHit = Math.Clamp(takeOut + progress, 0f, 1f);
@@ -351,7 +353,8 @@ public class HardnessDiagnostics
                 float damage = attack.Ranged != null
                     ? BattleModifiersUtil.CalculateDamageAtRange(attack.Ranged, range) * roll
                     : attack.Strength * attack.Melee.StrengthMultiplier * roll;
-                float penetrating = damage - (target.Armor?.Template.ArmorProvided ?? 0) * weapon.ArmorMultiplier;
+                float penetrating = damage
+                    - ((target.Armor?.Template.ArmorProvided ?? 0) + location.NaturalArmor) * weapon.ArmorMultiplier;
                 if (penetrating <= 0) continue;
                 resolver.WoundQueue.Add(new WoundResolution(
                     null, weapon, target, penetrating * weapon.WoundMultiplier, location));

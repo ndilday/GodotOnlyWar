@@ -70,7 +70,10 @@ public class BlastAttackActionTests
         battle.SetArmor(3, 0);
         battle.Place(1, true, 0, 0);
         battle.Place(2, false, 10, 0);
-        battle.Place(3, false, 15, 0);
+        // Three cells out, not five: the scripted RNG puts every hit on the Brain, whose natural
+        // armor (2) the attack now subtracts with worn armor (2026-10-12), and a hit five cells
+        // out (17.5 / 36) no longer beats it.
+        battle.Place(3, false, 13, 0);
 
         BlastAttackAction action = battle.ExecuteBlast(
             1, 2, Range, CreateRng(battle, marginZ: 0.5f));
@@ -81,7 +84,8 @@ public class BlastAttackActionTests
         WoundResolution rimWound = action.WoundResolutions
             .Single(wound => wound.Suffererer.Soldier.Id == 3);
         Assert.True(centerWound.Damage > rimWound.Damage);
-        Assert.Equal(17.5f, centerWound.Damage);
+        // 17.5 at the center, less the Brain's natural armor 2 at armor multiplier 1.
+        Assert.Equal(15.5f, centerWound.Damage);
     }
 
     [Fact]
@@ -224,10 +228,13 @@ public class BlastAttackActionTests
         battle.SetArmor(1, 0);
         battle.SetArmor(2, 0);
         battle.Place(1, true, 0, 0);
-        battle.Place(2, false, 4, 0);
+        // Three cells, not four: every scripted hit lands on the Brain, and at four cells the
+        // thrower's share (17.5 / 9) no longer beats its natural armor 2, which the attack now
+        // subtracts with worn armor (2026-10-12).
+        battle.Place(2, false, 3, 0);
 
         BlastAttackAction action = battle.ExecuteBlast(
-            1, 2, 4f, CreateRng(battle, marginZ: 0.5f, range: 4f));
+            1, 2, 3f, CreateRng(battle, marginZ: 0.5f, range: 3f));
 
         Assert.Equal(new[] { 1, 2 }, action.VictimIds);
         Assert.True(action.IsFriendlyFire);

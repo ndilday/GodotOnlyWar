@@ -53,6 +53,7 @@ namespace OnlyWar.Operations.Turns
         private readonly Action<IEnumerable<ISoldier>> _applyDailyHealing;
         private readonly Func<IReadOnlyList<BaseSkill>> _resolveMedicalSkills;
         private readonly Action<Order, FieldCareReport, IReadOnlyList<BaseSkill>, int, RatingConsumerBindings> _applyDailyFieldCare;
+        private readonly Action<Order, CyberneticRepairReport, int, bool> _applyDailyCyberneticRepair;
         private readonly Action<PlanetFaction, Region, float> _recordIntelGain;
         private readonly Action<IntelObservation> _recordTargetObservation;
         private readonly Action<RegionFaction, long, Faction> _recordScenarioPdfLost;
@@ -81,6 +82,7 @@ namespace OnlyWar.Operations.Turns
             _applyDailyHealing = dependencies.ApplyDailyHealing;
             _resolveMedicalSkills = dependencies.ResolveMedicalSkills;
             _applyDailyFieldCare = dependencies.ApplyDailyFieldCare;
+            _applyDailyCyberneticRepair = dependencies.ApplyDailyCyberneticRepair;
             _recordIntelGain = dependencies.RecordIntelGain;
             _recordTargetObservation = dependencies.RecordTargetObservation;
             _recordScenarioPdfLost = dependencies.RecordScenarioPdfLost;
@@ -372,18 +374,29 @@ namespace OnlyWar.Operations.Turns
             // pass does.
             Dictionary<int, Order> distinctPlayerOrders = [];
             Dictionary<int, FieldCareReport> fieldCareByOrder = [];
+            Dictionary<int, CyberneticRepairReport> repairByOrder = [];
+            Dictionary<int, List<MissionStepDriver>> driversByOrder = [];
             foreach (ScheduledMission mission in scheduled.Where(m => m.IsPlayerOrder))
             {
-                if (mission.Order == null || distinctPlayerOrders.ContainsKey(mission.Order.Id))
+                if (mission.Order == null) continue;
+                if (!driversByOrder.TryGetValue(mission.Order.Id, out List<MissionStepDriver> drivers))
+                {
+                    drivers = [];
+                    driversByOrder[mission.Order.Id] = drivers;
+                }
+                drivers.Add(mission.Driver);
+                if (distinctPlayerOrders.ContainsKey(mission.Order.Id))
                 {
                     continue;
                 }
                 distinctPlayerOrders[mission.Order.Id] = mission.Order;
                 fieldCareByOrder[mission.Order.Id] = new FieldCareReport();
+                repairByOrder[mission.Order.Id] = new CyberneticRepairReport();
             }
             IReadOnlyList<BaseSkill> medicalSkills =
                 _resolveMedicalSkills?.Invoke() ?? Array.Empty<BaseSkill>();
 
+            int lastScheduledDay = 0;
             MissionDayScheduler.Run(
                 scheduled.Select(mission => mission.Driver).ToList(),
                 onDayStart: _ => ResetCommittedAttention(),
@@ -398,7 +411,22 @@ namespace OnlyWar.Operations.Turns
                         medicalSkills,
                         _rules?.RatingConsumers,
                         day);
+                    ApplyDailyCyberneticRepair(
+                        distinctPlayerOrders, repairByOrder, driversByOrder, day);
+                    lastScheduledDay = day;
                 });
+            // The rest of the mission week. The day loop stops when the last mission ends, but the
+            // force is still in the field until the turn resolves, so its Techmarines keep working
+            // on the days no step needs them (OnlyWar_TDD.md §6.6.1). Those days are
+            // also the spare days that become drill, which is why repair hours come out of drill.
+            if (scheduled.Count > 0)
+            {
+                for (int day = lastScheduledDay + 1; day <= MissionContext.MissionDurationDays; day++)
+                {
+                    ApplyDailyCyberneticRepair(
+                        distinctPlayerOrders, repairByOrder, driversByOrder, day);
+                }
+            }
 
             foreach (ScheduledMission mission in scheduled)
             {
@@ -413,6 +441,12 @@ namespace OnlyWar.Operations.Turns
                     && fieldCare.HasApothecary)
                 {
                     context.FieldCare = fieldCare;
+                }
+                if (order != null
+                    && repairByOrder.TryGetValue(order.Id, out CyberneticRepairReport repair)
+                    && repair.HasTechnician)
+                {
+                    context.CyberneticRepair = repair;
                 }
                 missionContexts.Add(context);
                 if (mission.IsPlayerOrder)
@@ -649,6 +683,28 @@ namespace OnlyWar.Operations.Turns
             {
                 _applyDailyFieldCare?.Invoke(
                     entry.Value, reports[entry.Key], medicalSkills, day, ratingBindings);
+            }
+        }
+
+        /// <summary>
+        /// One day of cybernetic repair for every player order, once per distinct order as field
+        /// care is. An order had a mission step on <paramref name="day"/> when any of its elements
+        /// advanced into that day: a driver's day counter only reaches a day by spending a step on
+        /// it. A step uses the whole working day, so the host does no repair for that order then.
+        /// </summary>
+        private void ApplyDailyCyberneticRepair(
+            IReadOnlyDictionary<int, Order> distinctPlayerOrders,
+            IReadOnlyDictionary<int, CyberneticRepairReport> reports,
+            IReadOnlyDictionary<int, List<MissionStepDriver>> driversByOrder,
+            int day)
+        {
+            if (_applyDailyCyberneticRepair == null) return;
+            foreach (KeyValuePair<int, Order> entry in distinctPlayerOrders)
+            {
+                bool missionStepToday = driversByOrder.TryGetValue(
+                        entry.Key, out List<MissionStepDriver> drivers)
+                    && drivers.Any(driver => driver.State.DaysElapsed >= day);
+                _applyDailyCyberneticRepair(entry.Value, reports[entry.Key], day, missionStepToday);
             }
         }
 

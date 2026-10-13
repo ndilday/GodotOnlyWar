@@ -16,7 +16,7 @@ namespace OnlyWar.Campaign
         private static readonly HashSet<string> ApothecaryTemplates =
             new() { "Apothecary", "Master of the Apothecarion" };
         private static readonly HashSet<string> TechmarineTemplates =
-            new() { "Techmarine", "Master of the Forge" };
+            new() { "Techmarine", "Master Techmarine", "Master of the Forge" };
         // Worlds developed enough to support augmetic surgery (PRD 4.8). The biome descriptor
         // is the planet template name; agri/feudal/feral/death worlds lack the infrastructure.
         private static readonly HashSet<string> SurgeryCapableWorlds =

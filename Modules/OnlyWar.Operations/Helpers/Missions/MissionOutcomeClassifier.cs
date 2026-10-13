@@ -1,4 +1,5 @@
 using OnlyWar.Domain.Missions;
+using OnlyWar.Medical.Abstractions;
 using System.Collections.Generic;
 
 namespace OnlyWar.Operations.Missions
@@ -31,6 +32,9 @@ namespace OnlyWar.Operations.Missions
                 FieldCareApothecaries = context.FieldCare?.ApothecaryNames ?? [],
                 FieldCareTreatments = context.FieldCare?.TreatmentCount ?? 0,
                 FieldCareTreatedBrothers = context.FieldCare?.TreatedSoldierCount ?? 0,
+                CyberneticRepairTechnicians = DescribeRepairTechnicians(context),
+                CyberneticRepairsCompleted = context.CyberneticRepair?.CompletedRepairCount ?? 0,
+                CyberneticRepairHours = context.CyberneticRepair?.HoursSpent ?? 0f,
                 Impact = context.Impact,
                 // The objective's works are known from the posted mission whether or not the raid
                 // got to them, so a failed attempt can still name what it went after.
@@ -38,6 +42,20 @@ namespace OnlyWar.Operations.Missions
                 SabotageDamage = context.SabotageDamageDealt,
                 SabotageLevelBefore = context.SabotageDefenseLevelBefore
             };
+        }
+
+        // Who did the repair work: the order's Techmarines by name, and the loaned adepts when they
+        // did any of it.
+        private static IReadOnlyList<string> DescribeRepairTechnicians(MissionContext context)
+        {
+            CyberneticRepairReport report = context.CyberneticRepair;
+            if (report == null) return [];
+            List<string> names = [.. report.TechnicianNames];
+            if (report.HoursByProvider.ContainsKey(CyberneticRepairReport.LoanProviderId))
+            {
+                names.Add(CyberneticRepairReport.LoanProviderName);
+            }
+            return names;
         }
 
         // Priority order matters: a force can set more than one disposition signal across a mission's

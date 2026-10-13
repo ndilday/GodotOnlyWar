@@ -79,16 +79,20 @@ public class WoundResolverTests
     }
 
     [Fact]
-    public void Resolve_SubtractsNaturalArmorBeforeScoringWound()
+    public void Resolve_DoesNotSubtractNaturalArmor_TheAttackHasAlready()
     {
+        // Natural armor is applied with worn armor in the attack actions, scaled by the weapon's
+        // armor multiplier, before the penetration check (2026-10-12). A WoundResolution's damage
+        // is already past it, so the resolver must not take it off a second time.
+        // Until then this test asserted the opposite: 6 - 5 natural armor => Negligible.
         WoundResolver resolver = new();
         HitLocation location = new(Template(naturalArmor: 5));
-        // 6 damage - 5 armor = 1 effective => ratio 0.1 => Negligible
+        // 6 damage => ratio 0.6 => Major
         Enqueue(resolver, location, 6f);
 
         resolver.Resolve();
 
-        Assert.Equal(1, location.Wounds.NegligibleWounds);
+        Assert.Equal((uint)WoundLevel.Major, location.Wounds.WoundTotal);
     }
 
     [Fact]

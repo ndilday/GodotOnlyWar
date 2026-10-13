@@ -48,6 +48,8 @@ namespace OnlyWar.Persistence.Database.GameState
         public List<Order> Orders { get; set; }
         // Medical procedures in progress (PRD 4.8 / 5.3), restored onto the loaded Army.
         public List<MedicalProcedure> MedicalProcedures { get; set; }
+        // Queued cybernetic repairs (OnlyWar_TDD.md §6.6.1), in queue order.
+        public List<CyberneticRepairJob> CyberneticRepairJobs { get; set; }
         public IReadOnlyList<IndividualPostingRecord> IndividualPostings { get; set; }
         public IReadOnlyList<OrderCharacterRecord> OrderCharacterAssignments { get; set; }
         public int HighestSoldierId { get; set; }
@@ -198,6 +200,7 @@ namespace OnlyWar.Persistence.Database.GameState
                 _individualPostingDataAccess.GetRecords(dbCon);
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
+            var cyberneticRepairJobs = _medicalProcedureDataAccess.GetRepairJobs(dbCon);
             var lastTurnReportSnapshot = _lastTurnReportDataAccess.GetSnapshot(dbCon);
             // Decorated soldiers with no squad are fallen brothers; the living are reached
             // through the loaded units, so only the fallen need to ride along in the blob.
@@ -232,6 +235,7 @@ namespace OnlyWar.Persistence.Database.GameState
                 Recruitment = recruitment,
                 Orders = _unitDataAccess.LoadedOrders.Values.ToList(),
                 MedicalProcedures = medicalProcedures,
+                CyberneticRepairJobs = cyberneticRepairJobs,
                 IndividualPostings = individualPostings,
                 OrderCharacterAssignments = orderCharacterAssignments,
                 HighestSoldierId = highestIdentity,
@@ -288,7 +292,8 @@ namespace OnlyWar.Persistence.Database.GameState
                               IEnumerable<StrategicInvasionForce> strategicInvasionForces = null,
                               ChapterOperationalDoctrine chapterOperationalDoctrine = null,
                               bool mechanicusLoanActive = false,
-                              CampaignLocation marsReturnDestination = null)
+                              CampaignLocation marsReturnDestination = null,
+                              IEnumerable<CyberneticRepairJob> cyberneticRepairJobs = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -324,7 +329,7 @@ namespace OnlyWar.Persistence.Database.GameState
                               relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
                               additionalOrders, ghostPopulationSources, strategicInvasionForces,
                               chapterOperationalDoctrine, mechanicusLoanActive,
-                              marsReturnDestination);
+                              marsReturnDestination, cyberneticRepairJobs);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -381,7 +386,8 @@ namespace OnlyWar.Persistence.Database.GameState
                                     IEnumerable<StrategicInvasionForce> strategicInvasionForces,
                                     ChapterOperationalDoctrine chapterOperationalDoctrine,
                                     bool mechanicusLoanActive,
-                                    CampaignLocation marsReturnDestination)
+                                    CampaignLocation marsReturnDestination,
+                                    IEnumerable<CyberneticRepairJob> cyberneticRepairJobs)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -512,6 +518,7 @@ namespace OnlyWar.Persistence.Database.GameState
                     {
                         _medicalProcedureDataAccess.SaveProcedure(transaction, procedure);
                     }
+                    _medicalProcedureDataAccess.SaveRepairJobs(transaction, cyberneticRepairJobs);
                     _recruitmentDataAccess.SaveData(transaction, recruitment);
                     _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition,
                                                      geneseedStockpile, geneseedPurity, scenario,

@@ -571,8 +571,10 @@ public class SquadDuelDiagnostics
                 foreach (WoundResolution wound in wounds.Where(w => idsA.Contains(w.Suffererer.Soldier.Id)))
                 {
                     HitLocationTemplate location = wound.HitLocation.Template;
-                    float ratio = (wound.Damage - location.NaturalArmor) * location.WoundMultiplier
-                        / wound.Suffererer.Soldier.Constitution;
+                    // Mirrors WoundResolver.HandleWound. wound.Damage is already past worn and
+                    // natural armor (the attack actions subtract both).
+                    float ratio = wound.Damage * location.WoundMultiplier
+                        / wound.HitLocation.EffectiveConstitution(wound.Suffererer.Soldier);
                     string level = ratio >= 8f ? "Unsurvivable" : ratio >= 4f ? "Mortal" : ratio >= 2f ? "Massive"
                         : ratio >= 1f ? "Critical" : ratio >= 0.5f ? "Major" : ratio >= 0.25f ? "Moderate"
                         : ratio >= 0.125f ? "Minor" : "Negligible";

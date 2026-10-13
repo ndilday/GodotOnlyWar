@@ -43,6 +43,19 @@ namespace OnlyWar.Domain
                 ? doctrine
                 : ForceDoctrineWeights.Balanced;
         public UnitTemplate StrategicCommandUnitTemplate { get; }
+
+        /// <summary>
+        /// Installed augmetic tiers, lowest Id first (OnlyWar_TDD.md §6.6.1).
+        /// Empty when the rules carry none.
+        /// </summary>
+        public IReadOnlyList<CyberneticOption> CyberneticOptions { get; }
+
+        /// <summary>
+        /// The tier replacement surgery installs. There is one tier today, so this is the first
+        /// row; null when the rules carry none, and the part then has no armor of its own and uses
+        /// the soldier's constitution.
+        /// </summary>
+        public CyberneticOption StandardCyberneticOption => CyberneticOptions.FirstOrDefault();
         public IReadOnlyDictionary<int, BaseSkill> BaseSkillMap { get => _baseSkillMap; }
         public IReadOnlyList<SkillTemplate> SkillTemplateList { get => _skillTemplateList; }
         public IReadOnlyDictionary<int, List<HitLocationTemplate>> BodyHitLocationTemplateMap { get => _bodyHitLocationTemplateMap; }
@@ -125,6 +138,9 @@ namespace OnlyWar.Domain
             FactionBehaviorRules = FactionBehaviorRulesProfiles.Values.First();
             FactionDoctrines = gameBlob.FactionDoctrines
                 ?? new Dictionary<int, ForceDoctrineWeights>();
+            CyberneticOptions = (gameBlob.CyberneticOptions ?? [])
+                .OrderBy(option => option.Id)
+                .ToList();
             StrategicCommandUnitTemplate = EnsureStrategicCommandUnitTemplate();
             ValidateFactionGenerationPolicies(gameBlob.ScenarioInfiltratorOverrides);
             ValidateRatingDefinitions();

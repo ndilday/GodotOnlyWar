@@ -110,8 +110,10 @@ namespace OnlyWar.Battles.Actions
             float range = _grid.GetDistanceBetweenSoldiers(ShooterId, target.Soldier.Id);
             float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, range)
                 * (3.5f + ((float)_random.NextRandomZValue() * 1.75f));
-            float effectiveArmor = (target.Armor?.Template.ArmorProvided ?? 0)
-                * weapon.Template.ArmorMultiplier;
+            float effectiveArmor = RemovalMath.EffectiveArmor(
+                target.Armor?.Template.ArmorProvided ?? 0,
+                hitLocation.NaturalArmor,
+                weapon.Template.ArmorMultiplier);
             float penetratingDamage = damage - effectiveArmor;
             if (penetratingDamage <= 0)
             {

@@ -32,7 +32,14 @@ CREATE TABLE ChapterOperationalDoctrine (Id INTEGER PRIMARY KEY CHECK (Id = 1), 
 CREATE TABLE LastTurnReport (Id INTEGER PRIMARY KEY CHECK (Id = 1), ResolvedDate INTEGER NOT NULL, PayloadJson TEXT NOT NULL);
 
 -- Table: HitLocation
-CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, IsCybernetic BOOLEAN NOT NULL, Armor REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER);
+-- Armor and Constitution are an installed cybernetic part's own values (zero when organic).
+CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, IsCybernetic BOOLEAN NOT NULL, Armor REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER, Constitution REAL NOT NULL DEFAULT 0);
+
+-- Table: CyberneticRepairJob
+-- A queued Techmarine repair of one damaged cybernetic part (OnlyWar_TDD.md §6.6.1).
+-- HoursCompleted is the work done so far, in hours at the reference skill. Ordinal keeps the
+-- queue order, which is the order jobs are worked in.
+CREATE TABLE CyberneticRepairJob (Ordinal INTEGER NOT NULL, SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, HoursCompleted REAL NOT NULL, RequisitionCost INTEGER NOT NULL);
 
 -- Table: MedicalProcedure
 -- A medical procedure in progress in the Apothecarium (PRD 4.8 / 5.3). HitLocationTemplateId

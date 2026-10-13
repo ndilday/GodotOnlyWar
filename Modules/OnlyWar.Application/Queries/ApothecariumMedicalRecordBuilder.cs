@@ -1,4 +1,6 @@
 using OnlyWar.Medical.Readiness;
+using OnlyWar.Medical.Treatment;
+using OnlyWar.Campaign.Medical;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Soldiers;
 using OnlyWar.Domain.Squads;
@@ -84,7 +86,8 @@ namespace OnlyWar.Application
                 BuildFormationSummaries(force, currentDate),
                 force?.Army?.Requisition ?? 0,
                 purity,
-                puritySeverity);
+                puritySeverity,
+                BuildRepairQueue(force));
         }
 
         public MedicalUnitSummary BuildUnitSummary(Unit unit, PlayerForce force = null)
@@ -155,7 +158,64 @@ namespace OnlyWar.Application
                 BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id)
                     .Select(ProjectTreatmentOption)
                     .ToList(),
-                duty.ReasonCode);
+                duty.ReasonCode,
+                BuildCyberneticRepairs(soldier, force));
+        }
+
+        /// <summary>
+        /// Every damaged, unsevered augmetic on this brother, with its repair: queued (and how much
+        /// work is left) or not yet queued (and what queueing needs). A severed augmetic is not
+        /// here: it is gone and needs replacement surgery (OnlyWar_TDD.md §6.6.1).
+        /// </summary>
+        private static IReadOnlyList<CyberneticRepairOptionView> BuildCyberneticRepairs(
+            ISoldier soldier, PlayerForce force)
+        {
+            List<CyberneticRepairOptionView> repairs = [];
+            foreach (HitLocation location in soldier.Body.HitLocations
+                .Where(CyberneticRepairPolicy.IsRepairable))
+            {
+                CyberneticRepairJob job = CyberneticRepairService.FindJob(
+                    force, soldier.Id, location.Template.Id);
+                IReadOnlyList<ProcedureRequisite> requisites = job == null
+                    ? CyberneticRepairService.EvaluateQueueRequisites(
+                        force, soldier, location.Template.Id)
+                    : [];
+                repairs.Add(new CyberneticRepairOptionView(
+                    location.Template.Id,
+                    location.Template.Name,
+                    location.Wounds.WorstLevel.ToString(),
+                    CyberneticRepairPolicy.GetRemainingHours(job, location),
+                    job != null,
+                    job?.RequisitionCost ?? CyberneticRepairConstants.RequisitionCost,
+                    requisites
+                        .Select(requisite => new MedicalTreatmentRequisiteView(
+                            requisite.Label, requisite.IsMet))
+                        .ToArray(),
+                    force != null && job == null && requisites.All(requisite => requisite.IsMet)));
+            }
+            return repairs;
+        }
+
+        private static IReadOnlyList<CyberneticRepairQueueRow> BuildRepairQueue(PlayerForce force)
+        {
+            List<CyberneticRepairQueueRow> rows = [];
+            foreach (CyberneticRepairJob job in force?.Army?.CyberneticRepairJobs ?? [])
+            {
+                if (force.Army.PlayerSoldierMap.TryGetValue(job.SoldierId, out PlayerSoldier soldier) != true)
+                {
+                    continue;
+                }
+                HitLocation location = soldier.Body.HitLocations.FirstOrDefault(candidate =>
+                    candidate.Template.Id == job.HitLocationTemplateId);
+                if (location == null) continue;
+                rows.Add(new CyberneticRepairQueueRow(
+                    rows.Count + 1,
+                    soldier.Id,
+                    soldier.Name,
+                    location.Template.Name,
+                    CyberneticRepairPolicy.GetRemainingHours(job, location)));
+            }
+            return rows;
         }
 
         internal IReadOnlyList<ReplacementOption> BuildTreatmentOptions(
@@ -377,7 +437,7 @@ namespace OnlyWar.Application
                 ? procedure != null
                     ? $"{Math.Max(0, procedure.WeeksRemaining)} weeks"
                     : location.Wounds.WoundTotal > 0
-                        ? "Cybernetic repair required"
+                        ? DescribeRepair(force, soldierId, location)
                         : "Cybernetic - no natural healing"
                 : needsReplacement
                 ? procedure == null
@@ -400,6 +460,18 @@ namespace OnlyWar.Application
                 location.IsSevered,
                 location.IsCrippled);
         }
+
+        private static string DescribeRepair(PlayerForce force, int soldierId, HitLocation location)
+        {
+            CyberneticRepairJob job = CyberneticRepairService.FindJob(
+                force, soldierId, location.Template.Id);
+            return job == null
+                ? "Cybernetic repair required"
+                : $"Repair queued - {FormatHours(CyberneticRepairPolicy.GetRemainingHours(job, location))} of work left";
+        }
+
+        internal static string FormatHours(float hours) =>
+            $"{Math.Ceiling(Math.Max(0f, hours)):0} h";
 
         private IReadOnlyList<ReplacementOption> BuildReplacementOptions(
             IEnumerable<HitLocation> locations,

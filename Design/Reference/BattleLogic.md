@@ -118,11 +118,12 @@ ranged removal = hit probability × take-out probability × target Battle Value
 ```
 
 `CalculateTakeOutProbabilityOnHit` mirrors the resolver: stance-weighted hit-location choice,
-armor, natural armor, the wound ladder against each location's existing wounds and
+worn plus natural armor scaled by the weapon's armor multiplier, the wound ladder against each location's existing wounds and
 `CrippleWound`/`SeverWound` thresholds, motive/vital restrictions, and the last-functioning-hand
 rule. The real `N(3.5, 1.75)` damage roll is integrated rather than replaced with a clamped linear
 wound fraction. This makes concentration and finishing damaged targets emerge from the threshold
-model.
+model. It mirrors only what a shooter can see: augmetics are hidden, so every location uses the
+template natural armor and the species-median constitution (TDD §5.3).
 
 Ranged removal is not discounted because a target is far away or withdrawing. Distance already
 changes the shot through range and take-out probability; arrival discount is reserved for effects

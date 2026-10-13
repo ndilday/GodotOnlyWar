@@ -981,7 +981,7 @@ namespace OnlyWar.Battles
 
                 sizeTotal += soldier.Soldier.Size;
                 rangedEvasionTotal += soldier.Soldier.Template.Species.RangedEvasion;
-                constitutionTotal += soldier.Soldier.Constitution;
+                constitutionTotal += RemovalMath.RepresentativeConstitution(soldier);
                 ableSoldierCount += 1.0f;
 
                 float currentMaxSpeed = soldier.GetMoveSpeed();

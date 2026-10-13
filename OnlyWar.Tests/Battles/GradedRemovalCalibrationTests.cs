@@ -295,15 +295,16 @@ public class GradedRemovalCalibrationTests
                 meleeFraction: 0.05f);
             // Space Marine species: Strength 15, Dexterity 15, Constitution 30 (attribute
             // templates 18/18/28 in the rules database); the trace reports Dexterity 15.4.
-            // 2^1.4 skill points reproduce the reported Gun (Bolter) skill bonus of 1.4, since
-            // SkillBonus = log2(points) - difficulty and the test ranged skill has difficulty 0.
+            // 2^1.4 - 2^-4 skill points reproduce the reported Gun (Bolter) skill bonus of 1.4,
+            // since SkillBonus = log2(points + 2^(difficulty - 4)) - difficulty and the test
+            // ranged skill has difficulty 0.
             Soldier soldier = TestModelFactory.CreateSoldier(
                 template,
                 $"{name} {index}",
                 dexterity: 15.4f,
                 strength: 15f,
                 charisma: 10f,
-                new Skill(TestSkills.Ranged, (float)System.Math.Pow(2, 1.4)));
+                new Skill(TestSkills.Ranged, (float)(System.Math.Pow(2, 1.4) - System.Math.Pow(2, -4))));
             soldier.Id = firstSoldierId + index;
             soldier.Constitution = 30;
             soldier.Size = 2.4f;

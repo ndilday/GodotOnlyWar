@@ -2,6 +2,7 @@ using OnlyWar.Domain.Extensions;
 using OnlyWar.Domain.Fortifications;
 using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Missions;
+using System;
 using System.Collections.Generic;
 
 namespace OnlyWar.Application
@@ -91,6 +92,28 @@ namespace OnlyWar.Application
             string brotherPart = brothers == 1 ? "1 brother" : $"{brothers} brothers";
             return $" {who} treated {brotherPart} in the field"
                 + $" ({classification.FieldCareTreatments} wounds eased).";
+        }
+
+        /// <summary>
+        /// What cybernetic repair did for the operation's force (OnlyWar_TDD.md §6.6.1),
+        /// appended after the field-care line. Returns "" when no repair work was
+        /// done, so an order with a Techmarine and no damaged augmetics stays silent.
+        /// </summary>
+        public static string BuildCyberneticRepairLine(MissionOutcomeClassification classification)
+        {
+            if (classification == null || classification.CyberneticRepairHours <= 0f) return "";
+            IReadOnlyList<string> names = classification.CyberneticRepairTechnicians;
+            string who = names == null || names.Count == 0
+                ? "The force's Techmarines"
+                : names.Count == 1 ? names[0] : string.Join(" and ", names);
+            int hours = (int)Math.Round(classification.CyberneticRepairHours);
+            int completed = classification.CyberneticRepairsCompleted;
+            if (completed <= 0)
+            {
+                return $" {who} worked {hours} hours on augmetic repairs in the field.";
+            }
+            string parts = completed == 1 ? "1 augmetic" : $"{completed} augmetics";
+            return $" {who} repaired {parts} in the field ({hours} hours).";
         }
 
         // The player's own missions are the only ones this builder renders (NPC missions go through

@@ -59,6 +59,8 @@ namespace OnlyWar.Application.Storage
             army.CharacterLoadoutDoctrine.ReplaceWith(gameState.CharacterLoadoutDoctrine);
             army.EquipmentLoadoutDoctrine.ReplaceWith(gameState.EquipmentLoadoutDoctrine);
             army.MedicalProcedures.AddRange(gameState.MedicalProcedures ?? new List<MedicalProcedure>());
+            army.CyberneticRepairJobs.AddRange(
+                gameState.CyberneticRepairJobs ?? new List<CyberneticRepairJob>());
             MedicalProcedureService.SynchronizeProcedureReservations(
                 army.PlayerSoldierMap.Values,
                 army.MedicalProcedures);

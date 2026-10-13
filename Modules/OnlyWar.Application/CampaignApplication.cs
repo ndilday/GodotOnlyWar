@@ -344,6 +344,8 @@ public sealed class CampaignApplication :
     public RecoveryScreenView QueryRecovery(RecoveryQuery query) => _medical.QueryRecovery(query);
     public RecoveryPlanCommitResult ConfirmRecovery(ConfirmRecoveryCommand command) =>
         _medical.ConfirmRecovery(command);
+    public RecoveryPlanCommitResult QueueCyberneticRepair(QueueCyberneticRepairCommand command) =>
+        _medical.QueueCyberneticRepair(command);
 
     // IMusterScreenApplication
     public bool IsStaged(int soldierId) => _muster.IsStaged(soldierId);

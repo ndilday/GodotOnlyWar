@@ -15,13 +15,15 @@ public class MissionCheckTests
     [Fact]
     public void IndividualMissionTest_UsesHighestSkilledAbleSoldier()
     {
+        Soldier high = TestModelFactory.CreateSoldier(name: "High", dexterity: 10, skills: new Skill(TestSkills.Stealth, 16));
         OperationalMissionElement squad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(name: "Low", dexterity: 10, skills: new Skill(TestSkills.Stealth, 1)),
-            TestModelFactory.CreateSoldier(name: "High", dexterity: 10, skills: new Skill(TestSkills.Stealth, 16)));
+            high);
         IndividualMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
 
         RNG.Reset(99);
-        float expected = ExpectedMargin(zAdvantage: (13 - 5) / 5.0f, seed: 99);
+        float expected = ExpectedMargin(
+            zAdvantage: (high.GetTotalSkillValue(TestSkills.Stealth) - 5) / 5.0f, seed: 99);
         RNG.Reset(99);
         float actual = missionTest.RunMissionCheck([squad], new StaticRNG());
 
@@ -36,12 +38,13 @@ public class MissionCheckTests
         OperationalMissionElement firstSquad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Decent Leader", charisma: 11, skills: new Skill(TestSkills.Leadership, 4)),
             TestModelFactory.CreateSoldier(name: "Brilliant Non-Leader", charisma: 18, skills: new Skill(TestSkills.Leadership, 64)));
-        OperationalMissionElement secondSquad = CreateBattleSquad(
-            TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Best Leader", charisma: 12, skills: new Skill(TestSkills.Leadership, 8)));
+        Soldier best = TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Best Leader", charisma: 12, skills: new Skill(TestSkills.Leadership, 8));
+        OperationalMissionElement secondSquad = CreateBattleSquad(best);
         LeaderMissionTest missionTest = new(TestSkills.Leadership, difficulty: 5);
 
         RNG.Reset(10);
-        float expected = ExpectedMargin(zAdvantage: (15 - 5) / 5.0f, seed: 10);
+        float expected = ExpectedMargin(
+            zAdvantage: (best.GetTotalSkillValue(TestSkills.Leadership) - 5) / 5.0f, seed: 10);
         RNG.Reset(10);
         float actual = missionTest.RunMissionCheck(
             [firstSquad, secondSquad],
@@ -135,13 +138,15 @@ public class MissionCheckTests
     [Fact]
     public void LeaderMissionTest_FallsBackToBestIndividualWhenNoLeaderExists()
     {
+        Soldier high = TestModelFactory.CreateSoldier(name: "High", charisma: 13, skills: new Skill(TestSkills.Leadership, 4));
         OperationalMissionElement squad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(name: "Low", charisma: 10, skills: new Skill(TestSkills.Leadership, 1)),
-            TestModelFactory.CreateSoldier(name: "High", charisma: 13, skills: new Skill(TestSkills.Leadership, 4)));
+            high);
         LeaderMissionTest missionTest = new(TestSkills.Leadership, difficulty: 5);
 
         RNG.Reset(11);
-        float expected = ExpectedMargin(zAdvantage: (15 - 5) / 5.0f, seed: 11);
+        float expected = ExpectedMargin(
+            zAdvantage: (high.GetTotalSkillValue(TestSkills.Leadership) - 5) / 5.0f, seed: 11);
         RNG.Reset(11);
         float actual = missionTest.RunMissionCheck([squad], new StaticRNG());
 
@@ -151,13 +156,15 @@ public class MissionCheckTests
     [Fact]
     public void SquadMissionTest_UsesAverageSkillAcrossAbleSoldiers()
     {
-        OperationalMissionElement squad = CreateBattleSquad(
-            TestModelFactory.CreateSoldier(name: "First", dexterity: 10, skills: new Skill(TestSkills.Stealth, 1)),
-            TestModelFactory.CreateSoldier(name: "Second", dexterity: 14, skills: new Skill(TestSkills.Stealth, 4)));
+        Soldier first = TestModelFactory.CreateSoldier(name: "First", dexterity: 10, skills: new Skill(TestSkills.Stealth, 1));
+        Soldier second = TestModelFactory.CreateSoldier(name: "Second", dexterity: 14, skills: new Skill(TestSkills.Stealth, 4));
+        OperationalMissionElement squad = CreateBattleSquad(first, second);
         SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
+        float average = (first.GetTotalSkillValue(TestSkills.Stealth)
+            + second.GetTotalSkillValue(TestSkills.Stealth)) / 2f;
 
         RNG.Reset(12);
-        float expected = ExpectedMargin(zAdvantage: (12 - 5) / 5.0f, seed: 12);
+        float expected = ExpectedMargin(zAdvantage: (average - 5) / 5.0f, seed: 12);
         RNG.Reset(12);
         float actual = missionTest.RunMissionCheck([squad], new StaticRNG());
 

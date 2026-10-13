@@ -43,6 +43,11 @@ public sealed class MissionTurnDependencies
     public Action<IEnumerable<ISoldier>> ApplyDailyHealing { get; init; }
     public Func<IReadOnlyList<BaseSkill>> ResolveMedicalSkills { get; init; }
     public Action<Order, FieldCareReport, IReadOnlyList<BaseSkill>, int, RatingConsumerBindings> ApplyDailyFieldCare { get; init; }
+    /// <summary>
+    /// One order's cybernetic repair for one day: (order, report, day, missionStepToday). On a
+    /// day the order had a mission step, the host records the Techmarines and does no work.
+    /// </summary>
+    public Action<Order, CyberneticRepairReport, int, bool> ApplyDailyCyberneticRepair { get; init; }
     public Action<PlanetFaction, Region, float> RecordIntelGain { get; init; }
     public Action<IntelObservation> RecordTargetObservation { get; init; }
     public Action<RegionFaction, long, Faction> RecordScenarioPdfLost { get; init; }

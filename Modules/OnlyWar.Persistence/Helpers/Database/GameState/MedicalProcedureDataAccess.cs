@@ -43,5 +43,45 @@ namespace OnlyWar.Persistence.Database.GameState
                 command.ExecuteNonQuery();
             }
         }
+
+        /// <summary>Queued cybernetic repairs, in queue order.</summary>
+        public List<CyberneticRepairJob> GetRepairJobs(IDbConnection connection)
+        {
+            List<CyberneticRepairJob> jobs = [];
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = @"SELECT SoldierId, HitLocationTemplateId, HoursCompleted,
+                    RequisitionCost FROM CyberneticRepairJob ORDER BY Ordinal";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    jobs.Add(new CyberneticRepairJob(
+                        reader.GetInt32(0),
+                        reader.GetInt32(1),
+                        System.Convert.ToSingle(reader[2]),
+                        reader.GetInt32(3)));
+                }
+            }
+            return jobs;
+        }
+
+        public void SaveRepairJobs(IDbTransaction transaction, IEnumerable<CyberneticRepairJob> jobs)
+        {
+            int ordinal = 0;
+            foreach (CyberneticRepairJob job in jobs ?? [])
+            {
+                using var command = transaction.Connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO CyberneticRepairJob
+                    (Ordinal, SoldierId, HitLocationTemplateId, HoursCompleted, RequisitionCost)
+                    VALUES (@ordinal, @soldierId, @hitLocationTemplateId, @hoursCompleted, @requisitionCost);";
+                command.AddParam("@ordinal", ordinal++);
+                command.AddParam("@soldierId", job.SoldierId);
+                command.AddParam("@hitLocationTemplateId", job.HitLocationTemplateId);
+                command.AddParam("@hoursCompleted", job.HoursCompleted);
+                command.AddParam("@requisitionCost", job.RequisitionCost);
+                command.ExecuteNonQuery();
+            }
+        }
     }
 }

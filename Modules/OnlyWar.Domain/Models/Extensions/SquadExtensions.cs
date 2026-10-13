@@ -92,6 +92,7 @@ public static class SquadExtensions
         HitLocation newHitLocation = new HitLocation(originalHitLocation.Template)
         {
             Armor = originalHitLocation.Armor,
+            Constitution = originalHitLocation.Constitution,
             IsCybernetic = originalHitLocation.IsCybernetic,
         };
 

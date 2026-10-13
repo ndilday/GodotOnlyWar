@@ -68,14 +68,18 @@ namespace OnlyWar.Persistence.Database.GameState
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.Transaction = transaction;
-                    command.CommandText = @"INSERT INTO HitLocation VALUES
-                        (@soldierId, @templateId, @isCybernetic, @armor, @woundTotal, @weeksOfHealing);";
+                    command.CommandText = @"INSERT INTO HitLocation
+                        (SoldierId, HitLocationTemplateId, IsCybernetic, Armor, WoundTotal,
+                         WeeksOfHealing, Constitution) VALUES
+                        (@soldierId, @templateId, @isCybernetic, @armor, @woundTotal, @weeksOfHealing,
+                         @constitution);";
                     command.AddParam("@soldierId", soldier.Id);
                     command.AddParam("@templateId", hitLocation.Template.Id);
                     command.AddParam("@isCybernetic", hitLocation.IsCybernetic);
                     command.AddParam("@armor", hitLocation.Armor);
                     command.AddParam("@woundTotal", hitLocation.Wounds.WoundTotal);
                     command.AddParam("@weeksOfHealing", hitLocation.Wounds.WeeksOfHealing);
+                    command.AddParam("@constitution", hitLocation.Constitution);
                     command.ExecuteNonQuery();
                 }
             }
@@ -87,7 +91,8 @@ namespace OnlyWar.Persistence.Database.GameState
             Dictionary<int, List<HitLocation>> hitLocationMap = [];
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM HitLocation";
+                command.CommandText = @"SELECT SoldierId, HitLocationTemplateId, IsCybernetic, Armor,
+                    WoundTotal, WeeksOfHealing, Constitution FROM HitLocation";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -97,9 +102,11 @@ namespace OnlyWar.Persistence.Database.GameState
                     float armor = Convert.ToSingle(reader[3]);
                     int woundTotal = reader.GetInt32(4);
                     int weeksOfHealing = reader.GetInt32(5);
+                    float constitution = Convert.ToSingle(reader[6]);
                     HitLocation hitLocation =
                         new HitLocation(hitLocationTemplateMap[hitLocationTemplateId],
-                                        isCybernetic, armor, (uint)woundTotal, (uint)weeksOfHealing);
+                                        isCybernetic, armor, (uint)woundTotal, (uint)weeksOfHealing,
+                                        constitution);
 
                     if (!hitLocationMap.ContainsKey(soldierId))
                     {

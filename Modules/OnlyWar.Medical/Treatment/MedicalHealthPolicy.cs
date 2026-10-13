@@ -37,9 +37,14 @@ public static class MedicalHealthPolicy
         }
     }
 
+    /// <param name="cyberneticOption">
+    /// The augmetic tier a cybernetic replacement installs: its armor and constitution go onto
+    /// every restored location. Null installs a part with no values of its own.
+    /// </param>
     public static MedicalProcedureCompletion AdvanceProcedure(
         MedicalProcedure procedure,
-        IReadOnlyDictionary<int, Body> bodies)
+        IReadOnlyDictionary<int, Body> bodies,
+        CyberneticOption cyberneticOption = null)
     {
         if (procedure == null || bodies == null
             || !bodies.TryGetValue(procedure.SoldierId, out Body body)
@@ -61,7 +66,14 @@ public static class MedicalHealthPolicy
             candidate == location || body.GetReplacementParent(candidate) == location))
         {
             restored.Wounds.HealWounds();
-            restored.IsCybernetic = procedure.ProcedureType == MedicalProcedureType.Cybernetic;
+            if (procedure.ProcedureType == MedicalProcedureType.Cybernetic)
+            {
+                restored.InstallCybernetic(cyberneticOption);
+            }
+            else
+            {
+                restored.IsCybernetic = false;
+            }
         }
 
         return new MedicalProcedureCompletion(

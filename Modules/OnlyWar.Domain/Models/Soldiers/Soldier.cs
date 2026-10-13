@@ -203,7 +203,7 @@ namespace OnlyWar.Domain.Soldiers
             float attribute = GetStatForBaseAttribute(skill.BaseAttribute);
             if(!_skills.ContainsKey(skill.Id))
             {
-                return attribute - 4;
+                return attribute + Skill.UntrainedBonus;
             }
 
             return _skills[skill.Id].SkillBonus + attribute;

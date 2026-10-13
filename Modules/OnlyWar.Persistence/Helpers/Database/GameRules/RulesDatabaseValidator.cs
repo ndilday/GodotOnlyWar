@@ -40,6 +40,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             RequireNotEmpty(rules.WeaponSets, "WeaponSet", errors);
             RequireNotEmpty(rules.TrainingProfiles, "TrainingProfile", errors);
             RequireNotEmpty(rules.ScoutTrainingOptions?.Options, "ScoutTrainingOption", errors);
+            RequireNotEmpty(rules.CyberneticOptions, "CyberneticOption", errors);
             RequireNotEmpty(rules.RatingDefinitions, "RatingDefinition", errors);
             RequireNotEmpty(rules.RatingAwardTiers, "RatingAwardTier", errors);
             RequireNotEmpty(rules.FactionRoleAssignments, "FactionRoleAssignment", errors);
@@ -61,6 +62,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             ValidateSkillTemplates(rules.SkillTemplates, errors);
             ValidateTrainingProfiles(rules.TrainingProfiles, errors);
             ValidateScoutTrainingOptions(rules.ScoutTrainingOptions, errors);
+            ValidateCyberneticOptions(rules.CyberneticOptions, errors);
             ValidateFactionContent(rules, errors);
             ValidateEquipmentCatalog(rules.EquipmentCatalog, errors);
             ValidateFactionBehaviorProfiles(rules.FactionBehaviorRulesProfiles, errors);
@@ -333,6 +335,32 @@ namespace OnlyWar.Persistence.Database.GameRules
                 errors.Add(
                     $"ScoutTrainingOption catalog is missing the required default option "
                     + $"'{ScoutTrainingOptionKeys.Balanced}'.");
+            }
+        }
+
+        private static void ValidateCyberneticOptions(
+            IReadOnlyList<CyberneticOption> options,
+            ICollection<string> errors)
+        {
+            foreach (CyberneticOption option in options ?? [])
+            {
+                if (option == null)
+                {
+                    errors.Add("CyberneticOption contains a null row.");
+                    continue;
+                }
+                if (string.IsNullOrWhiteSpace(option.Name))
+                {
+                    errors.Add($"CyberneticOption {option.Id} has an empty name.");
+                }
+                // A part's constitution divides every wound to it, so it must be positive.
+                if (!float.IsFinite(option.Armor) || option.Armor < 0
+                    || !float.IsFinite(option.Constitution) || option.Constitution <= 0)
+                {
+                    errors.Add(
+                        $"CyberneticOption {option.Id} ('{option.Name}') needs armor >= 0 "
+                        + "and constitution > 0.");
+                }
             }
         }
 

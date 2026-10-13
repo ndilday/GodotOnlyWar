@@ -29,7 +29,7 @@ namespace OnlyWar.Operations.Missions
     // This is smooth, bounded in (0, BasePointsPerCheck], symmetric-ish around the bump center,
     // and decays toward zero for both trivial wins and deep losses. Applied per able
     // participating PlayerSoldier per check; there is deliberately no per-mission cap — the
-    // geometric skill-point cost curve (Skill.SkillBonus = log2(pointsInvested) - difficulty)
+    // geometric skill-point cost curve (Skill.SkillBonus = log2(points + 2^(difficulty - 4)) - difficulty)
     // is the intended governor, so green/mid soldiers gain fast and veterans taper off on their
     // own without any code-side clamp.
     public static class MissionExperienceCalculator

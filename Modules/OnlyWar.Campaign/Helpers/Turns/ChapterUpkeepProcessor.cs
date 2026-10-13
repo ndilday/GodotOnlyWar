@@ -1,4 +1,6 @@
+using OnlyWar.Medical.Abstractions;
 using OnlyWar.Medical.Treatment;
+using OnlyWar.Campaign.Medical;
 using OnlyWar.Campaign.Simulation;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Events;
@@ -40,14 +42,15 @@ namespace OnlyWar.Campaign.Turns
 
         // Weekly medical resolution: wounds knit closed over time for the whole chapter
         // (deployed or not -- a week passes for everyone), except locations that require a
-        // replacement procedure.
-        internal void ProcessMedical(Sector sector)
+        // replacement procedure. Returns the garrison cybernetic-repair reports, whose hours come
+        // out of each Techmarine's drill in TrainNonDeployedPlayerForces.
+        internal IReadOnlyList<CyberneticRepairReport> ProcessMedical(Sector sector)
         {
             PlayerForce force = sector.PlayerForce;
             Army army = force?.Army;
             if (army == null)
             {
-                return;
+                return [];
             }
 
             IEnumerable<ISoldier> members = army.OrderOfBattle?.GetAllMembers();
@@ -85,11 +88,23 @@ namespace OnlyWar.Campaign.Turns
                     _turn.Rules?.RatingDefinitions, _turn.Rules?.BaseSkillMap,
                     _turn.Rules?.RatingConsumers),
                 _turn.Rules?.RatingConsumers);
+            // GARRISON CYBERNETIC REPAIR (OnlyWar_TDD.md §6.6.1): the same partition
+            // as garrison care, so a Techmarine sent forward stops clearing the queue at home.
+            // Cybernetic parts never heal on their own, so the order against the weekly cascade
+            // does not matter; it runs here to sit beside its organic counterpart.
+            IReadOnlyList<CyberneticRepairReport> repairReports =
+                CyberneticRepairService.ApplyGarrisonRepair(
+                    force,
+                    CyberneticRepairService.ResolveCyberneticsSkill(_turn.Rules?.BaseSkillMap));
             MedicalTurnProcessor.ApplyWeeklyHealing(members);
             IReadOnlyList<CompletedMedicalProcedure> completedProcedures =
-                MedicalTurnProcessor.ResolveProcedures(army.MedicalProcedures, army.PlayerSoldierMap);
+                MedicalTurnProcessor.ResolveProcedures(
+                    army.MedicalProcedures,
+                    army.PlayerSoldierMap,
+                    _turn.Rules?.StandardCyberneticOption);
             RecordCompletedReplacements(force, completedProcedures);
             RecordNearDeathRecoveries(force, openEpisodes, deployabilityBefore, completedProcedures);
+            return repairReports;
         }
 
         private void RecordCompletedReplacements(
@@ -184,9 +199,16 @@ namespace OnlyWar.Campaign.Turns
         /// training rather than less. A squad absent from the map with a standing order (patrol, defence,
         /// construction, a show of force) occupies its whole week and earns nothing, as before.
         /// </param>
+        /// <param name="repairHoursBySoldier">
+        /// Hours each Techmarine spent on cybernetic repair this turn, field and garrison together,
+        /// keyed by soldier id. They come out of his drill in proportion
+        /// (<see cref="CyberneticRepairConstants.DrillPointsPerRepairHour"/>), as mission days do,
+        /// so the same hour is not credited twice.
+        /// </param>
         internal void TrainNonDeployedPlayerForces(
             Sector sector,
-            IReadOnlyDictionary<int, int> missionDaysBySquad = null)
+            IReadOnlyDictionary<int, int> missionDaysBySquad = null,
+            IReadOnlyDictionary<int, float> repairHoursBySoldier = null)
         {
             ISoldierTrainingService trainingService = _trainingService ?? CreateTrainingService();
             List<Squad> squads = (sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
@@ -221,7 +243,16 @@ namespace OnlyWar.Campaign.Turns
                 SoldierProgressLog.ProgressSnapshot before = SoldierProgressLog.Capture(present);
                 foreach (ISoldier soldier in present)
                 {
-                    trainingService.ApplySoldierWorkExperience(soldier, squad, points);
+                    float soldierPoints = points;
+                    if (repairHoursBySoldier != null
+                        && repairHoursBySoldier.TryGetValue(soldier.Id, out float repairHours))
+                    {
+                        soldierPoints = Math.Max(
+                            0f,
+                            points - repairHours * CyberneticRepairConstants.DrillPointsPerRepairHour);
+                    }
+                    if (soldierPoints <= 0f) continue;
+                    trainingService.ApplySoldierWorkExperience(soldier, squad, soldierPoints);
                 }
                 SoldierProgressLog.LogDelta(
                     $"Training XP [garrison] {squad.Name}", present, before);

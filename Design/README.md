@@ -52,10 +52,13 @@ Active plans were deleted on 2026-08-21 under the promotion rule. `ForceLegibili
 distilled into TDD §7.6, and deleted on 2026-08-29; its approved composition is now recorded in
 `VisualBaselines/PlanetaryOperations/`. `MarsPipeline.md` (Techmarines & the Mars pipeline, PRD
 §4.28) was implemented and checked in Godot, distilled into TDD §6.14, and deleted on 2026-09-30.
-Active design work currently retained here is:
+`CyberneticRepair.md` (Techmarine repair of augmetics, and each augmetic's own armor and
+constitution) was implemented, distilled into TDD §5.3 and §6.6.1 with the player rules in PRD §4.8,
+and deleted on 2026-10-13. Nothing in it met the `Reference/` bar: its rejected alternatives (a
+budget from a rating, a floor on the skill curve) fold into the TDD in a sentence each. Its Godot
+check was still outstanding when it was deleted.
 
-- `CyberneticRepair.md` — Techmarine repair of cybernetic parts (weekly time budget, requisition
-  cost, built-in armor and constitution). Decisions settled 2026-10-03; no code yet.
+No active design work is retained here at present.
 
 **Audited 2026-10-12.** Two plans were removed:
 

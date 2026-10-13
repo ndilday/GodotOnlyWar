@@ -11,6 +11,7 @@ public partial class ApothecariumScreenView : MainScreenView
     private VBoxContainer _vaultMetricGrid;
     private VBoxContainer _vaultRows;
     private VBoxContainer _vaultFormationRows;
+    private VBoxContainer _vaultRepairRows;
     private VBoxContainer _rollupMetrics;
     private VBoxContainer _rollupRows;
     private Label _rollupTitle;
@@ -31,6 +32,7 @@ public partial class ApothecariumScreenView : MainScreenView
     public event EventHandler VaultButtonPressed;
     public event EventHandler<ApothecariumSelection> TreeSelectionChanged;
     public event EventHandler<MedicalTreatmentOptionView> ReplacementOptionPressed;
+    public event EventHandler<CyberneticRepairOptionView> CyberneticRepairPressed;
     public event EventHandler RecoveryOperationsPressed;
     public event EventHandler RecoveryBackPressed;
     public event EventHandler<int> RecoveryPatientSelected;
@@ -105,6 +107,20 @@ public partial class ApothecariumScreenView : MainScreenView
                 formation.PurityStatus,
                 formation.Severity));
         }
+
+        ClearContainer(_vaultRepairRows);
+        if (summary.SafeRepairQueue.Count == 0)
+        {
+            _vaultRepairRows.AddChild(CreateInfoLabel("No augmetic repairs queued."));
+        }
+        foreach (CyberneticRepairQueueRow row in summary.SafeRepairQueue)
+        {
+            _vaultRepairRows.AddChild(CreateDataRow(
+                $"{row.Position}. {row.SoldierName}",
+                row.LocationName,
+                $"{Hours(row.HoursRemaining)} left",
+                MedicalSeverity.Watch));
+        }
     }
 
     public void ShowRollup(MedicalUnitSummary summary)
@@ -177,6 +193,10 @@ public partial class ApothecariumScreenView : MainScreenView
             _replacementRows.AddChild(CreateInfoLabel(
                 "Cybernetic damage requires Techmarine repair; Apothecary care is unavailable."));
         }
+        foreach (CyberneticRepairOptionView repair in summary.SafeCyberneticRepairs)
+        {
+            _replacementRows.AddChild(CreateRepairCard(repair));
+        }
         if (summary.ReplacementOptions.Count == 0)
         {
             if (!hasCyberneticDamage)
@@ -191,6 +211,57 @@ public partial class ApothecariumScreenView : MainScreenView
             _replacementRows.AddChild(CreateReplacementCard(option));
         }
     }
+
+    // One damaged augmetic: queue its Techmarine repair, or show the work left on a queued one.
+    private Control CreateRepairCard(CyberneticRepairOptionView repair)
+    {
+        PanelContainer panel = new() { CustomMinimumSize = new Vector2(0, 112), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(MedicalSeverity.Watch, 0.75f));
+        VBoxContainer stack = new();
+        stack.AddThemeConstantOverride("separation", 6);
+        panel.AddChild(stack);
+        Label title = new() { Text = $"Repair {repair.LocationName}" };
+        title.AddThemeFontSizeOverride("font_size", 18);
+        stack.AddChild(title);
+        Label description = new()
+        {
+            Text = repair.IsQueued
+                ? $"Queued. {Hours(repair.HoursRemaining)} of Techmarine work left at standard skill; a skilled Techmarine needs less."
+                : $"{repair.Damage} damage. {Hours(repair.HoursRemaining)} of Techmarine work at standard skill. The repair resets the part fully.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        description.AddThemeFontSizeOverride("font_size", 13);
+        description.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        stack.AddChild(description);
+        foreach (MedicalTreatmentRequisiteView requisite in repair.Requisites ?? [])
+        {
+            Label line = new()
+            {
+                Text = $"{(requisite.IsMet ? "✓" : "✗")} {requisite.Label}"
+            };
+            line.AddThemeFontSizeOverride("font_size", 13);
+            line.AddThemeColorOverride("font_color",
+                ColorFor(requisite.IsMet ? MedicalSeverity.Stable : MedicalSeverity.Critical));
+            stack.AddChild(line);
+        }
+        HBoxContainer actions = new();
+        actions.AddThemeConstantOverride("separation", 8);
+        actions.AddChild(CreateSmallChip(Hours(repair.HoursRemaining), MedicalSeverity.Watch));
+        actions.AddChild(CreateSmallChip($"{repair.RequisitionCost} Req", MedicalSeverity.Critical));
+        Button queueButton = new()
+        {
+            Text = repair.IsQueued ? "Repair Queued" : "Queue Repair",
+            Disabled = !repair.CanQueue,
+            MouseDefaultCursorShape = CursorShape.PointingHand,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        queueButton.Pressed += () => CyberneticRepairPressed?.Invoke(this, repair);
+        actions.AddChild(queueButton);
+        stack.AddChild(actions);
+        return panel;
+    }
+
+    private static string Hours(float hours) => $"{Mathf.CeilToInt(Mathf.Max(0f, hours))} h";
 
     private void BuildLayout()
     {
@@ -319,6 +390,7 @@ public partial class ApothecariumScreenView : MainScreenView
 
         _vaultRows = CreateSection(columns, "Stockpile Ledger");
         _vaultFormationRows = CreateSection(columns, "Currently Implanted");
+        _vaultRepairRows = CreateSection(columns, "Augmetic Repair Queue");
         return panel;
     }
 
@@ -348,7 +420,7 @@ public partial class ApothecariumScreenView : MainScreenView
         stack.AddChild(columns);
 
         _woundRows = CreateSection(columns, "Wound Ledger");
-        _replacementRows = CreateSection(columns, "Replacement Assignment");
+        _replacementRows = CreateSection(columns, "Replacement and Repair");
         return panel;
     }
 

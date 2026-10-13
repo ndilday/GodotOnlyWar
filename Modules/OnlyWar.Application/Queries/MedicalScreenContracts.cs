@@ -38,6 +38,9 @@ public sealed record ConfirmRecoveryCommand(
     Guid SessionToken, int SoldierId, MedicalLocationId Destination,
     RecoveryMovementChoice Movement, int? HitLocationId, MedicalProcedureChoice? ProcedureType);
 
+/// <summary>Queue a Techmarine repair of one damaged augmetic, paying its Requisition now.</summary>
+public sealed record QueueCyberneticRepairCommand(Guid SessionToken, int SoldierId, int HitLocationId);
+
 public interface IMedicalScreenApplication
 {
     Guid SessionToken { get; }
@@ -45,4 +48,5 @@ public interface IMedicalScreenApplication
     MedicalScreenView QueryMedical(MedicalScreenQuery query);
     RecoveryScreenView QueryRecovery(RecoveryQuery query);
     RecoveryPlanCommitResult ConfirmRecovery(ConfirmRecoveryCommand command);
+    RecoveryPlanCommitResult QueueCyberneticRepair(QueueCyberneticRepairCommand command);
 }

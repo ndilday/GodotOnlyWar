@@ -480,9 +480,9 @@ public class FieldCareServiceTests
         PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Critical);
         Order order = OrderFor(apothecary, patient);
 
-        // Measured in POINTS INVESTED rather than total skill value: a day's practice is a fraction
-        // of a point, and the skill-value curve reads a fraction of a point as still worse than
-        // untrained. The learn-by-doing question is whether the practice was banked.
+        // Measured in POINTS INVESTED rather than total skill value: a day's practice is a small
+        // fraction of a point, which moves the skill value very little. The learn-by-doing question
+        // is whether the practice was banked.
         Assert.Equal(0f, PointsIn(apothecary, firstAid));
         FieldCareService.ApplyDailyFieldCare(new StaticRNG(), order, new FieldCareReport(), [firstAid]);
         Assert.True(PointsIn(apothecary, firstAid) > 0f, "a day spent treating must teach something");

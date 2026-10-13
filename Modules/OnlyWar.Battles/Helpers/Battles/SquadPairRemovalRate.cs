@@ -20,10 +20,11 @@ namespace OnlyWar.Battles
     /// wounds it already carries.</para>
     ///
     /// <para>THE WOUND LADDER (2026-10-06). The resolver's damage-to-wound-ratio map is affine
-    /// (<c>ratio = (d * weaponWoundMultiplier - naturalArmor) * woundMultiplier / constitution</c>),
+    /// (<c>ratio = (d - effectiveArmor) * weaponWoundMultiplier * woundMultiplier / constitution</c>,
+    /// with <c>effectiveArmor = (wornArmor + naturalArmor) * armorMultiplier</c>),
     /// so the damage at which a hit reaches wound ratio <c>r</c> is
     /// <c>ZeroProgressThreshold + DamagePerRatio * r</c>, with
-    /// <c>ZeroProgressThreshold = effectiveArmor + naturalArmor / weaponWoundMultiplier</c> and
+    /// <c>ZeroProgressThreshold = effectiveArmor</c> and
     /// <c>DamagePerRatio = constitution / (locationWoundMultiplier * weaponWoundMultiplier)</c>.
     /// Any hit that beats <see cref="EffectiveArmor"/> wounds (a Negligible at least). The
     /// location's wound counter holds at most five wounds of a level, six of which become one of
@@ -39,12 +40,22 @@ namespace OnlyWar.Battles
         internal float RequiredRatio { get; }
         /// <summary>The damage at which this location's wound ratio is 0.</summary>
         internal float ZeroProgressThreshold { get; }
-        /// <summary>The damage a hit must beat to wound at all: the worn armor.</summary>
+        /// <summary>
+        /// The damage a hit must beat to wound at all: worn plus natural armor, scaled by the
+        /// weapon's armor multiplier.
+        /// </summary>
         internal float EffectiveArmor { get; }
         /// <summary>Damage per unit of wound ratio at this location.</summary>
         internal float DamagePerRatio { get; }
         /// <summary>Negligible-wound units left before this location disables.</summary>
         internal float Gap { get; }
+        /// <summary>
+        /// The location's natural armor as the estimate perceives it, unscaled. The unit-weapon
+        /// walk carries it so that rescaling to a weapon can add it to worn armor before the
+        /// weapon's armor multiplier applies; it is already inside <see cref="EffectiveArmor"/> of
+        /// a rescaled term.
+        /// </summary>
+        internal float NaturalArmor { get; }
 
         internal TakeOutLocationTerm(
             float weight,
@@ -53,7 +64,8 @@ namespace OnlyWar.Battles
             float zeroProgressThreshold,
             float effectiveArmor,
             float damagePerRatio,
-            float gap)
+            float gap,
+            float naturalArmor = 0f)
         {
             Weight = weight;
             PenetrationThreshold = penetrationThreshold;
@@ -62,6 +74,7 @@ namespace OnlyWar.Battles
             EffectiveArmor = effectiveArmor;
             DamagePerRatio = damagePerRatio;
             Gap = gap;
+            NaturalArmor = naturalArmor;
         }
     }
 

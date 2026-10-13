@@ -171,7 +171,8 @@ namespace OnlyWar.Persistence.Database.GameRules
                 ChapterGenerationProfiles = chapterGenerationProfiles,
                 SectorGenerationProfiles = sectorGenerationProfiles,
                 FactionBehaviorRulesProfiles = factionBehaviorRulesProfiles,
-                FactionDoctrines = GetFactionDoctrines(dbCon)
+                FactionDoctrines = GetFactionDoctrines(dbCon),
+                CyberneticOptions = GetCyberneticOptions(dbCon)
             };
             RulesDatabaseValidator.Validate(rules);
             return rules;
@@ -206,6 +207,28 @@ namespace OnlyWar.Persistence.Database.GameRules
                 };
             }
             return doctrines;
+        }
+
+        /// <summary>
+        /// Installed augmetic tiers (OnlyWar_TDD.md §5.3): each one's
+        /// own armor and constitution, which replace the body part's for wound resolution.
+        /// </summary>
+        private static List<CyberneticOption> GetCyberneticOptions(IDbConnection connection)
+        {
+            List<CyberneticOption> options = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT Id, Name, Armor, Constitution FROM CyberneticOption ORDER BY Id";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                options.Add(new CyberneticOption(
+                    reader.GetInt32(0),
+                    reader[1].ToString(),
+                    Convert.ToSingle(reader[2]),
+                    Convert.ToSingle(reader[3])));
+            }
+            return options;
         }
 
         private List<Faction> GetFactionTemplates(IDbConnection connection,

@@ -70,9 +70,40 @@ public sealed class MedicalScreenApplicationTests
     [InlineData(typeof(MedicalScreenView))]
     [InlineData(typeof(RecoveryScreenView))]
     [InlineData(typeof(ConfirmRecoveryCommand))]
+    [InlineData(typeof(QueueCyberneticRepairCommand))]
     public void MedicalBoundaryContainsNoLiveDomainGraph(Type root)
     {
         Assert.Empty(FindDomainGraph(root));
+    }
+
+    // OnlyWar_TDD.md §6.6.1: the player queues a repair from the Apothecarium and pays
+    // its Requisition at once. A command from a replaced session changes nothing.
+    [Fact]
+    public void QueueingACyberneticRepairChargesRequisitionAndRejectsAStaleSession()
+    {
+        var application = CreateApplication(out var patient);
+        var force = application.ActiveSession.Sector.PlayerForce;
+        force.Army.Requisition = 30;
+        var arm = patient.Body.HitLocations.First(location => location.Template.Name == "Right Arm");
+        arm.InstallCybernetic(null);
+        arm.Wounds.AddWound(WoundLevel.Moderate);
+        var view = application.QueryMedical(new(ApothecariumSelectionKind.Soldier, patient.Id));
+        var repair = Assert.Single(view.Soldier.SafeCyberneticRepairs);
+        Assert.True(repair.CanQueue);
+
+        Assert.False(application.QueueCyberneticRepair(
+            new(Guid.NewGuid(), patient.Id, repair.HitLocationId)).Succeeded);
+        Assert.Equal(30, force.Army.Requisition);
+
+        var result = application.QueueCyberneticRepair(
+            new(application.SessionToken, patient.Id, repair.HitLocationId));
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal(20, force.Army.Requisition);
+        Assert.Single(force.Army.CyberneticRepairJobs);
+        Assert.False(application.QueueCyberneticRepair(
+            new(application.SessionToken, patient.Id, repair.HitLocationId)).Succeeded);
+        Assert.Equal(20, force.Army.Requisition);
     }
 
     [Fact]

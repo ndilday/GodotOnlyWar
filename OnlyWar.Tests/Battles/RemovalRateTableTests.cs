@@ -183,11 +183,10 @@ public class RemovalRateTableTests
             shooter, 99_402, degrades: true, maximumRange: 200, baseDamage: 6);
         target.Armor = new Armor(TestModelFactory.TestArmor);
 
-        float effectiveArmor = target.Armor.Template.ArmorProvided
-            * rifle.Template.ArmorMultiplier;
+        float wornArmor = target.Armor.Template.ArmorProvided;
         IReadOnlyList<TakeOutLocationTerm> terms =
             RemovalMath.BuildTakeOutLocationTerms(
-                target, effectiveArmor, rifle.Template.WoundMultiplier);
+                target, wornArmor, rifle.Template.ArmorMultiplier, rifle.Template.WoundMultiplier);
         Assert.NotEmpty(terms);
 
         float previous = float.MaxValue;
@@ -196,7 +195,8 @@ public class RemovalRateTableTests
             float damageCoefficient = BattleModifiersUtil.CalculateDamageAtRange(
                 rifle.Template, range);
             float direct = RemovalMath.CalculateTakeOutProbabilityOnHit(
-                target, damageCoefficient, effectiveArmor, rifle.Template.WoundMultiplier);
+                target, damageCoefficient, wornArmor, rifle.Template.ArmorMultiplier,
+                rifle.Template.WoundMultiplier);
             float viaVector = RemovalMath.EvaluateTakeOutProbability(
                 terms, damageCoefficient);
 

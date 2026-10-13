@@ -156,6 +156,6 @@ namespace OnlyWar.Runtime.Logging
         }
 
         private static float BonusForPoints(float points, float difficulty) =>
-            (points <= 0f ? -4f : (float)Math.Log(points, 2)) - difficulty;
+            Skill.CalculateBonus(points, difficulty);
     }
 }

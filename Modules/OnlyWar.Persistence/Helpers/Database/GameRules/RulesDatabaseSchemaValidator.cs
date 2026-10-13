@@ -58,7 +58,8 @@ namespace OnlyWar.Persistence.Database.GameRules
             "SectorGenerationProfile",
             "ChapterGenerationTemplateAssignment",
             "ChapterGenerationFormationAssignment",
-            "ChapterGenerationUnitOrder"
+            "ChapterGenerationUnitOrder",
+            "CyberneticOption"
         ];
 
         // Optional policy tables. Their absence is valid because the corresponding loaders

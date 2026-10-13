@@ -900,7 +900,7 @@ internal static class BattleEngagementFrameBuilder
         {
             size += soldier.Soldier.Size;
             armor += soldier.Armor?.Template.ArmorProvided ?? 0;
-            constitution += soldier.Soldier.Constitution;
+            constitution += RemovalMath.RepresentativeConstitution(soldier);
             evasion += soldier.Soldier.Template.Species.RangedEvasion;
             battleValue += Math.Max(1, soldier.EffectiveBattleValue);
         }

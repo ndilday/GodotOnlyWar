@@ -201,6 +201,9 @@ namespace OnlyWar.Battles
         /// is materialized up front by <see cref="PrepareForParallelPlanning"/> so planning workers
         /// only ever read it.
         /// </summary>
+        // An in-battle change to HitLocation.IsCybernetic or HitLocation.Armor must bump
+        // Body.InjuryRevision if the walk ever reads a part's own values (today it reads only
+        // perceived, template values, so it does not).
         internal IReadOnlyList<TakeOutLocationTerm> UnitTakeOutTerms
         {
             get

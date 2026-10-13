@@ -57,12 +57,21 @@ namespace OnlyWar.Domain.Soldiers
         public BaseSkill BaseSkill { get; private set; }
         public float PointsInvested { get; private set; }
 
-        public float SkillBonus
+        /// <summary>The bonus of a skill the soldier has no record of.</summary>
+        public const float UntrainedBonus = -4f;
+
+        public float SkillBonus => CalculateBonus(PointsInvested, BaseSkill.Difficulty);
+
+        /// <summary>
+        /// <c>log2(points + p0) - difficulty</c>, with <c>p0 = 2^(difficulty - 4)</c>. At 0 points
+        /// this is exactly <see cref="UntrainedBonus"/>, so every fraction of a point is better than
+        /// untrained, and the curve has no break. With many points it is the plain
+        /// <c>log2(points) - difficulty</c>.
+        /// </summary>
+        public static float CalculateBonus(float points, float difficulty)
         {
-            get
-            {
-                return (PointsInvested == 0 ? -4 : (float)System.Math.Log(PointsInvested, 2)) - BaseSkill.Difficulty;
-            }
+            double offset = System.Math.Pow(2, difficulty + UntrainedBonus);
+            return (float)System.Math.Log(System.Math.Max(0f, points) + offset, 2) - difficulty;
         }
         public Skill(BaseSkill baseSkill, float points = 0)
         {

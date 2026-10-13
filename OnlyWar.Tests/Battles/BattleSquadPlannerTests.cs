@@ -390,7 +390,7 @@ public class BattleSquadPlannerTests
         HitLocation location = target.Soldier.Body.HitLocations
             .First(candidate => candidate.Template.IsMotive || candidate.Template.IsVital);
         float fresh = RemovalMath.CalculateTakeOutProbabilityOnHit(
-            target, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
+            target, damageCoefficient: 2f, wornArmor: 0f, armorMultiplier: 1f, weaponWoundMultiplier: 1f);
 
         uint setupWounds = location.Template.CrippleWound switch
         {
@@ -404,7 +404,7 @@ public class BattleSquadPlannerTests
         location.Wounds = new Wounds(setupWounds, 0);
 
         float wounded = RemovalMath.CalculateTakeOutProbabilityOnHit(
-            target, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
+            target, damageCoefficient: 2f, wornArmor: 0f, armorMultiplier: 1f, weaponWoundMultiplier: 1f);
 
         Assert.True(
             wounded > fresh,

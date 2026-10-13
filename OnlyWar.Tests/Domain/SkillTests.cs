@@ -14,17 +14,19 @@ public class SkillTests
         Assert.Equal(0, skill.PointsInvested);
     }
 
+    // log2(points + 2^(difficulty - 4)) - difficulty; the test ranged skill has difficulty 0, so
+    // the offset is 1/16 and 0 points give exactly the untrained -4.
     [Theory]
     [InlineData(0, -4)]
-    [InlineData(1, 0)]
-    [InlineData(2, 1)]
-    [InlineData(4, 2)]
-    [InlineData(8, 3)]
-    public void SkillBonus_UsesLogTwoProgression(float points, float expectedBonus)
+    [InlineData(1, 0.08746)]
+    [InlineData(2, 1.04439)]
+    [InlineData(4, 2.02237)]
+    [InlineData(8, 3.01123)]
+    public void SkillBonus_UsesShiftedLogTwoProgression(float points, float expectedBonus)
     {
         Skill skill = new(TestSkills.Ranged, points);
 
-        Assert.Equal(expectedBonus, skill.SkillBonus, precision: 5);
+        Assert.Equal(expectedBonus, skill.SkillBonus, precision: 4);
     }
 
     [Fact]
@@ -45,7 +47,7 @@ public class SkillTests
             dexterity: 12,
             skills: new Skill(TestSkills.Ranged, 4));
 
-        Assert.Equal(14, soldier.GetTotalSkillValue(TestSkills.Ranged), precision: 5);
+        Assert.Equal(14.02237f, soldier.GetTotalSkillValue(TestSkills.Ranged), precision: 4);
     }
 
     [Fact]

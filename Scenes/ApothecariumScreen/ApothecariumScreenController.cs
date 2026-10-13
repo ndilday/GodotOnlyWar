@@ -49,6 +49,7 @@ public partial class ApothecariumScreenController : MainScreenController
         _apothecariumView.VaultButtonPressed += OnVaultButtonPressed;
         _apothecariumView.TreeSelectionChanged += OnTreeSelectionChanged;
         _apothecariumView.ReplacementOptionPressed += OnReplacementOptionPressed;
+        _apothecariumView.CyberneticRepairPressed += OnCyberneticRepairPressed;
         _apothecariumView.RecoveryOperationsPressed += OnRecoveryOperationsPressed;
         _apothecariumView.RecoveryBackPressed += OnRecoveryBackPressed;
         _apothecariumView.RecoveryPatientSelected += OnRecoveryPatientSelected;
@@ -68,6 +69,7 @@ public partial class ApothecariumScreenController : MainScreenController
             _apothecariumView.VaultButtonPressed -= OnVaultButtonPressed;
             _apothecariumView.TreeSelectionChanged -= OnTreeSelectionChanged;
             _apothecariumView.ReplacementOptionPressed -= OnReplacementOptionPressed;
+            _apothecariumView.CyberneticRepairPressed -= OnCyberneticRepairPressed;
             _apothecariumView.RecoveryOperationsPressed -= OnRecoveryOperationsPressed;
             _apothecariumView.RecoveryBackPressed -= OnRecoveryBackPressed;
             _apothecariumView.RecoveryPatientSelected -= OnRecoveryPatientSelected;
@@ -104,6 +106,22 @@ public partial class ApothecariumScreenController : MainScreenController
         _recoveryProcedureType = option.Type;
         _showRecoveryOperations = true;
         RenderRecoveryOperations();
+    }
+
+    private void OnCyberneticRepairPressed(object sender, CyberneticRepairOptionView repair)
+    {
+        if (repair == null || _selectedId == null || repair.IsQueued) return;
+        RecoveryPlanCommitResult result = _application.QueueCyberneticRepair(new(
+            _sessionToken, _selectedId.Value, repair.HitLocationId));
+        if (result.Succeeded)
+        {
+            CampaignChanged?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            GD.Print(result.Message);
+        }
+        Render();
     }
 
     private void OnRecoveryOperationsPressed(object sender, EventArgs e)

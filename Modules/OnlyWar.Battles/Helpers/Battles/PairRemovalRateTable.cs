@@ -283,7 +283,7 @@ namespace OnlyWar.Battles
             IReadOnlyList<TakeOutLocationTerm> takeOutTerms =
                 template.DoesDamageDegradeWithRange
                     ? RemovalMath.BuildTakeOutLocationTerms(
-                        victim, armor * template.ArmorMultiplier, template.WoundMultiplier)
+                        victim, armor, template.ArmorMultiplier, template.WoundMultiplier)
                     : null;
             (float takeOut, float progress) = RangedShotEvaluator.CalculateRangedHitRemoval(
                 victim, weapon, victimRange, armor);
@@ -354,15 +354,14 @@ namespace OnlyWar.Battles
             int? fixedRounds = weapon.IsUnlimited || weapon.IsSelfRegenerating
                 ? 0
                 : weapon.IsConsumableItem ? 1 : null;
-            float effectiveArmor = (evaluation.Target.Armor?.Template.ArmorProvided ?? 0f)
-                * template.ArmorMultiplier;
+            float wornArmor = evaluation.Target.Armor?.Template.ArmorProvided ?? 0f;
             // Only a degrading weapon needs the K_loc vector. For a non-degrading weapon
             // CalculateDamageAtRange is a flat DamageMultiplier, so takeOut0 IS takeOut(r) for
             // every r -- exact, not an approximation.
             IReadOnlyList<TakeOutLocationTerm> takeOutTerms =
                 template.DoesDamageDegradeWithRange
                     ? RemovalMath.BuildTakeOutLocationTerms(
-                        evaluation.Target, effectiveArmor, template.WoundMultiplier)
+                        evaluation.Target, wornArmor, template.ArmorMultiplier, template.WoundMultiplier)
                     : null;
             return new PairRemovalTerm(
                 shooter.Soldier.Id,

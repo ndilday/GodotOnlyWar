@@ -439,7 +439,7 @@ Relationship records such as `PresenceRequestRecord`, `OrderCharacterRecord`, an
 rebuilds session state, while Operations and Campaign bind order, posting, relationship, narrative,
 and chronicle projections after the domain graph exists. SQL access does not own those policies.
 
-`SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 23 and are written to
+`SaveFormat.CurrentVersion` and `MinimumSupportedVersion` are both 24 and are written to
 `GlobalData.SaveVersion`. Missing saves are opened in neither create nor write mode, and the chooser
 retains compatible, incompatible, and corrupt entries with an explicit reason.
 
@@ -531,7 +531,12 @@ Soldier              (Id, SoldierTemplateId, SquadId, Name, Strength, Dexterity,
                       PsychicPower, AttackSpeed, Size, MoveSpeed)
 SoldierSkill         (SoldierId, BaseSkillId, PointsInvested)
 HitLocation          (SoldierId, HitLocationTemplateId, IsCybernetic,
-                      Armor, WoundTotal, WeeksOfHealing)
+                      Armor, WoundTotal, WeeksOfHealing, Constitution)
+                                                          -- Armor/Constitution: an installed augmetic's own values (§6.6.1)
+MedicalProcedure     (SoldierId, HitLocationTemplateId, ProcedureType, WeeksRemaining,
+                      RequisitionCost)
+CyberneticRepairJob  (Ordinal, SoldierId, HitLocationTemplateId, HoursCompleted,
+                      RequisitionCost)                     -- queue order = Ordinal (§6.6.1)
 
 PlayerSoldier        (SoldierId, ImplantMillenium, ImplantYear, ImplantWeek)
 SoldierEvaluation       (SoldierId, Millenium, Year, Week)   -- identity only
@@ -717,7 +722,9 @@ holds the authored service-record summary, and `Render()` formats that summary f
 
 #### Wound Model
 
-`HitLocation` holds a `Wounds` struct (two `uint` fields: `WoundTotal` and `WeeksOfHealing`), an `IsCybernetic` flag, a per-location `Armor` float, and a reference to its immutable `HitLocationTemplate`.
+`HitLocation` holds a `Wounds` struct (two `uint` fields: `WoundTotal` and `WeeksOfHealing`), an `IsCybernetic` flag, per-location `Armor` and `Constitution` floats, and a reference to its immutable `HitLocationTemplate`.
+
+**Location armor and constitution.** `HitLocation.NaturalArmor` is the template's natural armor, or an installed augmetic's own `Armor`, which replaces it (it does not add to it). The attack actions add it to worn armor and scale the sum by the weapon's `ArmorMultiplier` before the penetration check (`RemovalMath.EffectiveArmor`); `WoundResolver` no longer subtracts natural armor. `HitLocation.EffectiveConstitution(soldier)` is the augmetic's own `Constitution` when it has one (non-zero), else the soldier's, and `WoundResolver` divides by it. A severed augmetic stops being cybernetic and falls back to the template values. **The enemy cannot see augmetics:** planner estimates read `PerceivedNaturalArmor` (always the template's) and the species-median constitution for every location, and whole-soldier profiles use `RemovalMath.RepresentativeConstitution` (the organic value) with no cybernetic armor. Only resolution sees a part's real values. Nothing changes `IsCybernetic` or `Armor` during a battle, so `BattleSoldier.UnitTakeOutTerms` needs no refresh for them; a field repair between days raises the injury revision through `Wounds.HealWounds`.
 
 `WoundTotal` accumulates using `WoundLevel` values as bitmask steps:
 
@@ -802,12 +809,15 @@ SkillRoleAssignment
 Skill
   ├─ BaseSkill : BaseSkill
   ├─ PointsInvested : float
-  └─ SkillBonus = (PointsInvested == 0 ? -4 : log2(PointsInvested)) - Difficulty
+  └─ SkillBonus = log2(PointsInvested + 2^(Difficulty - 4)) - Difficulty
 
 Soldier.GetTotalSkillValue(BaseSkill) = attribute value + SkillBonus
+                                        (no Skill record: attribute value - 4)
 ```
 
 Attributes and skills both contribute to the same roll, meaning untrained soldiers still benefit from high raw attributes.
+
+The `2^(Difficulty - 4)` offset (since 2026-10-13, `Skill.CalculateBonus`) makes 0 points equal the untrained -4 (`Skill.UntrainedBonus`), so every fraction of a point is an improvement and a skill record with no points reads the same as no record. The plain `log2(points) - Difficulty` it replaced fell below untrained under `2^(Difficulty - 4)` points (0.25 at difficulty 2) and without limit toward 0, so the first small learn-by-doing award made a soldier worse. A floor at -4 was rejected: it removes the penalty but gives fractions below the crossover no benefit. With many points the two curves agree (+0.02 at 16 points, difficulty 2).
 
 ### 5.4 Squads & Units
 
@@ -1705,7 +1715,7 @@ Application cadence adapter invoked by the `ProcessMedical` step of
 returned completion facts to roster/posting/event state. The module has two policy halves.
 
 - **Natural healing.** `MedicalHealthPolicy` applies `Wounds.ApplyWeekOfHealing()` to every wounded hit location regardless of deployment, *except* severed non-vital locations that require a replacement procedure. Crippled locations do not require replacement for now. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree. Cadence and the daily Astartes pass are specified in §5.3.
-- **Procedure resolution.** `MedicalHealthPolicy.AdvanceProcedure` decrements weeks-remaining and, on completion, clears the location's wounds and returns a typed completion transition. The Application/Campaign adapter removes the persisted procedure and synchronizes reservation flags. Cybernetic completion sets `HitLocation.IsCybernetic`; vat-grown leaves it clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag.
+- **Procedure resolution.** `MedicalHealthPolicy.AdvanceProcedure` decrements weeks-remaining and, on completion, clears the location's wounds and returns a typed completion transition. The Application/Campaign adapter removes the persisted procedure and synchronizes reservation flags. Cybernetic completion installs `GameRulesData.StandardCyberneticOption` (`HitLocation.InstallCybernetic`: the flag plus the option's armor and constitution); vat-grown leaves the flag clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag.
 
 Medical completion returns a bounded list of `CompletedMedicalProcedure` facts. Each successful
 primary target emits one `BodyPartReplacement` event, recording the method, prior cybernetic state,
@@ -1735,6 +1745,55 @@ read live wound state. All tunables live in `FieldCareConstants`, never the rule
 - **Ceiling.** `IsReplacementEligible` is true for severed non-vital locations only. Crippled locations remain eligible for natural and field healing; a brother who has actually lost a non-vital part is a surgical case.
 
 Two seams, deliberately deduped. The mission pass runs on `MissionDayScheduler`'s scheduler-level `onDayEnd`, iterating **distinct `Order`s** — never mission elements, because `BuildMissionElements` fans one order into several single-squad drivers for `IndependentSquads` and a per-driver pass would make an Apothecary silently worth 3×. Garrison care runs the same `FieldCarePolicy` routine through `ChapterUpkeepProcessor.ProcessMedical` before the weekly cascade. **Field beats garrison by construction, not by rule:** an Apothecary under an order fails the "not on a mission" test defining the garrison pool, so the pools are disjoint and no man spends a day twice. Co-location resolves through `PlayerSoldier.EffectiveRegion`, since an attached Apothecary's home squad may sit on the ship while he is forward — `MedicalProcedureService.HasCoLocatedStaff` routes through it for the same reason.
+
+**Techmarine cybernetic repair.** Augmetics never heal naturally and Apothecaries cannot treat them
+(`MedicalHealthPolicy`, `FieldCarePolicy` both skip cybernetic locations), so a damaged augmetic
+needs a Techmarine. The tier comes from the required rules table `CyberneticOption` (`Id, Name,
+Armor, Constitution`; one row today, Standard Augmetic). `OnlyWar.Medical.Treatment.CyberneticRepairPolicy`
+owns repairability, job time and the daily allocation; Campaign's `CyberneticRepairService` owns the
+queue, cost, reach, reports and experience. Tunables live in `CyberneticRepairConstants`, never the
+rules DB.
+
+- **Repairable** means cybernetic, not severed, and damaged. A severed augmetic is gone and returns to
+  the replacement-surgery flow. One finished job resets the whole part (`Wounds.HealWounds`) whatever
+  its damage; damage changes only the time. Organic healing and repair run on the same soldier
+  independently, on different locations.
+- **Queue and cost.** The player queues a job from the Apothecarium and pays a flat 10 Requisition at
+  once (`TryQueueRepair`); queueing needs no Techmarine present. Jobs live on
+  `Army.CyberneticRepairJobs` and are worked in queue order, with no triage. A job whose brother left
+  the roster or whose part was severed or is no longer damaged is pruned without refund.
+- **Time.** Every Techmarine has a flat 8 working hours a day; unused hours are lost and no rating
+  changes them (the first plan took the budget from a rating; on 2026-10-12 skill moved onto job
+  time instead). A job needs `8 × severity` hours at the reference skill (Negligible 0.25, Minor 0.5,
+  Moderate 1, Major 2, Critical 3, Massive 4, Mortal 5), and a provider's hour does `1/f` reference
+  hours, with `f = clamp(0.9^(skill − 12), 0.5, 2.0)` from Engineering (Cybernetics). The most skilled
+  provider works first; providers share a job and carry leftover hours to the next. The job saves
+  the hours **done**, not remaining, so a part damaged further while it waits needs more work and the
+  work done still counts.
+- **Pools**, as for field care. Field: the order's Techmarines repair the queued parts of everyone
+  under the order, on days the order had no mission step (a day none of its drivers advanced into —
+  a step uses the whole day). After the mission day loop ends, `MissionTurnProcessor` runs the field
+  pool for the rest of the 7-day week, because the force stays in the field until the turn resolves.
+  Garrison: `ChapterUpkeepProcessor.ProcessMedical` runs 7 days for Techmarines not on a mission and
+  co-located brothers likewise not on a mission. The pools are disjoint by construction.
+  `IsAvailableTechmarine` is `MedicalProcedureService.IsTechmarine` (Techmarine, Master Techmarine,
+  Master of the Forge), combat-effective, and not on Mars.
+- **Mechanicus loan.** While the loan runs, its adepts are one more provider in every pool, 8 hours a
+  day at factor 1.0, wherever `TechmarineSupport` accepts the loan. They earn no experience.
+- **Experience and drill.** 8 hours of repair is worth 4 training hours (a training week is 56 hours,
+  so one training hour is 0.2/56 points), credited in full to Engineering (Cybernetics) for each
+  Techmarine's own hours. `TurnController` sums each Techmarine's field and garrison hours and
+  `TrainNonDeployedPlayerForces` takes `hours × 0.2/56` off his drill, as mission days do, so no hour
+  counts twice.
+- **Report.** `CyberneticRepairReport` (Medical.Abstractions) is the repair equivalent of
+  `FieldCareReport`: one per order on `MissionContext.CyberneticRepair`, carried into
+  `MissionOutcomeClassification` and rendered by `MissionReportSummaryBuilder.BuildCyberneticRepairLine`
+  only when work was done.
+- **Screen.** The Apothecarium soldier panel lists each repairable augmetic with its queue requisites
+  or remaining hours (`CyberneticRepairOptionView`), queued through
+  `IMedicalScreenApplication.QueueCyberneticRepair`; the vault panel lists the queue
+  (`CyberneticRepairQueueRow`). The Armory will show the Techmarine time budget once equipment work
+  uses it.
 
 Gene-seed recovery resolves once per confirmed-dead brother in `BattleTurnResolver.RemoveSoldiersKilledInBattle` (`ResolveGeneseedRecovery`), folding any recovered gland's purity into the chapter aggregate and writing a structured `SoldierEventType.GeneseedRecovery` event onto the preserved fallen-brother dossier; the battle log reads that recorded outcome rather than recomputing it. `PlayerForce` carries a count-weighted aggregate `GeneseedPurity` float alongside `GeneseedStockpile` — seeded pristine at founding, each recovered gland contributing a purity rolled around a baseline with small downward drift (`GeneseedRules`). Both persist on the extended `GlobalData` row. Stockpile drawdown happens in the recruitment pipeline (one unit consumed on Phase 0 → Phase 1; PRD §4.9).
 
@@ -2105,6 +2164,8 @@ room for individual dates without a save change.
 work experience, and `MechanicusTrainingService.Train` applies the rules-data profile
 `mechanicus_mars_training` at the ordinary 0.2 points a week. The profile mirrors the Techmarine MOS
 skills and weights; over 1,040 weeks every Techmarine skill receives at least its MOS points.
+Engineering (Cybernetics), the repair skill (§6.6.1), is in the profile and in the MOS training of
+all three Techmarine templates.
 
 **Return.** `TurnController` runs `MechanicusReturnService.ProcessReturns` each turn after training
 and puts the `MechanicusReturnReport` on `TurnResolutionResult.MechanicusReturns`, which

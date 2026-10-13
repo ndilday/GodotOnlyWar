@@ -333,7 +333,8 @@ internal static class TurnReportProjector
             MissionOutcomeClassification classification = MissionOutcomeClassifier.Classify(context);
             string summary = MissionReportSummaryBuilder.BuildSummary(classification, location)
                 + MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(classification)
-                + MissionReportSummaryBuilder.BuildFieldCareLine(classification);
+                + MissionReportSummaryBuilder.BuildFieldCareLine(classification)
+                + MissionReportSummaryBuilder.BuildCyberneticRepairLine(classification);
             string outcomeStatus = MissionReportSummaryBuilder.BuildOutcomeStatus(classification);
             IReadOnlyList<MissionDebriefLine> sourceLines = context.DebriefLines.Count > 0
                 ? context.DebriefLines

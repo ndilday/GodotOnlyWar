@@ -37,6 +37,34 @@ public class ShootActionFriendlyFireTests
     }
 
     [Fact]
+    public void Execute_ACyberneticPartsOwnArmorStopsTheHitLikeWornArmor()
+    {
+        // Same shot as above, with no worn armor: every location is an augmetic whose own armor
+        // the rifle cannot beat. The action applies location armor with worn armor, before the
+        // penetration check, so the hit lands and does nothing.
+        BattleSquad shooters = CreateSquad(true, (1, "Shooter"));
+        BattleSquad targets = CreateSquad(false, (2, "Target"));
+        BattleSoldier shooter = shooters.Soldiers[0];
+        BattleSoldier target = targets.Soldiers[0];
+        shooter.Soldier.AddSkillPoints(
+            shooter.EquippedRangedWeapons[0].Template.RelatedSkill,
+            1_000_000);
+        target.Armor = null;
+        foreach (HitLocation location in target.Soldier.Body.HitLocations)
+        {
+            location.IsCybernetic = true;
+            location.Armor = byte.MaxValue;
+        }
+        BattleState state = CreateState(shooters, targets);
+        ShootAction action = CreateAction(shooter, target, grid: null, new SeededRNG(1));
+
+        action.Execute(state);
+
+        Assert.Equal(1, action.HitCount);
+        Assert.Empty(action.WoundResolutions);
+    }
+
+    [Fact]
     public void CalculateToHitModifiers_FiringIntoMeleeAppliesSharedFlatPenalty()
     {
         BattleSquad shooters = CreateSquad(true, (1, "Shooter"));

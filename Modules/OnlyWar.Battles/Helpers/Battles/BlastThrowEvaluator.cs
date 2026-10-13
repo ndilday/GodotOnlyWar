@@ -453,7 +453,8 @@ namespace OnlyWar.Battles
                 float removalFraction = RemovalMath.CalculateRemovalFractionOnHit(
                     victim.Target,
                     victim.Weapon.Template.DamageMultiplier * falloff * falloff,
-                    armor * victim.Weapon.Template.ArmorMultiplier,
+                    armor,
+                    victim.Weapon.Template.ArmorMultiplier,
                     victim.Weapon.Template.WoundMultiplier);
                 float removed = weight * removalFraction * victim.BattleValue;
                 if (victim.Friendly)

@@ -50,7 +50,34 @@ namespace OnlyWar.Application
         int Requisition = 0,
         // The count-weighted aggregate purity (0..1) of the sealed stockpile (PRD 4.8).
         float AggregatePurity = 1.0f,
-        MedicalSeverity PuritySeverity = MedicalSeverity.Stable);
+        MedicalSeverity PuritySeverity = MedicalSeverity.Stable,
+        // The chapter's cybernetic repair queue, in the order the Techmarines work it.
+        IReadOnlyList<CyberneticRepairQueueRow> RepairQueue = null)
+    {
+        public IReadOnlyList<CyberneticRepairQueueRow> SafeRepairQueue => RepairQueue ?? [];
+    }
+
+    /// <summary>
+    /// One damaged augmetic on the selected brother. <see cref="HoursRemaining"/> is working hours
+    /// at the reference skill; a skilled Techmarine takes fewer.
+    /// </summary>
+    public sealed record CyberneticRepairOptionView(
+        int HitLocationId,
+        string LocationName,
+        string Damage,
+        float HoursRemaining,
+        bool IsQueued,
+        int RequisitionCost,
+        IReadOnlyList<MedicalTreatmentRequisiteView> Requisites,
+        bool CanQueue);
+
+    /// <summary>One queued repair, in queue order (Position 1 is worked first).</summary>
+    public sealed record CyberneticRepairQueueRow(
+        int Position,
+        int SoldierId,
+        string SoldierName,
+        string LocationName,
+        float HoursRemaining);
 
     public sealed record GeneSeedVaultRow(
         string Title,
@@ -100,8 +127,13 @@ namespace OnlyWar.Application
         MedicalSeverity WorstSeverity,
         IReadOnlyList<WoundLocationSummary> Wounds,
         IReadOnlyList<MedicalTreatmentOptionView> ReplacementOptions,
-        DutyReadinessReasonCode DutyReasonCode = DutyReadinessReasonCode.Ready)
+        DutyReadinessReasonCode DutyReasonCode = DutyReadinessReasonCode.Ready,
+        // Damaged augmetics and their Techmarine repair, queued or not
+        // (OnlyWar_TDD.md §6.6.1).
+        IReadOnlyList<CyberneticRepairOptionView> CyberneticRepairs = null)
     {
+        public IReadOnlyList<CyberneticRepairOptionView> SafeCyberneticRepairs =>
+            CyberneticRepairs ?? [];
         public bool IsDutyReady => IsCombatEffective;
         public bool IsWithheldByDoctrine =>
             DutyReasonCode == DutyReadinessReasonCode.ChapterInjuryThreshold;

@@ -73,7 +73,8 @@ namespace OnlyWar.Campaign
         // location's wounds, returning it to full capability.
         public static IReadOnlyList<CompletedMedicalProcedure> ResolveProcedures(
             IList<MedicalProcedure> procedures,
-            IReadOnlyDictionary<int, PlayerSoldier> soldierMap)
+            IReadOnlyDictionary<int, PlayerSoldier> soldierMap,
+            CyberneticOption cyberneticOption = null)
         {
             List<CompletedMedicalProcedure> completed = new();
             if (procedures == null)
@@ -88,7 +89,7 @@ namespace OnlyWar.Campaign
             {
                 MedicalProcedure procedure = procedures[i];
                 MedicalProcedureCompletion transition = MedicalHealthPolicy.AdvanceProcedure(
-                    procedure, bodies);
+                    procedure, bodies, cyberneticOption);
                 if (procedure.WeeksRemaining > 0) continue;
                 if (transition != null
                     && soldierMap?.TryGetValue(transition.SoldierId, out PlayerSoldier soldier) == true)

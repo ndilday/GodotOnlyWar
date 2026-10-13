@@ -435,8 +435,52 @@ namespace OnlyWar.Domain.Soldiers
             get => _isCybernetic && !IsSevered;
             set => _isCybernetic = value && !IsSevered;
         }
+        // Persisted per location: an installed cybernetic part's own armor. Read through
+        // NaturalArmor, which is the value battle code uses.
         public float Armor;
-        
+        // Persisted per location: an installed cybernetic part's own constitution. Zero means the
+        // part has no value of its own (a part from a save made before cybernetic options existed),
+        // and the soldier's constitution applies. Read through EffectiveConstitution.
+        public float Constitution;
+
+        /// <summary>
+        /// Installs a cybernetic part from <paramref name="option"/>: the location becomes
+        /// cybernetic and takes the option's armor and constitution. With no option, the part has
+        /// no armor and uses the soldier's constitution.
+        /// </summary>
+        public void InstallCybernetic(CyberneticOption option)
+        {
+            IsCybernetic = true;
+            Armor = option?.Armor ?? 0f;
+            Constitution = option?.Constitution ?? 0f;
+        }
+
+        /// <summary>
+        /// The armor this location itself provides, in addition to worn armor
+        /// (OnlyWar_TDD.md §5.3). An installed cybernetic part replaces
+        /// the body part, so its own <see cref="Armor"/> replaces the template's natural armor; an
+        /// organic location, or an augmetic that has been severed, uses the template's.
+        /// The attack actions add it to worn armor before the weapon's armor multiplier.
+        /// </summary>
+        public float NaturalArmor => IsCybernetic ? Armor : Template.NaturalArmor;
+
+        /// <summary>
+        /// The natural armor a shooter can judge at this location: always the template's. A
+        /// cybernetic part inside armor is not visible, so planner estimates read this and not
+        /// <see cref="NaturalArmor"/>.
+        /// </summary>
+        public float PerceivedNaturalArmor => Template.NaturalArmor;
+
+        /// <summary>
+        /// The constitution a wound to this location is measured against, for a soldier whose
+        /// own constitution is <paramref name="soldier"/>.Constitution. Wound resolution reads it.
+        /// Planner estimates deliberately do not: they use the species median for every location.
+        /// </summary>
+        public float EffectiveConstitution(ISoldier soldier) =>
+            // A cybernetic part uses its own per-option constitution (OnlyWar_TDD.md §5.3),
+            // unless it has none recorded.
+            IsCybernetic && Constitution > 0f ? Constitution : soldier.Constitution;
+
         public bool IsSevered
         {
             get
@@ -486,13 +530,14 @@ namespace OnlyWar.Domain.Soldiers
             Armor = 0;
         }
 
-        public HitLocation(HitLocationTemplate template, bool isCybernetic, float armor, 
-            uint woundTotal, uint weeksOfHealing)
+        public HitLocation(HitLocationTemplate template, bool isCybernetic, float armor,
+            uint woundTotal, uint weeksOfHealing, float constitution = 0f)
         {
             Template = template;
             Wounds = new Wounds(woundTotal, weeksOfHealing);
             IsCybernetic = isCybernetic;
             Armor = armor;
+            Constitution = constitution;
         }
 
         private void Wounds_Changed()

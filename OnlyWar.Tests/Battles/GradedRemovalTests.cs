@@ -47,7 +47,7 @@ public class GradedRemovalTests
         float effectiveArmor)
     {
         IReadOnlyList<TakeOutLocationTerm> terms = RemovalMath.BuildTakeOutLocationTerms(
-            target, effectiveArmor, weaponWoundMultiplier: 1f);
+            target, wornArmor: effectiveArmor, armorMultiplier: 1f, weaponWoundMultiplier: 1f);
         return (
             RemovalMath.EvaluateTakeOutProbability(terms, damageCoefficient),
             RemovalMath.EvaluateWoundProgress(terms, damageCoefficient));
@@ -72,7 +72,8 @@ public class GradedRemovalTests
             RemovalMath.CalculateRemovalFractionOnHit(
                 armoured,
                 damageCoefficient: 1f,
-                effectiveArmor: 500f,
+                wornArmor: 500f,
+                armorMultiplier: 1f,
                 weaponWoundMultiplier: 1f),
             6);
     }
@@ -126,9 +127,9 @@ public class GradedRemovalTests
         location.Wounds = new Wounds(setupWounds, 0);
 
         float freshRemoval = RemovalMath.CalculateRemovalFractionOnHit(
-            fresh, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
+            fresh, damageCoefficient: 2f, wornArmor: 0f, armorMultiplier: 1f, weaponWoundMultiplier: 1f);
         float softenedRemoval = RemovalMath.CalculateRemovalFractionOnHit(
-            softened, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
+            softened, damageCoefficient: 2f, wornArmor: 0f, armorMultiplier: 1f, weaponWoundMultiplier: 1f);
 
         Assert.True(
             softenedRemoval > freshRemoval,
@@ -144,7 +145,7 @@ public class GradedRemovalTests
         BattleSoldier weak = Target("Soft", 30_405, constitution: 1);
 
         float removal = RemovalMath.CalculateRemovalFractionOnHit(
-            weak, damageCoefficient: 50f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
+            weak, damageCoefficient: 50f, wornArmor: 0f, armorMultiplier: 1f, weaponWoundMultiplier: 1f);
 
         Assert.InRange(removal, 0f, 1f);
     }

@@ -35,7 +35,10 @@ namespace OnlyWar.Persistence.Database.GameState
         // 23: ambush targets are a share of the enemy's deployed battle value, and the load-time
         //     estimate for ambushes saved without a target is gone. No schema change; this is a
         //     deliberate incompatible save break.
-        public const int CurrentVersion = 23;
+        // 24: HitLocation gains a cybernetic part's own Constitution, and the CyberneticRepairJob
+        //     table holds queued Techmarine repairs (OnlyWar_TDD.md §6.6.1). This is a
+        //     deliberate incompatible save break.
+        public const int CurrentVersion = 24;
         public const int MinimumSupportedVersion = CurrentVersion;
     }
 }

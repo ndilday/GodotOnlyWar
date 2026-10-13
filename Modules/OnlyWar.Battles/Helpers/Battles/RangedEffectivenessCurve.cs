@@ -406,6 +406,9 @@ namespace OnlyWar.Battles
             // K = effectiveArmor + constitution/woundMultiplier is the damage that disables it in
             // one hit, and the gap is one Critical's worth of Negligible wounds. Same meaning as
             // TakeOutLocationTerm's fields, so the shared evaluator applies.
+            // target.Constitution comes from RemovalMath.RepresentativeConstitution: the organic
+            // value, ignoring cybernetic parts, and the profile carries no natural armor (decided
+            // 2026-10-12, OnlyWar_TDD.md §5.3).
             float damagePerRatio = Math.Max(0f, target.Constitution) / woundMultiplier;
             TakeOutLocationTerm[] locations =
             [

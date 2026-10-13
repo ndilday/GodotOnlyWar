@@ -38,6 +38,9 @@ public sealed class MissionOutcomeClassification
     public IReadOnlyList<string> FieldCareApothecaries { get; init; } = [];
     public int FieldCareTreatments { get; init; }
     public int FieldCareTreatedBrothers { get; init; }
+    public IReadOnlyList<string> CyberneticRepairTechnicians { get; init; } = [];
+    public int CyberneticRepairsCompleted { get; init; }
+    public float CyberneticRepairHours { get; init; }
     public float Impact { get; init; }
     public DefenseType? SabotageTarget { get; init; }
     public double SabotageDamage { get; init; }

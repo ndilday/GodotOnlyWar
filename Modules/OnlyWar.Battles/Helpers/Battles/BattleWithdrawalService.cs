@@ -1982,7 +1982,8 @@ namespace OnlyWar.Battles
             float size = (float)target.Average(soldier => soldier.Soldier.Size);
             float armor = (float)target.Average(
                 soldier => soldier.Armor?.Template.ArmorProvided ?? 0);
-            float constitution = (float)target.Average(soldier => soldier.Soldier.Constitution);
+            float constitution = (float)target.Average(
+                soldier => RemovalMath.RepresentativeConstitution(soldier));
             float evasion = (float)target.Average(
                 soldier => soldier.Soldier.Template.Species.RangedEvasion);
             float ranged = GetActiveSquads(pursuingSide)
