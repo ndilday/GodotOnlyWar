@@ -33,13 +33,21 @@ CREATE TABLE LastTurnReport (Id INTEGER PRIMARY KEY CHECK (Id = 1), ResolvedDate
 
 -- Table: HitLocation
 -- Armor and Constitution are an installed cybernetic part's own values (zero when organic).
-CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, IsCybernetic BOOLEAN NOT NULL, Armor REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER, Constitution REAL NOT NULL DEFAULT 0);
+-- RequiresOrganReplacement marks a vital location that needs an organ replacement
+-- (Design/Active/VitalLocationReplacement.md §3.2).
+CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, IsCybernetic BOOLEAN NOT NULL, Armor REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER, Constitution REAL NOT NULL DEFAULT 0, RequiresOrganReplacement BOOLEAN NOT NULL DEFAULT 0);
+
+-- Table: AugmeticOrgan
+-- An augmetic organ inside an organic vital location (Design/Active/VitalLocationReplacement.md
+-- §3.4). OrganIndex is its stable identity within the location; a repair job names it.
+CREATE TABLE AugmeticOrgan (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, OrganIndex INTEGER NOT NULL, Constitution REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER NOT NULL);
 
 -- Table: CyberneticRepairJob
 -- A queued Techmarine repair of one damaged cybernetic part (OnlyWar_TDD.md §6.6.1).
 -- HoursCompleted is the work done so far, in hours at the reference skill. Ordinal keeps the
--- queue order, which is the order jobs are worked in.
-CREATE TABLE CyberneticRepairJob (Ordinal INTEGER NOT NULL, SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, HoursCompleted REAL NOT NULL, RequisitionCost INTEGER NOT NULL);
+-- queue order, which is the order jobs are worked in. OrganIndex names an augmetic organ inside
+-- the location; NULL repairs the location's own part.
+CREATE TABLE CyberneticRepairJob (Ordinal INTEGER NOT NULL, SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, HoursCompleted REAL NOT NULL, RequisitionCost INTEGER NOT NULL, OrganIndex INTEGER);
 
 -- Table: MedicalProcedure
 -- A medical procedure in progress in the Apothecarium (PRD 4.8 / 5.3). HitLocationTemplateId

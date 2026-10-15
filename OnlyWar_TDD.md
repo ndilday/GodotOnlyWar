@@ -531,12 +531,15 @@ Soldier              (Id, SoldierTemplateId, SquadId, Name, Strength, Dexterity,
                       PsychicPower, AttackSpeed, Size, MoveSpeed)
 SoldierSkill         (SoldierId, BaseSkillId, PointsInvested)
 HitLocation          (SoldierId, HitLocationTemplateId, IsCybernetic,
-                      Armor, WoundTotal, WeeksOfHealing, Constitution)
+                      Armor, WoundTotal, WeeksOfHealing, Constitution,
+                      RequiresOrganReplacement)
                                                           -- Armor/Constitution: an installed augmetic's own values (§6.6.1)
+AugmeticOrgan        (SoldierId, HitLocationTemplateId, OrganIndex, Constitution,
+                      WoundTotal, WeeksOfHealing)          -- organs inside an organic vital location (§5.3)
 MedicalProcedure     (SoldierId, HitLocationTemplateId, ProcedureType, WeeksRemaining,
                       RequisitionCost)
 CyberneticRepairJob  (Ordinal, SoldierId, HitLocationTemplateId, HoursCompleted,
-                      RequisitionCost)                     -- queue order = Ordinal (§6.6.1)
+                      RequisitionCost, OrganIndex)         -- queue order = Ordinal; OrganIndex NULL = the location's own part (§6.6.1)
 
 PlayerSoldier        (SoldierId, ImplantMillenium, ImplantYear, ImplantWeek)
 SoldierEvaluation       (SoldierId, Millenium, Year, Week)   -- identity only
@@ -725,6 +728,13 @@ holds the authored service-record summary, and `Render()` formats that summary f
 `HitLocation` holds a `Wounds` struct (two `uint` fields: `WoundTotal` and `WeeksOfHealing`), an `IsCybernetic` flag, per-location `Armor` and `Constitution` floats, and a reference to its immutable `HitLocationTemplate`.
 
 **Location armor and constitution.** `HitLocation.NaturalArmor` is the template's natural armor, or an installed augmetic's own `Armor`, which replaces it (it does not add to it). The attack actions add it to worn armor and scale the sum by the weapon's `ArmorMultiplier` before the penetration check (`RemovalMath.EffectiveArmor`); `WoundResolver` no longer subtracts natural armor. `HitLocation.EffectiveConstitution(soldier)` is the augmetic's own `Constitution` when it has one (non-zero), else the soldier's, and `WoundResolver` divides by it. A severed augmetic stops being cybernetic and falls back to the template values. **The enemy cannot see augmetics:** planner estimates read `PerceivedNaturalArmor` (always the template's) and the species-median constitution for every location, and whole-soldier profiles use `RemovalMath.RepresentativeConstitution` (the organic value) with no cybernetic armor. Only resolution sees a part's real values. Nothing changes `IsCybernetic` or `Armor` during a battle, so `BattleSoldier.UnitTakeOutTerms` needs no refresh for them; a field repair between days raises the injury revision through `Wounds.HealWounds`.
+
+**Vital-organ replacement** (`Design/Active/VitalLocationReplacement.md`). Two more pieces of per-location state, both persisted:
+
+- `HitLocation.RequiresOrganReplacement` marks a vital location that needs an organ replacement. `PlayerChapterBattleAftermathPolicy` sets it at battle end, before `CasualtyStateEvaluator.Classify`, for a player brother whose chapter held the field: a severed Vitals (or one holding a severed augmetic organ) without an Unsurvivable wound survives on a session-RNG roll of `VitalOrganRules.SeveredVitalsSurvivalChance`, and a Torso crippled in that battle (the policy snapshots crippled torsos at construction) is flagged on a roll of `CrippledTorsoReplacementChance`. No roll is made for a brother another severed vital kills, and the Torso roll is skipped when the Vitals roll fails. `IsReplacementEligible` is true for a flagged location; `CasualtyStateEvaluator.HasSeveredVitalLocation` ignores it and counts a severed augmetic organ as its host severed.
+- `HitLocation.AugmeticOrgans` is a list of `AugmeticOrgan` (stable `Index`, own `Wounds`, own `Constitution`, no armor) inside an organic Torso or Vitals, at most `VitalOrganRules.MaximumAugmeticOrgansPerLocation`. An organ uses its host's cripple/sever thresholds; its wound changes raise the body's injury revision; `Soldier.CanFight` treats a crippled organ as a crippled vital. `WoundResolver` (given the session RNG by `BattleTurnResolver`) routes a hit on a location with *n* organs to an organ with probability `n × HitChancePerAugmeticOrgan`, uniformly among them, and measures the band against the organ's constitution; it draws nothing for a location without organs. A newly crippled organ raises the death hook. Planner estimates and Battle Value ignore organs.
+
+Torso and Vitals are recognised by template name (`VitalOrganRules.IsTorso` / `IsVitals`), because Brain and Vitals share every anatomical value. All four tunables are code constants in `VitalOrganRules`.
 
 `WoundTotal` accumulates using `WoundLevel` values as bitmask steps:
 
@@ -1714,8 +1724,8 @@ Application cadence adapter invoked by the `ProcessMedical` step of
 `TurnController.ProcessTurn`; it supplies bodies and campaign maps to the module and applies
 returned completion facts to roster/posting/event state. The module has two policy halves.
 
-- **Natural healing.** `MedicalHealthPolicy` applies `Wounds.ApplyWeekOfHealing()` to every wounded hit location regardless of deployment, *except* severed non-vital locations that require a replacement procedure. Crippled locations do not require replacement for now. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree. Cadence and the daily Astartes pass are specified in §5.3.
-- **Procedure resolution.** `MedicalHealthPolicy.AdvanceProcedure` decrements weeks-remaining and, on completion, clears the location's wounds and returns a typed completion transition. The Application/Campaign adapter removes the persisted procedure and synchronizes reservation flags. Cybernetic completion installs `GameRulesData.StandardCyberneticOption` (`HitLocation.InstallCybernetic`: the flag plus the option's armor and constitution); vat-grown leaves the flag clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag.
+- **Natural healing.** `MedicalHealthPolicy` applies `Wounds.ApplyWeekOfHealing()` to every wounded hit location regardless of deployment, *except* locations that require a replacement procedure: severed non-vital locations and vital locations flagged `RequiresOrganReplacement` (§5.3). The daily Astartes pass skips flagged locations too, and augmetic organs never heal naturally. Other crippled locations heal naturally. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree. Cadence and the daily Astartes pass are specified in §5.3.
+- **Procedure resolution.** `MedicalHealthPolicy.AdvanceProcedure` decrements weeks-remaining and, on completion, clears the location's wounds and returns a typed completion transition. The Application/Campaign adapter removes the persisted procedure and synchronizes reservation flags. Cybernetic completion installs `GameRulesData.StandardCyberneticOption` (`HitLocation.InstallCybernetic`: the flag plus the option's armor and constitution); vat-grown leaves the flag clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag. An **organ replacement** (the location is flagged `RequiresOrganReplacement`) is priced on the "not severed" row whatever the location's state (`MedicalProcedureRules.UsesSeveredPricing`). On completion it clears the location's wounds and the flag, removes any severed augmetic organ, and leaves the location organic; a cybernetic organ replacement then adds one augmetic organ from `GameRulesData.VitalOrganCyberneticOption` (`CyberneticOption` row 2, Vital Organ Augmetic) unless the location is at the cap. The progenoid gland is never touched.
 
 Medical completion returns a bounded list of `CompletedMedicalProcedure` facts. Each successful
 primary target emits one `BodyPartReplacement` event, recording the method, prior cybernetic state,
@@ -1742,14 +1752,18 @@ read live wound state. All tunables live in `FieldCareConstants`, never the rule
 - **Cost is flat in band *index*, not band value.** Wound bands are powers of 16, so a proportional cost would make severe wounds untreatable; a sub-linear surcharge covers extra wounds within a band, since a demotion moves the whole band at once.
 - **Triage** is worst-first and deliberately not spread thin: severity by `Wounds.RecoveryTimeLeft()` — the *player-visible* number, so the order shown is the order run — then Rank desc, Subrank desc, then a random draw from the session RNG. Re-triaged after **every** treatment, so a demotion can hand the queue to someone else mid-day.
 - **Greedy, no per-soldier cap, use-it-or-lose-it.** Re-triage self-levels: once the worst case drops below the next man, the queue reorders on its own.
-- **Ceiling.** `IsReplacementEligible` is true for severed non-vital locations only. Crippled locations remain eligible for natural and field healing; a brother who has actually lost a non-vital part is a surgical case.
+- **Ceiling.** `IsReplacementEligible` is true for severed non-vital locations and for vital locations flagged `RequiresOrganReplacement` only. Other crippled locations remain eligible for natural and field healing; a brother who has actually lost a non-vital part, or needs an organ replaced, is a surgical case.
 
 Two seams, deliberately deduped. The mission pass runs on `MissionDayScheduler`'s scheduler-level `onDayEnd`, iterating **distinct `Order`s** — never mission elements, because `BuildMissionElements` fans one order into several single-squad drivers for `IndependentSquads` and a per-driver pass would make an Apothecary silently worth 3×. Garrison care runs the same `FieldCarePolicy` routine through `ChapterUpkeepProcessor.ProcessMedical` before the weekly cascade. **Field beats garrison by construction, not by rule:** an Apothecary under an order fails the "not on a mission" test defining the garrison pool, so the pools are disjoint and no man spends a day twice. Co-location resolves through `PlayerSoldier.EffectiveRegion`, since an attached Apothecary's home squad may sit on the ship while he is forward — `MedicalProcedureService.HasCoLocatedStaff` routes through it for the same reason.
 
 **Techmarine cybernetic repair.** Augmetics never heal naturally and Apothecaries cannot treat them
 (`MedicalHealthPolicy`, `FieldCarePolicy` both skip cybernetic locations), so a damaged augmetic
 needs a Techmarine. The tier comes from the required rules table `CyberneticOption` (`Id, Name,
-Armor, Constitution`; one row today, Standard Augmetic). `OnlyWar.Medical.Treatment.CyberneticRepairPolicy`
+Armor, Constitution`; row 1 Standard Augmetic for limbs, row 2 Vital Organ Augmetic for augmetic
+organs). An augmetic organ (§5.3) is repaired the same way: `CyberneticRepairJob.OrganIndex` names
+it inside its location (null means the location's own part), `CyberneticRepairJobFacts.Organ`
+carries it into the policy, and a repairable organ is installed, not severed, and damaged. A
+severed organ needs an organ replacement instead. `OnlyWar.Medical.Treatment.CyberneticRepairPolicy`
 owns repairability, job time and the daily allocation; Campaign's `CyberneticRepairService` owns the
 queue, cost, reach, reports and experience. Tunables live in `CyberneticRepairConstants`, never the
 rules DB.

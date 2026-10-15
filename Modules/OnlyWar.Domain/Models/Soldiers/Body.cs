@@ -498,20 +498,118 @@ namespace OnlyWar.Domain.Soldiers
             }
         }
 
-        // A non-vital location qualifies for a cybernetic/vat-grown replacement when it is
-        // severed (PRD 4.8). Crippled locations do not require replacement for now; they remain
-        // on the ordinary natural-healing path while the question of partial vital replacement
-        // is still open. This is the single source of truth shared by the Apothecarium view and
-        // the weekly healing pass.
+        // A location qualifies for a cybernetic/vat-grown replacement when it is a severed
+        // non-vital location (PRD 4.8), or when the battle aftermath marked a vital location as
+        // needing an organ replacement (Design/Active/VitalLocationReplacement.md §3.2). Other
+        // crippled locations stay on the ordinary natural-healing path. This is the single source
+        // of truth shared by the Apothecarium view, field care and the weekly healing pass.
         public bool IsReplacementEligible
         {
             get
             {
-                return !Template.IsVital
-                    && IsSevered
-                    && !IsCoveredBySeveredParent;
+                return (!Template.IsVital
+                        && IsSevered
+                        && !IsCoveredBySeveredParent)
+                    || RequiresOrganReplacement;
             }
         }
+
+        private bool _requiresOrganReplacement;
+
+        /// <summary>
+        /// Persisted: this vital location needs an organ replacement before it can recover
+        /// (Design/Active/VitalLocationReplacement.md §3.2). The battle aftermath sets it for a
+        /// severed Vitals that the brother survived and for a Torso crippled in battle that will
+        /// not heal; procedure completion clears it. While it is set the location does not heal
+        /// naturally, field care does not treat it, and its wounds stay until the procedure ends.
+        /// </summary>
+        public bool RequiresOrganReplacement
+        {
+            get => _requiresOrganReplacement;
+            set
+            {
+                if (_requiresOrganReplacement == value) return;
+                _requiresOrganReplacement = value;
+                InjuryChanged?.Invoke();
+            }
+        }
+
+        private readonly List<AugmeticOrgan> _augmeticOrgans = [];
+
+        /// <summary>
+        /// The augmetic organs inside this (organic) location, in the order they were installed
+        /// (Design/Active/VitalLocationReplacement.md §3.4).
+        /// </summary>
+        public IReadOnlyList<AugmeticOrgan> AugmeticOrgans => _augmeticOrgans;
+
+        // Plain loops: CanFight reads this for every vital location, and almost every location
+        // holds no organ.
+        public bool HasCrippledAugmeticOrgan
+        {
+            get
+            {
+                for (int i = 0; i < _augmeticOrgans.Count; i++)
+                {
+                    if (_augmeticOrgans[i].IsCrippled) return true;
+                }
+                return false;
+            }
+        }
+
+        public bool HasSeveredAugmeticOrgan
+        {
+            get
+            {
+                for (int i = 0; i < _augmeticOrgans.Count; i++)
+                {
+                    if (_augmeticOrgans[i].IsSevered) return true;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Severed itself, or holds a severed augmetic organ, which counts as the location severed
+        /// at battle end (D8).
+        /// </summary>
+        public bool IsSeveredOrHasSeveredAugmeticOrgan => IsSevered || HasSeveredAugmeticOrgan;
+
+        /// <summary>
+        /// Adds a new augmetic organ with <paramref name="option"/>'s constitution. Returns null,
+        /// with nothing added, when the location is already at
+        /// <see cref="VitalOrganRules.MaximumAugmeticOrgansPerLocation"/>.
+        /// </summary>
+        public AugmeticOrgan AddAugmeticOrgan(CyberneticOption option)
+        {
+            if (_augmeticOrgans.Count >= VitalOrganRules.MaximumAugmeticOrgansPerLocation)
+            {
+                return null;
+            }
+            int index = _augmeticOrgans.Count == 0 ? 1 : _augmeticOrgans.Max(organ => organ.Index) + 1;
+            return AttachAugmeticOrgan(new AugmeticOrgan(index, option?.Constitution ?? 0f));
+        }
+
+        /// <summary>Puts a saved organ back, keeping its index and its wounds.</summary>
+        public AugmeticOrgan AttachAugmeticOrgan(AugmeticOrgan organ)
+        {
+            organ.Host = this;
+            organ.Changed += Wounds_Changed;
+            _augmeticOrgans.Add(organ);
+            InjuryChanged?.Invoke();
+            return organ;
+        }
+
+        public bool RemoveAugmeticOrgan(AugmeticOrgan organ)
+        {
+            if (organ == null || !_augmeticOrgans.Remove(organ)) return false;
+            organ.Changed -= Wounds_Changed;
+            organ.Host = null;
+            InjuryChanged?.Invoke();
+            return true;
+        }
+
+        public AugmeticOrgan FindAugmeticOrgan(int index) =>
+            _augmeticOrgans.FirstOrDefault(organ => organ.Index == index);
 
         // A severed proximal arm already takes its grouped hand with it. The arm replacement
         // restores the complete hand group, so the distal location must not create a second
@@ -569,7 +667,7 @@ namespace OnlyWar.Domain.Soldiers
                 WoundLevel.Moderate => Template.Name + ": <color=orange>Moderate</color>",
                 WoundLevel.Minor => Template.Name + ": <color=green>Minor</color>",
                 WoundLevel.Negligible => Template.Name + ": <color=green>Negligible</color>",
-                _ => Template.Name + ": No wounds"
+                _ => Template.Name + (IsCybernetic ? ": No damage" : ": No wounds")
             };
         }
     }
@@ -649,8 +747,9 @@ namespace OnlyWar.Domain.Soldiers
                     NaturalArmor = 0,
                     WoundMultiplier = 1,
                     HitProbabilityMap = new int[3] { 480, 480, 30 },
+                    // Sever is Mortal, as in the rules DB. Keep in step with it.
                     CrippleWound = (uint)WoundLevel.Massive,
-                    SeverWound = (uint)WoundLevel.Unsurvivable,
+                    SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = false,
                     IsVital = true,
                     HoldsProgenoid = true
@@ -859,8 +958,9 @@ namespace OnlyWar.Domain.Soldiers
                     NaturalArmor = 0,
                     WoundMultiplier = 1,
                     HitProbabilityMap = new int[3] { 480, 480, 30 },
+                    // Sever is Mortal, as in the rules DB. Keep in step with it.
                     CrippleWound = (uint)WoundLevel.Massive,
-                    SeverWound = (uint)WoundLevel.Unsurvivable,
+                    SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = false,
                     IsVital = true,
                     HoldsProgenoid = true
@@ -1064,9 +1164,18 @@ namespace OnlyWar.Domain.Soldiers
                 WoundLevel current = location?.Wounds?.WorstLevel ?? WoundLevel.None;
                 // WoundLevel values are band positions, so their numeric order is severity order.
                 if ((uint)current > (uint)worst) worst = current;
+                foreach (AugmeticOrgan organ in location?.AugmeticOrgans ?? [])
+                {
+                    WoundLevel organLevel = organ.Wounds.WorstLevel;
+                    if ((uint)organLevel > (uint)worst) worst = organLevel;
+                }
             }
             return worst;
         }
+
+        /// <summary>Every augmetic organ in the body, location by location.</summary>
+        public IEnumerable<AugmeticOrgan> AugmeticOrgans =>
+            HitLocations.SelectMany(location => location.AugmeticOrgans);
 
         public Body(List<HitLocation> hitLocations)
         {

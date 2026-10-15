@@ -42,9 +42,10 @@ namespace OnlyWar.Campaign.Medical
     /// unconditional for everyone else.
     ///
     /// A CONSEQUENCE WORTH STATING, because it is not obvious from §2.6 alone: since
-    /// <c>HitLocation.IsReplacementEligible</c> is true for severed non-vital locations only.
-    /// Field care can therefore continue working on crippled locations, while a brother who has
-    /// actually lost a non-vital part remains a surgical case. An Apothecary in the field cannot
+    /// <c>HitLocation.IsReplacementEligible</c> is true for severed non-vital locations and for
+    /// vital locations marked as needing an organ replacement only. Field care can therefore
+    /// continue working on other crippled locations, while a brother who has actually lost a
+    /// non-vital part, or needs an organ replaced, remains a surgical case. An Apothecary in the field cannot
     /// shortcut that surgery. What he CAN do is return the walking wounded to the line, including
     /// men carrying several severe wounds who would otherwise be out for months.
     ///

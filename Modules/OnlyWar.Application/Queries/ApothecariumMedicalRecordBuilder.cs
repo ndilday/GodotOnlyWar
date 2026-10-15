@@ -193,6 +193,32 @@ namespace OnlyWar.Application
                         .ToArray(),
                     force != null && job == null && requisites.All(requisite => requisite.IsMet)));
             }
+            // Damaged augmetic organs inside organic vital locations
+            // (Design/Active/VitalLocationReplacement.md §3.4).
+            foreach (AugmeticOrgan organ in soldier.Body.AugmeticOrgans
+                .Where(CyberneticRepairPolicy.IsRepairable))
+            {
+                int locationId = organ.Host.Template.Id;
+                CyberneticRepairJob job = CyberneticRepairService.FindJob(
+                    force, soldier.Id, locationId, organ.Index);
+                IReadOnlyList<ProcedureRequisite> requisites = job == null
+                    ? CyberneticRepairService.EvaluateQueueRequisites(
+                        force, soldier, locationId, organ.Index)
+                    : [];
+                repairs.Add(new CyberneticRepairOptionView(
+                    locationId,
+                    organ.Name,
+                    organ.Wounds.WorstLevel.ToString(),
+                    CyberneticRepairPolicy.GetRemainingHours(job, organ),
+                    job != null,
+                    job?.RequisitionCost ?? CyberneticRepairConstants.RequisitionCost,
+                    requisites
+                        .Select(requisite => new MedicalTreatmentRequisiteView(
+                            requisite.Label, requisite.IsMet))
+                        .ToArray(),
+                    force != null && job == null && requisites.All(requisite => requisite.IsMet),
+                    organ.Index));
+            }
             return repairs;
         }
 
@@ -208,12 +234,18 @@ namespace OnlyWar.Application
                 HitLocation location = soldier.Body.HitLocations.FirstOrDefault(candidate =>
                     candidate.Template.Id == job.HitLocationTemplateId);
                 if (location == null) continue;
+                AugmeticOrgan organ = job.OrganIndex.HasValue
+                    ? location.FindAugmeticOrgan(job.OrganIndex.Value)
+                    : null;
+                if (job.OrganIndex.HasValue && organ == null) continue;
                 rows.Add(new CyberneticRepairQueueRow(
                     rows.Count + 1,
                     soldier.Id,
                     soldier.Name,
-                    location.Template.Name,
-                    CyberneticRepairPolicy.GetRemainingHours(job, location)));
+                    organ?.Name ?? location.Template.Name,
+                    organ == null
+                        ? CyberneticRepairPolicy.GetRemainingHours(job, location)
+                        : CyberneticRepairPolicy.GetRemainingHours(job, organ)));
             }
             return rows;
         }
@@ -458,7 +490,8 @@ namespace OnlyWar.Application
                 severity,
                 MedicalProcedureChoiceMapping.ToView(location.Wounds.WorstLevel),
                 location.IsSevered,
-                location.IsCrippled);
+                location.IsCrippled,
+                location.AugmeticOrgans.Count);
         }
 
         private static string DescribeRepair(PlayerForce force, int soldierId, HitLocation location)
@@ -485,13 +518,20 @@ namespace OnlyWar.Application
                 l.IsReplacementEligible
                 && GetActiveProcedure(force, soldierId, l.Template.Id) == null))
             {
-                bool severed = location.IsSevered;
+                // An organ replacement keeps the location organic and uses the "not severed"
+                // price row (Design/Active/VitalLocationReplacement.md §3.3, D5).
+                bool organ = location.RequiresOrganReplacement;
+                bool severed = MedicalProcedureRules.UsesSeveredPricing(location);
                 options.Add(new ReplacementOption(
                     location.Template.Id,
                     MedicalProcedureType.Cybernetic,
                     location.Template.Name,
-                    $"Cybernetic {location.Template.Name}",
-                    "Fastest return to duty; adds an augmetic replacement.",
+                    organ
+                        ? $"Augmetic {location.Template.Name} Organ"
+                        : $"Cybernetic {location.Template.Name}",
+                    organ
+                        ? "Fastest return to duty; adds an augmetic organ to the location."
+                        : "Fastest return to duty; adds an augmetic replacement.",
                     MedicalProcedureRules.GetWeeks(MedicalProcedureType.Cybernetic, severed),
                     MedicalProcedureRules.GetRequisitionCost(MedicalProcedureType.Cybernetic, severed),
                     true));
@@ -499,7 +539,9 @@ namespace OnlyWar.Application
                     location.Template.Id,
                     MedicalProcedureType.VatGrown,
                     location.Template.Name,
-                    $"Vat-Grown {location.Template.Name}",
+                    organ
+                        ? $"Vat-Grown {location.Template.Name} Organ"
+                        : $"Vat-Grown {location.Template.Name}",
                     "Rare restorative treatment; slower and more resource intensive.",
                     MedicalProcedureRules.GetWeeks(MedicalProcedureType.VatGrown, severed),
                     MedicalProcedureRules.GetRequisitionCost(MedicalProcedureType.VatGrown, severed),
@@ -673,12 +715,14 @@ namespace OnlyWar.Application
 
         private static bool IsWounded(ISoldier soldier)
         {
-            return soldier.Body.HitLocations.Any(hl => hl.Wounds.WoundTotal > 0 || hl.IsSevered);
+            return soldier.Body.HitLocations.Any(hl => hl.Wounds.WoundTotal > 0 || hl.IsSevered)
+                || soldier.Body.AugmeticOrgans.Any(organ => organ.Wounds.WoundTotal > 0);
         }
 
         private static bool IsMedicallyRelevant(ISoldier soldier)
         {
-            return IsWounded(soldier) || !soldier.IsCombatEffective || soldier.Body.HitLocations.Any(hl => hl.IsCybernetic);
+            return IsWounded(soldier) || !soldier.IsCombatEffective
+                || soldier.Body.HitLocations.Any(hl => hl.IsCybernetic || hl.AugmeticOrgans.Count > 0);
         }
 
         private static MedicalSeverity SeverityForSoldiers(IReadOnlyList<ISoldier> soldiers)
@@ -699,7 +743,8 @@ namespace OnlyWar.Application
             {
                 return MedicalSeverity.Lost;
             }
-            if (location.IsCrippled)
+            // A crippled augmetic organ has the effect of a crippled vital location.
+            if (location.IsCrippled || location.HasCrippledAugmeticOrgan)
             {
                 return MedicalSeverity.Critical;
             }

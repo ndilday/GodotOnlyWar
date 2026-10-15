@@ -16,12 +16,15 @@ namespace OnlyWar.Medical.Abstractions
 
     /// <summary>
     /// One queued job with the live part it repairs. The Medical owner may mutate only the job's
-    /// progress and the supplied location's wounds.
+    /// progress and the supplied part's wounds. <paramref name="Organ"/> is the augmetic organ
+    /// under repair when the job names one (<see cref="CyberneticRepairJob.OrganIndex"/>); the
+    /// part is then the organ, not the location.
     /// </summary>
     public sealed record CyberneticRepairJobFacts(
         CyberneticRepairJob Job,
         string SoldierName,
-        HitLocation Location);
+        HitLocation Location,
+        AugmeticOrgan Organ = null);
 
     /// <summary>One provider's work on one job in one day.</summary>
     public sealed record CyberneticRepairWork(
@@ -33,7 +36,8 @@ namespace OnlyWar.Medical.Abstractions
         string LocationName,
         float HoursWorked,
         bool Completed,
-        int Day = 0);
+        int Day = 0,
+        int? OrganIndex = null);
 
     /// <summary>
     /// What cybernetic repair did for one order (or one garrison location) over the days it ran:

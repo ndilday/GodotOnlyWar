@@ -179,11 +179,14 @@ namespace OnlyWar.Domain.Soldiers
         /// </summary>
         public bool IsCombatEffective => !HasUntreatedSeveredLimb && CanFight && CanMove;
 
+        // A crippled augmetic organ disables its host the same way a crippled vital location does
+        // (Design/Active/VitalLocationReplacement.md §3.4).
         private static bool IsDisabled(HitLocation location)
         {
             uint wounds = location.Wounds.WoundTotal;
             return wounds >= location.Template.CrippleWound
-                || wounds >= location.Template.SeverWound;
+                || wounds >= location.Template.SeverWound
+                || location.HasCrippledAugmeticOrgan;
         }
 
         public void AddSkillPoints(BaseSkill skill, float points)

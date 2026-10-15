@@ -61,6 +61,10 @@ namespace OnlyWar.Application
     /// One damaged augmetic on the selected brother. <see cref="HoursRemaining"/> is working hours
     /// at the reference skill; a skilled Techmarine takes fewer.
     /// </summary>
+    /// <param name="OrganIndex">
+    /// The augmetic organ inside the location, when the damaged part is an organ; null for the
+    /// location's own part.
+    /// </param>
     public sealed record CyberneticRepairOptionView(
         int HitLocationId,
         string LocationName,
@@ -69,7 +73,8 @@ namespace OnlyWar.Application
         bool IsQueued,
         int RequisitionCost,
         IReadOnlyList<MedicalTreatmentRequisiteView> Requisites,
-        bool CanQueue);
+        bool CanQueue,
+        int? OrganIndex = null);
 
     /// <summary>One queued repair, in queue order (Position 1 is worked first).</summary>
     public sealed record CyberneticRepairQueueRow(
@@ -150,6 +155,9 @@ namespace OnlyWar.Application
         MedicalSeverity Severity,
         MedicalWoundLevel PrincipalWoundLevel = MedicalWoundLevel.None,
         bool IsSevered = false,
-        bool IsCrippled = false);
+        bool IsCrippled = false,
+        // Augmetic organs inside this organic location
+        // (Design/Active/VitalLocationReplacement.md §3.4).
+        int AugmeticOrganCount = 0);
 
 }

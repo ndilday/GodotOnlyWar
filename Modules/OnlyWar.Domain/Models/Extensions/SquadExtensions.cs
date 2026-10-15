@@ -98,6 +98,12 @@ public static class SquadExtensions
 
         // Deep copy Wounds
         newHitLocation.Wounds = new Wounds(originalHitLocation.Wounds.WoundTotal, originalHitLocation.Wounds.WeeksOfHealing);
+        newHitLocation.RequiresOrganReplacement = originalHitLocation.RequiresOrganReplacement;
+        foreach (AugmeticOrgan organ in originalHitLocation.AugmeticOrgans)
+        {
+            newHitLocation.AttachAugmeticOrgan(new AugmeticOrgan(
+                organ.Index, organ.Constitution, organ.Wounds.WoundTotal, organ.Wounds.WeeksOfHealing));
+        }
 
         return newHitLocation;
     }

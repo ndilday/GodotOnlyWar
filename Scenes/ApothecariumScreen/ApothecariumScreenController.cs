@@ -112,7 +112,7 @@ public partial class ApothecariumScreenController : MainScreenController
     {
         if (repair == null || _selectedId == null || repair.IsQueued) return;
         RecoveryPlanCommitResult result = _application.QueueCyberneticRepair(new(
-            _sessionToken, _selectedId.Value, repair.HitLocationId));
+            _sessionToken, _selectedId.Value, repair.HitLocationId, repair.OrganIndex));
         if (result.Succeeded)
         {
             CampaignChanged?.Invoke(this, EventArgs.Empty);

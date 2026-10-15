@@ -84,7 +84,8 @@ public partial class WoundBodyMapView : Control
             List<WoundLocationSummary> wounds = _wounds
                 .Where(wound => region.Locations.Contains(wound.LocationName, StringComparer.OrdinalIgnoreCase))
                 .Where(wound => wound.PrincipalWoundLevel != MedicalWoundLevel.None
-                    || wound.IsSevered || wound.IsCrippled || wound.IsCybernetic)
+                    || wound.IsSevered || wound.IsCrippled || wound.IsCybernetic
+                    || wound.AugmeticOrganCount > 0)
                 .ToList();
             if (wounds.Count == 0) return $"{region.Name}\nNo recorded injury or replacement.";
 
@@ -92,7 +93,10 @@ public partial class WoundBodyMapView : Control
                 $"• {wound.LocationName}: {wound.Status}; {wound.Recovery}"
                 + (wound.IsSevered ? "; lost" : string.Empty)
                 + (wound.IsCrippled ? "; crippled" : string.Empty)
-                + (wound.IsCybernetic ? "; cybernetic" : string.Empty)));
+                + (wound.IsCybernetic ? "; cybernetic" : string.Empty)
+                + (wound.AugmeticOrganCount > 0
+                    ? $"; {wound.AugmeticOrganCount} augmetic organ(s)"
+                    : string.Empty)));
         }
         return string.Empty;
     }

@@ -51,7 +51,7 @@ namespace OnlyWar.Persistence.Database.GameState
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = @"SELECT SoldierId, HitLocationTemplateId, HoursCompleted,
-                    RequisitionCost FROM CyberneticRepairJob ORDER BY Ordinal";
+                    RequisitionCost, OrganIndex FROM CyberneticRepairJob ORDER BY Ordinal";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -59,7 +59,8 @@ namespace OnlyWar.Persistence.Database.GameState
                         reader.GetInt32(0),
                         reader.GetInt32(1),
                         System.Convert.ToSingle(reader[2]),
-                        reader.GetInt32(3)));
+                        reader.GetInt32(3),
+                        reader.IsDBNull(4) ? null : reader.GetInt32(4)));
                 }
             }
             return jobs;
@@ -73,13 +74,16 @@ namespace OnlyWar.Persistence.Database.GameState
                 using var command = transaction.Connection.CreateCommand();
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO CyberneticRepairJob
-                    (Ordinal, SoldierId, HitLocationTemplateId, HoursCompleted, RequisitionCost)
-                    VALUES (@ordinal, @soldierId, @hitLocationTemplateId, @hoursCompleted, @requisitionCost);";
+                    (Ordinal, SoldierId, HitLocationTemplateId, HoursCompleted, RequisitionCost,
+                     OrganIndex)
+                    VALUES (@ordinal, @soldierId, @hitLocationTemplateId, @hoursCompleted,
+                     @requisitionCost, @organIndex);";
                 command.AddParam("@ordinal", ordinal++);
                 command.AddParam("@soldierId", job.SoldierId);
                 command.AddParam("@hitLocationTemplateId", job.HitLocationTemplateId);
                 command.AddParam("@hoursCompleted", job.HoursCompleted);
                 command.AddParam("@requisitionCost", job.RequisitionCost);
+                command.AddParam("@organIndex", (object)job.OrganIndex ?? System.DBNull.Value);
                 command.ExecuteNonQuery();
             }
         }

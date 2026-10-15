@@ -38,7 +38,11 @@ namespace OnlyWar.Persistence.Database.GameState
         // 24: HitLocation gains a cybernetic part's own Constitution, and the CyberneticRepairJob
         //     table holds queued Techmarine repairs (OnlyWar_TDD.md §6.6.1). This is a
         //     deliberate incompatible save break.
-        public const int CurrentVersion = 24;
+        // 25: HitLocation gains RequiresOrganReplacement, the AugmeticOrgan table holds augmetic
+        //     organs, and CyberneticRepairJob gains OrganIndex
+        //     (Design/Active/VitalLocationReplacement.md). This is a deliberate incompatible save
+        //     break.
+        public const int CurrentVersion = 25;
         public const int MinimumSupportedVersion = CurrentVersion;
     }
 }

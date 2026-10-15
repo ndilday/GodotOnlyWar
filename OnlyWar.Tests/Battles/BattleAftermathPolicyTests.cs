@@ -316,6 +316,209 @@ public class BattleAftermathPolicyTests
         Assert.Equal("Killed in battle with the Orks", death.Render());
     }
 
+    // ---- Vital-location replacement (Design/Active/VitalLocationReplacement.md §3.1) ----------
+
+    [Fact]
+    public void SeveredVitals_FailedSurvivalRoll_IsKilled()
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Unlucky", 0.9);
+        Location(player, "Vitals").Wounds.AddWound(WoundLevel.Massive);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Same(player, Assert.Single(sink.FallenBrothers));
+        Assert.False(Location(player, "Vitals").RequiresOrganReplacement);
+    }
+
+    [Fact]
+    public void SeveredVitals_SuccessfulSurvivalRoll_IsIncapacitatedAndNeedsAnOrganReplacement()
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Spared", 0.1);
+        HitLocation vitals = Location(player, "Vitals");
+        vitals.Wounds.AddWound(WoundLevel.Massive);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Empty(sink.FallenBrothers);
+        Assert.True(vitals.RequiresOrganReplacement);
+        Assert.True(vitals.IsReplacementEligible);
+        // The wounds stay until the procedure is complete, and the location still reads as severed.
+        Assert.True(vitals.IsSevered);
+        Assert.False(CasualtyStateEvaluator.HasSeveredVitalLocation(player));
+        Assert.Equal(CasualtyState.Incapacitated, CasualtyStateEvaluator.Classify(player, true));
+        Assert.Contains(player.SoldierEvents, soldierEvent => soldierEvent.Type == SoldierEventType.Incapacitated);
+    }
+
+    [Fact]
+    public void SeveredVitals_WithAnUnsurvivableWound_AlwaysKills()
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Beyond Help", 0.0);
+        Location(player, "Vitals").Wounds.AddWound(WoundLevel.Unsurvivable);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Same(player, Assert.Single(sink.FallenBrothers));
+        Assert.False(Location(player, "Vitals").RequiresOrganReplacement);
+    }
+
+    [Fact]
+    public void SeveredVitals_LeftOnTheField_DiesWhateverTheRoll()
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Abandoned", 0.0,
+                new BattleOutcome(BattleEndReason.Withdrawal, BattleSide.Opposing));
+        Location(player, "Vitals").Wounds.AddWound(WoundLevel.Massive);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Same(player, Assert.Single(sink.FallenBrothers));
+        Assert.False(Location(player, "Vitals").RequiresOrganReplacement);
+    }
+
+    [Theory]
+    [InlineData("Brain", WoundLevel.Massive)]
+    [InlineData("Face", WoundLevel.Massive)]
+    [InlineData("Torso", WoundLevel.Mortal)]
+    public void SeveredVitals_AnotherSeveredVitalStillKills(string otherLocation, WoundLevel severingWound)
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Doubly Struck", 0.0);
+        Location(player, "Vitals").Wounds.AddWound(WoundLevel.Massive);
+        Location(player, otherLocation).Wounds.AddWound(severingWound);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Same(player, Assert.Single(sink.FallenBrothers));
+    }
+
+    [Theory]
+    [InlineData(0.1, true)]
+    [InlineData(0.9, false)]
+    public void TorsoCrippledInBattle_RollDecidesWhetherItNeedsAnOrganReplacement(double roll, bool flagged)
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Gutted", roll);
+        HitLocation torso = Location(player, "Torso");
+        torso.Wounds.AddWound(WoundLevel.Massive);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Empty(sink.FallenBrothers);
+        Assert.Equal(flagged, torso.RequiresOrganReplacement);
+        Assert.Equal(flagged, torso.IsReplacementEligible);
+    }
+
+    [Fact]
+    public void TorsoCrippledBeforeTheBattle_DoesNotRollAgain()
+    {
+        PlayerSoldier player = CreatePlayerSoldier("Brother Still Mending");
+        HitLocation torso = Location(player, "Torso");
+        torso.Wounds.AddWound(WoundLevel.Massive);
+        (_, IBattleAftermathPolicy policy, BattleState finalState, _) =
+            CreateVitalOrganBattle(player, 0.0);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.False(torso.RequiresOrganReplacement);
+    }
+
+    [Fact]
+    public void CrippledTorso_GeneSeedStaysRecoverable()
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Fallen Whole", 0.0);
+        Location(player, "Torso").Wounds.AddWound(WoundLevel.Massive);
+        Location(player, "Brain").Wounds.AddWound(WoundLevel.Massive);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Same(player, Assert.Single(sink.FallenBrothers));
+        Assert.Single(sink.RecoveredGeneseedPurities);
+    }
+
+    [Fact]
+    public void SeveredVitalsAndCrippledTorso_CanSurviveNeedingTwoOrganReplacements()
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Twice Spared", 0.1, rolls: [0.1, 0.1]);
+        Location(player, "Vitals").Wounds.AddWound(WoundLevel.Massive);
+        Location(player, "Torso").Wounds.AddWound(WoundLevel.Massive);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Empty(sink.FallenBrothers);
+        Assert.Equal(2, player.Body.HitLocations.Count(location => location.IsReplacementEligible));
+    }
+
+    [Theory]
+    [InlineData(0.1, false)]
+    [InlineData(0.9, true)]
+    public void SeveredVitalsAugmeticOrgan_MakesTheSurvivalRoll(double roll, bool killed)
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Augmented", roll);
+        HitLocation vitals = Location(player, "Vitals");
+        AugmeticOrgan organ = vitals.AddAugmeticOrgan(new CyberneticOption(2, "Vital Organ Augmetic", 5f, 40f));
+        organ.Wounds.AddWound(WoundLevel.Massive);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Equal(killed, sink.FallenBrothers.Contains(player));
+        Assert.Equal(!killed, vitals.RequiresOrganReplacement);
+    }
+
+    [Fact]
+    public void SeveredTorsoAugmeticOrgan_Kills()
+    {
+        (PlayerSoldier player, IBattleAftermathPolicy policy, BattleState finalState, RecordingPlayerBattleAftermathSink sink) =
+            CreateVitalOrganBattle("Brother Hollowed", 0.0);
+        AugmeticOrgan organ = Location(player, "Torso")
+            .AddAugmeticOrgan(new CyberneticOption(2, "Vital Organ Augmetic", 5f, 40f));
+        organ.Wounds.AddWound(WoundLevel.Mortal);
+
+        policy.OnBattleCompleted(finalState);
+
+        Assert.Same(player, Assert.Single(sink.FallenBrothers));
+    }
+
+    private static HitLocation Location(ISoldier soldier, string name) =>
+        soldier.Body.HitLocations.First(location => location.Template.Name == name);
+
+    private static (PlayerSoldier, IBattleAftermathPolicy, BattleState, RecordingPlayerBattleAftermathSink)
+        CreateVitalOrganBattle(string name, double roll, BattleOutcome outcome = null, double[] rolls = null) =>
+        CreateVitalOrganBattle(CreatePlayerSoldier(name), roll, outcome, rolls);
+
+    // The policy is created before the test applies its battle wounds, as BattleTurnResolver
+    // creates it before the first turn.
+    private static (PlayerSoldier, IBattleAftermathPolicy, BattleState, RecordingPlayerBattleAftermathSink)
+        CreateVitalOrganBattle(PlayerSoldier player, double roll, BattleOutcome outcome = null, double[] rolls = null)
+    {
+        RecordingPlayerBattleAftermathSink sink = new();
+        // Late enough after the default implant date for the progenoids to be mature.
+        BattleAftermathDependencies dependencies = new(
+            new Date(1, 10, 1), new ScriptedLinearRng(rolls ?? [roll]), sink);
+        BattleSquad attackers = CreateBattleSquad(CreateFaction(_nextId++, "Chapter", isPlayer: true), "Strike Squad", player);
+        BattleSquad defenders = CreateBattleSquad(CreateFaction(_nextId++, "Orks", isPlayer: false), "Warband", CreateSoldier("Boy"));
+        BattleHistory history = new() { Outcome = outcome };
+        BattleAftermathContext context = new(
+            [attackers], [defenders], CreateRegion("Ash Wastes", "Calth"), history, dependencies);
+        return (player, BattleAftermathPolicyFactory.Create(context), CreateFinalState(attackers, defenders), sink);
+    }
+
+    // Repeats its last value once the script runs out, so a test names only the rolls it cares about.
+    private sealed class ScriptedLinearRng(double[] rolls) : OnlyWar.Abstractions.IRNG
+    {
+        private int _next;
+
+        public double GetLinearDouble() => rolls[System.Math.Min(_next++, rolls.Length - 1)];
+        public double GetDoubleInRange(double lowerBound, double upperBound) => lowerBound;
+        public int GetIntBelowMax(int min, int max) => min;
+        public double NextRandomZValue() => 0.0;
+    }
+
     private static void SeverVitalLocation(PlayerSoldier soldier)
     {
         soldier.Body.HitLocations

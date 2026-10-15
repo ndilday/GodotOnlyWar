@@ -12,5 +12,12 @@ public static class MedicalProcedureRules
         type == MedicalProcedureType.Cybernetic
             ? isSevered ? 40 : 25
             : isSevered ? 95 : 70;
-}
 
+    /// <summary>
+    /// Which price row a replacement of <paramref name="location"/> uses. Every organ replacement
+    /// uses the "not severed" row, even for a severed Vitals
+    /// (Design/Active/VitalLocationReplacement.md D5); a limb uses the severed row.
+    /// </summary>
+    public static bool UsesSeveredPricing(HitLocation location) =>
+        location != null && !location.RequiresOrganReplacement && location.IsSevered;
+}

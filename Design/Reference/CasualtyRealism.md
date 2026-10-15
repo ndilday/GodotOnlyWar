@@ -452,10 +452,12 @@ Every tunable lives in `Helpers/Medical/FieldCareConstants.cs`, in code and not 
 | Opportunity cost / default lean | **Field wins, by construction rather than by rule.** An Apothecary under an order fails the "not on a mission" test that defines the garrison pool, so the pools are disjoint and no man spends a day twice. The Apothecarium once showed that cost as a per-brother field-care readout; the readout was removed from the screen on 2026-08-12 and its query (`GetCoveringApothecaries`) on 2026-09-26, so the cost is now visible only in who gets treated. | `ApplyGarrisonFieldCare` |
 
 **One consequence worth recording, since §2.6 does not make it obvious.**
-`HitLocation.IsReplacementEligible` is true from the **cripple** threshold upward, so the worst wound
-field care can ever reach is the band immediately *below* it — `Critical` for a torso or a leg. A
-brother who has actually gone down is a surgical case and an Apothecary in the field cannot shortcut
-that. What he can do is exactly what was asked for: return the walking wounded to the line, including
+When this was written, `HitLocation.IsReplacementEligible` was true from the **cripple** threshold
+upward, so the worst wound field care could reach was the band immediately *below* it. That is no
+longer true: it is now true only for a severed non-vital location and for a vital location the battle
+aftermath marked as needing an organ replacement (`Design/Active/VitalLocationReplacement.md`), so
+field care also works on other crippled locations. A brother with a lost limb or a failed organ is
+still a surgical case and an Apothecary in the field cannot shortcut that. What he can do is exactly what was asked for: return the walking wounded to the line, including
 men carrying several Critical wounds who would otherwise be out for two months.
 
 ### 3.3 Smaller calls

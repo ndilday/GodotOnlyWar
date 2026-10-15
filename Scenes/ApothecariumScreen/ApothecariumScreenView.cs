@@ -172,11 +172,13 @@ public partial class ApothecariumScreenView : MainScreenView
         ]);
 
         ClearContainer(_woundRows);
-        foreach (WoundLocationSummary wound in summary.Wounds.Where(w => w.Severity > MedicalSeverity.None || w.HoldsProgenoid || w.IsCybernetic))
+        foreach (WoundLocationSummary wound in summary.Wounds.Where(w => w.Severity > MedicalSeverity.None || w.HoldsProgenoid || w.IsCybernetic || w.AugmeticOrganCount > 0))
         {
             string title = wound.IsCybernetic
                 ? $"{wound.LocationName} - CYBERNETIC"
-                : wound.LocationName;
+                : wound.AugmeticOrganCount > 0
+                    ? $"{wound.LocationName} - {wound.AugmeticOrganCount} AUGMETIC ORGAN{(wound.AugmeticOrganCount == 1 ? "" : "S")}"
+                    : wound.LocationName;
             string subtitle = wound.HoldsProgenoid
                 ? $"{wound.Recovery} - progenoid-bearing"
                 : wound.Recovery;

@@ -70,9 +70,9 @@ namespace OnlyWar.Persistence.Database.GameState
                     command.Transaction = transaction;
                     command.CommandText = @"INSERT INTO HitLocation
                         (SoldierId, HitLocationTemplateId, IsCybernetic, Armor, WoundTotal,
-                         WeeksOfHealing, Constitution) VALUES
+                         WeeksOfHealing, Constitution, RequiresOrganReplacement) VALUES
                         (@soldierId, @templateId, @isCybernetic, @armor, @woundTotal, @weeksOfHealing,
-                         @constitution);";
+                         @constitution, @requiresOrganReplacement);";
                     command.AddParam("@soldierId", soldier.Id);
                     command.AddParam("@templateId", hitLocation.Template.Id);
                     command.AddParam("@isCybernetic", hitLocation.IsCybernetic);
@@ -80,6 +80,25 @@ namespace OnlyWar.Persistence.Database.GameState
                     command.AddParam("@woundTotal", hitLocation.Wounds.WoundTotal);
                     command.AddParam("@weeksOfHealing", hitLocation.Wounds.WeeksOfHealing);
                     command.AddParam("@constitution", hitLocation.Constitution);
+                    command.AddParam("@requiresOrganReplacement", hitLocation.RequiresOrganReplacement);
+                    command.ExecuteNonQuery();
+                }
+
+                foreach (AugmeticOrgan organ in hitLocation.AugmeticOrgans)
+                {
+                    using var command = transaction.Connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO AugmeticOrgan
+                        (SoldierId, HitLocationTemplateId, OrganIndex, Constitution, WoundTotal,
+                         WeeksOfHealing) VALUES
+                        (@soldierId, @templateId, @organIndex, @constitution, @woundTotal,
+                         @weeksOfHealing);";
+                    command.AddParam("@soldierId", soldier.Id);
+                    command.AddParam("@templateId", hitLocation.Template.Id);
+                    command.AddParam("@organIndex", organ.Index);
+                    command.AddParam("@constitution", organ.Constitution);
+                    command.AddParam("@woundTotal", organ.Wounds.WoundTotal);
+                    command.AddParam("@weeksOfHealing", organ.Wounds.WeeksOfHealing);
                     command.ExecuteNonQuery();
                 }
             }
@@ -89,10 +108,12 @@ namespace OnlyWar.Persistence.Database.GameState
                                                                               IReadOnlyDictionary<int, HitLocationTemplate> hitLocationTemplateMap)
         {
             Dictionary<int, List<HitLocation>> hitLocationMap = [];
+            Dictionary<(int SoldierId, int TemplateId), List<AugmeticOrgan>> organMap =
+                GetAugmeticOrgans(connection);
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = @"SELECT SoldierId, HitLocationTemplateId, IsCybernetic, Armor,
-                    WoundTotal, WeeksOfHealing, Constitution FROM HitLocation";
+                    WoundTotal, WeeksOfHealing, Constitution, RequiresOrganReplacement FROM HitLocation";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -107,6 +128,15 @@ namespace OnlyWar.Persistence.Database.GameState
                         new HitLocation(hitLocationTemplateMap[hitLocationTemplateId],
                                         isCybernetic, armor, (uint)woundTotal, (uint)weeksOfHealing,
                                         constitution);
+                    hitLocation.RequiresOrganReplacement = reader.GetBoolean(7);
+                    if (organMap.TryGetValue((soldierId, hitLocationTemplateId),
+                            out List<AugmeticOrgan> organs))
+                    {
+                        foreach (AugmeticOrgan organ in organs)
+                        {
+                            hitLocation.AttachAugmeticOrgan(organ);
+                        }
+                    }
 
                     if (!hitLocationMap.ContainsKey(soldierId))
                     {
@@ -116,6 +146,31 @@ namespace OnlyWar.Persistence.Database.GameState
                 }
             }
             return hitLocationMap;
+        }
+
+        private static Dictionary<(int SoldierId, int TemplateId), List<AugmeticOrgan>> GetAugmeticOrgans(
+            IDbConnection connection)
+        {
+            Dictionary<(int, int), List<AugmeticOrgan>> organMap = [];
+            using var command = connection.CreateCommand();
+            command.CommandText = @"SELECT SoldierId, HitLocationTemplateId, OrganIndex, Constitution,
+                WoundTotal, WeeksOfHealing FROM AugmeticOrgan ORDER BY SoldierId, HitLocationTemplateId, OrganIndex";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                (int, int) key = (reader.GetInt32(0), reader.GetInt32(1));
+                if (!organMap.TryGetValue(key, out List<AugmeticOrgan> organs))
+                {
+                    organs = [];
+                    organMap[key] = organs;
+                }
+                organs.Add(new AugmeticOrgan(
+                    reader.GetInt32(2),
+                    Convert.ToSingle(reader[3]),
+                    (uint)reader.GetInt64(4),
+                    (uint)reader.GetInt64(5)));
+            }
+            return organMap;
         }
 
         private Dictionary<int, List<Skill>> GetSkillsBySoldierId(IDbConnection connection,

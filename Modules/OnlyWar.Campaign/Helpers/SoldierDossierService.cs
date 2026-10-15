@@ -215,8 +215,8 @@ namespace OnlyWar.Campaign
                 if (hl.Wounds.WoundTotal != 0)
                 {
                     // Keep the Chapter/Soldier dossier aligned with the Apothecarium and weekly
-                    // medical pass. Current replacement eligibility is limited to severed
-                    // non-vital locations.
+                    // medical pass. Replacement eligibility covers severed non-vital locations
+                    // and vital locations marked as needing an organ replacement.
                     if (hl.IsReplacementEligible)
                     {
                         needsReplacement = true;

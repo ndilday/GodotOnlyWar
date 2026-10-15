@@ -70,11 +70,13 @@ namespace OnlyWar.Campaign
         // Advances each in-progress procedure by a week and, on completion, applies its
         // result to the hit location and removes it (PRD 4.8 / 5.3). Cybernetic completion
         // marks the location augmetic; vat-grown restores it organically. Both clear the
-        // location's wounds, returning it to full capability.
+        // location's wounds, returning it to full capability. An organ replacement keeps the
+        // location organic and, if cybernetic, adds an augmetic organ from organOption.
         public static IReadOnlyList<CompletedMedicalProcedure> ResolveProcedures(
             IList<MedicalProcedure> procedures,
             IReadOnlyDictionary<int, PlayerSoldier> soldierMap,
-            CyberneticOption cyberneticOption = null)
+            CyberneticOption cyberneticOption = null,
+            CyberneticOption organOption = null)
         {
             List<CompletedMedicalProcedure> completed = new();
             if (procedures == null)
@@ -89,7 +91,7 @@ namespace OnlyWar.Campaign
             {
                 MedicalProcedure procedure = procedures[i];
                 MedicalProcedureCompletion transition = MedicalHealthPolicy.AdvanceProcedure(
-                    procedure, bodies, cyberneticOption);
+                    procedure, bodies, cyberneticOption, organOption);
                 if (procedure.WeeksRemaining > 0) continue;
                 if (transition != null
                     && soldierMap?.TryGetValue(transition.SoldierId, out PlayerSoldier soldier) == true)

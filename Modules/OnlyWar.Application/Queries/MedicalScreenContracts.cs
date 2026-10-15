@@ -38,8 +38,12 @@ public sealed record ConfirmRecoveryCommand(
     Guid SessionToken, int SoldierId, MedicalLocationId Destination,
     RecoveryMovementChoice Movement, int? HitLocationId, MedicalProcedureChoice? ProcedureType);
 
-/// <summary>Queue a Techmarine repair of one damaged augmetic, paying its Requisition now.</summary>
-public sealed record QueueCyberneticRepairCommand(Guid SessionToken, int SoldierId, int HitLocationId);
+/// <summary>
+/// Queue a Techmarine repair of one damaged augmetic, paying its Requisition now. OrganIndex names
+/// an augmetic organ inside the location; null repairs the location's own part.
+/// </summary>
+public sealed record QueueCyberneticRepairCommand(
+    Guid SessionToken, int SoldierId, int HitLocationId, int? OrganIndex = null);
 
 public interface IMedicalScreenApplication
 {

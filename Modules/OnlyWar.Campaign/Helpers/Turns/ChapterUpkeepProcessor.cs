@@ -101,7 +101,8 @@ namespace OnlyWar.Campaign.Turns
                 MedicalTurnProcessor.ResolveProcedures(
                     army.MedicalProcedures,
                     army.PlayerSoldierMap,
-                    _turn.Rules?.StandardCyberneticOption);
+                    _turn.Rules?.StandardCyberneticOption,
+                    _turn.Rules?.VitalOrganCyberneticOption);
             RecordCompletedReplacements(force, completedProcedures);
             RecordNearDeathRecoveries(force, openEpisodes, deployabilityBefore, completedProcedures);
             return repairReports;

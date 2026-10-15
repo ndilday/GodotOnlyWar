@@ -104,7 +104,7 @@ namespace OnlyWar.Battles
             _grid = grid;
             _region = region;
             _execution = execution ?? throw new ArgumentNullException(nameof(execution));
-            _woundResolver = new WoundResolver();
+            _woundResolver = new WoundResolver(execution.Random);
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
             _woundResolver.OnSoldierWounded += WoundResolver_OnSoldierWounded;
             _woundResolver.OnSoldierFall += WoundResolver_OnSoldierFall;

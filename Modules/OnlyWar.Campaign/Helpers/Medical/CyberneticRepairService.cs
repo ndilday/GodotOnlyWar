@@ -44,25 +44,29 @@ namespace OnlyWar.Campaign.Medical
 
         // ---- The queue ------------------------------------------------------------------------
 
-        public static CyberneticRepairJob FindJob(PlayerForce force, int soldierId, int hitLocationTemplateId) =>
+        /// <param name="organIndex">
+        /// The augmetic organ inside the location, or null for the location's own part.
+        /// </param>
+        public static CyberneticRepairJob FindJob(
+            PlayerForce force, int soldierId, int hitLocationTemplateId, int? organIndex = null) =>
             force?.Army?.CyberneticRepairJobs?.FirstOrDefault(job =>
-                job.SoldierId == soldierId && job.HitLocationTemplateId == hitLocationTemplateId);
+                job.Targets(soldierId, hitLocationTemplateId, organIndex));
 
         /// <summary>
         /// What queueing a repair of this part needs, met or not, for the Apothecarium to list.
         /// Queueing needs no Techmarine present: the job waits until one can reach it.
         /// </summary>
         public static IReadOnlyList<ProcedureRequisite> EvaluateQueueRequisites(
-            PlayerForce force, ISoldier soldier, int hitLocationTemplateId)
+            PlayerForce force, ISoldier soldier, int hitLocationTemplateId, int? organIndex = null)
         {
             HitLocation location = FindLocation(soldier, hitLocationTemplateId);
             int balance = force?.Army?.Requisition ?? 0;
             return
             [
                 new ProcedureRequisite("Damaged augmetic, not severed",
-                    CyberneticRepairPolicy.IsRepairable(location)),
+                    IsRepairable(location, organIndex)),
                 new ProcedureRequisite("No repair already queued",
-                    FindJob(force, soldier?.Id ?? 0, hitLocationTemplateId) == null),
+                    FindJob(force, soldier?.Id ?? 0, hitLocationTemplateId, organIndex) == null),
                 new ProcedureRequisite(
                     $"Requisition {CyberneticRepairConstants.RequisitionCost} (have {balance})",
                     balance >= CyberneticRepairConstants.RequisitionCost),
@@ -73,23 +77,25 @@ namespace OnlyWar.Campaign.Medical
         /// Queues a repair and pays for it now. False, with nothing changed, when any
         /// requisite is unmet.
         /// </summary>
-        public static bool TryQueueRepair(PlayerForce force, ISoldier soldier, int hitLocationTemplateId)
+        public static bool TryQueueRepair(
+            PlayerForce force, ISoldier soldier, int hitLocationTemplateId, int? organIndex = null)
         {
             if (force?.Army == null || soldier == null) return false;
             if (!force.Army.PlayerSoldierMap.ContainsKey(soldier.Id)) return false;
-            if (!EvaluateQueueRequisites(force, soldier, hitLocationTemplateId).All(r => r.IsMet))
+            if (!EvaluateQueueRequisites(force, soldier, hitLocationTemplateId, organIndex).All(r => r.IsMet))
             {
                 return false;
             }
             force.Army.Requisition -= CyberneticRepairConstants.RequisitionCost;
             force.Army.CyberneticRepairJobs.Add(new CyberneticRepairJob(
-                soldier.Id, hitLocationTemplateId, 0f, CyberneticRepairConstants.RequisitionCost));
+                soldier.Id, hitLocationTemplateId, 0f, CyberneticRepairConstants.RequisitionCost,
+                organIndex));
             return true;
         }
 
         /// <summary>
         /// Drops jobs that can no longer be worked: the brother is gone from the roster, or his
-        /// part was severed (sever is final) or is no longer damaged. The Requisition
+        /// part was severed (sever is final), removed, or is no longer damaged. The Requisition
         /// was spent when the job was queued and is not returned.
         /// </summary>
         public static void PruneJobs(PlayerForce force)
@@ -98,8 +104,13 @@ namespace OnlyWar.Campaign.Medical
             if (jobs == null) return;
             jobs.RemoveAll(job =>
                 !force.Army.PlayerSoldierMap.TryGetValue(job.SoldierId, out PlayerSoldier soldier)
-                || !CyberneticRepairPolicy.IsRepairable(FindLocation(soldier, job.HitLocationTemplateId)));
+                || !IsRepairable(FindLocation(soldier, job.HitLocationTemplateId), job.OrganIndex));
         }
+
+        private static bool IsRepairable(HitLocation location, int? organIndex) =>
+            organIndex.HasValue
+                ? CyberneticRepairPolicy.IsRepairable(location?.FindAugmeticOrgan(organIndex.Value))
+                : CyberneticRepairPolicy.IsRepairable(location);
 
         // ---- Who can repair -------------------------------------------------------------------
 
@@ -215,8 +226,12 @@ namespace OnlyWar.Campaign.Medical
             {
                 if (!patients.TryGetValue(job.SoldierId, out PlayerSoldier patient)) continue;
                 HitLocation location = FindLocation(patient, job.HitLocationTemplateId);
-                if (!CyberneticRepairPolicy.IsRepairable(location)) continue;
-                jobs.Add(new CyberneticRepairJobFacts(job, patient.Name, location));
+                if (!IsRepairable(location, job.OrganIndex)) continue;
+                jobs.Add(new CyberneticRepairJobFacts(
+                    job,
+                    patient.Name,
+                    location,
+                    job.OrganIndex.HasValue ? location.FindAugmeticOrgan(job.OrganIndex.Value) : null));
             }
             if (jobs.Count == 0) return;
 
@@ -244,8 +259,7 @@ namespace OnlyWar.Campaign.Medical
                 if (entry.Completed)
                 {
                     force.Army.CyberneticRepairJobs.RemoveAll(job =>
-                        job.SoldierId == entry.SoldierId
-                        && job.HitLocationTemplateId == entry.HitLocationTemplateId);
+                        job.Targets(entry.SoldierId, entry.HitLocationTemplateId, entry.OrganIndex));
                 }
                 GameLog.Debug(() =>
                     $"CYBERNETIC_REPAIR order={(orderId.HasValue ? orderId.Value.ToString() : "garrison")} "

@@ -66,10 +66,11 @@ internal sealed class MedicalCommandContext
         if (patient == null) return new(false, "The patient is no longer available.");
 
         ProcedureRequisite unmet = CyberneticRepairService
-            .EvaluateQueueRequisites(force, patient, command.HitLocationId)
+            .EvaluateQueueRequisites(force, patient, command.HitLocationId, command.OrganIndex)
             .FirstOrDefault(requisite => !requisite.IsMet);
         if (unmet != null) return new(false, $"Repair cannot be queued: {unmet.Label}.");
-        return CyberneticRepairService.TryQueueRepair(force, patient, command.HitLocationId)
+        return CyberneticRepairService.TryQueueRepair(
+                force, patient, command.HitLocationId, command.OrganIndex)
             ? new(true, "Repair queued.")
             : new(false, "The repair could not be queued.");
     }

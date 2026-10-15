@@ -129,6 +129,78 @@ public class WoundResolverTests
     }
 
     [Fact]
+    public void Resolve_NamesACyberneticLocationInTheLog()
+    {
+        WoundResolver resolver = new();
+        HitLocation location = new(Template());
+        location.InstallCybernetic(null);
+        WoundResolution wound = Enqueue(resolver, location, 6f);
+
+        resolver.Resolve();
+
+        Assert.Equal("Wounded Marine suffers Major damage to cybernetic Test Location\n", wound.Description);
+    }
+
+    [Fact]
+    public void AnUndamagedCyberneticLocation_ReadsAsNoDamage()
+    {
+        HitLocation location = new(Template());
+        Assert.Equal("Test Location: No wounds", location.ToString());
+        location.InstallCybernetic(null);
+        Assert.Equal("Test Location: No damage", location.ToString());
+    }
+
+    [Fact]
+    public void Resolve_LogsACyberneticLocationTornAway()
+    {
+        WoundResolver resolver = new();
+        HitLocation location = new(Template(severWound: (uint)WoundLevel.Critical));
+        location.InstallCybernetic(null);
+        WoundResolution wound = Enqueue(resolver, location, 10f, CreateSufferer(location));
+
+        resolver.Resolve();
+
+        Assert.False(location.IsCybernetic);
+        Assert.Equal(
+            "Wounded Marine suffers Critical damage to cybernetic Test Location\n"
+            + "The cybernetic Test Location is torn away\n",
+            wound.Description);
+    }
+
+    [Fact]
+    public void Resolve_NamesTheAugmeticOrganAHitStrikes()
+    {
+        // Every roll strikes the first organ (0.0 < 20%).
+        WoundResolver resolver = new(new FixedRNG());
+        HitLocation location = new(Template(isVital: true));
+        location.AddAugmeticOrgan(new CyberneticOption(2, "Vital Organ Augmetic", 5f, 10f));
+        WoundResolution wound = Enqueue(resolver, location, 6f);
+
+        resolver.Resolve();
+
+        Assert.Equal(
+            "Wounded Marine suffers Major damage to augmetic organ 1 in the Test Location\n",
+            wound.Description);
+    }
+
+    [Fact]
+    public void Resolve_LogsADestroyedAugmeticOrgan()
+    {
+        WoundResolver resolver = new(new FixedRNG());
+        HitLocation location = new(Template(isVital: true, severWound: (uint)WoundLevel.Critical));
+        location.AddAugmeticOrgan(new CyberneticOption(2, "Vital Organ Augmetic", 5f, 10f));
+        WoundResolution severing = Enqueue(resolver, location, 10f);
+        resolver.Resolve();
+        WoundResolution later = Enqueue(resolver, location, 10f);
+        resolver.Resolve();
+
+        Assert.Contains("The augmetic organ 1 in the Test Location is destroyed\n", severing.Description);
+        Assert.Equal(
+            "The hit to the Test Location further mangles the destroyed augmetic organ 1 in the Test Location\n",
+            later.Description);
+    }
+
+    [Fact]
     public void Resolve_DescribesEarlierQueuedHitWhenLaterHitSeversLocation()
     {
         WoundResolver resolver = new();

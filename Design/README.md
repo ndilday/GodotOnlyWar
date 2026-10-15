@@ -58,7 +58,19 @@ and deleted on 2026-10-13. Nothing in it met the `Reference/` bar: its rejected 
 budget from a rating, a floor on the skill curve) fold into the TDD in a sentence each. Its Godot
 check was still outstanding when it was deleted.
 
-No active design work is retained here at present.
+Active designs:
+
+- `Active/VitalLocationReplacement.md` — organ replacement for a severed Vitals or a crippled
+  Torso, and augmetic organs (formerly PRD §6.17, now PRD §4.8; Alpha 0.8.1). Created 2026-10-13;
+  implemented 2026-10-14, Godot check outstanding.
+- `Active/ChapterMandates.md` — player-chosen mandates and the legacy-point ledger (PRD §4.25,
+  Alpha 0.8.1). Created 2026-10-13; design complete, not started.
+- `Active/FoundingMyth.md` — a generated founding history as the first Chronicle entry, and the
+  chapter's founding, which sets the starting year (PRD §4.19, Alpha 0.8.1). Created 2026-10-13;
+  design complete, not started.
+- `Active/SectorDispatches.md` — the Chapter Master's aide reports major sector events in the Turn
+  Report (PRD §4.19 *Wider-Imperium Dispatches*, Alpha 0.8.1). Created 2026-10-13; design
+  complete, not started.
 
 **Audited 2026-10-12.** Two plans were removed:
 

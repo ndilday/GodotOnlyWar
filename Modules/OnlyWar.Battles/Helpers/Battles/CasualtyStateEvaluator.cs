@@ -13,11 +13,18 @@ namespace OnlyWar.Battles
         /// A vital location taken off entirely. This -- not a crippled vital -- is what kills a
         /// player soldier, and it has been the live rule in
         /// <c>PlayerChapterBattleAftermathPolicy</c> since before this state was named.
+        ///
+        /// A severed augmetic organ counts as its host location severed. A location marked as
+        /// needing an organ replacement does not count: the brother survived it, and must never be
+        /// classified as dead later (Design/Active/VitalLocationReplacement.md §3.2).
         /// </summary>
         public static bool HasSeveredVitalLocation(ISoldier soldier) =>
-            soldier?.Body?.HitLocations
-                .Any(location => location.Template.IsVital && location.IsSevered)
-            ?? false;
+            soldier?.Body?.HitLocations.Any(IsFatallySeveredVital) ?? false;
+
+        private static bool IsFatallySeveredVital(HitLocation location) =>
+            location.Template.IsVital
+            && location.IsSeveredOrHasSeveredAugmeticOrgan
+            && !location.RequiresOrganReplacement;
 
         public static bool IsWounded(ISoldier soldier) =>
             soldier?.Body?.HitLocations.Any(location => location.Wounds.WoundTotal > 0) ?? false;

@@ -37,6 +37,12 @@ public sealed class CyberneticRepairJob
 {
     public int SoldierId { get; set; }
     public int HitLocationTemplateId { get; set; }
+    /// <summary>
+    /// The <see cref="AugmeticOrgan.Index"/> of the augmetic organ under repair, inside the
+    /// location named by <see cref="HitLocationTemplateId"/>. Null when the job repairs the
+    /// location's own cybernetic part.
+    /// </summary>
+    public int? OrganIndex { get; set; }
     public float HoursCompleted { get; set; }
     public int RequisitionCost { get; set; }
 
@@ -46,11 +52,19 @@ public sealed class CyberneticRepairJob
         int soldierId,
         int hitLocationTemplateId,
         float hoursCompleted,
-        int requisitionCost)
+        int requisitionCost,
+        int? organIndex = null)
     {
         SoldierId = soldierId;
         HitLocationTemplateId = hitLocationTemplateId;
         HoursCompleted = hoursCompleted;
         RequisitionCost = requisitionCost;
+        OrganIndex = organIndex;
     }
+
+    /// <summary>True when this job repairs the given part: a location's part or one organ.</summary>
+    public bool Targets(int soldierId, int hitLocationTemplateId, int? organIndex) =>
+        SoldierId == soldierId
+        && HitLocationTemplateId == hitLocationTemplateId
+        && OrganIndex == organIndex;
 }
