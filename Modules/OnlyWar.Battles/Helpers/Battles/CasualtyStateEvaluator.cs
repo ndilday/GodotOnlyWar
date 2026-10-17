@@ -16,7 +16,7 @@ namespace OnlyWar.Battles
         ///
         /// A severed augmetic organ counts as its host location severed. A location marked as
         /// needing an organ replacement does not count: the brother survived it, and must never be
-        /// classified as dead later (Design/Active/VitalLocationReplacement.md §3.2).
+        /// classified as dead later (OnlyWar_TDD.md §5.3).
         /// </summary>
         public static bool HasSeveredVitalLocation(ISoldier soldier) =>
             soldier?.Body?.HitLocations.Any(IsFatallySeveredVital) ?? false;

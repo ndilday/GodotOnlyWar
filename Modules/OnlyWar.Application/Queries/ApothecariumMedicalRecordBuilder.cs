@@ -194,7 +194,7 @@ namespace OnlyWar.Application
                     force != null && job == null && requisites.All(requisite => requisite.IsMet)));
             }
             // Damaged augmetic organs inside organic vital locations
-            // (Design/Active/VitalLocationReplacement.md §3.4).
+            // (OnlyWar_TDD.md §5.3).
             foreach (AugmeticOrgan organ in soldier.Body.AugmeticOrgans
                 .Where(CyberneticRepairPolicy.IsRepairable))
             {
@@ -519,7 +519,7 @@ namespace OnlyWar.Application
                 && GetActiveProcedure(force, soldierId, l.Template.Id) == null))
             {
                 // An organ replacement keeps the location organic and uses the "not severed"
-                // price row (Design/Active/VitalLocationReplacement.md §3.3, D5).
+                // price row (OnlyWar_TDD.md §6.6.1).
                 bool organ = location.RequiresOrganReplacement;
                 bool severed = MedicalProcedureRules.UsesSeveredPricing(location);
                 options.Add(new ReplacementOption(

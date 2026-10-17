@@ -47,7 +47,9 @@ namespace OnlyWar.Domain.Events
         WorldSaved = 2205,
         WorldLost = 2206,
         HiddenCultRevealed = 2207,
-        SquadLeaderUnavailable = 2208
+        SquadLeaderUnavailable = 2208,
+        // The Chapter Master's aide reports a change in the wider sector (PRD §4.19).
+        SectorDispatch = 2209
     }
 
     public enum CampaignEntityKind
@@ -177,7 +179,9 @@ namespace OnlyWar.Domain.Events
                 CampaignEventChronicleTreatment.None,
                 CurrentClassifierVersion);
 
-        public const int CurrentClassifierVersion = 2;
+        // 3: sector dispatches; WorldLost and a WorldSaved without the Chapter reach the Turn
+        //    Report only through their dispatch.
+        public const int CurrentClassifierVersion = 3;
     }
 
     public sealed class CampaignEventCandidate
@@ -412,6 +416,7 @@ namespace OnlyWar.Domain.Events
             Register<WorldControlChangedPayload>(CampaignEventType.WorldLost, 1);
             Register<HiddenCultRevealedPayload>(CampaignEventType.HiddenCultRevealed, 1);
             Register<SquadLeaderUnavailablePayload>(CampaignEventType.SquadLeaderUnavailable, 1);
+            Register<SectorDispatchPayload>(CampaignEventType.SectorDispatch, 1);
             foreach (CampaignEventType type in typedVersionThreeTypes)
             {
                 RegisterTypedVersionThree(type);
@@ -517,12 +522,15 @@ namespace OnlyWar.Domain.Events
         {
             if (payload is IncapacitatedPayload nearDeathPayload
                 && nearDeathPayload.QualifiesAsNearDeath
-                && (!nearDeathPayload.DefiningLocationIsVital
-                    || !nearDeathPayload.DefiningLocationWasCrippled
-                    || nearDeathPayload.DefiningLocationWasSevered))
+                && !IncapacitatedPayload.IsNearDeath(
+                    nearDeathPayload.DefiningLocationIsVital,
+                    nearDeathPayload.DefiningLocationWasCrippled,
+                    nearDeathPayload.DefiningLocationWasSevered,
+                    nearDeathPayload.DefiningLocationRequiresOrganReplacement))
             {
                 throw new ArgumentException(
-                    "Only a crippled, non-severed vital location can qualify as near death.",
+                    "Only a crippled vital location that is not severed, or a severed one that "
+                    + "needs an organ replacement, can qualify as near death.",
                     nameof(payload));
             }
 

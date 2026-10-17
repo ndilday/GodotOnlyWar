@@ -38,9 +38,10 @@ namespace OnlyWar.Battles.Aftermath
         // Dev-facing skill/attribute growth log: snapshot before the fight, diffed once it ends.
         private readonly SoldierProgressLog.ProgressSnapshot _progressBefore;
         private readonly NarrativeEventRules _narrativeEventRules;
-        // Brothers whose Torso was already crippled when the battle began. Only a Torso crippled
-        // in this battle makes the replacement roll (Design/Active/VitalLocationReplacement.md §3.1).
-        private readonly HashSet<int> _torsoCrippledAtStart = new();
+        // (soldier, location template) pairs for CrippledMayNeedOrganReplacement locations that were
+        // already crippled when the battle began. Only a location crippled in this battle makes the
+        // replacement roll (OnlyWar_TDD.md §5.3).
+        private readonly HashSet<(int SoldierId, int TemplateId)> _crippledAtStart = new();
 
         public PlayerChapterBattleAftermathPolicy(
             BattleAftermathContext context,
@@ -53,10 +54,12 @@ namespace OnlyWar.Battles.Aftermath
             foreach (BattleSoldier soldier in context.StartingPlayerSoldiers)
             {
                 RememberPlayerSnapshot(soldier);
-                if (soldier.Soldier?.Body?.HitLocations.Any(location =>
-                        VitalOrganRules.IsTorso(location.Template) && location.IsCrippled) == true)
+                foreach (HitLocation location in soldier.Soldier?.Body?.HitLocations ?? [])
                 {
-                    _torsoCrippledAtStart.Add(soldier.Soldier.Id);
+                    if (location.Template.CrippledMayNeedOrganReplacement && location.IsCrippled)
+                    {
+                        _crippledAtStart.Add((soldier.Soldier.Id, location.Template.Id));
+                    }
                 }
             }
             _progressBefore = SoldierProgressLog.Capture(
@@ -319,28 +322,31 @@ namespace OnlyWar.Battles.Aftermath
         }
 
         /// <summary>
-        /// The two independent battle-end rolls of Design/Active/VitalLocationReplacement.md §3.1,
+        /// The two independent battle-end rolls of OnlyWar_TDD.md §5.3,
         /// made before the casualty classification.
         ///
-        /// SEVERED VITALS (D2): a Vitals that is severed, or holds a severed augmetic organ, and
-        /// carries no Unsurvivable wound is survived on a successful roll and marked as needing an
-        /// organ replacement. On a failed roll nothing changes and the existing death path kills
-        /// him.
+        /// The rules data says which locations roll, through two flags on the location template;
+        /// in the shipped rules the Vitals has the first and the Torso the second.
         ///
-        /// CRIPPLED TORSO (D3): a Torso crippled in this battle and not severed is marked as
-        /// needing an organ replacement on a successful roll, and otherwise heals as before.
+        /// SEVERED (<see cref="HitLocationTemplate.SeveredMayNeedOrganReplacement"/>): a location
+        /// that is severed, or holds a severed augmetic organ, and carries no Unsurvivable wound is
+        /// survived on a successful roll and marked as needing an organ replacement. On a failed
+        /// roll nothing changes and the existing death path kills him.
         ///
-        /// No roll is made for a brother another severed vital already kills, and the Torso roll
-        /// is not made for a brother who failed the Vitals roll.
+        /// CRIPPLED (<see cref="HitLocationTemplate.CrippledMayNeedOrganReplacement"/>): a
+        /// location crippled in this battle and not severed is marked as needing an organ
+        /// replacement on a successful roll, and otherwise heals as before. Severing such a
+        /// location (or an augmetic organ in it) stays fatal.
+        ///
+        /// No roll is made for a brother another severed vital already kills, and the crippled
+        /// rolls are not made for a brother who failed a survival roll.
         /// </summary>
         private void ApplyVitalOrganRolls(PlayerSoldier soldier)
         {
             HitLocation[] locations = soldier?.Body?.HitLocations;
             if (locations == null) return;
 
-            HitLocation vitals = locations.FirstOrDefault(location =>
-                VitalOrganRules.IsVitals(location.Template));
-            if (locations.Any(location => location != vitals
+            if (locations.Any(location => !location.Template.SeveredMayNeedOrganReplacement
                     && location.Template.IsVital
                     && location.IsSeveredOrHasSeveredAugmeticOrgan
                     && !location.RequiresOrganReplacement))
@@ -348,32 +354,34 @@ namespace OnlyWar.Battles.Aftermath
                 return;
             }
 
-            if (vitals != null
-                && vitals.IsSeveredOrHasSeveredAugmeticOrgan
-                && !vitals.RequiresOrganReplacement)
+            foreach (HitLocation location in locations.Where(location =>
+                location.Template.SeveredMayNeedOrganReplacement
+                && location.IsSeveredOrHasSeveredAugmeticOrgan
+                && !location.RequiresOrganReplacement).ToList())
             {
-                if (HasUnsurvivableWound(vitals)
-                    || _dependencies.Random.GetLinearDouble() >= VitalOrganRules.SeveredVitalsSurvivalChance)
+                if (HasUnsurvivableWound(location)
+                    || _dependencies.Random.GetLinearDouble() >= VitalOrganRules.SeveredSurvivalChance)
                 {
                     return;
                 }
-                vitals.RequiresOrganReplacement = true;
+                location.RequiresOrganReplacement = true;
             }
 
-            HitLocation torso = locations.FirstOrDefault(location =>
-                VitalOrganRules.IsTorso(location.Template));
-            if (torso != null
-                && torso.IsCrippled
-                && !torso.IsSevered
-                && !torso.RequiresOrganReplacement
-                && !_torsoCrippledAtStart.Contains(soldier.Id)
-                && _dependencies.Random.GetLinearDouble() < VitalOrganRules.CrippledTorsoReplacementChance)
+            foreach (HitLocation location in locations.Where(location =>
+                location.Template.CrippledMayNeedOrganReplacement
+                && location.IsCrippled
+                && !location.IsSevered
+                && !location.RequiresOrganReplacement
+                && !_crippledAtStart.Contains((soldier.Id, location.Template.Id))).ToList())
             {
-                torso.RequiresOrganReplacement = true;
+                if (_dependencies.Random.GetLinearDouble() < VitalOrganRules.CrippledReplacementChance)
+                {
+                    location.RequiresOrganReplacement = true;
+                }
             }
         }
 
-        // D3b: an Unsurvivable wound to the location or to one of its organs is always fatal.
+        // An Unsurvivable wound to the location or to one of its organs is always fatal.
         private static bool HasUnsurvivableWound(HitLocation location) =>
             location.Wounds.UnsurvivableWounds > 0
             || location.AugmeticOrgans.Any(organ => organ.Wounds.UnsurvivableWounds > 0);
@@ -452,10 +460,12 @@ namespace OnlyWar.Battles.Aftermath
             HitLocation definingLocation = FindDefiningLocation(soldier);
             // "Severed and survived" (a Vitals marked for organ replacement) is near death, as
             // "crippled and not severed" is.
-            bool qualifiesAsNearDeath = definingLocation?.Template?.IsVital == true
-                && IsCrippledVital(definingLocation)
-                && (!definingLocation.IsSeveredOrHasSeveredAugmeticOrgan
-                    || definingLocation.RequiresOrganReplacement);
+            bool qualifiesAsNearDeath = definingLocation != null
+                && IncapacitatedPayload.IsNearDeath(
+                    definingLocation.Template?.IsVital == true,
+                    IsCrippledVital(definingLocation),
+                    definingLocation.IsSeveredOrHasSeveredAugmeticOrgan,
+                    definingLocation.RequiresOrganReplacement);
             if (_dependencies.PlayerSink is IPlayerNarrativeEventSink narrativeSink)
             {
                 Squad assignedSquad = soldier.AssignedSquad;

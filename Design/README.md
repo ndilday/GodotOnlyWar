@@ -57,20 +57,25 @@ constitution) was implemented, distilled into TDD §5.3 and §6.6.1 with the pla
 and deleted on 2026-10-13. Nothing in it met the `Reference/` bar: its rejected alternatives (a
 budget from a rating, a floor on the skill curve) fold into the TDD in a sentence each. Its Godot
 check was still outstanding when it was deleted.
+`VitalLocationReplacement.md` (organ replacement for a severed Vitals or a crippled Torso, and
+augmetic organs; formerly PRD §6.17) was implemented, checked in Godot, distilled into TDD §5.3 and
+§6.6.1 with the player rules in PRD §4.8, and deleted on 2026-10-15. Nothing in it met the
+`Reference/` bar. Its out-of-scope list and the reason the tunables sit in the Domain fold into TDD
+§5.3 in two sentences. One residual moved to PRD §5.6 before deletion (a brother who survived a
+severed Vitals opened no near-death episode) and was fixed the same day.
+`SectorDispatches.md` (the Chapter Master's aide reports major sector changes in the Turn Report) was
+implemented, distilled into TDD §6.1 *Sector dispatches* with the player rules in PRD §4.19, and
+deleted on 2026-10-16. Nothing in it met the `Reference/` bar: its two rejected alternatives (a cap or
+summary, a "greatest danger" trigger) fold into the TDD in a sentence. A 10-week playtest saw no
+dispatch because nothing in the sector met a trigger; a dispatch on screen is still unconfirmed.
 
 Active designs:
 
-- `Active/VitalLocationReplacement.md` — organ replacement for a severed Vitals or a crippled
-  Torso, and augmetic organs (formerly PRD §6.17, now PRD §4.8; Alpha 0.8.1). Created 2026-10-13;
-  implemented 2026-10-14, Godot check outstanding.
 - `Active/ChapterMandates.md` — player-chosen mandates and the legacy-point ledger (PRD §4.25,
   Alpha 0.8.1). Created 2026-10-13; design complete, not started.
 - `Active/FoundingMyth.md` — a generated founding history as the first Chronicle entry, and the
   chapter's founding, which sets the starting year (PRD §4.19, Alpha 0.8.1). Created 2026-10-13;
   design complete, not started.
-- `Active/SectorDispatches.md` — the Chapter Master's aide reports major sector events in the Turn
-  Report (PRD §4.19 *Wider-Imperium Dispatches*, Alpha 0.8.1). Created 2026-10-13; design
-  complete, not started.
 
 **Audited 2026-10-12.** Two plans were removed:
 

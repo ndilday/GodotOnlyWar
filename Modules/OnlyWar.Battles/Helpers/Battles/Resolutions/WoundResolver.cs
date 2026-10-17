@@ -134,7 +134,7 @@ namespace OnlyWar.Battles.Resolutions
         }
 
         /// <summary>
-        /// Design/Active/VitalLocationReplacement.md §3.4: a penetrating hit to a location with n
+        /// OnlyWar_TDD.md §5.3: a penetrating hit to a location with n
         /// augmetic organs strikes one of them with probability n x the per-organ chance, the
         /// organ chosen uniformly. Null means the hit strikes the organic part.
         /// </summary>

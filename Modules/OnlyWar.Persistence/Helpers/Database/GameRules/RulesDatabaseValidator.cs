@@ -63,6 +63,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             ValidateTrainingProfiles(rules.TrainingProfiles, errors);
             ValidateScoutTrainingOptions(rules.ScoutTrainingOptions, errors);
             ValidateCyberneticOptions(rules.CyberneticOptions, errors);
+            ValidateOrganReplacementLocations(rules.BodyTemplates, errors);
             ValidateFactionContent(rules, errors);
             ValidateEquipmentCatalog(rules.EquipmentCatalog, errors);
             ValidateFactionBehaviorProfiles(rules.FactionBehaviorRulesProfiles, errors);
@@ -360,6 +361,43 @@ namespace OnlyWar.Persistence.Database.GameRules
                     errors.Add(
                         $"CyberneticOption {option.Id} ('{option.Name}') needs armor >= 0 "
                         + "and constitution > 0.");
+                }
+            }
+
+            // GameRulesData reads the organ tier as "the row with IsAugmeticOrganTier", so a second
+            // one would be ignored without a word.
+            if ((options ?? []).Count(option => option?.IsAugmeticOrganTier == true) > 1)
+            {
+                errors.Add("CyberneticOption has more than one row with IsAugmeticOrganTier set.");
+            }
+        }
+
+        /// <summary>
+        /// The organ-replacement flags (OnlyWar_TDD.md §5.3) make sense on a
+        /// vital location only: a severed non-vital location is already a replacement case, and
+        /// one location cannot both survive a sever by roll and fail to heal from a cripple.
+        /// </summary>
+        private static void ValidateOrganReplacementLocations(
+            IReadOnlyDictionary<int, List<HitLocationTemplate>> bodyTemplates,
+            ICollection<string> errors)
+        {
+            foreach (HitLocationTemplate template in (bodyTemplates?.Values ?? [])
+                .SelectMany(locations => locations ?? []))
+            {
+                if (template == null) continue;
+                bool severed = template.SeveredMayNeedOrganReplacement;
+                bool crippled = template.CrippledMayNeedOrganReplacement;
+                if ((severed || crippled) && !template.IsVital)
+                {
+                    errors.Add(
+                        $"HitLocationTemplate {template.Id} ('{template.Name}') has an "
+                        + "organ-replacement flag but is not vital.");
+                }
+                if (severed && crippled)
+                {
+                    errors.Add(
+                        $"HitLocationTemplate {template.Id} ('{template.Name}') sets both "
+                        + "SeveredMayNeedOrganReplacement and CrippledMayNeedOrganReplacement.");
                 }
             }
         }

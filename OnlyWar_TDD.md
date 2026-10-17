@@ -567,6 +567,8 @@ ChapterChronicleAnnotation (Id, ChronicleEntryId→ChapterChronicleEntry,
                             NarratorKey, NarratorVersion, DedupeKey, IsCorrection)
 WorldControlEpisode      (PlanetId→Planet, ImperialFactionId, LastControllingFactionId,
                           WasImperialControlled, ContestedSinceWeek, ChapterParticipated)
+SectorDispatchPlanet     (PlanetId→Planet, InDanger, RevoltActive, RevoltChapterParticipated)
+SectorDispatchSectorLord (Id = 1, CharacterId, CapitalPlanetId)
 ```
 
 **Note:** Region adjacency is runtime-only. It is reconstructed from the ordered region array on load and is not persisted.
@@ -588,6 +590,9 @@ chronicle prose, narrator/version metadata, variants, and callbacks are not rege
 
 `WorldControlEpisode` preserves contested control episodes. Stable dedupe keys prevent repeated
 events, and corrections append `ChapterChronicleAnnotation` rows without rewriting the original entry.
+`SectorDispatchPlanet` and `SectorDispatchSectorLord` hold the `SectorDispatchTracker` state that sector
+dispatch detection needs across saves (§6.1 *Sector dispatches*). A missing Sector Lord row means the seat
+was not yet observed; a row with a null `CharacterId` means the seat was vacant.
 
 ---
 
@@ -729,12 +734,12 @@ holds the authored service-record summary, and `Render()` formats that summary f
 
 **Location armor and constitution.** `HitLocation.NaturalArmor` is the template's natural armor, or an installed augmetic's own `Armor`, which replaces it (it does not add to it). The attack actions add it to worn armor and scale the sum by the weapon's `ArmorMultiplier` before the penetration check (`RemovalMath.EffectiveArmor`); `WoundResolver` no longer subtracts natural armor. `HitLocation.EffectiveConstitution(soldier)` is the augmetic's own `Constitution` when it has one (non-zero), else the soldier's, and `WoundResolver` divides by it. A severed augmetic stops being cybernetic and falls back to the template values. **The enemy cannot see augmetics:** planner estimates read `PerceivedNaturalArmor` (always the template's) and the species-median constitution for every location, and whole-soldier profiles use `RemovalMath.RepresentativeConstitution` (the organic value) with no cybernetic armor. Only resolution sees a part's real values. Nothing changes `IsCybernetic` or `Armor` during a battle, so `BattleSoldier.UnitTakeOutTerms` needs no refresh for them; a field repair between days raises the injury revision through `Wounds.HealWounds`.
 
-**Vital-organ replacement** (`Design/Active/VitalLocationReplacement.md`). Two more pieces of per-location state, both persisted:
+**Vital-organ replacement** (PRD §4.8). Two more pieces of per-location state, both persisted:
 
-- `HitLocation.RequiresOrganReplacement` marks a vital location that needs an organ replacement. `PlayerChapterBattleAftermathPolicy` sets it at battle end, before `CasualtyStateEvaluator.Classify`, for a player brother whose chapter held the field: a severed Vitals (or one holding a severed augmetic organ) without an Unsurvivable wound survives on a session-RNG roll of `VitalOrganRules.SeveredVitalsSurvivalChance`, and a Torso crippled in that battle (the policy snapshots crippled torsos at construction) is flagged on a roll of `CrippledTorsoReplacementChance`. No roll is made for a brother another severed vital kills, and the Torso roll is skipped when the Vitals roll fails. `IsReplacementEligible` is true for a flagged location; `CasualtyStateEvaluator.HasSeveredVitalLocation` ignores it and counts a severed augmetic organ as its host severed.
+- `HitLocation.RequiresOrganReplacement` marks a vital location that needs an organ replacement. `PlayerChapterBattleAftermathPolicy` sets it at battle end, before `CasualtyStateEvaluator.Classify`, for a player brother whose chapter held the field: a severed Vitals (or one holding a severed augmetic organ) without an Unsurvivable wound survives on a session-RNG roll of `VitalOrganRules.SeveredSurvivalChance`, and a Torso crippled in that battle (the policy snapshots crippled flagged locations at construction) is flagged on a roll of `CrippledReplacementChance`. No roll is made for a brother another severed vital kills, and the Torso roll is skipped when the Vitals roll fails. `IsReplacementEligible` is true for a flagged location; `CasualtyStateEvaluator.HasSeveredVitalLocation` ignores it and counts a severed augmetic organ as its host severed.
 - `HitLocation.AugmeticOrgans` is a list of `AugmeticOrgan` (stable `Index`, own `Wounds`, own `Constitution`, no armor) inside an organic Torso or Vitals, at most `VitalOrganRules.MaximumAugmeticOrgansPerLocation`. An organ uses its host's cripple/sever thresholds; its wound changes raise the body's injury revision; `Soldier.CanFight` treats a crippled organ as a crippled vital. `WoundResolver` (given the session RNG by `BattleTurnResolver`) routes a hit on a location with *n* organs to an organ with probability `n × HitChancePerAugmeticOrgan`, uniformly among them, and measures the band against the organ's constitution; it draws nothing for a location without organs. A newly crippled organ raises the death hook. Planner estimates and Battle Value ignore organs.
 
-Torso and Vitals are recognised by template name (`VitalOrganRules.IsTorso` / `IsVitals`), because Brain and Vitals share every anatomical value. All four tunables are code constants in `VitalOrganRules`.
+Which locations take part is rules data, not code: two `HitLocationTemplate` flags, `SeveredMayNeedOrganReplacement` (the survival roll; set on every Vitals) and `CrippledMayNeedOrganReplacement` (the replacement roll; set on every Torso). A location with either flag can hold augmetic organs (`VitalOrganRules.CanHoldAugmeticOrgans`). Severing a `CrippledMayNeedOrganReplacement` location, or an organ in it, stays fatal. `RulesDatabaseValidator` rejects a flag on a non-vital location and both flags on one location. All four tunables are code constants in `VitalOrganRules`, which is in the Domain and not beside `MedicalProcedureRules`, because the battle module reads them and does not reference the Medical module. Deliberately out of scope: a hit chart of individual organs (splitting the Torso and Vitals into sub-areas needs a rework of wound accumulation, so an organ is chosen uniformly instead), Brain and Face replacement, replacement for NPCs (a crippled vital still kills them), and Dreadnought interment.
 
 `WoundTotal` accumulates using `WoundLevel` values as bitmask steps:
 
@@ -1127,6 +1132,7 @@ The processors are divided by simulation responsibility:
 - `ChapterUpkeepProcessor` owns weekly medical and training work; `FleetTurnProcessor` advances travel and delegates warp-subjective training back to the shared upkeep processor.
 - `PlanetTurnProcessor` owns planet/region simulation, revolts, governors, and intelligence-derived special missions. `TurnIntelligenceLedger` accumulates awareness gains, directed observations, recon evidence, and one-pass Allied sharing until the intelligence phase applies them. Target-belief decay, public-activity sampling, and belief-backed special opportunities happen in this phase.
 - `ScenarioTurnProcessor` resolves campaign objectives after the simulated world state settles. `ScenarioMetricsCollector` owns the optional debug-only opening-scenario trace.
+- `SectorDispatchProcessor` records the Chapter Master's aide's dispatches about the wider sector (below).
 
 `ProcessTurn` preserves this phase order:
 
@@ -1136,6 +1142,41 @@ The processors are divided by simulation responsibility:
 4. Apply mission aftermath, Chapter medical/training upkeep, fleet movement, and planet simulation.
 5. Decay awareness/beliefs, apply listening-post and recon gains, generate public/patrol/contact observations, fan them out once to Allies, then reconcile belief-backed opportunities and governor requests.
 6. Resolve the campaign scenario, finish diagnostics, clean resolved player orders, and return the result.
+
+**Sector dispatches** (PRD §4.19). `SectorDispatchProcessor.BeginTurn`
+runs before faction forces act: it seeds the persisted `PlayerForce.SectorDispatches` tracker with any world
+or Sector Lord it has not seen (a first observation never reports), and snapshots the public Consumption
+(swarm) presences and the command squads of publicly known strategic invasion forces. `EndTurn` runs right
+after the WorldSaved/WorldLost and hidden-cult events are recorded, and records one
+`CampaignEventType.SectorDispatch` event (`SectorDispatchPayload`) per trigger:
+
+- a `WorldSaved` without the Chapter, and every `WorldLost` (secession when the new controller is the
+  Insurrectionist faction), keyed by the source event;
+- a world in danger: an Imperial world where at least one third of the regions have a public, populated
+  presence hostile to the default faction. The tracker keeps the episode open until the share falls below
+  one sixth, so it reports once per episode;
+- a revolt crushed: the public Insurrectionist presence on a world that is still Imperial ends. The tracker
+  remembers whether the Chapter took part at any time during the revolt;
+- a swarm on a new world, and a strategic invasion force that becomes publicly known, from the
+  start-of-turn snapshot. An invasion force is keyed by its command squad, so a merge that keeps the
+  commander reports nothing new;
+- a new Sector Lord: a different character governs the Imperial-held sector capital.
+
+The Chapter's part is *took part* (the Chapter had squads under orders on the world this week, or a battle
+there entered the record; for a lost world, `ChapterParticipated`), *present but not engaged* (a Chapter
+squad in the same subsector, named by its company), or *absent*. Dispatches use only public state.
+The classifier publishes a dispatch to the Turn Report only; WorldLost and a WorldSaved without the
+Chapter keep their Chronicle entries but leave the Turn Report to the dispatch (classifier version 3).
+`CampaignEventNarrator.RenderDispatch` renders the `chapter-master-aide` voice from a variant pool per
+trigger. `TurnReportProjector` gives each dispatch a card in the `Dispatches` section, after the main list,
+with a link to its world.
+
+Limits of the current simulation: a revolt that is beaten in battle and one that dissolves look the same,
+so both report as crushed. The governance hierarchy is re-derived only on load, so a capital that moves is
+reported on the first turn after that load. Rejected: a cap or periodic summary (every trigger is reported),
+and a "greatest danger" trigger (the danger and lost-world dispatches already cover it). A quiet sector can
+go many weeks with no dispatch: in a 10-week playtest on 2026-10-16 the only public enemy was the opening
+invasion, which existed at the start and so was not news.
 
 `SimulatePlanetForward` reuses the same planning, mission, aftermath, planet, intelligence, and diagnostic processors for generation-time world evolution, but intentionally omits date advancement, Chapter upkeep, fleet movement, other planets, and scenario resolution. Because it has no following planning pass, it sweeps the transient AI recon parties still standing after its last week, so the world hands off to the player with nothing landed on it. Patrol screens need no sweeping: they are a battle value on the `RegionFaction` rather than landed squads (§6.2).
 
@@ -1696,8 +1737,13 @@ Battle completion produces a typed `BattleOutcome` with end reason, field holder
 through the aftermath boundary so battle participation, First Blood and kill milestones,
 incapacitation, death, gene-seed outcome, Last Brother Standing, Squad Held Against Odds, and
 `BattleResolved` share one correlation key. Casualty facts are emitted after final body-state
-settlement: only a crippled, non-severed vital location marks an incapacitation as a near-death
-source; a severed vital or an unrecovered brother follows the typed death disposition. Last Brother
+settlement: a crippled vital location that is not severed marks an incapacitation as a near-death
+source, and so does a severed one flagged `RequiresOrganReplacement` (a survived severed Vitals,
+§5.3). `IncapacitatedPayload.IsNearDeath` is the one rule that the aftermath policy, the recorder and
+the payload validator share; an augmetic organ counts as its host for "crippled" and "severed".
+`DefiningLocationRequiresOrganReplacement` was added to payload version 3 as an optional field, so
+an older payload loads with it false. Any other severed vital or an unrecovered brother follows the
+typed death disposition. Last Brother
 Standing requires five starting Chapter participants and exactly one combat-effective finisher.
 Squad Held Against Odds is evaluated per starting player squad at a 50% casualty threshold under a
 defensive commitment, only when the Chapter held the field. All achievement thresholds live in the
@@ -1725,7 +1771,7 @@ Application cadence adapter invoked by the `ProcessMedical` step of
 returned completion facts to roster/posting/event state. The module has two policy halves.
 
 - **Natural healing.** `MedicalHealthPolicy` applies `Wounds.ApplyWeekOfHealing()` to every wounded hit location regardless of deployment, *except* locations that require a replacement procedure: severed non-vital locations and vital locations flagged `RequiresOrganReplacement` (§5.3). The daily Astartes pass skips flagged locations too, and augmetic organs never heal naturally. Other crippled locations heal naturally. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree. Cadence and the daily Astartes pass are specified in §5.3.
-- **Procedure resolution.** `MedicalHealthPolicy.AdvanceProcedure` decrements weeks-remaining and, on completion, clears the location's wounds and returns a typed completion transition. The Application/Campaign adapter removes the persisted procedure and synchronizes reservation flags. Cybernetic completion installs `GameRulesData.StandardCyberneticOption` (`HitLocation.InstallCybernetic`: the flag plus the option's armor and constitution); vat-grown leaves the flag clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag. An **organ replacement** (the location is flagged `RequiresOrganReplacement`) is priced on the "not severed" row whatever the location's state (`MedicalProcedureRules.UsesSeveredPricing`). On completion it clears the location's wounds and the flag, removes any severed augmetic organ, and leaves the location organic; a cybernetic organ replacement then adds one augmetic organ from `GameRulesData.VitalOrganCyberneticOption` (`CyberneticOption` row 2, Vital Organ Augmetic) unless the location is at the cap. The progenoid gland is never touched.
+- **Procedure resolution.** `MedicalHealthPolicy.AdvanceProcedure` decrements weeks-remaining and, on completion, clears the location's wounds and returns a typed completion transition. The Application/Campaign adapter removes the persisted procedure and synchronizes reservation flags. Cybernetic completion installs `GameRulesData.StandardCyberneticOption` (`HitLocation.InstallCybernetic`: the flag plus the option's armor and constitution); vat-grown leaves the flag clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag. An **organ replacement** (the location is flagged `RequiresOrganReplacement`) is priced on the "not severed" row whatever the location's state (`MedicalProcedureRules.UsesSeveredPricing`). On completion it clears the location's wounds and the flag, removes any severed augmetic organ, and leaves the location organic; a cybernetic organ replacement then adds one augmetic organ from `GameRulesData.VitalOrganCyberneticOption` (the `CyberneticOption` row with `IsAugmeticOrganTier`) unless the location is at the cap. The progenoid gland is never touched.
 
 Medical completion returns a bounded list of `CompletedMedicalProcedure` facts. Each successful
 primary target emits one `BodyPartReplacement` event, recording the method, prior cybernetic state,
@@ -1759,8 +1805,9 @@ Two seams, deliberately deduped. The mission pass runs on `MissionDayScheduler`'
 **Techmarine cybernetic repair.** Augmetics never heal naturally and Apothecaries cannot treat them
 (`MedicalHealthPolicy`, `FieldCarePolicy` both skip cybernetic locations), so a damaged augmetic
 needs a Techmarine. The tier comes from the required rules table `CyberneticOption` (`Id, Name,
-Armor, Constitution`; row 1 Standard Augmetic for limbs, row 2 Vital Organ Augmetic for augmetic
-organs). An augmetic organ (§5.3) is repaired the same way: `CyberneticRepairJob.OrganIndex` names
+Armor, Constitution, IsAugmeticOrganTier`; Standard Augmetic for limbs, Vital Organ Augmetic for
+augmetic organs). `GameRulesData.StandardCyberneticOption` is the first row without
+`IsAugmeticOrganTier`, `VitalOrganCyberneticOption` the row with it; the validator allows at most one. An augmetic organ (§5.3) is repaired the same way: `CyberneticRepairJob.OrganIndex` names
 it inside its location (null means the location's own part), `CyberneticRepairJobFacts.Organ`
 carries it into the policy, and a repairable organ is installed, not severed, and damaged. A
 severed organ needs an organ replacement instead. `OnlyWar.Medical.Treatment.CyberneticRepairPolicy`
@@ -2398,6 +2445,8 @@ LastTurnReportEntrySnapshot
   OutcomeStatus
   IsEnemyActivity
   Debrief (optional)
+  PlanetId (optional)          -- the "go to" world link
+  Section (optional)           -- report heading, e.g. "Dispatches"; null for the main list
 
 LastTurnDebriefSnapshot
   Title

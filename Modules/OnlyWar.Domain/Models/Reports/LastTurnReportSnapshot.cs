@@ -37,6 +37,8 @@ namespace OnlyWar.Domain.Reports
         public LastTurnDebriefSnapshot Debrief { get; }
         // Absent from payloads written before the report offered a "go to" link; those load as null.
         public int? PlanetId { get; }
+        // The report section heading; absent (null) for the main list and for older payloads.
+        public string Section { get; }
 
         public LastTurnReportEntrySnapshot(
             string title,
@@ -45,8 +47,10 @@ namespace OnlyWar.Domain.Reports
             string outcomeStatus,
             bool isEnemyActivity,
             LastTurnDebriefSnapshot debrief = null,
-            int? planetId = null)
+            int? planetId = null,
+            string section = null)
         {
+            Section = section;
             Title = title ?? "";
             Subtitle = subtitle ?? "";
             Summary = summary ?? "";

@@ -28,7 +28,7 @@ public static class CyberneticRepairPolicy
 
     /// <summary>
     /// An augmetic organ a Techmarine can repair: still installed, not severed, and damaged
-    /// (Design/Active/VitalLocationReplacement.md §3.4). A severed organ needs an organ
+    /// (OnlyWar_TDD.md §5.3). A severed organ needs an organ
     /// replacement, not a repair.
     /// </summary>
     public static bool IsRepairable(AugmeticOrgan organ) =>

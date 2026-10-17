@@ -71,6 +71,8 @@ namespace OnlyWar.Persistence.Database.GameState
         public CampaignIdentity CampaignIdentity { get; set; }
         public FactionRelationshipLedger RelationshipLedger { get; set; }
         public IReadOnlyList<WorldControlEpisodeState> WorldControlEpisodes { get; set; }
+        public IReadOnlyList<SectorDispatchPlanetState> SectorDispatchPlanets { get; set; }
+        public SectorLordState SectorDispatchSectorLord { get; set; }
         public List<GhostPopulationSource> GhostPopulationSources { get; set; }
         public List<StrategicInvasionForceSaveData> StrategicInvasionForces { get; set; }
         public bool UpgradePending { get; set; }
@@ -94,6 +96,7 @@ namespace OnlyWar.Persistence.Database.GameState
         private readonly CampaignEventDataAccess _campaignEventDataAccess;
         private readonly ChapterChronicleDataAccess _chapterChronicleDataAccess;
         private readonly WorldControlEpisodeDataAccess _worldControlEpisodeDataAccess;
+        private readonly SectorDispatchDataAccess _sectorDispatchDataAccess;
         private readonly IndividualPostingDataAccess _individualPostingDataAccess;
         private readonly string _schemaFilePath;
 
@@ -117,6 +120,7 @@ namespace OnlyWar.Persistence.Database.GameState
             _campaignEventDataAccess = new CampaignEventDataAccess();
             _chapterChronicleDataAccess = new ChapterChronicleDataAccess();
             _worldControlEpisodeDataAccess = new WorldControlEpisodeDataAccess();
+            _sectorDispatchDataAccess = new SectorDispatchDataAccess();
             _individualPostingDataAccess = new IndividualPostingDataAccess();
         }
 
@@ -216,6 +220,9 @@ namespace OnlyWar.Persistence.Database.GameState
             ChapterChronicleLedger chronicle = _chapterChronicleDataAccess.GetLedger(dbCon, campaignEvents);
             IReadOnlyList<WorldControlEpisodeState> worldControlEpisodes =
                 _worldControlEpisodeDataAccess.GetStates(dbCon);
+            IReadOnlyList<SectorDispatchPlanetState> sectorDispatchPlanets =
+                _sectorDispatchDataAccess.GetPlanetStates(dbCon);
+            SectorLordState sectorDispatchSectorLord = _sectorDispatchDataAccess.GetSectorLord(dbCon);
             return new GameStateDataBlob
             {
                 Characters = characterMap.Values.ToList(),
@@ -254,6 +261,8 @@ namespace OnlyWar.Persistence.Database.GameState
                 CampaignIdentity = campaignIdentity,
                 RelationshipLedger = relationshipLedger,
                 WorldControlEpisodes = worldControlEpisodes,
+                SectorDispatchPlanets = sectorDispatchPlanets,
+                SectorDispatchSectorLord = sectorDispatchSectorLord,
                 GhostPopulationSources = ghostPopulationSources,
                 StrategicInvasionForces = strategicInvasionForces,
                 UpgradePending = false
@@ -293,7 +302,8 @@ namespace OnlyWar.Persistence.Database.GameState
                               ChapterOperationalDoctrine chapterOperationalDoctrine = null,
                               bool mechanicusLoanActive = false,
                               CampaignLocation marsReturnDestination = null,
-                              IEnumerable<CyberneticRepairJob> cyberneticRepairJobs = null)
+                              IEnumerable<CyberneticRepairJob> cyberneticRepairJobs = null,
+                              SectorDispatchTracker sectorDispatches = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -329,7 +339,7 @@ namespace OnlyWar.Persistence.Database.GameState
                               relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
                               additionalOrders, ghostPopulationSources, strategicInvasionForces,
                               chapterOperationalDoctrine, mechanicusLoanActive,
-                              marsReturnDestination, cyberneticRepairJobs);
+                              marsReturnDestination, cyberneticRepairJobs, sectorDispatches);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -387,7 +397,8 @@ namespace OnlyWar.Persistence.Database.GameState
                                     ChapterOperationalDoctrine chapterOperationalDoctrine,
                                     bool mechanicusLoanActive,
                                     CampaignLocation marsReturnDestination,
-                                    IEnumerable<CyberneticRepairJob> cyberneticRepairJobs)
+                                    IEnumerable<CyberneticRepairJob> cyberneticRepairJobs,
+                                    SectorDispatchTracker sectorDispatches)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -528,6 +539,7 @@ namespace OnlyWar.Persistence.Database.GameState
                     _campaignEventDataAccess.SaveLedger(transaction, campaignEventLedger);
                     _chapterChronicleDataAccess.SaveLedger(transaction, chapterChronicle);
                     _worldControlEpisodeDataAccess.SaveStates(transaction, worldControlEpisodes);
+                    _sectorDispatchDataAccess.Save(transaction, sectorDispatches);
                     _lastTurnReportDataAccess.SaveSnapshot(transaction, lastTurnReportSnapshot);
                 }
                 catch (Exception)

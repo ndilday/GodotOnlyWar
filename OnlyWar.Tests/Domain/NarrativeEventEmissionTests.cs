@@ -3,6 +3,7 @@ using OnlyWar.Persistence.Database.GameState;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Events;
 using OnlyWar.Domain.Soldiers;
+using OnlyWar.Tests.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -361,6 +362,139 @@ public sealed class NarrativeEventEmissionTests
                 false,
                 second)));
     }
+
+    // ---- Near death for a survived severed Vitals (OnlyWar_TDD.md §5.3, §6.6) -----------------
+
+    [Fact]
+    public void SeveredVitalThatNeedsAnOrganReplacement_QualifiesAsNearDeathAndRoundTrips()
+    {
+        PlayerSoldier soldier = CreateSoldier(17, "Brother Spared");
+        CampaignEventLedger ledger = new(id => id == soldier.Id ? soldier : null);
+        CampaignEventRecorder recorder = new(
+            ledger,
+            soldierResolver: id => id == soldier.Id ? soldier : null);
+        BattleEventContextSnapshot context = Context("battle/40/3/8/0", 40);
+
+        CampaignEvent incapacitation = recorder.Record(new CampaignEventCandidate(
+            CampaignEventType.Incapacitated,
+            40,
+            40,
+            context.CorrelationKey,
+            "battle/incapacitated/17/40",
+            3,
+            SeveredVitalsPayload(context, requiresOrganReplacement: true),
+            [Subject(soldier)]));
+
+        Assert.Equal(incapacitation.Id, ledger.GetOpenNearDeathEpisode(soldier.Id)?.SourceIncapacitationEventId);
+        IncapacitatedPayload loaded = Assert.IsType<IncapacitatedPayload>(
+            CampaignEventPayloadRegistry.Deserialize(
+                incapacitation.Id,
+                incapacitation.Type,
+                incapacitation.PayloadVersion,
+                CampaignEventPayloadRegistry.Serialize(incapacitation)));
+        Assert.True(loaded.DefiningLocationRequiresOrganReplacement);
+        Assert.Contains("needs an organ replacement", soldier.SoldierEvents.Last().Detail);
+
+        // Severed without the flag is still not near death.
+        Assert.Throws<ArgumentException>(() => new CampaignEventCandidate(
+            CampaignEventType.Incapacitated,
+            40,
+            40,
+            context.CorrelationKey,
+            "invalid/severed-vitals",
+            3,
+            SeveredVitalsPayload(context, requiresOrganReplacement: false),
+            [Subject(soldier)]));
+    }
+
+    [Fact]
+    public void IncapacitatedPayloadSavedBeforeTheOrganFlag_LoadsWithTheFlagClear()
+    {
+        BattleEventContextSnapshot context = Context("battle/41", 41);
+        CampaignEvent current = new CampaignEventRecorder(new CampaignEventLedger(_ => null)).Record(new CampaignEventCandidate(
+            CampaignEventType.Incapacitated,
+            41,
+            41,
+            context.CorrelationKey,
+            "old/incapacitated",
+            3,
+            new IncapacitatedPayload(
+                context, 77, "Heart", true, true, false, true, null, null, null, null, null),
+            []));
+        string json = CampaignEventPayloadRegistry.Serialize(current);
+        string oldJson = json.Replace(",\"definingLocationRequiresOrganReplacement\":false", "");
+        Assert.NotEqual(json, oldJson);
+
+        IncapacitatedPayload loaded = Assert.IsType<IncapacitatedPayload>(
+            CampaignEventPayloadRegistry.Deserialize(1, CampaignEventType.Incapacitated, 3, oldJson));
+
+        Assert.False(loaded.DefiningLocationRequiresOrganReplacement);
+        Assert.True(loaded.QualifiesAsNearDeath);
+    }
+
+    [Theory]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, false)]
+    public void RecordIncapacitated_SeveredVitals_IsNearDeathOnlyWhenItNeedsAnOrganReplacement(
+        bool severedThroughAnAugmeticOrgan, bool requiresOrganReplacement, bool expectedNearDeath)
+    {
+        PlayerSoldier soldier = new(
+            TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate, "Brother Hollow"),
+            "Brother Hollow");
+        HitLocation vitals = soldier.Body.HitLocations.First(location => location.Template.Name == "Vitals");
+        if (severedThroughAnAugmeticOrgan)
+        {
+            vitals.AddAugmeticOrgan(new CyberneticOption(2, "Vital Organ Augmetic", 5f, 40f))
+                .Wounds.AddWound(WoundLevel.Massive);
+        }
+        else
+        {
+            vitals.Wounds.AddWound(WoundLevel.Massive);
+        }
+        vitals.RequiresOrganReplacement = requiresOrganReplacement;
+        CampaignEventLedger ledger = new(id => id == soldier.Id ? soldier : null);
+        CampaignEventRecorder recorder = new(
+            ledger,
+            soldierResolver: id => id == soldier.Id ? soldier : null);
+
+        CampaignEvent incapacitation = recorder.RecordIncapacitated(
+            soldier,
+            Context("battle/42/3/8/0", 42),
+            vitals,
+            null,
+            expectedNearDeath,
+            null,
+            null,
+            null);
+
+        IncapacitatedPayload payload = Assert.IsType<IncapacitatedPayload>(incapacitation.Payload);
+        Assert.True(payload.DefiningLocationWasSevered);
+        Assert.True(payload.DefiningLocationWasCrippled);
+        Assert.Equal(requiresOrganReplacement, payload.DefiningLocationRequiresOrganReplacement);
+        Assert.Equal(expectedNearDeath, payload.QualifiesAsNearDeath);
+        Assert.Equal(expectedNearDeath, ledger.GetOpenNearDeathEpisode(soldier.Id) != null);
+    }
+
+    private static IncapacitatedPayload SeveredVitalsPayload(
+        BattleEventContextSnapshot context, bool requiresOrganReplacement) =>
+        new(
+            context,
+            78,
+            "Vitals",
+            DefiningLocationIsVital: true,
+            DefiningLocationWasCrippled: true,
+            DefiningLocationWasSevered: true,
+            QualifiesAsNearDeath: true,
+            null,
+            null,
+            null,
+            null,
+            null,
+            DefiningLocationRequiresOrganReplacement: requiresOrganReplacement);
+
+    private static CampaignEventEntityRef Subject(PlayerSoldier soldier) =>
+        new(CampaignEntityKind.Soldier, soldier.Id, CampaignEventEntityRole.Subject, soldier.Name);
 
     private static BattleEventContextSnapshot Context(string correlation, int week) =>
         new(

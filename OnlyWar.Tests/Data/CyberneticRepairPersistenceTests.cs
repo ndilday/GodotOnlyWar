@@ -35,7 +35,7 @@ public sealed class CyberneticRepairPersistenceTests
             [
                 new(12, 4, 6.5f, 10),
                 new(3, 5, 0f, 10),
-                // An augmetic organ inside the Vitals (Design/Active/VitalLocationReplacement.md §3.4).
+                // An augmetic organ inside the Vitals (OnlyWar_TDD.md §5.3).
                 new(3, 8, 2f, 10, organIndex: 2),
                 new(12, 7, 17.25f, 10)
             ];

@@ -394,6 +394,13 @@ namespace OnlyWar.Domain.Soldiers
         public bool IsVital;
         // A location holding a progenoid gland destroys the soldier's geneseed when severed.
         public bool HoldsProgenoid;
+        // OnlyWar_TDD.md §5.3: a severed vital location with this flag is
+        // not always fatal; the battle aftermath rolls for survival, and a survivor needs an organ
+        // replacement. A location with either organ-replacement flag can hold augmetic organs.
+        public bool SeveredMayNeedOrganReplacement;
+        // A location with this flag that is crippled in a battle may fail to heal; the battle
+        // aftermath rolls, and on success it needs an organ replacement.
+        public bool CrippledMayNeedOrganReplacement;
         public int[] HitProbabilityMap;
     }
 
@@ -500,7 +507,7 @@ namespace OnlyWar.Domain.Soldiers
 
         // A location qualifies for a cybernetic/vat-grown replacement when it is a severed
         // non-vital location (PRD 4.8), or when the battle aftermath marked a vital location as
-        // needing an organ replacement (Design/Active/VitalLocationReplacement.md §3.2). Other
+        // needing an organ replacement (OnlyWar_TDD.md §5.3). Other
         // crippled locations stay on the ordinary natural-healing path. This is the single source
         // of truth shared by the Apothecarium view, field care and the weekly healing pass.
         public bool IsReplacementEligible
@@ -518,7 +525,7 @@ namespace OnlyWar.Domain.Soldiers
 
         /// <summary>
         /// Persisted: this vital location needs an organ replacement before it can recover
-        /// (Design/Active/VitalLocationReplacement.md §3.2). The battle aftermath sets it for a
+        /// (OnlyWar_TDD.md §5.3). The battle aftermath sets it for a
         /// severed Vitals that the brother survived and for a Torso crippled in battle that will
         /// not heal; procedure completion clears it. While it is set the location does not heal
         /// naturally, field care does not treat it, and its wounds stay until the procedure ends.
@@ -538,7 +545,7 @@ namespace OnlyWar.Domain.Soldiers
 
         /// <summary>
         /// The augmetic organs inside this (organic) location, in the order they were installed
-        /// (Design/Active/VitalLocationReplacement.md §3.4).
+        /// (OnlyWar_TDD.md §5.3).
         /// </summary>
         public IReadOnlyList<AugmeticOrgan> AugmeticOrgans => _augmeticOrgans;
 
@@ -570,7 +577,7 @@ namespace OnlyWar.Domain.Soldiers
 
         /// <summary>
         /// Severed itself, or holds a severed augmetic organ, which counts as the location severed
-        /// at battle end (D8).
+        /// at battle end.
         /// </summary>
         public bool IsSeveredOrHasSeveredAugmeticOrgan => IsSevered || HasSeveredAugmeticOrgan;
 
@@ -752,7 +759,8 @@ namespace OnlyWar.Domain.Soldiers
                     SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = false,
                     IsVital = true,
-                    HoldsProgenoid = true
+                    HoldsProgenoid = true,
+                    CrippledMayNeedOrganReplacement = true
                 },
 
                 new HitLocationTemplate
@@ -821,7 +829,8 @@ namespace OnlyWar.Domain.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = false,
-                    IsVital = true
+                    IsVital = true,
+                    SeveredMayNeedOrganReplacement = true
                 },
 
                 new HitLocationTemplate
@@ -963,7 +972,8 @@ namespace OnlyWar.Domain.Soldiers
                     SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = false,
                     IsVital = true,
-                    HoldsProgenoid = true
+                    HoldsProgenoid = true,
+                    CrippledMayNeedOrganReplacement = true
                 },
 
                 new HitLocationTemplate
@@ -1058,7 +1068,8 @@ namespace OnlyWar.Domain.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = false,
-                    IsVital = true
+                    IsVital = true,
+                    SeveredMayNeedOrganReplacement = true
                 },
 
                 new HitLocationTemplate

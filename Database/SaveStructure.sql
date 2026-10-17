@@ -34,12 +34,12 @@ CREATE TABLE LastTurnReport (Id INTEGER PRIMARY KEY CHECK (Id = 1), ResolvedDate
 -- Table: HitLocation
 -- Armor and Constitution are an installed cybernetic part's own values (zero when organic).
 -- RequiresOrganReplacement marks a vital location that needs an organ replacement
--- (Design/Active/VitalLocationReplacement.md §3.2).
+-- (OnlyWar_TDD.md §5.3).
 CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, IsCybernetic BOOLEAN NOT NULL, Armor REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER, Constitution REAL NOT NULL DEFAULT 0, RequiresOrganReplacement BOOLEAN NOT NULL DEFAULT 0);
 
 -- Table: AugmeticOrgan
--- An augmetic organ inside an organic vital location (Design/Active/VitalLocationReplacement.md
--- §3.4). OrganIndex is its stable identity within the location; a repair job names it.
+-- An augmetic organ inside an organic vital location (OnlyWar_TDD.md
+-- §5.3). OrganIndex is its stable identity within the location; a repair job names it.
 CREATE TABLE AugmeticOrgan (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, OrganIndex INTEGER NOT NULL, Constitution REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER NOT NULL);
 
 -- Table: CyberneticRepairJob
@@ -243,6 +243,11 @@ CREATE TABLE ChapterChronicleEvent (ChronicleEntryId INTEGER NOT NULL REFERENCES
 CREATE TABLE ChapterChronicleCallback (ChronicleEntryId INTEGER NOT NULL REFERENCES ChapterChronicleEntry (Id), CampaignEventId INTEGER NOT NULL REFERENCES CampaignEvent (Id), SortOrder INTEGER NOT NULL, PRIMARY KEY (ChronicleEntryId, CampaignEventId));
 CREATE TABLE ChapterChronicleAnnotation (Id INTEGER PRIMARY KEY, ChronicleEntryId INTEGER NOT NULL REFERENCES ChapterChronicleEntry (Id), EvidenceEventId INTEGER NOT NULL REFERENCES CampaignEvent (Id), RecordedWeek INTEGER NOT NULL, Body TEXT NOT NULL, NarratorKey TEXT NOT NULL, NarratorVersion INTEGER NOT NULL, DedupeKey TEXT NOT NULL UNIQUE, IsCorrection BOOLEAN NOT NULL);
 CREATE TABLE WorldControlEpisode (PlanetId INTEGER PRIMARY KEY REFERENCES Planet (Id), ImperialFactionId INTEGER NOT NULL, LastControllingFactionId INTEGER, WasImperialControlled BOOLEAN NOT NULL, ContestedSinceWeek INTEGER, ChapterParticipated BOOLEAN NOT NULL);
+-- Sector dispatch detection state (OnlyWar_TDD.md §6.1): per-world danger
+-- episodes and active revolts, and the last known Sector Lord. A missing SectorDispatchSectorLord
+-- row means the seat was not yet observed; a row with a null CharacterId means it was vacant.
+CREATE TABLE SectorDispatchPlanet (PlanetId INTEGER PRIMARY KEY REFERENCES Planet (Id), InDanger BOOLEAN NOT NULL, RevoltActive BOOLEAN NOT NULL, RevoltChapterParticipated BOOLEAN NOT NULL);
+CREATE TABLE SectorDispatchSectorLord (Id INTEGER PRIMARY KEY CHECK (Id = 1), CharacterId INTEGER, CapitalPlanetId INTEGER);
 CREATE INDEX IX_CampaignEvent_OccurredWeek ON CampaignEvent (OccurredWeek, Id);
 CREATE INDEX IX_CampaignEvent_RecordedWeek ON CampaignEvent (RecordedWeek, Id);
 CREATE INDEX IX_CampaignEvent_Correlation ON CampaignEvent (CorrelationKey, Id);

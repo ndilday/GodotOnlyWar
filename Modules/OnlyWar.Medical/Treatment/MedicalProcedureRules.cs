@@ -16,7 +16,7 @@ public static class MedicalProcedureRules
     /// <summary>
     /// Which price row a replacement of <paramref name="location"/> uses. Every organ replacement
     /// uses the "not severed" row, even for a severed Vitals
-    /// (Design/Active/VitalLocationReplacement.md D5); a limb uses the severed row.
+    /// (OnlyWar_TDD.md §6.6.1); a limb uses the severed row.
     /// </summary>
     public static bool UsesSeveredPricing(HitLocation location) =>
         location != null && !location.RequiresOrganReplacement && location.IsSevered;

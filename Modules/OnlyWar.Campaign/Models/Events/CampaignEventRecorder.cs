@@ -428,22 +428,28 @@ namespace OnlyWar.Campaign.Events
         {
             if (soldier == null) throw new ArgumentNullException(nameof(soldier));
             if (battleContext == null) throw new ArgumentNullException(nameof(battleContext));
-            bool derivedNearDeath = definingLocation?.Template?.IsVital == true
-                && definingLocation.IsCrippled
-                && !definingLocation.IsSevered;
+            // An augmetic organ counts as its host location, as it does at battle end.
+            bool isVital = definingLocation?.Template?.IsVital == true;
+            bool wasCrippled = definingLocation != null
+                && (definingLocation.IsCrippled || definingLocation.HasCrippledAugmeticOrgan);
+            bool wasSevered = definingLocation?.IsSeveredOrHasSeveredAugmeticOrgan == true;
+            bool requiresOrganReplacement = definingLocation?.RequiresOrganReplacement == true;
+            bool derivedNearDeath = IncapacitatedPayload.IsNearDeath(
+                isVital, wasCrippled, wasSevered, requiresOrganReplacement);
             IncapacitatedPayload payload = new(
                 battleContext,
                 definingLocation?.Template?.Id,
                 definingLocation?.Template?.Name,
-                definingLocation?.Template?.IsVital == true,
-                definingLocation?.IsCrippled == true,
-                definingLocation?.IsSevered == true,
+                isVital,
+                wasCrippled,
+                wasSevered,
                 derivedNearDeath,
                 causingWeapon?.Id,
                 causingWeapon?.Name,
                 soldierTemplateId,
                 soldierTemplateName,
-                soldierRank);
+                soldierRank,
+                requiresOrganReplacement);
             return Record(new CampaignEventCandidate(
                 CampaignEventType.Incapacitated,
                 battleContext.OccurredWeek,
@@ -551,6 +557,52 @@ namespace OnlyWar.Campaign.Events
                 payload,
                 [new CampaignEventEntityRef(CampaignEntityKind.Planet, payload.PlanetId,
                     CampaignEventEntityRole.Subject, payload.PlanetName)]));
+        }
+
+        /// <summary>
+        /// Records one sector dispatch. The dedupe key names the trigger and its subject, so a
+        /// repeated detection in the same episode records nothing.
+        /// </summary>
+        public CampaignEvent RecordSectorDispatch(
+            SectorDispatchPayload payload,
+            int occurredWeek,
+            string dedupeKey)
+        {
+            if (payload == null) throw new ArgumentNullException(nameof(payload));
+            List<CampaignEventEntityRef> entities = [];
+            // The world is the Location, which is what the Turn Report and the Command Brief
+            // link to. A Sector Lord dispatch links to the world that holds the seat.
+            if (payload.PlanetId is int planetId and >= 0 && !string.IsNullOrWhiteSpace(payload.PlanetName))
+            {
+                entities.Add(new CampaignEventEntityRef(CampaignEntityKind.Planet, planetId,
+                    CampaignEventEntityRole.Location, payload.PlanetName));
+            }
+            if (payload.FactionId is int factionId and >= 0 && !string.IsNullOrWhiteSpace(payload.FactionName))
+            {
+                entities.Add(new CampaignEventEntityRef(CampaignEntityKind.Faction, factionId,
+                    CampaignEventEntityRole.Subject, payload.FactionName));
+            }
+            if (payload.SectorLordId is int lordId and >= 0 && !string.IsNullOrWhiteSpace(payload.SectorLordName))
+            {
+                entities.Add(new CampaignEventEntityRef(CampaignEntityKind.Character, lordId,
+                    CampaignEventEntityRole.Authority, payload.SectorLordName));
+            }
+            if (payload.PreviousSectorLordId is int previousId and >= 0
+                && previousId != payload.SectorLordId
+                && !string.IsNullOrWhiteSpace(payload.PreviousSectorLordName))
+            {
+                entities.Add(new CampaignEventEntityRef(CampaignEntityKind.Character, previousId,
+                    CampaignEventEntityRole.Related, payload.PreviousSectorLordName));
+            }
+            return Record(new CampaignEventCandidate(
+                CampaignEventType.SectorDispatch,
+                occurredWeek,
+                occurredWeek,
+                null,
+                dedupeKey,
+                1,
+                payload,
+                entities));
         }
 
         public CampaignEvent RecordGeneseedRecovery(

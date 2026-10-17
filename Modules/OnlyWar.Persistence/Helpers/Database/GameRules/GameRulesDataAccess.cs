@@ -218,7 +218,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             List<CyberneticOption> options = [];
             using var command = connection.CreateCommand();
             command.CommandText =
-                "SELECT Id, Name, Armor, Constitution FROM CyberneticOption ORDER BY Id";
+                "SELECT Id, Name, Armor, Constitution, IsAugmeticOrganTier FROM CyberneticOption ORDER BY Id";
             using IDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -226,7 +226,8 @@ namespace OnlyWar.Persistence.Database.GameRules
                     reader.GetInt32(0),
                     reader[1].ToString(),
                     Convert.ToSingle(reader[2]),
-                    Convert.ToSingle(reader[3])));
+                    Convert.ToSingle(reader[3]),
+                    Convert.ToBoolean(reader[4])));
             }
             return options;
         }

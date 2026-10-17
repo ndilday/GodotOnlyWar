@@ -28,6 +28,10 @@ namespace OnlyWar.Persistence.Database.GameRules
                     bool isMotive = Convert.ToBoolean(reader["IsMotive"]);
                     bool isVital = Convert.ToBoolean(reader["IsVital"]);
                     bool holdsProgenoid = Convert.ToBoolean(reader["HoldsProgenoid"]);
+                    bool severedMayNeedOrganReplacement =
+                        Convert.ToBoolean(reader["SeveredMayNeedOrganReplacement"]);
+                    bool crippledMayNeedOrganReplacement =
+                        Convert.ToBoolean(reader["CrippledMayNeedOrganReplacement"]);
                     int? handGroupId = reader["HandGroupId"].GetType() == typeof(DBNull)
                         ? null
                         : Convert.ToInt32(reader["HandGroupId"]);
@@ -48,6 +52,8 @@ namespace OnlyWar.Persistence.Database.GameRules
                             HandGroupId = handGroupId,
                             IsVital = isVital,
                             HoldsProgenoid = holdsProgenoid,
+                            SeveredMayNeedOrganReplacement = severedMayNeedOrganReplacement,
+                            CrippledMayNeedOrganReplacement = crippledMayNeedOrganReplacement,
                             HitProbabilityMap = hitProbabilityMap
                         };
                     if (!hitLocationTemplateMap.ContainsKey(bodyId))

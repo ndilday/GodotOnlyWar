@@ -157,7 +157,7 @@ namespace OnlyWar.Application
         bool IsSevered = false,
         bool IsCrippled = false,
         // Augmetic organs inside this organic location
-        // (Design/Active/VitalLocationReplacement.md §3.4).
+        // (OnlyWar_TDD.md §5.3).
         int AugmeticOrganCount = 0);
 
 }

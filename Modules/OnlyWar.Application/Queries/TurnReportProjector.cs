@@ -118,9 +118,15 @@ internal static class TurnReportProjector
         }
         entries.AddRange(BuildMechanicusEntries(mechanicusReturns));
 
+        List<CampaignEvent> dispatches = [];
         foreach (CampaignEvent @event in campaignEvents ?? Enumerable.Empty<CampaignEvent>())
         {
             if (!@event.Publication.PublishesToTurnReport) continue;
+            if (@event.Payload is SectorDispatchPayload)
+            {
+                dispatches.Add(@event);
+                continue;
+            }
             entries.Add(new EndOfTurnReportEntry(
                 @event.Type == CampaignEventType.FirstBlood ? "First Blood" : "Campaign Event",
                 @event.CorrelationKey == null ? "Personal service record" : @event.CorrelationKey,
@@ -128,6 +134,11 @@ internal static class TurnReportProjector
                 false,
                 @event.Publication.Importance.ToString().ToUpperInvariant()));
         }
+
+        // The Dispatches section follows everything the Chapter itself did.
+        entries.AddRange(dispatches
+            .OrderBy(@event => @event.Id)
+            .Select(@event => BuildDispatchEntry(@event, campaignIdentity)));
 
         if (entries.Count == 0)
         {
@@ -140,6 +151,32 @@ internal static class TurnReportProjector
         }
 
         return entries;
+    }
+
+    // One card per dispatch. The world link is the dispatch's world; a Sector Lord dispatch links
+    // to the world that holds the seat.
+    private static EndOfTurnReportEntry BuildDispatchEntry(
+        CampaignEvent @event,
+        CampaignIdentity campaignIdentity)
+    {
+        SectorDispatchPayload dispatch = (SectorDispatchPayload)@event.Payload;
+        string subtitle = dispatch.Kind == SectorDispatchKind.NewSectorLord
+            ? $"{dispatch.PlanetName}, seat of the Sector Lord"
+            : string.IsNullOrWhiteSpace(dispatch.SubsectorName)
+                ? dispatch.PlanetName
+                : $"{dispatch.PlanetName}, {dispatch.SubsectorName}";
+        return new EndOfTurnReportEntry(
+            CampaignEventNarrator.RenderDispatchTitle(dispatch),
+            subtitle,
+            CampaignEventNarrator.RenderDispatch(@event, dispatch, campaignIdentity),
+            false,
+            @event.Publication.Importance.ToString().ToUpperInvariant(),
+            isEnemyActivity: dispatch.Kind is SectorDispatchKind.WorldLost
+                or SectorDispatchKind.WorldInDanger
+                or SectorDispatchKind.InvasionForceFormed
+                or SectorDispatchKind.SwarmReachedWorld,
+            planetId: dispatch.PlanetId,
+            section: TurnReportSections.Dispatches);
     }
 
     // Returns from Mars and the end of the Mechanicus loan (TDD §6.14).

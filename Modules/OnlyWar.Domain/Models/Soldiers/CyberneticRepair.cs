@@ -12,13 +12,21 @@ public sealed class CyberneticOption
     public string Name { get; }
     public float Armor { get; }
     public float Constitution { get; }
+    /// <summary>
+    /// True for the tier a cybernetic organ replacement installs as an augmetic organ
+    /// (OnlyWar_TDD.md §6.6.1); false for a tier that replaces a whole
+    /// body part.
+    /// </summary>
+    public bool IsAugmeticOrganTier { get; }
 
-    public CyberneticOption(int id, string name, float armor, float constitution)
+    public CyberneticOption(
+        int id, string name, float armor, float constitution, bool isAugmeticOrganTier = false)
     {
         Id = id;
         Name = name;
         Armor = armor;
         Constitution = constitution;
+        IsAugmeticOrganTier = isAugmeticOrganTier;
     }
 }
 

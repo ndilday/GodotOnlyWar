@@ -17,7 +17,7 @@ using Xunit;
 namespace OnlyWar.Tests.Domain;
 
 /// <summary>
-/// Vital-location replacement outside the battle aftermath (Design/Active/VitalLocationReplacement.md):
+/// Vital-location replacement outside the battle aftermath (OnlyWar_TDD.md §5.3):
 /// the needs-organ-replacement flag, the organ procedure, augmetic organ hit routing and repair.
 /// The aftermath rolls are tested in <c>BattleAftermathPolicyTests</c>, persistence in
 /// <c>CyberneticRepairPersistenceTests</c>.
@@ -25,6 +25,64 @@ namespace OnlyWar.Tests.Domain;
 public class VitalOrganReplacementTests
 {
     private static readonly CyberneticOption OrganOption = new(2, "Vital Organ Augmetic", 5f, 40f);
+
+    // ---- Rules data -----------------------------------------------------------------------------
+
+    [Fact]
+    public void TheShippedRules_MarkTheVitalsAndTorsoOfEveryBody_AndOneOrganTier()
+    {
+        GameRulesData rules = SectorSimulationFixture.Create().Rules;
+        List<HitLocationTemplate> locations = rules.BodyHitLocationTemplateMap.Values
+            .SelectMany(body => body)
+            .ToList();
+
+        Assert.Contains(locations, location => location.SeveredMayNeedOrganReplacement);
+        Assert.Contains(locations, location => location.CrippledMayNeedOrganReplacement);
+        Assert.All(
+            locations.Where(location => location.SeveredMayNeedOrganReplacement),
+            location => Assert.Equal("Vitals", location.Name));
+        Assert.All(
+            locations.Where(location => location.CrippledMayNeedOrganReplacement),
+            location => Assert.Equal("Torso", location.Name));
+        Assert.All(
+            locations.Where(location => location.Name is "Vitals" or "Torso"),
+            location => Assert.True(VitalOrganRules.CanHoldAugmeticOrgans(location)));
+
+        Assert.True(rules.VitalOrganCyberneticOption.IsAugmeticOrganTier);
+        Assert.False(rules.StandardCyberneticOption.IsAugmeticOrganTier);
+    }
+
+    [Fact]
+    public void TheRulesValidator_RejectsMisplacedOrganFlagsAndASecondOrganTier()
+    {
+        GameRulesBlob blob = new()
+        {
+            BodyTemplates = new Dictionary<int, List<HitLocationTemplate>>
+            {
+                [0] =
+                [
+                    new HitLocationTemplate { Id = 1, Name = "Arm", SeveredMayNeedOrganReplacement = true },
+                    new HitLocationTemplate
+                    {
+                        Id = 2, Name = "Chest", IsVital = true,
+                        SeveredMayNeedOrganReplacement = true, CrippledMayNeedOrganReplacement = true
+                    }
+                ]
+            },
+            CyberneticOptions =
+            [
+                new CyberneticOption(1, "Organ A", 5f, 40f, isAugmeticOrganTier: true),
+                new CyberneticOption(2, "Organ B", 5f, 40f, isAugmeticOrganTier: true)
+            ]
+        };
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(
+            () => OnlyWar.Persistence.Database.GameRules.RulesDatabaseValidator.Validate(blob));
+
+        Assert.Contains("HitLocationTemplate 1 ('Arm') has an organ-replacement flag but is not vital", error.Message);
+        Assert.Contains("HitLocationTemplate 2 ('Chest') sets both", error.Message);
+        Assert.Contains("more than one row with IsAugmeticOrganTier", error.Message);
+    }
 
     // ---- The flag -------------------------------------------------------------------------------
 
@@ -119,7 +177,7 @@ public class VitalOrganReplacementTests
         Assert.False(torso.IsCybernetic);
         Assert.Equal(expectedOrgans, torso.AugmeticOrgans.Count);
         Assert.Equal(MedicalProcedureRules.GetWeeks(type, isSevered: false), completion.ProcedureDurationWeeks);
-        // D9: the progenoid gland survives; the location still holds one and is not severed.
+        // The progenoid gland survives; the location still holds one and is not severed.
         Assert.True(torso.Template.HoldsProgenoid);
         Assert.False(torso.IsSevered);
         Assert.True(soldier.IsCombatEffective);

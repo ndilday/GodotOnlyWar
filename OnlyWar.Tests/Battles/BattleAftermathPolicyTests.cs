@@ -316,7 +316,7 @@ public class BattleAftermathPolicyTests
         Assert.Equal("Killed in battle with the Orks", death.Render());
     }
 
-    // ---- Vital-location replacement (Design/Active/VitalLocationReplacement.md §3.1) ----------
+    // ---- Vital-location replacement (OnlyWar_TDD.md §5.3) ----------
 
     [Fact]
     public void SeveredVitals_FailedSurvivalRoll_IsKilled()

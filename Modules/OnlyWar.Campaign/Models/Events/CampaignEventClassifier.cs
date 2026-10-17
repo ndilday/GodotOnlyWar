@@ -107,13 +107,18 @@ namespace OnlyWar.Campaign.Events
                         : importance;
                     break;
                 case CampaignEventType.WorldSaved:
-                    surfaces = CampaignEventSurfaceFlags.TurnReport | CampaignEventSurfaceFlags.ChapterChronicle;
+                    // A world saved without the Chapter reaches the Turn Report as a sector
+                    // dispatch instead, so it is not reported twice.
+                    surfaces = candidate.Payload is WorldControlChangedPayload { ChapterParticipated: true }
+                        ? CampaignEventSurfaceFlags.TurnReport | CampaignEventSurfaceFlags.ChapterChronicle
+                        : CampaignEventSurfaceFlags.ChapterChronicle;
                     importance = CampaignEventImportance.Major;
                     reasons |= CampaignEventReasonFlags.WorldChangedHands | CampaignEventReasonFlags.WorldSaved;
                     treatment = CampaignEventChronicleTreatment.Standalone;
                     break;
                 case CampaignEventType.WorldLost:
-                    surfaces = CampaignEventSurfaceFlags.TurnReport | CampaignEventSurfaceFlags.ChapterChronicle;
+                    // Every lost world is a sector dispatch, which carries it to the Turn Report.
+                    surfaces = CampaignEventSurfaceFlags.ChapterChronicle;
                     importance = CampaignEventImportance.Major;
                     reasons |= CampaignEventReasonFlags.WorldChangedHands | CampaignEventReasonFlags.WorldLost;
                     treatment = CampaignEventChronicleTreatment.Standalone;
@@ -123,6 +128,18 @@ namespace OnlyWar.Campaign.Events
                     importance = CampaignEventImportance.Notable;
                     reasons |= CampaignEventReasonFlags.HiddenCultRevealed;
                     treatment = CampaignEventChronicleTreatment.Standalone;
+                    break;
+                case CampaignEventType.SectorDispatch:
+                    // Dispatches are Turn Report only. A lost world is also in the
+                    // Chronicle, through its own WorldLost event.
+                    surfaces = CampaignEventSurfaceFlags.TurnReport;
+                    treatment = CampaignEventChronicleTreatment.None;
+                    importance = candidate.Payload is SectorDispatchPayload
+                    {
+                        Kind: SectorDispatchKind.WorldLost
+                    }
+                        ? CampaignEventImportance.Major
+                        : CampaignEventImportance.Notable;
                     break;
                 case CampaignEventType.Death:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;

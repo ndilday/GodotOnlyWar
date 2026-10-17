@@ -476,6 +476,8 @@ namespace OnlyWar.Campaign.Command
                         CampaignEventType.WorldSaved => "World restored",
                         CampaignEventType.WorldLost => "World lost",
                         CampaignEventType.HiddenCultRevealed => "Hidden cult revealed",
+                        CampaignEventType.SectorDispatch when @event.Payload is SectorDispatchPayload dispatch =>
+                            CampaignEventNarrator.RenderDispatchTitle(dispatch),
                         _ => "Known Campaign Event"
                     },
                     CampaignEventNarrator.RenderCommandBrief(@event, sector.PlayerForce?.CampaignIdentity),

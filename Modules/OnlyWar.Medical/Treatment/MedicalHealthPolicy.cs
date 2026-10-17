@@ -107,11 +107,11 @@ public static class MedicalHealthPolicy
     }
 
     /// <summary>
-    /// Design/Active/VitalLocationReplacement.md §3.3: the location's organic wounds and the flag
+    /// OnlyWar_TDD.md §6.6.1: the location's organic wounds and the flag
     /// are cleared, and the location stays organic. A severed augmetic organ is removed. A
     /// cybernetic replacement then adds one augmetic organ, unless the location is at the cap; a
     /// vat-grown replacement adds nothing. So replacing a lost organ never grows the count. The
-    /// progenoid gland is not touched (D9).
+    /// progenoid gland is not touched.
     /// </summary>
     private static void CompleteOrganReplacement(
         HitLocation location,

@@ -113,6 +113,9 @@ namespace OnlyWar.Application.Storage
             ValidateSquadLineageInvariants(playerForce);
             playerForce.LastTurnReportSnapshot = gameState.LastTurnReportSnapshot;
             playerForce.RestoreWorldControlEpisodes(gameState.WorldControlEpisodes);
+            playerForce.RestoreSectorDispatches(
+                gameState.SectorDispatchPlanets,
+                gameState.SectorDispatchSectorLord);
             foreach (var historyDay in history)
             {
                 foreach (EventHistory entry in historyDay.Value ?? [])

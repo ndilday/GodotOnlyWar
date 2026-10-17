@@ -40,9 +40,12 @@ namespace OnlyWar.Persistence.Database.GameState
         //     deliberate incompatible save break.
         // 25: HitLocation gains RequiresOrganReplacement, the AugmeticOrgan table holds augmetic
         //     organs, and CyberneticRepairJob gains OrganIndex
-        //     (Design/Active/VitalLocationReplacement.md). This is a deliberate incompatible save
+        //     (OnlyWar_TDD.md §5.3). This is a deliberate incompatible save
         //     break.
-        public const int CurrentVersion = 25;
+        // 26: SectorDispatchPlanet and SectorDispatchSectorLord hold sector dispatch detection
+        //     state (OnlyWar_TDD.md §6.1). This is a deliberate incompatible save
+        //     break.
+        public const int CurrentVersion = 26;
         public const int MinimumSupportedVersion = CurrentVersion;
     }
 }

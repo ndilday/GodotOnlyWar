@@ -52,10 +52,27 @@ public partial class EndOfTurnDialogView : DialogView
             return;
         }
 
+        string currentSection = null;
         for (int i = 0; i < entries.Count; i++)
         {
+            if (entries[i].Section != null && entries[i].Section != currentSection)
+            {
+                AddSectionHeader(entries[i].Section);
+            }
+            currentSection = entries[i].Section;
             AddEntry(entries[i], i);
         }
+    }
+
+    // Sectioned cards (the Dispatches) follow the main list under their own heading.
+    private void AddSectionHeader(string section)
+    {
+        Label header = new()
+        {
+            Text = section.ToUpperInvariant()
+        };
+        header.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
+        _entryList.AddChild(header);
     }
 
     private void AddEntry(EndOfTurnReportEntry entry, int index)

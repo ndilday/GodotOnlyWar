@@ -68,6 +68,9 @@ public sealed class EndOfTurnReportEntry
     // The world the card is about, so the report can offer to take the player there. Null for
     // cards that are not tied to one planet (recruitment, service-record events, "No Reports").
     public int? PlanetId { get; }
+    // The heading the card is shown under, or null for the main list. Cards of one section are
+    // contiguous and follow the main list (see TurnReportSections).
+    public string Section { get; }
 
     public EndOfTurnReportEntry(
         string title,
@@ -77,8 +80,10 @@ public sealed class EndOfTurnReportEntry
         string outcomeStatus = "",
         IReadOnlyList<MissionDebriefLineView> debriefLines = null,
         bool isEnemyActivity = false,
-        int? planetId = null)
+        int? planetId = null,
+        string section = null)
     {
+        Section = string.IsNullOrWhiteSpace(section) ? null : section;
         Title = title ?? "";
         Subtitle = subtitle ?? "";
         Summary = summary ?? "";
@@ -88,6 +93,13 @@ public sealed class EndOfTurnReportEntry
         DebriefLines = debriefLines ?? Array.Empty<MissionDebriefLineView>();
         PlanetId = planetId;
     }
+}
+
+/// <summary>Named sections of the turn report.</summary>
+public static class TurnReportSections
+{
+    // The Chapter Master's aide reports the wider sector (PRD §4.19).
+    public const string Dispatches = "Dispatches";
 }
 
 /// <summary>

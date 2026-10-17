@@ -13,6 +13,9 @@ namespace OnlyWar.Campaign.Events
         public const string BattlefleetNarratorKey = "battlefleet";
         public const string AstartesChapterNarratorKey = "astartes-chapter";
         public const string ArchivalAnnotationNarratorKey = "archival-annotation";
+        // Sector dispatches (PRD §4.19): one voice, an unnamed aide who reports to the Chapter
+        // Master. He reports what happened and does not advise.
+        public const string ChapterMasterAideNarratorKey = "chapter-master-aide";
         public const int CurrentVersion = 2;
 
         private static readonly string[] FirstBloodVariants =
@@ -55,6 +58,150 @@ namespace OnlyWar.Campaign.Events
             "The concealed hand of {faction} was uncovered upon {planet}. Its false obedience ended when the Chapter brought its hidden war to light."
         ];
 
+        private static readonly string[] DispatchWorldSavedVariants =
+        [
+            "My lord, word from {planet}: Imperial forces have restored the Emperor's rule there.",
+            "My lord, {planet} is again held in the Emperor's name. Its own defenders retook it."
+        ];
+
+        private static readonly string[] DispatchWorldLostVariants =
+        [
+            "My lord, {planet} has fallen. {faction} now hold it.",
+            "My lord, I must report the loss of {planet}. The world is in the hands of {faction}."
+        ];
+
+        private static readonly string[] DispatchSecessionVariants =
+        [
+            "My lord, {planet} has seceded from the Imperium. {faction} now rule it.",
+            "My lord, {planet} has broken with the Imperium. The rebels hold the world."
+        ];
+
+        private static readonly string[] DispatchWorldInDangerVariants =
+        [
+            "My lord, {planet} is in danger. The enemy holds ground openly in {hostile} of its {regions} regions.",
+            "My lord, reports from {planet} show open hostile presence in {hostile} of {regions} regions. The world is in danger."
+        ];
+
+        private static readonly string[] DispatchRevoltCrushedVariants =
+        [
+            "My lord, the revolt on {planet} has been put down. No rebels stand openly there now.",
+            "My lord, {planet} is quiet again. The rebellion there has ended."
+        ];
+
+        private static readonly string[] DispatchInvasionForceFormedVariants =
+        [
+            "My lord, {faction} on {planet} have gathered into one host under a single warlord.",
+            "My lord, a warlord of {faction} has risen on {planet}, and a great host follows him."
+        ];
+
+        private static readonly string[] DispatchSwarmReachedWorldVariants =
+        [
+            "My lord, the swarm has reached {planet}. {faction} now show themselves openly there.",
+            "My lord, {faction} have appeared on {planet}. Until this week the world was free of them."
+        ];
+
+        private static readonly string[] DispatchSectorLordSuccessionVariants =
+        [
+            "My lord, {lord} now holds the seat of Sector Lord on {planet}, in succession to {previous}.",
+            "My lord, the seat of Sector Lord on {planet} has passed from {previous} to {lord}."
+        ];
+
+        private static readonly string[] DispatchSectorLordMovedVariants =
+        [
+            "My lord, the seat of Sector Lord is now on {planet}. {lord} holds it.",
+            "My lord, the sector is now governed from {planet}. {lord} is Sector Lord."
+        ];
+
+        /// <summary>The Turn Report title of a dispatch.</summary>
+        public static string RenderDispatchTitle(SectorDispatchPayload dispatch) =>
+            dispatch?.Kind switch
+            {
+                SectorDispatchKind.WorldSavedWithoutChapter => "World Restored",
+                SectorDispatchKind.WorldLost => dispatch.IsSecession ? "World Seceded" : "World Lost",
+                SectorDispatchKind.WorldInDanger => "World in Danger",
+                SectorDispatchKind.RevoltCrushed => "Revolt Crushed",
+                SectorDispatchKind.InvasionForceFormed => "Warlord Risen",
+                SectorDispatchKind.SwarmReachedWorld => "Swarm Sighted",
+                SectorDispatchKind.NewSectorLord => "New Sector Lord",
+                null => throw new ArgumentNullException(nameof(dispatch)),
+                _ => "Dispatch"
+            };
+
+        /// <summary>
+        /// The aide's report: the fact, then the Chapter's part. The variant is selected from
+        /// the event id and the campaign identity, so the text is the same every time it is shown.
+        /// </summary>
+        public static string RenderDispatch(
+            CampaignEvent @event,
+            SectorDispatchPayload dispatch,
+            CampaignIdentity identity = null)
+        {
+            if (@event == null) throw new ArgumentNullException(nameof(@event));
+            if (dispatch == null) throw new ArgumentNullException(nameof(dispatch));
+            (string[] variants, string family) = dispatch.Kind switch
+            {
+                SectorDispatchKind.WorldSavedWithoutChapter =>
+                    (DispatchWorldSavedVariants, "dispatch/world-saved"),
+                SectorDispatchKind.WorldLost when dispatch.IsSecession =>
+                    (DispatchSecessionVariants, "dispatch/world-seceded"),
+                SectorDispatchKind.WorldLost => (DispatchWorldLostVariants, "dispatch/world-lost"),
+                SectorDispatchKind.WorldInDanger =>
+                    (DispatchWorldInDangerVariants, "dispatch/world-in-danger"),
+                SectorDispatchKind.RevoltCrushed =>
+                    (DispatchRevoltCrushedVariants, "dispatch/revolt-crushed"),
+                SectorDispatchKind.InvasionForceFormed =>
+                    (DispatchInvasionForceFormedVariants, "dispatch/invasion-force-formed"),
+                SectorDispatchKind.SwarmReachedWorld =>
+                    (DispatchSwarmReachedWorldVariants, "dispatch/swarm-reached-world"),
+                SectorDispatchKind.NewSectorLord when dispatch.CapitalMoved
+                    || string.IsNullOrWhiteSpace(dispatch.PreviousSectorLordName) =>
+                    (DispatchSectorLordMovedVariants, "dispatch/sector-lord-moved"),
+                SectorDispatchKind.NewSectorLord =>
+                    (DispatchSectorLordSuccessionVariants, "dispatch/sector-lord-succession"),
+                _ => throw new NotSupportedException($"No dispatch renderer exists for {dispatch.Kind}.")
+            };
+            string text = SelectFamily(variants, @event, identity, family)
+                .Replace("{planet}", dispatch.PlanetName ?? "an unnamed world", StringComparison.Ordinal)
+                .Replace("{faction}", dispatch.FactionName ?? "the enemy", StringComparison.Ordinal)
+                .Replace("{hostile}", dispatch.HostileRegionCount.ToString(), StringComparison.Ordinal)
+                .Replace("{regions}", dispatch.RegionCount.ToString(), StringComparison.Ordinal)
+                .Replace("{lord}", dispatch.SectorLordName ?? "a new governor", StringComparison.Ordinal)
+                .Replace("{previous}", dispatch.PreviousSectorLordName ?? "the former Sector Lord",
+                    StringComparison.Ordinal);
+            string part = RenderChapterPart(dispatch);
+            return string.IsNullOrEmpty(part) ? text : $"{text} {part}";
+        }
+
+        private static string RenderChapterPart(SectorDispatchPayload dispatch)
+        {
+            string subsector = string.IsNullOrWhiteSpace(dispatch.SubsectorName)
+                ? "that part of the sector"
+                : $"the {dispatch.SubsectorName}";
+            return dispatch.ChapterPart switch
+            {
+                SectorDispatchChapterPart.TookPart => "Brothers of the Chapter fought there.",
+                SectorDispatchChapterPart.PresentNotEngaged =>
+                    $"Brothers of {JoinFormations(dispatch.PresentFormationNames)} stood in {subsector}; "
+                    + "they were not committed.",
+                SectorDispatchChapterPart.Absent => $"No brothers of the Chapter were in {subsector}.",
+                _ => string.Empty
+            };
+        }
+
+        private static string JoinFormations(System.Collections.Generic.IReadOnlyList<string> names)
+        {
+            string[] formations = (names ?? [])
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => $"the {name}")
+                .ToArray();
+            return formations.Length switch
+            {
+                0 => "the Chapter",
+                1 => formations[0],
+                _ => $"{string.Join(", ", formations[..^1])} and {formations[^1]}"
+            };
+        }
+
         public static string RenderServiceRecord(
             CampaignEvent @event,
             CampaignIdentity identity = null)
@@ -63,6 +210,7 @@ namespace OnlyWar.Campaign.Events
             string soldier = SubjectName(@event);
             return @event.Payload switch
             {
+                SectorDispatchPayload dispatch => RenderDispatch(@event, dispatch, identity),
                 FirstBloodPayload first => Select(FirstBloodVariants, @event, identity)
                     .Replace("{soldier}", soldier, StringComparison.Ordinal)
                     .Replace("{total}", first.NewCumulativeTotal.ToString(), StringComparison.Ordinal),
@@ -77,9 +225,11 @@ namespace OnlyWar.Campaign.Events
                     + (string.IsNullOrWhiteSpace(incapacitated.CausingWeaponName)
                         ? ""
                         : $" by {incapacitated.CausingWeaponName}")
-                    + (incapacitated.QualifiesAsNearDeath
-                        ? $"; the crippled vital location was {incapacitated.DefiningHitLocationName}."
-                        : "."),
+                    + (!incapacitated.QualifiesAsNearDeath
+                        ? "."
+                        : incapacitated.DefiningLocationRequiresOrganReplacement
+                            ? $"; the {incapacitated.DefiningHitLocationName} needs an organ replacement."
+                            : $"; the crippled vital location was {incapacitated.DefiningHitLocationName}."),
                 DeathPayload death => RenderDeath(soldier, death),
                 GeneseedRecoveryPayload geneseed => RenderGeneseed(geneseed),
                 LastSurvivorPayload survivor =>
@@ -131,6 +281,7 @@ namespace OnlyWar.Campaign.Events
             if (@event == null) throw new ArgumentNullException(nameof(@event));
             return @event.Payload switch
             {
+                SectorDispatchPayload dispatch => RenderDispatch(@event, dispatch, identity),
                 FirstBloodPayload => $"FIRST BLOOD — {RenderServiceRecord(@event, identity)}",
                 KillMilestonePayload => $"KILL MILESTONE — {RenderServiceRecord(@event, identity)}",
                 BattleResolvedPayload battle => battle.Summary,
@@ -211,7 +362,8 @@ namespace OnlyWar.Campaign.Events
                     or BattleParticipationPayload or IncapacitatedPayload
                     or GeneseedRecoveryPayload or MentorAssignedPayload
                     or NearDeathRecoveryPayload or BodyPartReplacementPayload
-                    or SquadLeaderUnavailablePayload => RenderServiceRecord(@event, identity),
+                    or SquadLeaderUnavailablePayload or SectorDispatchPayload =>
+                    RenderServiceRecord(@event, identity),
                 DeathPayload death => RenderDeath(SubjectName(@event), death),
                 _ => throw new NotSupportedException(
                     $"No Chronicle renderer exists for {@event.Type} payload {@event.Payload.GetType().Name}.")

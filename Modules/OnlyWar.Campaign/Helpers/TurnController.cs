@@ -175,6 +175,12 @@ namespace OnlyWar.Campaign
                 defaultFaction);
             InitializeWorldControlEpisodes(sector, defaultFaction);
             HashSet<(int PlanetId, int FactionId)> hiddenCults = SnapshotHiddenCults(sector);
+            SectorDispatchProcessor dispatchProcessor = new(
+                sector,
+                defaultFaction,
+                _turn.Rules.SectorFactions?.Insurrectionists,
+                _turn.Rules.Factions);
+            SectorDispatchSnapshot dispatchStart = dispatchProcessor.BeginTurn();
             // Ghost sources and already-active strategic invasion forces resolve before NPC planning, so a newly
             // consolidated force can act in the same week it announces itself.
             _progress?.Report("Processing Faction Forces");
@@ -254,6 +260,11 @@ namespace OnlyWar.Campaign
             _factionCapabilityCampaignProcessor.ProcessAttractionAndFragmentation(sector);
             RelocateAdministrativeStationsAfterHomeWorldLoss(sector);
             RecordStrategicNarrativeEvents(sector, defaultFaction, hiddenCults);
+            // After the world-control events, which the WorldSaved / WorldLost dispatches report.
+            dispatchProcessor.EndTurn(
+                dispatchStart,
+                BuildChapterPlanetIds(sector, playerOrdersThisTurn),
+                _turn.CurrentDate.GetTotalWeeks());
             _lastResult.RecruitmentReport = _recruitmentTurnProcessor.Process();
             MissionAftermathProcessor.PruneInvalidSpecialMissions(sector.Planets.Values);
             _planetIntelligenceProcessor.RefreshSpecialMissions(sector.Planets.Values);
@@ -373,6 +384,34 @@ namespace OnlyWar.Campaign
                         planet.Id, planet.Name, presence.Faction.Id, presence.Faction.Name, week);
                 }
             }
+        }
+
+        // Worlds where the Chapter took part this week: it had squads under orders there, or a
+        // battle there entered the record (OnlyWar_TDD.md §6.1).
+        private static HashSet<int> BuildChapterPlanetIds(Sector sector, IEnumerable<Order> playerOrders)
+        {
+            HashSet<int> planetIds = (playerOrders ?? [])
+                .Where(order => order?.Force?.IsEmpty == false
+                    && order.Mission?.MissionType != MissionType.Recruitment)
+                .Select(order => order.Mission?.Region?.Planet?.Id)
+                .Where(id => id.HasValue)
+                .Select(id => id.Value)
+                .ToHashSet();
+            foreach (CampaignEvent @event in sector.PlayerForce?.CurrentTurnEvents ?? [])
+            {
+                if (@event.Type is not (CampaignEventType.BattleParticipation
+                    or CampaignEventType.BattleResolved
+                    or CampaignEventType.MissionOutcome))
+                {
+                    continue;
+                }
+                foreach (CampaignEventEntityRef entity in @event.Entities
+                    .Where(entity => entity.Kind == CampaignEntityKind.Planet))
+                {
+                    planetIds.Add(entity.EntityId);
+                }
+            }
+            return planetIds;
         }
 
         private static HashSet<(int PlanetId, int FactionId)> SnapshotHiddenCults(Sector sector) =>

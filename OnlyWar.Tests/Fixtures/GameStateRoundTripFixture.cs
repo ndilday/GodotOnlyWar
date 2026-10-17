@@ -93,7 +93,8 @@ internal sealed class GameStateRoundTripFixture
             ghostPopulationSources: sector.GhostPopulationSources,
             strategicInvasionForces: sector.StrategicInvasionForces,
             mechanicusLoanActive: sector.PlayerForce.IsMechanicusLoanActive,
-            marsReturnDestination: sector.PlayerForce.MarsReturnDestination);
+            marsReturnDestination: sector.PlayerForce.MarsReturnDestination,
+            sectorDispatches: sector.PlayerForce.SectorDispatches);
     }
 
     public GameStateDataBlob Load(string dbPath)

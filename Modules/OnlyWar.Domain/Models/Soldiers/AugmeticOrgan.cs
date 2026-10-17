@@ -1,8 +1,8 @@
 namespace OnlyWar.Domain.Soldiers;
 
 /// <summary>
-/// One augmetic organ inside an organic vital location (Design/Active/VitalLocationReplacement.md
-/// §3.4). A cybernetic organ replacement adds one to the Torso or the Vitals; the location itself
+/// One augmetic organ inside an organic vital location (OnlyWar_TDD.md
+/// §5.3). A cybernetic organ replacement adds one to the Torso or the Vitals; the location itself
 /// stays organic. The organ has its own wound track and its own constitution, but no armor: a hit
 /// reaches it only after it has passed the soldier's armor and the location's natural armor.
 ///

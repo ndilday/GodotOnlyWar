@@ -155,6 +155,7 @@ namespace OnlyWar.Domain
         public TurnEventBuffer CurrentTurnEvents { get; } = new();
         public ChapterChronicleLedger ChapterChronicle { get; } = new();
         public WorldControlEpisodeTracker WorldControlEpisodes { get; private set; } = new();
+        public SectorDispatchTracker SectorDispatches { get; private set; } = new();
         private CampaignIdentity _campaignIdentity;
         public CampaignIdentity CampaignIdentity
         {
@@ -209,6 +210,11 @@ namespace OnlyWar.Domain
 
         public void RestoreWorldControlEpisodes(IEnumerable<WorldControlEpisodeState> states) =>
             WorldControlEpisodes = new WorldControlEpisodeTracker(states);
+
+        public void RestoreSectorDispatches(
+            IEnumerable<SectorDispatchPlanetState> planets,
+            SectorLordState sectorLord) =>
+            SectorDispatches = new SectorDispatchTracker(planets, sectorLord);
 
         // Adds one recovered gland of the given purity to the stockpile, folding it into the
         // count-weighted aggregate purity before incrementing the count.

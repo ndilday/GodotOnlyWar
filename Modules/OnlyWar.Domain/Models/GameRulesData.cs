@@ -51,19 +51,21 @@ namespace OnlyWar.Domain
         public IReadOnlyList<CyberneticOption> CyberneticOptions { get; }
 
         /// <summary>
-        /// The tier replacement surgery installs. There is one tier today, so this is the first
-        /// row; null when the rules carry none, and the part then has no armor of its own and uses
+        /// The tier limb replacement surgery installs: the first row that is not the augmetic-organ
+        /// tier. Null when the rules carry none, and the part then has no armor of its own and uses
         /// the soldier's constitution.
         /// </summary>
-        public CyberneticOption StandardCyberneticOption => CyberneticOptions.FirstOrDefault();
+        public CyberneticOption StandardCyberneticOption => CyberneticOptions.FirstOrDefault(
+            option => !option.IsAugmeticOrganTier);
 
         /// <summary>
-        /// The tier a cybernetic organ replacement installs as an augmetic organ
-        /// (Design/Active/VitalLocationReplacement.md D7b). Null when the rules carry none, and the
+        /// The tier a cybernetic organ replacement installs as an augmetic organ: the row with
+        /// <see cref="CyberneticOption.IsAugmeticOrganTier"/> set
+        /// (OnlyWar_TDD.md §6.6.1). Null when the rules carry none, and the
         /// organ then uses the soldier's constitution.
         /// </summary>
         public CyberneticOption VitalOrganCyberneticOption => CyberneticOptions.FirstOrDefault(
-            option => option.Id == VitalOrganRules.VitalOrganCyberneticOptionId);
+            option => option.IsAugmeticOrganTier);
         public IReadOnlyDictionary<int, BaseSkill> BaseSkillMap { get => _baseSkillMap; }
         public IReadOnlyList<SkillTemplate> SkillTemplateList { get => _skillTemplateList; }
         public IReadOnlyDictionary<int, List<HitLocationTemplate>> BodyHitLocationTemplateMap { get => _bodyHitLocationTemplateMap; }

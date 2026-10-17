@@ -196,10 +196,27 @@ namespace OnlyWar.Domain.Events
         string CausingWeaponName,
         int? SoldierTemplateId,
         string SoldierTemplateName,
-        int? SoldierRank) : ICampaignEventPayload
+        int? SoldierRank,
+        // Added after version 3 shipped; a payload saved without it reads as false.
+        bool DefiningLocationRequiresOrganReplacement = false) : ICampaignEventPayload
     {
         public CampaignEventType EventType => CampaignEventType.Incapacitated;
         public ushort Version => 3;
+
+        /// <summary>
+        /// The near-death rule, shared by the battle aftermath, the recorder and the payload
+        /// validator: a crippled vital location that is not severed, or one that was severed and
+        /// survived and so needs an organ replacement (OnlyWar_TDD.md §5.3). An augmetic organ
+        /// counts as its host location for both "crippled" and "severed".
+        /// </summary>
+        public static bool IsNearDeath(
+            bool definingLocationIsVital,
+            bool definingLocationWasCrippled,
+            bool definingLocationWasSevered,
+            bool definingLocationRequiresOrganReplacement) =>
+            definingLocationIsVital
+            && definingLocationWasCrippled
+            && (!definingLocationWasSevered || definingLocationRequiresOrganReplacement);
     }
 
     public sealed record DeathPayload(
@@ -267,6 +284,57 @@ namespace OnlyWar.Domain.Events
         int RevealedWeek) : ICampaignEventPayload
     {
         public CampaignEventType EventType => CampaignEventType.HiddenCultRevealed;
+        public ushort Version => 1;
+    }
+
+    /// <summary>The sector change a dispatch reports (OnlyWar_TDD.md §6.1).</summary>
+    public enum SectorDispatchKind
+    {
+        WorldSavedWithoutChapter = 0,
+        WorldLost = 1,
+        WorldInDanger = 2,
+        RevoltCrushed = 3,
+        // A capability-owned strategic invasion force: a Waaagh! for the Orks.
+        InvasionForceFormed = 4,
+        SwarmReachedWorld = 5,
+        NewSectorLord = 6
+    }
+
+    /// <summary>What the Chapter did where a world dispatch happened.</summary>
+    public enum SectorDispatchChapterPart
+    {
+        NotApplicable = 0,
+        TookPart = 1,
+        PresentNotEngaged = 2,
+        Absent = 3
+    }
+
+    /// <summary>
+    /// One dispatch from the Chapter Master's aide. Every field is a snapshot taken when the
+    /// dispatch was recorded, so the text does not change when the sector does.
+    /// </summary>
+    public sealed record SectorDispatchPayload(
+        SectorDispatchKind Kind,
+        int? PlanetId,
+        string PlanetName,
+        int? SubsectorId,
+        string SubsectorName,
+        int? FactionId,
+        string FactionName,
+        SectorDispatchChapterPart ChapterPart,
+        IReadOnlyList<string> PresentFormationNames = null,
+        // The WorldSaved / WorldLost event this dispatch reports, when it derives from one.
+        long? SourceEventId = null,
+        bool IsSecession = false,
+        int HostileRegionCount = 0,
+        int RegionCount = 0,
+        int? PreviousSectorLordId = null,
+        string PreviousSectorLordName = null,
+        int? SectorLordId = null,
+        string SectorLordName = null,
+        bool CapitalMoved = false) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.SectorDispatch;
         public ushort Version => 1;
     }
 
