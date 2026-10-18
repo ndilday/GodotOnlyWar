@@ -377,7 +377,6 @@ namespace OnlyWar.Operations.StrategicCombat
         {
             if (mission == null) return 0;
             return mission.CommittedBattleValue
-                * StrategicCombatRules.FactionQuality(mission.Attacker)
                 * StrategicCombatRules.AggressionStrengthMultiplier(mission.Aggression);
         }
 
@@ -385,7 +384,6 @@ namespace OnlyWar.Operations.StrategicCombat
         {
             if (defender == null || defenderBattleValue <= 0) return 0;
             return defenderBattleValue
-                * StrategicCombatRules.FactionQuality(defender.PlanetFaction.Faction)
                 // The defender fights from the whole position its side holds here, not just the
                 // stretch of trench its own faction dug (RegionDefenses).
                 * StrategicCombatRules.EntrenchmentMultiplier(

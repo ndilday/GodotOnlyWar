@@ -1287,12 +1287,10 @@ The effective-strength model is:
 
 ```text
 attackerEffective = committedBV
-                  × factionQuality(attacker)
                   × aggressionStrengthMultiplier
                   × ambushSurpriseMultiplier
 
 defenderEffective = engagedDefenderBV
-                  × factionQuality(defender)
                   × entrenchmentMultiplier(sharedPosition)
 
 entrenchmentMultiplier(e) = min(3.0, 1 + 0.10 × e)

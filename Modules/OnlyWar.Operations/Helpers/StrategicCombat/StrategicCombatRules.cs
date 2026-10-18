@@ -1,5 +1,4 @@
 using System;
-using OnlyWar.Domain;
 using OnlyWar.Domain.Orders;
 
 namespace OnlyWar.Operations.StrategicCombat
@@ -86,15 +85,6 @@ namespace OnlyWar.Operations.StrategicCombat
             Aggression.Aggressive => 1.50,
             _ => 1.00
         };
-
-        public static double FactionQuality(Faction faction)
-        {
-            if (faction == null) return 1.0;
-            if (faction.IsDefaultFaction) return 1.0;
-            if (faction.GrowthType == GrowthType.Consumption) return 1.15;
-            if (faction.GrowthType == GrowthType.Conversion) return 0.85;
-            return 1.0;
-        }
 
         public static double EntrenchmentMultiplier(double entrenchment) =>
             Math.Min(3.0, 1.0 + Math.Max(0.0, entrenchment) * 0.10);

@@ -68,6 +68,11 @@ implemented, distilled into TDD §6.1 *Sector dispatches* with the player rules 
 deleted on 2026-10-16. Nothing in it met the `Reference/` bar: its two rejected alternatives (a cap or
 summary, a "greatest danger" trigger) fold into the TDD in a sentence. A 10-week playtest saw no
 dispatch because nothing in the sector met a trigger; a dispatch on screen is still unconfirmed.
+`RefugeeResettlement.md` (refugees from a hidden Imperial remnant resettle any adjacent region with no
+public enemy, weighted by visibly available carrying capacity) was implemented, distilled into TDD §6.3
+*Imperial remnants and refugees* with the player rules in PRD §4.24, and deleted on 2026-10-17. Nothing
+in it met the `Reference/` bar: it held decisions and a test list, and no rejected alternatives. Its
+Godot check was still outstanding when it was deleted.
 
 Active designs:
 
@@ -76,6 +81,9 @@ Active designs:
 - `Active/FoundingMyth.md` — a generated founding history as the first Chronicle entry, and the
   chapter's founding, which sets the starting year (PRD §4.19, Alpha 0.8.1). Created 2026-10-13;
   design complete, not started.
+- `Active/SpecialOperations.md` — sabotage, ambush and assassination for every faction, from each
+  faction's own intelligence, with believed enemy works (PRD §5.6, Alpha 0.8.1). Created
+  2026-10-17; design complete, not started.
 
 **Audited 2026-10-12.** Two plans were removed:
 

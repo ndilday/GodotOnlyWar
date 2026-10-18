@@ -109,23 +109,111 @@ public class ImperialRemnantTests
     }
 
     [Fact]
-    public void Emigration_DistributesByRefugePopulation()
+    public void Emigration_DistributesByVisibleFreeCapacity()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.IsPublic = false;
         remnant.Population = 100_000;
-        // Region 0 (Alpha) borders three governed regions: 1 (Beta), 2 (Gamma), 4 (Epsilon).
-        fixture.DefaultRegionFaction(1).Population = 30_000;
-        fixture.DefaultRegionFaction(2).Population = 10_000;
-        fixture.DefaultRegionFaction(4).Population = 10_000;
+        // Region 0 (Alpha) borders three governed regions: 1 (Beta), 2 (Gamma), 4 (Epsilon), each
+        // holding 20,000. Free capacity 30k / 10k / 0.
+        fixture.Planet.Regions[1].CarryingCapacity = 50_000;
+        fixture.Planet.Regions[2].CarryingCapacity = 30_000;
+        fixture.Planet.Regions[4].CarryingCapacity = 20_000;
 
         RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
-        // 5,000 refugees split 3:1:1 by the refuges' 30k/10k/10k populations
-        Assert.Equal(33_000, fixture.DefaultRegionFaction(1).Population);
-        Assert.Equal(11_000, fixture.DefaultRegionFaction(2).Population);
-        Assert.Equal(11_000, fixture.DefaultRegionFaction(4).Population);
+        // 5,000 refugees split 3:1 by free capacity; the full refuge gets nobody
+        Assert.Equal(23_750, fixture.DefaultRegionFaction(1).Population);
+        Assert.Equal(21_250, fixture.DefaultRegionFaction(2).Population);
+        Assert.Equal(20_000, fixture.DefaultRegionFaction(4).Population);
+    }
+
+    [Fact]
+    public void Emigration_SplitsEquallyWhenEveryRefugeIsFull()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 100_000;
+        foreach (int r in new[] { 1, 2, 4 })
+        {
+            fixture.Planet.Regions[r].CarryingCapacity = 15_000; // overfilled already
+        }
+
+        RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+
+        // the last refuge absorbs the rounding remainder
+        foreach (int r in new[] { 1, 2, 4 })
+        {
+            Assert.InRange(fixture.DefaultRegionFaction(r).Population, 21_666, 21_668);
+        }
+    }
+
+    [Fact]
+    public void Emigration_HiddenPresenceDoesNotReduceRefugeWeight()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 100_000;
+        fixture.Planet.Regions[1].CarryingCapacity = 40_000;
+        fixture.Planet.Regions[2].CarryingCapacity = 40_000;
+        fixture.Planet.Regions[4].CarryingCapacity = 20_000;
+        // a hidden cult fills Beta, but the refugees cannot see it
+        fixture.AddHiddenFaction(1, GrowthType.None, population: 20_000);
+
+        RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+
+        Assert.Equal(22_500, fixture.DefaultRegionFaction(1).Population);
+        Assert.Equal(22_500, fixture.DefaultRegionFaction(2).Population);
+        Assert.Equal(20_000, fixture.DefaultRegionFaction(4).Population);
+    }
+
+    [Fact]
+    public void Emigration_ResettlesAnEmptyRegionWithNoPublicEnemy()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 100_000;
+        Region emptied = fixture.Planet.Regions[1];
+        emptied.RegionFactionMap.Remove(fixture.Default.Id); // the swarm left nobody behind
+        emptied.CarryingCapacity = 100_000;
+        fixture.Planet.Regions[2].CarryingCapacity = 20_000;
+        fixture.Planet.Regions[4].CarryingCapacity = 20_000;
+        long before = TotalPopulation(fixture);
+
+        RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+
+        RegionFaction resettled = emptied.RegionFactionMap[fixture.Default.Id];
+        Assert.Same(fixture.DefaultPlanetFaction, resettled.PlanetFaction);
+        Assert.True(resettled.IsPublic);
+        Assert.Equal(0, resettled.Garrison);
+        Assert.Equal(5_000, resettled.Population);
+        Assert.Equal(before, TotalPopulation(fixture));
+    }
+
+    [Fact]
+    public void Emigration_SkipsANeighbourWithAPublicEnemy()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 100_000;
+        // Beta is besieged: still Imperial, but a public swarm holds ground there. Gamma is emptied
+        // and held by the swarm alone.
+        fixture.AddConsumptionFaction(1, population: 50_000, organization: 100);
+        fixture.Planet.Regions[2].RegionFactionMap.Remove(fixture.Default.Id);
+        fixture.AddConsumptionFaction(2, population: 50_000, organization: 100);
+        long before = TotalPopulation(fixture);
+
+        RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+
+        Assert.Equal(20_000, fixture.DefaultRegionFaction(1).Population);
+        Assert.False(fixture.Planet.Regions[2].RegionFactionMap.ContainsKey(fixture.Default.Id));
+        Assert.Equal(25_000, fixture.DefaultRegionFaction(4).Population);
+        Assert.Equal(before, TotalPopulation(fixture));
     }
 
     [Fact]
@@ -135,10 +223,11 @@ public class ImperialRemnantTests
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.IsPublic = false;
         remnant.Population = 100_000;
-        // all three neighbours (1, 2, 4) are themselves overrun — no governed refuge to flee to
-        fixture.DefaultRegionFaction(1).IsPublic = false;
-        fixture.DefaultRegionFaction(2).IsPublic = false;
-        fixture.DefaultRegionFaction(4).IsPublic = false;
+        // all three neighbours (1, 2, 4) hold a public enemy — no safe refuge to flee to
+        foreach (int r in new[] { 1, 2, 4 })
+        {
+            fixture.AddConsumptionFaction(r, population: 50_000, organization: 100);
+        }
 
         RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
@@ -375,6 +464,19 @@ public class ImperialRemnantTests
 
         Assert.True(governing.Population > 1_000_000, "a governing population grows organically");
         Assert.True(governing.Garrison > 0, "a governing PDF drafts from its growth");
+    }
+
+    private static long TotalPopulation(SectorSimulationFixture fixture)
+    {
+        long total = 0;
+        foreach (Region region in fixture.Planet.Regions)
+        {
+            foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+            {
+                total += regionFaction.Population;
+            }
+        }
+        return total;
     }
 
     private static PlanetDemographicsProcessor CreateDemographicsProcessor(SectorSimulationFixture fixture)

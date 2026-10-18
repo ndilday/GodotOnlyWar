@@ -109,4 +109,4 @@ Detailed army-scale formulas are retained in `Design/Reference/BattleLogic.md`.
 - Rich governance titles and capital markers on every strategic screen.
 - Replacement-world offers after failure.
 - Reduced starting Chapter strength if later playtesting shows the objective is trivial.
-- Explicit air, void-support, blockade, and Guard-quality modifiers for strategic combat.
+- Explicit air, void-support, and blockade modifiers for strategic combat.

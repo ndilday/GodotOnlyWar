@@ -48,7 +48,7 @@
    - 5.4 [Alpha 0.7.3 — To-Do](#54-alpha-073--to-do)
    - 5.5 [Alpha 0.8 — Command, Narrative & Cross-Faction Simulation](#55-alpha-08--command-narrative--cross-faction-simulation)
    - 5.6 [Alpha 0.8.1](#56-alpha-081)
-   - 5.7 [Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat](#57-alpha-08--tyranid-invasion--large-scale-npc-combat)
+   - 5.7 [Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat](#57-alpha-08--tyranid-invasion--large-scale-npc-combat) (retired; moved to 5.6)
    - 5.8 [Post-0.8 Backlog](#58-post-08-backlog)
 6. [Open Design Questions](#6-open-design-questions)
    - 6.1 [Aggression Axis Split — DEFERRED](#61-aggression-axis-split--deferred)
@@ -575,7 +575,7 @@ behavior changed.
 - **Advance:** Squad assaults a selected hostile faction, either locally or in an adjacent region. If that faction has a reciprocal assault force ready in the same region, the two committed forces fight one shared meeting engagement first; neither benefits from entrenchment. A tactical withdrawal does not end this contest while the force remains combat-capable and inside its cumulative aggression tolerance. Once one assault force becomes nonviable, the survivor may begin attacking the remaining prepared defenders on the following day, at which point those defenders use entrenchment normally. Successful advance reduces enemy garrison and may convert or destroy enemy regional holdings.
 - **Ambush:** Squad positions and waits for enemy movement before engaging. Success depends on positioning skill and the enemy patrol activity level.
 - **Assassination:** Squad locates and eliminates a specific enemy leader target. Target tier determines the strength of the bodyguard force encountered.
-- **Sabotage:** Squad degrades enemy defensive infrastructure (listening posts, entrenchment, or anti-air). Degree of degradation scales with skill margin and the size of the existing defenses.
+- **Sabotage:** Squad degrades enemy defensive infrastructure (listening posts or entrenchment). Degree of degradation scales with skill margin and the size of the existing defenses.
 - **Defense:** Squad defends a region against an incoming enemy assault. Defender advantage applies. Outcome affects whether the enemy assault order resolves successfully.
 - **Patrol:** Squad conducts a security sweep, potentially intercepting enemy infiltration or patrol forces.
 - **Construction:** Squad in its own region spends the turn building regional fortifications instead of fighting — Entrenchment (Fortify), Listening Post, or Anti-Air. Progress scales with squad size and the Engineering (Fortification) skill, accumulating across successive turns and sharing resolution with the NPC development path.
@@ -1064,7 +1064,7 @@ This behavioral specification is **implemented for Alpha 0.7.1** (see §5.3) on 
 
 These are specified together because they share the same per-faction-pair shape and the same consumers (offensive planning, garrison sizing, the fog-of-war/intelligence UI, governor requests).
 
-This is the implemented Alpha 0.8 substrate for Orks (§4.22) and the later Tyranid line (§5.7). It
+This is the implemented Alpha 0.8 substrate for Orks (§4.22) and the later Tyranid line (§4.24, §5.6). It
 is shared by the Revolt and governor systems, so those systems use the same relationship and
 observer-belief contracts without faction-specific hostility shortcuts.
 
@@ -1237,7 +1237,7 @@ This is deliberately **not** a survival economy. Consistent with the relevance/l
 
 **Description.** A Tyranid incursion is not a rival civilization contesting a world; it is an ecological catastrophe that eats the world itself. A splinter of a hive fleet, called down by a Genestealer Cult's psychic beacon, makes planetfall, strips the biomass of every region it reaches, and grows *only* by that consumption. This section specifies the Tyranid faction's growth and behavior, the Imperial population's collapse into hiding beneath it, the Genestealer Cult's doomed uprising, and the opening-scenario sequencing that produces the "Promised World" the chapter is pledged to retake. It builds on the cross-faction substrate (§4.21) and most resembles the Ork growth-faction structure (§4.22).
 
-This is a behavioral specification. It depends on §4.21 (behavior flags, growth types, intelligence-as-belief), which now ships in 0.8, and is scheduled in §5.7. The current `ScenarioBuilder.StampPromisedWorld` static stamp (§4.1) is the shipped subset this enhances.
+This is a behavioral specification. It depends on §4.21 (behavior flags, growth types, intelligence-as-belief), which now ships in 0.8; its remaining follow-through is scheduled in §5.6. The current `ScenarioBuilder.StampPromisedWorld` static stamp (§4.1) is the shipped subset this enhances.
 
 Implementation review (2026-09-03): the Phase 2–5 strategy extraction was reviewed against the
 single-budget, defensive-actor, construction, expansion, feeding, recon, patrol, intelligence, and
@@ -1273,7 +1273,7 @@ behavior changed.
 - The mobile combat force is the region's concrete `OrganizedMilitaryStrength` pool. The disorganized remainder still exists and can be caught in an ambush; after an assault destroys the organized defence, continuing undefended assault days destroy disorganized BV at a tunable multiple of surviving attacker BV. Reorganization explicitly transfers BV back into the organized pool (a share of the disorganized pool per effort point) rather than applying a percentage multiplier to total strength.
 - Each turn the AI allocates `organizedTroops` by priority. This is **one budget**, drawn down in order: every step spends from the same per-region residual, so a swarm committed to defending and attacking has correspondingly less left to eat with.
   1. **Fight** — commit force to any in-region military threat (a PDF garrison, or a Cult fighting the swarm); the swarm is drawn to resistance first. This also reserves the region's own defensive minimum.
-  2. **Expand** — send a share of the remainder to neighbors, biased toward the richest / most-resistant region. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
+  2. **Expand** — send a share of the remainder to the neighbor with the most biomass. Resistance is not a term here: assaults on defended ground are priced against the estimated defender in the force-allocation auction. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
   3. **Predate + Consume** — whatever survives every earlier claim strips the current region: predate while headcount remains, consume the land in parallel, shifting fully to consumption once the survivors are gone.
 - Feeding is a **planned tasking, not a background process**: it is one mission type the strategy controller allocates against that budget alongside defence, offensives, development and patrols, so the swarm can never be simultaneously counted as eating and as fighting. Predation and consumption remain a single tasking rather than two, because the returns on each diminish *within* the turn as the other's pool depletes — the allocator decides the prey/land split internally and the planner only decides how many troops to hand it. A swarm the planner cannot see (a hidden `RegionFaction`) has no budget allocated to it and falls back to feeding at full strength rather than silently starving.
 
@@ -1293,8 +1293,8 @@ behavior changed.
 - `IsPublic = false` on the Imperial remnant here means "gone to ground," and this hide/unhide is evaluated **per region** for the default faction — distinct from the existing planet-level `CheckForPlanetaryRevolt` / `CheckForRevoltSuppression`, which exclude the default faction and only surface infiltrators. (Generalizing all going-public transitions to region granularity is an open question — §6.12.)
 
 **Civilian Emigration (Stage 3)**
-- Each turn, ~5% of a hidden remnant's population flees to **adjacent Imperial-controlled regions**, distributed **weighted by the destination's population** (refugees pour toward the nearest dense fortification — the suburb, not the desert). A fully-surrounded remnant (no eligible neighbor) cannot flee and faces predation in place.
-- Emigration is **not** clamped to destination capacity: overfilling a refuge is intended. The crowding term (§4.15) then models the resulting deprivation die-off, and the swollen population makes that region a worse massacre if the swarm reaches it next — a deliberate grimdark feedback loop.
+- Each turn, ~5% of a hidden remnant's population flees to **adjacent regions with no public enemy**, distributed **weighted by the destination's visibly available carrying capacity** (current carrying capacity less the population of its public presences). A depopulated destination gets a new public Imperial presence that grows and drafts normally. A fully-surrounded remnant (no eligible neighbor) cannot flee and faces predation in place.
+- Emigration is **not** clamped to destination capacity: when every neighbor is full, refugees split equally and overfill them. The crowding term (§4.15) then models the resulting deprivation die-off, and the swollen population makes that region a worse massacre if the swarm reaches it next. Because refugees prefer free capacity, a full refuge gets few of them while emptier land is available, so this happens only when every neighbor is full.
 
 **PDF as a Strategic Actor**
 - For the pre-arrival and invasion simulation to produce believable outcomes (regions where a dug-in PDF drives the Cult back), the default-Imperial faction plans through `FactionStrategyController` like any other faction.
@@ -1303,7 +1303,7 @@ behavior changed.
 - `FactionStrategyController` retains a `defensiveOnly` mode for any faction that should be posture-restricted in future. Nothing sets it today.
 
 **Strategic Combat Model**
-- PDF ↔ Tyranid ↔ Cult fighting resolves as a lightweight **strategic attrition** step — committed organized force × effectiveness against the defender's organized BV, modified by `Entrenchment`, `ListeningPost`-fed regional intel, and `AntiAir`. This is distinct from the tactical Battle engine (§4.14), which is reserved for Astartes engagements; running tactical resolution for every AI skirmish across a multi-turn headless pre-simulation would be far too costly.
+- PDF ↔ Tyranid ↔ Cult fighting resolves as a lightweight **strategic attrition** step — committed organized force × effectiveness against the defender's organized BV, modified by `Entrenchment` and `ListeningPost`-fed regional intel. `AntiAir` has no combat effect until flying units exist (§5.8, *Anti-Air effect*). This is distinct from the tactical Battle engine (§4.14), which is reserved for Astartes engagements; running tactical resolution for every AI skirmish across a multi-turn headless pre-simulation would be far too costly.
 
 **Opening Scenario Application (the Promised World)**
 - The opening scenario sequences the two enemies in time so the Tyranid beachhead stays authored while the Cult war is emergent (extends `ScenarioBuilder.StampPromisedWorld` and the OpeningScenario design doc):
@@ -1492,7 +1492,7 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
   persistent-ID compatibility is low-priority technical debt in TDD §8.7, not an Alpha 0.8
   player-facing requirement.
 
-The items that remained open at the end of 0.8 moved to Alpha 0.8.1 (§5.6). Residual follow-through for the Tyranid line and Large-Scale NPC Combat stays in §5.7; the completed behavior is specified in §4.24 and the TDD rather than repeated in release scope.
+The items that remained open at the end of 0.8 moved to Alpha 0.8.1 (§5.6). Residual follow-through for the Tyranid line and Large-Scale NPC Combat also moved to §5.6; the completed behavior is specified in §4.24 and the TDD rather than repeated in release scope.
 
 ### 5.6 Alpha 0.8.1
 
@@ -1506,42 +1506,21 @@ The work that remained open at the end of 0.8, together with the connective item
 - ✅ **Near death for a survived severed Vitals** — a brother who survives a severed Vitals now opens a near-death episode, so the end of his organ replacement records a near-death recovery, and his service record says the location needs an organ replacement. TDD §6.6 *Player aftermath event emission*. Godot check outstanding.
 - ⬜ **Chapter Mandates** — player-chosen mandates shown in the Command Brief, the legacy-point ledger, and Chapter Master tenure and succession. §4.25; `Design/Active/ChapterMandates.md` (design complete, not started; the constants' starting values are still to be chosen).
 - ⬜ **Display mode and UI/text scaling** — the §4.27 requirement.
+- ✅ **Refugees into depopulated regions.** Refugees resettle any adjacent region with no public
+  enemy, weighted by its visibly available carrying capacity, so that liberated land fills with
+  people again. §4.24; TDD §6.3 *Imperial remnants and refugees*. Godot check outstanding.
+- ⬜ **Special operations for every faction.** Sabotage, ambush and assassination work the same way
+  for NPC factions as for the player: each faction's intelligence generates opportunities and its
+  planner decides which to pursue, against NPC targets and the player's real squads. The PDF never
+  assassinates. Includes believed (not exact) enemy works for every decision, entrenchment in the
+  assault launch threshold, sabotage damage on the day it succeeds, and no Anti-Air sabotage.
+  `Design/Active/SpecialOperations.md` (design complete, not started; starting values to tune).
+  *(Save format change.)*
 
 ### 5.7 Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat
 
-The core Tyranid invasion, biomass consumption, Genestealer Cult behavior, PDF defensive posture,
-opening-scenario sequencing, and large-scale NPC combat now ship in 0.8. Their behavior belongs in
-§4.24 and their architecture and formulas belong in `OnlyWar_TDD.md` and
-`Design/Reference/BattleLogic.md`. This section records only the incomplete follow-through.
-
-- **Complete civilian emigration destinations.** Refugees from a hidden remnant should be able to
-  move to any adjacent public Imperial-controlled region, including a player-held region, weighted by
-  destination population and without a capacity clamp. Spec: §4.24.
-- **Finish Tyranid expansion valuation.** Keep the shared force budget and depletion-driven spreading,
-  but add the intended resistance component to destination selection so biomass richness and military
-  resistance both influence which neighboring region is worth entering. Spec: §4.24.
-- **Add the remaining strategic-combat modifiers.** Extend the battle-value resolver with the
-  deferred Anti-Air and Guard-quality effects, plus any explicitly chosen air, void-support, or
-  blockade modifiers. The current attrition resolver, conquest/withdrawal outcomes, and tactical-scale
-  handoff are already shipped. Related deferrals: §6.4 and `Design/Reference/OpeningScenario.md`.
-- **Make the stranded-swarm premise explicit.** Add a durable narrative/simulation state for the
-  Navy's destruction of the hive fleet or blockade of the world, rather than relying only on the
-  current absence of an orbital-reinforcement mechanic. The state should preserve the opening
-  scenario's no-reinforcement rule and be available to future void-support systems.
-- **Add NPC-generated diversion planning.** Teach `FactionStrategyController` to issue diversion
-  feints for NPC-versus-NPC situations, with target selection and a follow-through plan that fits the
-  existing weekly planning and daily mission-resolution flow.
-- **Add NPC sabotage and assassination planning.** Use the existing mission mechanics and generated
-  opportunities to let NPC factions select worthwhile defense assets and leadership targets, budget
-  forces for those operations, and issue the corresponding orders.
-- **Finish mission-risk and aggression heuristics.** Extend the existing reconnaissance aggression
-  choice to diversions and special operations, using target value, watch effort, expected exposure,
-  and mission effect to choose both targets and `Aggression`. Review the remaining fixed aggression
-  values on assaults and raids where the broader decision model requires it.
-- **Add NPC-versus-player feint deception.** Resolve the player-facing half of enemy diversions as a
-  one-turn-lagged intelligence deception: define the effect channel, persistence, displayed estimate,
-  resolution timing, and the AI's cross-turn feint-plus-assault planning horizon. This supersedes the
-  "Enemy-generated diversions" backlog entry in §5.8.
+Retired. Its open follow-through moved into Alpha 0.8.1 (§5.6). The heading stays so that the
+numbering of §5.8 and the references to it do not change.
 
 ### 5.8 Post-0.8 Backlog
 
@@ -1552,6 +1531,20 @@ beacon-driven discovery of new visible Ork planets, and actual Ork fleet reinfor
 Promised-World opening, belief-gated feral culling, population-gated emergence, Ork-only morale
 support, and deterministic invader selection are shipped in §4.22; persisted threat scopes,
 beacons, and non-player fleets remain backlog items.
+
+**Void support, blockade, and orbital reinforcement.** Wait for non-player fleets ("Factional
+Fleets with independent movement", below) and Ork fleet reinforcement (above). Then extend the
+strategic combat resolver with void-support and blockade modifiers that read the fleets in orbit.
+**Requirement on any reinforcement mechanic:** reinforcement must come from a fleet or other source
+that exists in the simulation. The opening Tyranid swarm then stays stranded because it has no hive
+fleet, and needs no separate "stranded" state. A design that adds abstract reinforcement (for
+example BV that a world spawns on a timer) must keep the opening scenario's no-reinforcement rule
+(§4.24, *Opening Scenario Application*). Related: §6.4 and `Design/Reference/OpeningScenario.md`.
+
+**Anti-Air effect.** Deferred until flying units exist. Anti-Air fortification is built, sabotaged,
+and shown in the UI, but no combat resolver reads it, so the NPC development planner deliberately
+does not build it (`FactionDevelopmentPlanner`). When flying units arrive, give Anti-Air a combat
+effect at both tactical and strategic scale, then restore the planner's Anti-Air entry.
 
 **Equipment compatibility cleanup.** The itemized catalog, complete personal/role loadouts, mission
 equipment state, ammunition behaviors, and effective tactical Battle Value are delivered. The pooled
@@ -1651,7 +1644,7 @@ support dynamic unit membership and new effect channels. Design record:
 
 **Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Ork Phase 1 is shipped in §5.5; its sector-level escalation remains in the Ork follow-through backlog. **Vehicles depend on the 0.8 Techmarine pipeline (§4.28, scheduled in §5.5)** — armor cannot be fielded until the chapter has Techmarines to maintain and wake its machine spirits, so that pipeline must land first. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
 
-**Enemy-generated diversions.** *(Now scheduled as part of "Next-level NPC mission planning" — see §5.7. The scoping analysis below is retained because it is the governing design note for the NPC-vs-player half, which is the genuinely hard part.)* Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
+**Enemy-generated diversions.** *(Deferred indefinitely, both halves, on 2026-10-17: NPC-vs-NPC feints change only NPC planning and add little the player sees, and the NPC-vs-player deception is not yet wanted. The scoping analysis below is retained as the design note if either half returns.)* Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
 
 - *NPC-vs-NPC feints* fit the existing turn loop with no changes: both the feinter and the fooled defender resolve within the same turn (shaping phase → faction planning), so this is purely a generation-heuristic addition to `FactionStrategyController`.
 - *NPC-vs-player feints do not fit the current flow.* The diversion mechanic only fools a decision-maker who plans *after* the shaping phase; the player commits orders *before* `ProcessTurn` runs, and nothing consumes `PerceivedThreatBonus` on a player region (the player allocates garrisons by hand). A feint against the player therefore cannot reuse the AI's same-turn planning bonus — it must become a **one-turn-lagged intelligence deception**: the feint inflates the *displayed* enemy-strength estimate in the player's intel layer, persists past `ClearDiversionEffects` (unlike the transient AI bonus), and is acted on by the player the following turn, with the real attack landing then. This also implies an AI planning horizon that pairs a feint with a follow-up assault across turns — beyond the current per-region greedy `GenerateFactionOrders`. Resolve these (effect channel, persistence, what the player sees and when the deception resolves, AI feint+follow-through planning) before implementation.

@@ -215,16 +215,19 @@ namespace OnlyWar.Campaign.Turns
                 && (rf.Population > 0 || rf.Garrison > 0));
         }
 
+        /// <summary>
+        /// Moves refugees out of a hidden Imperial remnant into every adjacent region with no public
+        /// enemy (Design/Active/RefugeeResettlement.md). A refuge needs no Imperial presence: an emptied
+        /// region gets a new public default-faction presence, so liberated land fills with people again.
+        /// </summary>
         internal static void ProcessImperialEmigration(Region region)
         {
             RegionFaction remnant = region.RegionFactionMap.Values.FirstOrDefault(
                 rf => rf.PlanetFaction.Faction.IsDefaultFaction && !rf.IsPublic);
             if (remnant == null || remnant.Population <= 0) return;
 
-            List<RegionFaction> refuges = region.GetAdjacentRegions()
-                .Select(r => r.RegionFactionMap.Values.FirstOrDefault(
-                    rf => rf.PlanetFaction.Faction.IsDefaultFaction && rf.IsPublic))
-                .Where(rf => rf != null)
+            List<Region> refuges = region.GetAdjacentRegions()
+                .Where(IsRefugeeDestination)
                 .ToList();
             if (refuges.Count == 0) return;
 
@@ -234,19 +237,73 @@ namespace OnlyWar.Campaign.Turns
             remnant.Population -= emigrants;
             ScenarioMetricsCollector.RecordScenarioImmigration(region, -emigrants);
 
-            long refugeTotal = refuges.Sum(rf => rf.Population);
+            long[] weights = refuges.Select(VisibleFreeCapacity).ToArray();
+            long weightTotal = weights.Sum();
             long distributed = 0;
             for (int i = 0; i < refuges.Count; i++)
             {
                 long share = i == refuges.Count - 1
                     ? emigrants - distributed
-                    : refugeTotal > 0
-                        ? (long)(emigrants * (double)refuges[i].Population / refugeTotal)
+                    : weightTotal > 0
+                        ? (long)(emigrants * (double)weights[i] / weightTotal)
                         : emigrants / refuges.Count;
-                refuges[i].Population += share;
-                ScenarioMetricsCollector.RecordScenarioImmigration(refuges[i].Region, share);
                 distributed += share;
+                if (share <= 0) continue;
+                GetOrCreateRefugeePresence(refuges[i]).Population += share;
+                ScenarioMetricsCollector.RecordScenarioImmigration(refuges[i], share);
             }
+        }
+
+        // A besieged Imperial region is no refuge, and a region the planet's default faction cannot
+        // hold a presence in has nobody to take the refugees in.
+        private static bool IsRefugeeDestination(Region region)
+        {
+            if (HasPublicEnemy(region)) return false;
+            return FindDefaultPresence(region) != null || FindDefaultPlanetFaction(region.Planet) != null;
+        }
+
+        /// <summary>
+        /// The capacity refugees can see is free: carrying capacity less the population of the public
+        /// presences. A hidden cult or swarm does not reduce it, and blighted land offers little.
+        /// </summary>
+        internal static long VisibleFreeCapacity(Region region)
+        {
+            long visiblePopulation = region.RegionFactionMap.Values
+                .Where(rf => rf.IsPublic)
+                .Sum(rf => rf.Population);
+            return Math.Max(0, region.CarryingCapacity - visiblePopulation);
+        }
+
+        // An existing default-faction presence takes the refugees in, public or hidden. Without one,
+        // the refugees found a new public presence with no garrison and no works; it grows and drafts
+        // its PDF normally from the next turn.
+        private static RegionFaction GetOrCreateRefugeePresence(Region region)
+        {
+            RegionFaction existing = FindDefaultPresence(region);
+            if (existing != null) return existing;
+
+            PlanetFaction planetFaction = FindDefaultPlanetFaction(region.Planet);
+            RegionFaction created = new(planetFaction, region)
+            {
+                IsPublic = true,
+                Population = 0,
+                Garrison = 0,
+                Organization = 100
+            };
+            region.RegionFactionMap[planetFaction.Faction.Id] = created;
+            GameLog.Debug(() => $"Refugees resettle {DescribeRegionFaction(created)}");
+            return created;
+        }
+
+        private static RegionFaction FindDefaultPresence(Region region)
+        {
+            return region.RegionFactionMap.Values.FirstOrDefault(
+                rf => rf.PlanetFaction.Faction.IsDefaultFaction);
+        }
+
+        private static PlanetFaction FindDefaultPlanetFaction(Planet planet)
+        {
+            return planet.PlanetFactionMap.Values.FirstOrDefault(pf => pf.Faction.IsDefaultFaction);
         }
 
         private static long SquadBattleValue(IEnumerable<Squad> squads)
