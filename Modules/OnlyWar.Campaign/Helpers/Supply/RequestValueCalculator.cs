@@ -22,7 +22,7 @@ public static class RequestValueCalculator
             throw new ArgumentOutOfRangeException(nameof(hazardMultiplier));
 
         long effort = SaturatingMultiply(
-            SaturatingMultiply(commitment.ReferenceBattleValuePerPackage, commitment.PackageCount),
+            SaturatingMultiply(commitment.ReferenceStrategicValuePerPackage, commitment.PackageCount),
             commitment.ServiceWeeks);
         long throughput = DivideRoundingUp(effort, commitment.CompletionDeadlineWeeks);
         decimal throughputMultiplier = SelectThroughputMultiplier(throughput, rules.ThroughputBands);
@@ -33,7 +33,7 @@ public static class RequestValueCalculator
         combinedPremium = Math.Min(combinedPremium, rules.MaximumCombinedPremium);
 
         decimal rawValue = SaturatingMultiply(
-            SaturatingMultiply(effort, rules.RequisitionPerBattleValueTime),
+            SaturatingMultiply(effort, rules.RequisitionPerStrategicValueTime),
             combinedPremium);
         int requisitionValue = RoundAndClamp(
             rawValue,
@@ -50,12 +50,12 @@ public static class RequestValueCalculator
     }
 
     private static decimal SelectThroughputMultiplier(
-        long requiredBattleValuePerWeek,
+        long requiredStrategicValuePerWeek,
         IReadOnlyList<ThroughputPremiumBand> bands)
     {
         foreach (ThroughputPremiumBand band in bands)
         {
-            if (requiredBattleValuePerWeek <= band.MaximumBattleValuePerWeek)
+            if (requiredStrategicValuePerWeek <= band.MaximumStrategicValuePerWeek)
                 return band.Multiplier;
         }
 

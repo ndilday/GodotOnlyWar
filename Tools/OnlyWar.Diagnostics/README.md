@@ -26,14 +26,22 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   The table lands in `%TEMP%\GodotOnlyWar\squad-duel.txt`, or in the file `DUEL_OUT` names, and the
   battles per minute in the same name with `.throughput.txt`. `DUEL_ROLES` picks which side is the
   battle's Attacker: `a-attacks` (default), `b-attacks` or `alternate` (A attacks on odd seeds). The
-  table is always from A's point of view. For the first battle of a run, `DUEL_TRACE` writes the
+  table is always from A's point of view. `DUEL_CLOSE_TRAVEL=0` prices the Close continuation over
+  the plain horizon, without its travel turns, as before 2026-10-23. `DUEL_STANDOFF_CLOSE=0` and
+  `DUEL_NO_WIN_WITHDRAW=0` turn off the two stalemate rules of 2026-11-06, which are on in the game
+  (`DUEL_NO_WIN_PATIENCE` sets the second rule's patience, default 100). Three forecast changes of
+  2026-11-08 are on in the game and turn off in duels: `DUEL_FIRE_ON_APPROACH=0` drops the Close
+  approaches that fire at a jog or a walk, `DUEL_POTENTIAL_AMMO=0` makes rounds free in the potential,
+  and `DUEL_BURST_BY_RANGE=0` makes the removal-rate table keep each shot's burst and round price
+  from the range the table was built at. `DUEL_CLOSE_STOPS=2` tries the halfway stops (off in the
+  game). For the first battle of a run, `DUEL_TRACE` writes the
   engine's planning log and `DUEL_WOUND_LOG` writes every wound side A takes (attack kind, weapon,
   damage, hit location, damage-to-Constitution ratio and wound level), a per-weapon summary, and the
   final wound totals of A's hit locations: the tool for "what actually killed it". `DUEL_SHOT_LOG`
   writes every volley of that battle, both sides (rounds planned and fired, aim multiplier, the
   turns the shooter had just spent aiming at that target, hits, range) and a per-weapon summary split
   by aimed and un-aimed: the tool for "did the aim reach the shot".
-- All the tools run battles in parallel, `DUEL_WORKERS` at a time (default 8; `1` runs them one after
+- All the tools run battles in parallel, `DUEL_WORKERS` at a time (default half the logical processors, 6 on a 12-thread machine; `1` runs them one after
   another). Each battle has its own seeded random streams and results are summed in seed order, so
   the worker count does not change the result.
 - `SquadLadderDiagnostics` finds, for each pair of squads, the break-even force ratio, which is the
@@ -45,11 +53,24 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   table, and `throughput-TAG.txt` reports battles per minute. Probes run one after another, because
   each one decides where the next goes; only the battles inside a probe run in parallel. The
   gauntlet below has superseded it.
-- `SquadGauntletDiagnostics` is the fixed-design calibration. Set `RUN_GAUNTLET=1`,
+- `SquadGauntletDiagnostics` is the fixed-design calibration. **v2 (2026-10-21,
+  `Design/Active/GauntletV2.md`):** set `GAUNTLET_PANEL` instead of `GAUNTLET_REFS`, and every entry
+  fights every panel squad of another side (`GAUNTLET_ALLIES`, default `0+1`: PDF with Marines; since
+  2026-10-27 the Tyranids and the Cult are separate sides, as they are hostile in the game); battles open where a reciprocal assault would (`GAUNTLET_RANGE` defaults to
+  `assault`: the two forces' preferred opening ranges, equipment reallocation, burrowers, both sides
+  Attacker; give a number for the old fixed range); a one-sided cell's cap rises to `GAUNTLET_CAP_MAX`
+  (default 1000); and the report leads with **single-scale values**, a least-squares fit over every
+  "ok" cell weighted by 1 / (se² + τ²), where τ is the matchup standard deviation. The v1 design
+  below still works with `GAUNTLET_REFS` and a numeric `GAUNTLET_RANGE`.
+  v1: set `RUN_GAUNTLET=1`,
   `GAUNTLET_ENTRIES` (same `key=spec|...` syntax as the ladder) and `GAUNTLET_REFS` (comma-separated
   entry keys): every entry fights every reference over a spread of force ratios (stage 1: five ratios
-  around the prior, 8 seeds each; stage 2: three ratios where the stage-1 fit says 25%, 50% and 75%,
-  16 seeds each; `GAUNTLET_REFINE=n` repeats stage 2), and a probit model is fitted to all the
+  around the prior, 8 seeds each; stage 2, since 2026-10-25, in rounds of 4 seeds at three ratios per
+  unresolved cell, where its own fit says 25%, 50% and 75%, or, for a one-sided cell, around the
+  break-even the single scale predicts from both squads' other matchups; a cell stops when
+  se(ln break-even) is under `GAUNTLET_TARGET_SE` (0.2) or its predicted break-even is more than ×2
+  past the largest battle `GAUNTLET_CAP_MAX` allows, and then counts as a bound in the fit;
+  `GAUNTLET_ROUNDS`, default 6), and a probit model is fitted to all the
   battles. All battles of a stage run in one pool, so long battles do not leave cores idle. Output in
   `%TEMP%\GodotOnlyWar\gauntlet` (or `GAUNTLET_OUT`): `battles-TAG.tsv` is one row per battle, keyed
   by rules-database hash, a code hash (`OnlyWar.Battles.dll` plus `SquadDuelDiagnostics.HarnessVersion`,
@@ -60,10 +81,16 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   one attacker-role coefficient, which should come out near zero. `fit-TAG.txt`, `cells-TAG.tsv` and
   `values-TAG.tsv` are the fit (per-model values with PDF = 5, the noise of a fight, per-cell
   break-evens, and a chi-square test of whether matchup structure exists beyond one value per entry);
-  `throughput-TAG.txt` counts fresh battles. The other settings (`GAUNTLET_PRIOR`, `_RANGE`, `_AGGR`,
-  `_CAP`, `_TAG`, `_MIRROR`) are documented on the class. To refit stored battles without fighting
+  `throughput-TAG.txt` counts fresh battles, and `lsq-TAG.tsv` holds the single-scale values. The other
+  settings (`GAUNTLET_PRIOR`, `_RANGE`, `_AGGR`, `_CAP`, `_CAP_MAX`, `_TAG`, `_MIRROR`, `_ALLIES`) are
+  documented on the class. A battle row records the range it actually opened at (`openingRange`); an
+  assault battle's configured range is stored as 0. To refit stored battles without fighting
   any, set `RUN_GAUNTLET_FIT=1` and `GAUNTLET_IN` (a battles file, or a folder meaning every
   `battles-*.tsv` in it).
+- `HardnessDiagnostics.Hardness_FitsSofteningAcrossRanges` (`RUN_HARDNESS_FIT=1`, same
+  `HARDNESS_ENTRIES`, `HARDNESS_RANGES` default `30|60|120|250|450`) sets the engine's hits to
+  disable against the planner's over a grid of the combining exponent and a softening scale, overall
+  and per range, and lists every cell. 1,089 cells for ten entries in about half an hour.
 - `HardnessDiagnostics` measures how hard each target is for each attacker's weapons: it fires hits
   through the engine's own hit pipeline (hit location, damage roll, armor, `WoundResolver`) at fresh
   copies of the target until it is no longer combat-effective, and reports mean hits to disable,
@@ -88,7 +115,66 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   optional. No battles. The same report prints each squad's options and the curve its effective
   engagement range is the argmax of. Its second fact, `PhiSweep`, rebuilds the scenario at every
   opening range in `PHI_SWEEP` (`"from:to:step"`) and prints each side-A squad's root engagement
-  potential and chosen option: the tool for "does the forecast jump". Set `RUN_PHI_SWEEP=1`.
+  potential and chosen option: the tool for "does the forecast jump". Set `RUN_PHI_SWEEP=1`
+  (`PHI_LEVEL_BREAKS=1` prices the potential's breaks by level for that sweep).
+- More planner switches for every tool that fights battles, all adopted in the game on 2026-11-09:
+  `DUEL_FOLLOW_PLAN=0` turns off the rule that a Normal squad whose Close plan wins, while standing
+  loses, moves at that plan's speed (`DUEL_FOLLOW_ANY_STAY=1` applies it whatever Stay is worth);
+  `DUEL_ROUNDS_WITH_SOLDIERS=0` makes the forecast keep dead soldiers' rounds in the budget; and
+  `DUEL_REMOVAL_NODES` sets the yards between the nodes of the removal fraction per hit (default 50 since 2026-11-10, interpolated linearly; `0` solves every range);
+  `DUEL_CYCLE_GRID` sets the range step in yards on which the removal-rate table solves each soldier's fire cycle (default 1 since 2026-11-10; `0` solves at the exact range);
+  `DUEL_GROUP_SHOOTERS=0` builds one removal-rate term per soldier instead of one per group of interchangeable shooters (grouping is the default since 2026-11-11);
+  `DUEL_CYCLE_NODE_RATIO` sets the range ratio between the nodes at which the fire-cycle search runs, interpolated between them (default `0`, which searches at every yard of `DUEL_CYCLE_GRID`; 1.25 was tried on 2026-11-11 and moved the duels without a speed gain);
+  `DUEL_SHOT_REMOVAL_TABLES=0` makes the live shot evaluator walk the target's hit locations at the exact range instead of reading shared tables (tables are the default since 2026-11-11), and `DUEL_SHOT_REMOVAL_NODES` sets those tables' node spacing in yards (default 10; the forecast's tables keep `DUEL_REMOVAL_NODES`);
+  `DUEL_BURST_TAIL_TOLERANCE` sets the share of a burst's score its remaining rounds may leave out before the burst integral stops (default `1e-4` since 2026-11-12; `0` runs every round to the deep tail, as before);
+  `DUEL_SHARE_REMOVAL_TABLES=0` makes every term and range curve build its own removal-fraction table instead of sharing one per weapon and target location vector (sharing is the default since 2026-11-11); and
+  `DUEL_SCARCITY_MARGIN` sets the factor on the rounds a soldier needs before his rounds are priced
+  (default 1.5; 1 is the rule before). The rate-table and opening-range tools do not read these
+  switches.
+- The duel's `DUEL_SHOT_LOG` also ends with `AIM` lines: aim turns spent and wasted, split into target
+  gone, switched while it stood, and lapsed; the mean distances of switches with the first 20 as
+  samples; and the planner's own reasons for dropping held aims (`RangedTargetSelector.DroppedAimSink`).
+- `ApproachCurveDiagnostics.ApproachCurves_ForecastBesideMeasured` (`RUN_APPROACH_FORECAST`) prints the
+  opening forecast beside a measured curve table; `APPROACH_FIRE` (`planner`, the default, `aimed` or
+  `unaimed`) and `APPROACH_DISCOUNT` (default 1) pick the forecast settings to compare.
+- `OpeningRangeDiagnostics` prints each squad's preferred opening range for a duel scenario, with the
+  opening forecast's net value (expected and unlucky) at a ladder of openings and the assault
+  opening (rule B: the longer preference). Set `RUN_OPENING_RANGE=1` and `OPENING_SCENARIO`. No
+  battles.
+- `ApproachCurveDiagnostics` (the opening-range refactor, `Design/Active/OpeningRangeRefactor.md`).
+  `RUN_APPROACH_CURVES=1` fights a panel of matchups (`APPROACH_PANEL`) at a ladder of forced assault
+  openings (`APPROACH_RANGES`, `APPROACH_SEEDS`) and writes casualties, holds, contact and rounds left
+  at contact to `approach-curves.tsv`/`.txt` after every point (8.5 hours for the default panel; the
+  phase 0 result is in `GauntletResults/approach-phase0`). `RUN_APPROACH_FORECAST=1` fights nothing:
+  it prints the grid-free opening forecast beside a measured tsv (`APPROACH_MEASURED`, default the
+  phase 0 one), with `APPROACH_FIRE=aimed|unaimed`, `APPROACH_AMMO=0` and `APPROACH_BREAKS=hazard`
+  to try the variants, and after each matchup the measured best opening beside both models'
+  preferences; about a second. `APPROACH_TRACE=matchup:range` (for example `pdf-v-gs:100`) also
+  writes every squad's forecast at that point turn by turn to `approach-trace.txt`.
+- `ShotAuditDiagnostics` sets the planner's removal model against the engine. `RUN_SHOT_AUDIT=1` with
+  `SHOT_AUDIT_SCENARIO` (duel syntax) and `SHOT_AUDIT_SEEDS` fights the battles on one thread with
+  `ShootAction.Observer` set and, per side and range band, compares actual hits with the engine's own
+  expectation at the total it rolled, at a full aim, and at a full aim on a still target, beside the
+  aim bonus the shots actually had. `RUN_HITS_TO_KILL=1` with `HITS_TO_KILL_SCENARIO`
+  (`"shooter vs target @ range"`) fires hits through the engine's wound rules at fresh targets and
+  sets hits per take-out against the planner's removal per hit. Output in `SHOT_AUDIT_OUT`.
+  `HITS_TO_KILL_MELEE=1` uses the attacker's primary melee weapon instead (the range is ignored).
+- `ForecastAgainstBattleDiagnostics` compares the engagement potential's root forecasts with what
+  happens in the battle. Set `RUN_FORECAST_AUDIT=1`, `FORECAST_AUDIT_SCENARIO` (duel syntax) and
+  `FORECAST_AUDIT_SEEDS`; it reports, per side and range band, the share of the enemy (and of
+  itself) each side's forecast expects to lose in the next turn against the share actually lost, and
+  the first planning turn's forecast followed over its horizon (cumulative losses, broken share)
+  against the battle. A FRONTAGE table follows: for each turn a side lands melee strikes, counted from
+  its first, the distinct strikers and defenders struck against both sides' able soldiers, and per
+  striker the strikes planned, hits landed and moved-penalty share (the evidence for
+  `MeleeStrikeEstimator.ContactStrikersPerDefender`). The FROM TURN 1 table also gives each side's own
+  forecast break chance against the share of its starting value routed by then (rows past the
+  forecast's horizon say nothing). MORALE CHECKS sets every live morale check
+  (`BattleMoraleService.CheckObserver`) beside the forecast's `BreakHazard` at the same inputs;
+  CADENCE AND LEADERS counts checks per squad and when leaders fall. CONTINUATIONS gives, per range
+  band, the root states' Stay and Close values, what the Close forecast expects, and how often the
+  squad advanced. `FORECAST_AUDIT_TRACE=1` writes the first battle's first squad's root forecasts,
+  lane by lane and turn by turn, to `forecast-trace.txt`. Output in `FORECAST_AUDIT_OUT`.
 - `MarineVersusPdfDuelDiagnostics` is the first one-marine-against-N duel, superseded by the duel tool
   and kept for reference.
 
@@ -118,8 +204,13 @@ version 3 carry about ×1.15 in force ratio toward side A.
 - The ladder's probe cache has no code key; delete `probes-*.tsv` after any battle-relevant code
   change. The gauntlet's code hash is the byte hash of `OnlyWar.Battles.dll`, which is too strict (an
   attribute changes it) and too loose (it ignores `Runtime` and `Domain`).
-- All calibration runs use one start range (200 yards), open ground and no line of sight. Terrain
-  will need a rerun.
+- v1 runs use one start range (200 yards); v2 runs open at the assault range. All use open ground and
+  no line of sight, so terrain will need a rerun. v1 runs also deployed burrowers (today only the
+  Ravener has the Burrow ability) normally, where the game has them erupt beside the enemy; v2's
+  assault mode places them as the game does.
+- Precision weights alone do not suit a single-scale fit: on the `*9` cells the precision-weighted
+  chi-square was 168 times its degrees of freedom, so the matchups, not the battles, set the spread.
+  Hence the τ in the single-scale weights.
 - Small forces behave differently from large ones; measure with full-size squads. A side of one to
   three monsters is close to all-or-nothing (probit σ about 0.75 against 0.1–0.2 for infantry).
 
@@ -138,8 +229,11 @@ fire-cycle progress. `RUN_PURSUIT_SCALE_TRACE=1` enables them; each writes a sum
 `ScenarioTraceDiagnostics` (moved from `OnlyWar.Tests/Turns` on 2026-10-04) generates the opening
 "Promised World" scenario across several seeds and runs each sector forward with an idle player.
 `RUN_SCENARIO_TRACE=1` writes per-seed traces and a combined CSV to
-`%TEMP%\GodotOnlyWar\scenario-trace`; `SCENARIO_TRACE_SEEDS=1` narrows the seeds (seed 1 alone is
-about 17 minutes). `RUN_POCKET_DUMP=1` runs the Imperial-pocket probe. Both facts are also tagged
+`%TEMP%\GodotOnlyWar\scenario-trace`, or the folder `SCENARIO_TRACE_OUT` names;
+`SCENARIO_TRACE_SEEDS=1` narrows the seeds (seed 1 alone is about 17 minutes).
+`SCENARIO_TRACE_TURNS=0` stops after generation, so the trace shows only generation's battles, in
+under 10 minutes a seed. `SCENARIO_TRACE_SMALL=1` uses the small sector of the save round-trip tests,
+and `SCENARIO_TRACE_CHAPTER` sets the chapter name. `RUN_POCKET_DUMP=1` runs the Imperial-pocket probe. Both facts are also tagged
 `Category=Slow`. They use `TestGeneration` and `TestPersonnelComposition`, linked from
 `OnlyWar.Tests/Fixtures`.
 

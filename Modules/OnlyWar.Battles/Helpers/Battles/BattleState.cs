@@ -117,7 +117,8 @@ namespace OnlyWar.Battles
 		{
 			List<BattleSoldier> soldiers = squads.SelectMany(squad => squad.Soldiers).ToList();
 			return new BattleSideState(profile,
-				soldiers.Sum(soldier => soldier.EffectiveBattleValue), soldiers.Count);
+				// Strategic value: the side's starting strength as the strategic layer counts it.
+				soldiers.Sum(soldier => soldier.Soldier.StrategicValue), soldiers.Count);
 		}
 
 		// Helper method to get a soldier by ID

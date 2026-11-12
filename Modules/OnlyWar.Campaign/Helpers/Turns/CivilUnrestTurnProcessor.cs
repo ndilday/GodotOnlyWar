@@ -306,7 +306,7 @@ namespace OnlyWar.Campaign.Turns
                         || rf.PlanetFaction.Faction.IsPlayerFaction))
                 .SelectMany(rf => rf.LandedSquads)
                 .SelectMany(squad => squad.Members)
-                .Sum(member => (long)member.Template.BattleValue);
+                .Sum(member => (long)member.StrategicValue);
             return strength;
         }
 

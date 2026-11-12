@@ -138,10 +138,16 @@ ahead of the path breaks first-token matching.
 
 ## Build & test
 
-- `dotnet` runs through the **PowerShell** tool. One invocation at a time, foreground,
-  allowed to block until it returns. Never overlap invocations and never
-  background-and-poll them — concurrent runs lock `bin/obj` artifacts and testhost, which
-  reads as a hang.
+- `dotnet` runs through the **PowerShell** tool, foreground, allowed to block until it returns.
+  What must not overlap is anything that WRITES a project's `bin/obj`: two builds, or two test
+  runs that build, of the same project lock each other's artifacts and testhost (it reads as a
+  hang, and it once came from several agents running suites at the same time). A `--no-build`
+  run only reads `bin`, so it may run beside another `--no-build` run, such as a long gauntlet
+  in the background (user, 2026-10-26). While a background run holds a project's DLLs, do not
+  build THAT project; build it to another folder INSIDE the repo
+  (`dotnet build Tools\OnlyWar.Diagnostics -o Tools\OnlyWar.Diagnostics\bin\side`) and run
+  `dotnet test` on the copy's DLL. Not the scratchpad: the tests find `Database\OnlyWar.s3db` by
+  walking up from the DLL's folder. Timings taken beside a background run are not evidence (see the idle rule).
 - Keep output small: `--nologo -v q`. Build once, then `dotnet test --no-build`.
 - **Pass environment variables with `dotnet test -e NAME=value`, never a PowerShell
   `$env:NAME = "…";` prefix.** The prefix takes first-token position and breaks the allow
@@ -176,6 +182,31 @@ ahead of the path breaks first-token matching.
   the load than the tests). Nobody has timed one unfiltered run since 2026-08-08 (1709
   tests, 10m54s idle; 22m4s for 1679 at commit `0dcc7d2`). Run the two halves separately —
   you almost never want the slow half.
+- **The slow half took 26m27s for 12 tests on 2026-11-05**, after the gauntlet's strategic values
+  went into the database, and 54m13s for the same tests earlier that evening; no other run of mine
+  overlapped either, so the difference is unexplained load or variance, not code (fast half: 3686
+  tests, 1m27s). In the 54-minute TRX the top tests were
+  `Governance_IsDeterministicForSeed` 13m, `ScenarioBuilderTests` seed 3 12m and the three
+  `SaveLoadRoundTripTests` about 9m each. Those battles now run on the tactical-value planner with
+  new force sizes, so every duration in the next bullets is older than that. Run the slow half in
+  the background; to name a stuck test, add
+  `--blame-hang --blame-hang-timeout 15m --blame-hang-dump-type none`.
+- **`Governance_IsDeterministicForSeed` took 16m7s ALONE on 2026-11-10**, after the burst-choice
+  memo and one-yard range grid (`PairRemovalTerm.CycleRangeGrid`). Before them it took 45-52m,
+  but always beside another run, so that is not a clean before. A 30-minute
+  `--blame-hang-timeout` kills it under load; use 90m. Large battles (8-10 squads a side) cost
+  1-3 s per turn and dominate the slow half; the planner's per-turn cost, not battle length, is
+  what grew after 2026-11-05. **11m42s alone on 2026-11-11**, after the 50-yard removal nodes,
+  shooter grouping and shared removal tables (Design/Active/CoarseForecastTables.md steps 1-2).
+  Those cut an 8 v 3 squad duel 7x, so most of what is left in this test is not the forecast's
+  removal math. **12m19s alone later that day**, after the `RangeRates` binary search and the shot
+  evaluator's removal tables, which made an 8 v 8 squad duel 1.76x faster per turn: no gain, so
+  this test's time is no longer in battle planning of that kind. Profile the test itself before
+  more planner work aimed at it. **15m22s alone on 2026-11-12**, after the cache-count lock fix and
+  two exact burst memos, which made an 8 v 8 duel 1.43x faster per turn. Alone means no other run
+  of mine; the user's own load was not checked. Its times now spread 11m42s-15m22s with no
+  matching code change, so a single wall clock of this test decides nothing. Compare it by
+  profile shares or call counts instead.
 - Those 13 slow tests are all full sector generation or a save round-trip of one. Durations
   are from a TRX on 2026-09-19, when there were 12:
   `ScenarioBuilderTests` (4: 2m39s on seed 3, 1m34s, 36.9s, 22.2s), `SaveLoadRoundTripTests`

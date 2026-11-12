@@ -8,7 +8,7 @@ namespace OnlyWar.Operations.StrategicCombat
         public const int MaxTacticalActors = 120;
         public const int MaxGeneratedSquads = 24;
 
-        // These strategic thresholds retain the pre-recalculation unit scale. BattleValues are
+        // These strategic thresholds retain the pre-recalculation unit scale. StrategicValues are
         // deliberately compressed to that same scale so garrison growth, force pools, and
         // tactical/strategic handoff decisions remain comparable.
         // Raised from 1500 on 2026-09-18. This is the handoff: at or above it a fight resolves
@@ -24,11 +24,11 @@ namespace OnlyWar.Operations.StrategicCombat
         // commitment and down as the auction adds force above it. Measured on Monody Prime, the
         // smallest strategic battle in a five-week run was 1753 against a defender of 553; under this
         // floor it resolves tactically and can end.
-        public const long MassCombatBattleValueFloor = 3000;
+        public const long MassCombatStrategicValueFloor = 3000;
 
         // Force ratio at which an attack stops being a battle and becomes an overrun: the defence is
         // swept aside and takes total casualties rather than the usual clamped share. The defender is
-        // measured at `battleValue * EntrenchmentMultiplier(level)` - the same entrenchment curve the
+        // measured at `strategicValue * EntrenchmentMultiplier(level)` - the same entrenchment curve the
         // fight itself uses, so works are exactly as protective here as they are anywhere else.
         //
         // This exists because the 0.75 loss clamp made annihilation unreachable at ANY ratio. Monody
@@ -56,7 +56,7 @@ namespace OnlyWar.Operations.StrategicCombat
         // policy - it is the chaos of an overrun - so every attacker inflicts it. A tuning value, not
         // a conversion: one point of capacity kills one civilian, and the daily ceiling below is what
         // bounds the total. A faction whose numbers ARE its army has no civilians and so loses none.
-        public const double CiviliansPerBattleValue = 1.0;
+        public const double CiviliansPerStrategicValue = 1.0;
 
         // Ceiling on how much of a region's remaining civilian population one day of rampage can
         // kill. Without it a large enough horde empties a hive world in a single week.
@@ -101,7 +101,7 @@ namespace OnlyWar.Operations.StrategicCombat
         // Awareness a defender gains of each region an attack staged from, purely by being hit from
         // there: the blow itself reveals where the enemy is massing. This is the reactive path that
         // lets a previously-blind defender size its defensive need against a neighbour the following turn
-        // (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue) even with no listening posts
+        // (FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue) even with no listening posts
         // or recon.
         public const float IntelGainedFromBeingAttacked = 2.0f;
 

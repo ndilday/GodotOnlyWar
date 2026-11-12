@@ -21,7 +21,8 @@ namespace OnlyWar.Battles
         int RangedCoverSquadCount,
         bool AnySquadInMelee,
         bool HasViableDamagingActionRecently,
-        bool CanAnySquadProsecuteMission)
+        bool CanAnySquadProsecuteMission,
+        bool NoSquadHasWayToWin = false)
     {
         /// <summary>Share of the side's starting strength lost so far (1 - RemainingShare).</summary>
         public double LostShareSinceStart => 1.0 - RemainingShare;
@@ -50,7 +51,8 @@ namespace OnlyWar.Battles
         EligibleAndOutmatched,
         EligibleAndLosingExchange,
         EligibleAndUnableToDamage,
-        EligibleAndMissionIncapable
+        EligibleAndMissionIncapable,
+        NoWayToWin
     }
 
     public sealed record BattleForceEvaluationResult(
@@ -131,6 +133,19 @@ namespace OnlyWar.Battles
                 return (
                     VoluntaryWithdrawalDecision.FightingWithdrawal,
                     VoluntaryWithdrawalReason.AlreadyWithdrawing);
+            }
+
+            // Ahead of the thresholds: even an Aggressive force leaves a fight it can neither win
+            // from here nor close, once it is the side losing it. Set only under the experiment
+            // switch (EngagementPotential.NoWayToWinWithdrawal). Without the loss test, Mobs with
+            // no squad in reach left a battle in which they had killed 82% of the marines.
+            if (input.Friendly.NoSquadHasWayToWin
+                && input.Friendly.LostShareSinceStart
+                    > input.Enemy.LostShareSinceStart + ShareTolerance)
+            {
+                return (
+                    VoluntaryWithdrawalDecision.FightingWithdrawal,
+                    VoluntaryWithdrawalReason.NoWayToWin);
             }
 
             if (!threshold.HasValue)
@@ -236,6 +251,7 @@ namespace OnlyWar.Battles
                 "eligible_and_unable_to_damage",
             VoluntaryWithdrawalReason.EligibleAndMissionIncapable =>
                 "eligible_and_mission_incapable",
+            VoluntaryWithdrawalReason.NoWayToWin => "no_way_to_win",
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
         };
     }

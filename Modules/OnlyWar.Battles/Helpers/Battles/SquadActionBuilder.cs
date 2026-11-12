@@ -70,6 +70,7 @@ namespace OnlyWar.Battles
                 _ => WithdrawalRole.None
             };
             squad.LastEngagementOptionKind = decision.Chosen.Kind;
+            squad.NoWayToWinTurns = decision.Chosen.RootNoWayToWin ? squad.NoWayToWinTurns + 1 : 0;
             squad.LastScreenThreatSquadId = decision.Frame.ScreenThreatSquadId;
             squad.LastProtectedSquadId = decision.Frame.ProtectedSquadId;
             ApplyDeclaredMovementState(squad);

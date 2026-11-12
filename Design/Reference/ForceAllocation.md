@@ -99,7 +99,7 @@ every beachhead hostile neighbours on all sides, which then charged each landing
 requirement for enemies it had invited on itself.
 
 Carrying capacity is **not** involved in landing allocation and never was; the spread came from handing
-a flat `UndefendedLandingBattleValue` to region after region ordered by population.
+a flat `UndefendedLandingStrategicValue` to region after region ordered by population.
 
 ## Strategic combat thresholds, and what "contested" means
 

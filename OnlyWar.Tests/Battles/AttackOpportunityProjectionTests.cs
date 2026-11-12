@@ -372,7 +372,7 @@ public sealed class AttackOpportunityProjectionTests
         float rangedSkill = 12,
         int idBase = 96_000)
     {
-        SoldierTemplate pursuerTemplate = new(
+        SoldierTemplate pursuerTemplate = new TestSoldierTemplate(
             idBase + 1,
             TestModelFactory.HumanSpecies,
             "Projection Pursuer",
@@ -381,8 +381,8 @@ public sealed class AttackOpportunityProjectionTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 20);
-        SoldierTemplate quarryTemplate = new(
+            strategicValue: 20);
+        SoldierTemplate quarryTemplate = new TestSoldierTemplate(
             idBase + 2,
             TestModelFactory.HumanSpecies,
             "Projection Quarry",
@@ -391,7 +391,7 @@ public sealed class AttackOpportunityProjectionTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 20);
+            strategicValue: 20);
         Soldier pursuerModel = TestModelFactory.CreateSoldier(
             pursuerTemplate,
             "Projection Pursuer",

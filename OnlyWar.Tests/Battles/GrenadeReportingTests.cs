@@ -195,7 +195,7 @@ public class GrenadeReportingTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, (byte)soldierCount)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, (byte)soldierCount)],
             SquadTypes.None)
         {
             Faction = faction

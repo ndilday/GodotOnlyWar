@@ -191,14 +191,14 @@ public class MissionTargetStrengthTests
         Mission ambush = Assert.Single(generated);
         Assert.Equal(MissionType.Ambush, ambush.MissionType);
         Assert.Equal(0, horde.Garrison);
-        long target = Assert.NotNull(ambush.TargetBattleValue);
+        long target = Assert.NotNull(ambush.TargetStrategicValue);
         Assert.InRange(target, 1L, horde.GetDeployedStrength());
         Assert.Equal(AmbushMissionSizing.MissionSizeBand(target), ambush.MissionSize);
         // The recommendation tracks the generated target in reference squads.
-        const long referenceSquadBattleValue = 100;
+        const long referenceSquadStrategicValue = 100;
         Assert.Equal(
-            (target + referenceSquadBattleValue - 1) / referenceSquadBattleValue,
-            AmbushMissionSizing.RecommendSquads(target, referenceSquadBattleValue));
+            (target + referenceSquadStrategicValue - 1) / referenceSquadStrategicValue,
+            AmbushMissionSizing.RecommendSquads(target, referenceSquadStrategicValue));
     }
 
     // The units bug: the old cap read the enemy's battle value as a troop count and the roll then
@@ -215,7 +215,7 @@ public class MissionTargetStrengthTests
     {
         const long deployed = 3_000;
 
-        long target = AmbushMissionSizing.TargetBattleValue(deployed, margin, roll);
+        long target = AmbushMissionSizing.TargetStrategicValue(deployed, margin, roll);
 
         Assert.InRange(
             target,
@@ -232,17 +232,17 @@ public class MissionTargetStrengthTests
 
         Assert.Equal(
             (long)(deployed * AmbushMissionSizing.MinimumTargetShare),
-            AmbushMissionSizing.TargetBattleValue(deployed, 0.0, 0.0));
+            AmbushMissionSizing.TargetStrategicValue(deployed, 0.0, 0.0));
         Assert.Equal(
             deployed,
-            AmbushMissionSizing.TargetBattleValue(
+            AmbushMissionSizing.TargetStrategicValue(
                 deployed, AmbushMissionSizing.FullIntelligenceMargin, 1.0));
     }
 
     [Fact]
     public void AmbushTarget_WithNothingDeployed_IsZero()
     {
-        Assert.Equal(0L, AmbushMissionSizing.TargetBattleValue(0, 1.0, 0.5));
+        Assert.Equal(0L, AmbushMissionSizing.TargetStrategicValue(0, 1.0, 0.5));
     }
 
     // The same margin and roll catch the same share of any enemy, so the target scales with what
@@ -262,9 +262,9 @@ public class MissionTargetStrengthTests
         Mission largeAmbush = Assert.Single(largeGenerated);
         // Rounding to whole battle value on the small target is the only difference.
         Assert.InRange(
-            largeAmbush.TargetBattleValue.Value,
-            (smallAmbush.TargetBattleValue.Value - 1) * 1_000,
-            (smallAmbush.TargetBattleValue.Value + 1) * 1_000);
+            largeAmbush.TargetStrategicValue.Value,
+            (smallAmbush.TargetStrategicValue.Value - 1) * 1_000,
+            (smallAmbush.TargetStrategicValue.Value + 1) * 1_000);
         Assert.True(largeAmbush.MissionSize > smallAmbush.MissionSize);
     }
 
@@ -281,7 +281,7 @@ public class MissionTargetStrengthTests
                 processor.HandleBeliefIntelligence(ConfirmedBelief(horde), specMissionBudget: 1.0f);
                 Mission ambush = Assert.Single(generated);
                 Assert.Equal(MissionType.Ambush, ambush.MissionType);
-                return ambush.TargetBattleValue.Value;
+                return ambush.TargetStrategicValue.Value;
             })
             .ToArray();
 

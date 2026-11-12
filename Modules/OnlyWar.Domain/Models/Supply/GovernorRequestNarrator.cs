@@ -46,10 +46,10 @@ namespace OnlyWar.Domain.Supply
                 form += " I trust the Chapter to judge the hour wisely.";
             form = $"Governor {governor}: “{form}”";
 
-            decimal completed = request.Commitment.ReferenceBattleValuePerPackage <= 0
+            decimal completed = request.Commitment.ReferenceStrategicValuePerPackage <= 0
                 ? 0
-                : (decimal)request.ProgressBattleValueTime
-                    / request.Commitment.ReferenceBattleValuePerPackage;
+                : (decimal)request.ProgressStrategicValueTime
+                    / request.Commitment.ReferenceStrategicValuePerPackage;
             decimal required = request.Commitment.PackageCount * request.Commitment.ServiceWeeks;
             string deadline = request.Deadline == null
                 ? "unstated"

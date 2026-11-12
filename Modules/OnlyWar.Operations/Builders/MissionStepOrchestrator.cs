@@ -79,7 +79,7 @@ namespace OnlyWar.Operations.Missions
         ///
         /// Both the ambush day and the assault days raise their defenders through the SAME
         /// AssembleDefendingForce call, so the garrison is one force across the week. The ambush's kills
-        /// reach the following days through MissionContext.DefenderBattleValueDestroyed, which that
+        /// reach the following days through MissionContext.DefenderStrategicValueDestroyed, which that
         /// method already deducts from the reserve it mobilises.
         ///
         /// The defenders keep their patrol-detection and preparation contests here, unchanged from an
@@ -98,8 +98,8 @@ namespace OnlyWar.Operations.Missions
                     execution.Random,
                     execution.EntityIds,
                     execution.Rules.Tactics,
-                    context.DefenderBattleValueDestroyed,
-                    context.CurrentMissionBattleValue,
+                    context.DefenderStrategicValueDestroyed,
+                    context.CurrentMissionStrategicValue,
                     execution.Campaign,
                     execution.EngagementElements));
         }

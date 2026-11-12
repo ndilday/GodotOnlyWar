@@ -286,7 +286,7 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void CalculateDefenderBattleValue_WeightsLandedSquadsByBattleValueNotHeadcount()
+    public void CalculateDefenderStrategicValue_WeightsLandedSquadsByStrategicValueNotHeadcount()
     {
         Faction defender = CreateDefaultFaction();
         RegionFaction rf = CreateTargetRegionFaction(defender, population: 1_000, garrison: 50);
@@ -296,16 +296,16 @@ public class FactionStrategyControllerTests
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate),
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate)));
 
-        Assert.Equal(56L, FactionThreatAssessment.CalculateDefenderBattleValue(rf));
+        Assert.Equal(56L, FactionThreatAssessment.CalculateDefenderStrategicValue(rf));
     }
 
     [Fact]
-    public void CalculateDefenderBattleValue_UsesMilitaryStrengthForPopulationIsMilitaryDefenders()
+    public void CalculateDefenderStrategicValue_UsesMilitaryStrengthForPopulationIsMilitaryDefenders()
     {
         Faction defender = CreateNonPlayerFaction();
         RegionFaction rf = CreateTargetRegionFaction(defender, population: 1_000, garrison: 200);
 
-        Assert.Equal(1_000L, FactionThreatAssessment.CalculateDefenderBattleValue(rf));
+        Assert.Equal(1_000L, FactionThreatAssessment.CalculateDefenderStrategicValue(rf));
     }
 
     [Fact]
@@ -329,7 +329,7 @@ public class FactionStrategyControllerTests
         Order strategicOrder = Assert.Single(orders, o => o.Mission is StrategicCombatMission);
         Assert.Empty(strategicOrder.AssignedSquads);
         StrategicCombatMission mission = Assert.IsType<StrategicCombatMission>(strategicOrder.Mission);
-        Assert.True(mission.CommittedBattleValue >= StrategicCombatRules.MassCombatBattleValueFloor);
+        Assert.True(mission.CommittedStrategicValue >= StrategicCombatRules.MassCombatStrategicValueFloor);
         Assert.True(staging.RegionFactionMap[attacker.Id].MilitaryStrength < 50_000);
     }
 
@@ -350,8 +350,8 @@ public class FactionStrategyControllerTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
-             new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 0, 1),
+             OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)],
             // Scout-flagged, because a recon tasking now fields a scout squad and nothing else.
             SquadTypes.Scout);
         Faction attacker = BuildFaction(
@@ -428,11 +428,11 @@ public class FactionStrategyControllerTests
         // smaller than a full 10-BV squad can be generated. Against a near-dead garrison (BV 2)
         // the raw assault budget (2x defender = 4) is ungeneratable, so without the
         // minimum-force-request floor the offensive silently fizzles and the region survives.
-        SoldierTemplate trooper = new(
+        SoldierTemplate trooper = new TestSoldierTemplate(
             50, TestModelFactory.HumanSpecies, "Cult Trooper", 1, 1, false, 0, [], null, 2);
         SquadTemplate lineSquad = new(
             50, "Cult Squad", TestModelFactory.DefaultWeapons, [], TestModelFactory.TestArmor,
-            [new SquadTemplateElement(trooper, 5, 5)], SquadTypes.None);
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(trooper, 5, 5)], SquadTypes.None);
         Faction attacker = BuildFaction(20, "Cult", isPlayer: false, isDefault: false, GrowthType.Conversion,
             new Dictionary<int, SquadTemplate> { [lineSquad.Id] = lineSquad });
         Faction defender = CreateDefaultFaction();
@@ -448,10 +448,10 @@ public class FactionStrategyControllerTests
         List<Order> orders = new FactionStrategyController(new StaticRNG()).GenerateFactionOrders(attacker, sector);
 
         Order assault = Assert.Single(orders, o => o.Mission.MissionType == MissionType.Advance);
-        long generatedBattleValue = assault.AssignedSquads
-            .Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
+        long generatedStrategicValue = assault.AssignedSquads
+            .Sum(s => s.Members.Sum(m => (long)m.StrategicValue));
         Assert.Equal(10, attacker.MinimumForceRequest);
-        Assert.True(generatedBattleValue >= attacker.MinimumForceRequest);
+        Assert.True(generatedStrategicValue >= attacker.MinimumForceRequest);
     }
 
     [Fact]
@@ -709,7 +709,7 @@ public class FactionStrategyControllerTests
         RegionFaction target = CreateTargetRegionFaction(player, population: 1_000, garrison: 100);
         var offensive = Offensive(target, attackForce: 100_000, estimatedDefenderBv: 100, reward: 1_000);
 
-        Assert.False(FactionOffensiveOrderBuilder.ShouldUseStrategicCombat(attacker, offensive, committedBattleValue: 100_000));
+        Assert.False(FactionOffensiveOrderBuilder.ShouldUseStrategicCombat(attacker, offensive, committedStrategicValue: 100_000));
     }
 
     [Fact]
@@ -946,28 +946,28 @@ public class FactionStrategyControllerTests
     // off raw Garrison came out at zero for every revealed non-Imperial faction. Sizing it off
     // GetDeployedStrength (which resolves through MilitaryStrength) is what makes a hive defend itself.
     [Fact]
-    public void RequiredDefensiveBattleValue_HordeWithNoGarrison_IsStillNonZero()
+    public void RequiredDefensiveStrategicValue_HordeWithNoGarrison_IsStillNonZero()
     {
         RegionFaction horde = CreateTargetRegionFaction(CreateNonPlayerFaction(), population: 10_000);
 
         Assert.Equal(0, horde.Garrison);
         Assert.True(horde.GetDeployedStrength() > 0, "a horde's strength lives in Population");
         Assert.True(
-            FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(horde) > 0,
+            FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue(horde) > 0,
             "a region with fielded troops must hold some of them back to defend itself");
     }
 
     // With nothing visible next door the threat term contributes nothing, so the reserve is exactly the
     // floor. This is what stops an interior or blind region from materialising no defence at all.
     [Fact]
-    public void RequiredDefensiveBattleValue_WithNoVisibleThreat_FallsBackToTheFloor()
+    public void RequiredDefensiveStrategicValue_WithNoVisibleThreat_FallsBackToTheFloor()
     {
         RegionFaction quiet = CreateTargetRegionFaction(CreateNonPlayerFaction(), population: 10_000);
 
         long expected = (long)(quiet.GetDeployedStrength()
             * FactionThreatAssessment.MinimumDefensiveReserveFraction);
 
-        Assert.Equal(expected, FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(quiet));
+        Assert.Equal(expected, FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue(quiet));
     }
 
     // --- Feeding as a planned tasking (Design/Reference/ConsumptionFeedingAsMission.md) ---
@@ -996,8 +996,8 @@ public class FactionStrategyControllerTests
         // what is left of the deployed strength and nothing more.
         long reserve = (long)(regionFaction.GetDeployedStrength()
             * FactionThreatAssessment.MinimumDefensiveReserveFraction);
-        Assert.Equal(regionFaction.GetDeployedStrength() - reserve, mission.CommittedBattleValue);
-        Assert.True(mission.CommittedBattleValue < regionFaction.GetDeployedStrength(),
+        Assert.Equal(regionFaction.GetDeployedStrength() - reserve, mission.CommittedStrategicValue);
+        Assert.True(mission.CommittedStrategicValue < regionFaction.GetDeployedStrength(),
             "the swarm must never commit its whole deployed strength to feeding");
     }
 
@@ -1038,8 +1038,8 @@ public class FactionStrategyControllerTests
         {
             TargetRegion = target.Region,
             TargetFaction = target,
-            EstimatedDefenderBattleValue = estimatedDefenderBv,
-            DefenderBattleValue = estimatedDefenderBv,
+            EstimatedDefenderStrategicValue = estimatedDefenderBv,
+            DefenderStrategicValue = estimatedDefenderBv,
             Reward = reward
         };
     }

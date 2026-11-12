@@ -311,17 +311,17 @@ namespace OnlyWar.Campaign.Turns
             if (chance < zScore)
             {
                 double margin = zScore - chance;
-                long targetBattleValue = AmbushMissionSizing.RollTargetBattleValue(
+                long targetStrategicValue = AmbushMissionSizing.RollTargetStrategicValue(
                     enemyRegionFaction.GetDeployedStrength(), margin, _turn.Random);
                 // A cell with no deployed fighters has nobody in it to ambush.
-                if (targetBattleValue <= 0) return;
+                if (targetStrategicValue <= 0) return;
                 int size = Math.Max((int)margin, 1);
                 Mission hiddenCellAmbush = new Mission(
                     _turn.Identity.GetNextMissionId(),
                     MissionType.Extermination,
                     enemyRegionFaction,
                     size,
-                    targetBattleValue);
+                    targetStrategicValue);
                 enemyRegionFaction.Region.SpecialMissions.Add(hiddenCellAmbush);
                 _specialMissions.Add(hiddenCellAmbush);
             }
@@ -331,15 +331,15 @@ namespace OnlyWar.Campaign.Turns
         // ambush catches (AmbushMissionSizing). Nothing deployed means nothing to catch.
         private void GenerateAmbushMission(RegionFaction enemyRegionFaction, double intelligenceMargin)
         {
-            long targetBattleValue = AmbushMissionSizing.RollTargetBattleValue(
+            long targetStrategicValue = AmbushMissionSizing.RollTargetStrategicValue(
                 enemyRegionFaction.GetDeployedStrength(), intelligenceMargin, _turn.Random);
-            if (targetBattleValue <= 0) return;
+            if (targetStrategicValue <= 0) return;
             Mission ambush = new Mission(
                 _turn.Identity.GetNextMissionId(),
                 MissionType.Ambush,
                 enemyRegionFaction,
-                AmbushMissionSizing.MissionSizeBand(targetBattleValue),
-                targetBattleValue);
+                AmbushMissionSizing.MissionSizeBand(targetStrategicValue),
+                targetStrategicValue);
             enemyRegionFaction.Region.SpecialMissions.Add(ambush);
             _specialMissions.Add(ambush);
         }

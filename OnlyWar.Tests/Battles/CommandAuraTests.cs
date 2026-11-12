@@ -50,7 +50,7 @@ public class CommandAuraTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(soldierTemplate, 0, (byte)soldierCount)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(soldierTemplate, 0, (byte)soldierCount)],
             squadType);
         Squad squad = new(templateId, name, null, squadTemplate);
         for (int i = 0; i < soldierCount; i++)

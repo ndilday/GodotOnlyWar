@@ -102,6 +102,8 @@ public sealed class PreparedShotRateTests
     /// The product owner's rule (2026-10-11): rounds are scarce only when the shooter's share of the
     /// enemy battle value would outlast them at his fastest pace. The same ten rounds are plenty
     /// against one man and short against a host, and only the host makes the shooter thrifty.
+    /// Since 2026-11-09 the need carries a margin (<see cref="RangedTargetSelector.ScarcityMargin"/>,
+    /// 1.5): rounds that only just cover the work are already a little scarce.
     /// </summary>
     [Fact]
     public void TheSameRoundsAreScarceOnlyWhenTheWorkOutlastsThem()
@@ -111,12 +113,15 @@ public sealed class PreparedShotRateTests
         Fixture host = CreateFixture(
             distance: 60, targetSpeed: 0, typedAmmunition: true, hordeSize: Horde);
         host.Weapon.ReserveAmmo = 0;
+        float margin = RangedTargetSelector.ScarcityMargin;
 
         Assert.Equal(0f, oneMan.StandingScarcity());
         Assert.True(host.StandingScarcity() > 0.5f);
         Assert.Equal(1f, RangedTargetSelector.Scarcity(0, 100, 1));
-        Assert.Equal(0f, RangedTargetSelector.Scarcity(10, 100, 10));
-        Assert.Equal(0.5f, RangedTargetSelector.Scarcity(10, 100, 5), 4);
+        // 100 work at 10 a round needs 10 rounds; with the margin, 10 x margin.
+        Assert.Equal(0f, RangedTargetSelector.Scarcity(10 * margin, 100, 10));
+        Assert.Equal(1f - (1f / margin), RangedTargetSelector.Scarcity(10, 100, 10), 4);
+        Assert.Equal(1f - (10f / (20f * margin)), RangedTargetSelector.Scarcity(10, 100, 5), 4);
     }
 
     /// <summary>
@@ -273,7 +278,7 @@ public sealed class PreparedShotRateTests
         int hordeSize = 0)
     {
         const int idBase = 98_400;
-        SoldierTemplate shooterTemplate = new(
+        SoldierTemplate shooterTemplate = new TestSoldierTemplate(
             idBase + 1,
             TestModelFactory.HumanSpecies,
             "Rate Shooter",
@@ -282,8 +287,8 @@ public sealed class PreparedShotRateTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 20);
-        SoldierTemplate targetTemplate = new(
+            strategicValue: 20);
+        SoldierTemplate targetTemplate = new TestSoldierTemplate(
             idBase + 2,
             TestModelFactory.HumanSpecies,
             "Rate Target",
@@ -292,7 +297,7 @@ public sealed class PreparedShotRateTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 20);
+            strategicValue: 20);
         Soldier shooterModel = TestModelFactory.CreateSoldier(
             shooterTemplate,
             "Rate Shooter",

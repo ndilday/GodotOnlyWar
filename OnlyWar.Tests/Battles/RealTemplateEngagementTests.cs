@@ -64,6 +64,38 @@ public class RealTemplateEngagementTests
     private const int InsurrectionistMobSquadTemplateId = 36;
     // 1 Sergeant + 9 Tactical Marines.
     private const int TacticalSquadTemplateId = 1;
+    // One Melee Carnifex.
+    private const int MeleeCarnifexSquadTemplateId = 29;
+    // Tyrant Guard: melee bodyguards.
+    private const int TyrantGuardSquadTemplateId = 30;
+
+    /// <summary>
+    /// XIBARRUS ZETA REGRESSION (2026-08-04), on real templates since 2026-10-24. Three marine
+    /// squads sprang an ambush on a Broodlord, Tyrant Guard and a Melee Carnifex at ONE YARD and
+    /// lost 29 of 30: the opening range then came from the mid-fight snapshot argmax, whose every
+    /// term falls with range against an enemy with no guns. A gunline must open far enough to shoot
+    /// melee-only monsters before they arrive. Measured 2026-10-24: Tactical against a Carnifex
+    /// holds the field best from 200 yards, and the forecast prefers about 280.
+    /// </summary>
+    [Fact]
+    public void PreferredOpeningRange_AgainstMeleeOnlyMonsters_StandsWellOffContact()
+    {
+        GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
+        Faction tyranids = blob.Factions.Single(faction => faction.Id == TyranidFactionId);
+        Faction imperial = blob.Factions.Single(faction => faction.Id == ImperialFactionId);
+        RNG.Reset(78_000);
+        OnlyWar.Abstractions.IEntityIdAllocator entityIds =
+            new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
+        BattleSquad pdf = CreateSquad(imperial, PdfSquadTemplateId, entityIds);
+        BattleSquad carnifex = CreateSquad(tyranids, MeleeCarnifexSquadTemplateId, entityIds);
+        BattleSquad guard = CreateSquad(tyranids, TyrantGuardSquadTemplateId, entityIds);
+
+        int range = pdf.GetPreferredOpeningRange([carnifex, guard], [pdf]);
+
+        _output.WriteLine($"PDF preferred opening range against a Carnifex and Tyrant Guard: {range}");
+        // The monsters close at 7-8 yards a turn: 24 is three turns of fire before they arrive.
+        Assert.True(range >= 24, $"a PDF line opened {range} yards from melee-only monsters");
+    }
 
     // Meeting-engagement distances, from long rifle range down to within one move of contact.
     private static readonly int[] Separations = [300, 150, 60, 20, 6];
@@ -122,7 +154,7 @@ public class RealTemplateEngagementTests
                 EngagementOptionEvaluation hold = decision.Candidates.Single(
                     candidate => candidate.Kind == EngagementOptionKind.Hold);
                 float teamValue = team.Soldiers.Sum(
-                    soldier => soldier.Soldier.Template.BattleValue);
+                    soldier => soldier.Soldier.StrategicValue);
                 Assert.True(
                     decision.Chosen.Score - hold.Score <= 0.02f * teamValue,
                     $"a doomed autocannon team's {decision.Chosen.Kind} stood out from holding at "
@@ -543,7 +575,6 @@ public class RealTemplateEngagementTests
                 + $"role={candidate.RoleTerm:F3} "
                 + $"morale={candidate.MoralePotentialValue:F3} "
                 + $"command={candidate.CommandPotentialValue:F3} "
-                + $"commitment={candidate.ContactCommitmentCost:F3} "
                 + $"actions=[{string.Join(",", (candidate.RootActions ?? [])
                     .GroupBy(action => action.Kind)
                     .Select(group => $"{group.Key}x{group.Count()}"))}]"));

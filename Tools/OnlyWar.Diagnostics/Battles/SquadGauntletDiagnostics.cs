@@ -28,11 +28,14 @@ namespace OnlyWar.Diagnostics.Battles;
 /// matter beyond what one number per entry explains. Gated by RUN_GAUNTLET.
 ///
 /// Design. A cell is one entry against one reference (never an entry against itself). Stage 1 fights
-/// every cell at five force ratios, the prior ratio times 1/4, 1/2, 1, 2 and 4, 8 seeds each. Each
-/// cell's probit is then fitted on those battles, and stage 2 fights three more ratios per cell, where
-/// the fit predicts that A holds the field 25%, 50% and 75% of the time, 16 seeds each. A cell whose
-/// stage-1 battles were all one-sided has no such fit, so stage 2 steps outward from the grid by
-/// factors of 4 instead, up to the model cap. Ratios are realized as whole squads (a of A against b of
+/// every cell at five force ratios, the prior ratio times 1/4, 1/2, 1, 2 and 4, 8 seeds each. Stage 2
+/// runs in rounds (2026-10-25): each round refits every cell and the single scale on all the battles so
+/// far, and gives every unresolved cell 4 more seeds at three sizes, where its own probit puts A's
+/// result at 25%, 50% and 75%, or, for a cell with no usable probit (one-sided, extrapolated), around
+/// the break-even the single scale predicts from both squads' other matchups. A cell is resolved when
+/// its break-even's standard error falls under GAUNTLET_TARGET_SE, or when the prediction lies more
+/// than a factor of two beyond the largest battle the cap allows; the fit then uses its battles as a
+/// bound (censored least squares). Ratios are realized as whole squads (a of A against b of
 /// B), at most GAUNTLET_CAP models a side, preferring small battles. All the battles of a stage run
 /// in one pool, largest first, so a long battle never leaves cores idle behind it.
 ///
@@ -40,14 +43,26 @@ namespace OnlyWar.Diagnostics.Battles;
 ///   GAUNTLET_ENTRIES  '|'-separated "key=spec", one squad each in SquadDuelDiagnostics syntax (for
 ///                     example "pdf=34|hyb=26|tac=1|ork=39"). A squad with no n= is built at its
 ///                     template maximum. Do not use x= here.
-///   GAUNTLET_REFS     comma-separated entry keys that act as references (for example "pdf,hyb").
+///   GAUNTLET_PANEL    comma-separated entry keys forming the panel (Design/Active/GauntletV2.md section 1):
+///                     every entry fights every panel squad of ANOTHER side, so panel squads also fight
+///                     each other. Takes precedence over GAUNTLET_REFS.
+///   GAUNTLET_ALLIES   faction ids that share a side, '|'-separated groups of '+'-joined ids (default
+///                     "0+1": PDF with Space Marines; every other faction is its own side). Used by
+///                     the panel design only.
+///   GAUNTLET_REFS     the v1 design: comma-separated entry keys that every entry fights, whatever its
+///                     side (for example "pdf,hyb").
 ///   GAUNTLET_PRIOR    optional "key=value|..." prior per-model value of an entry; the default is the
 ///                     summed template Battle Value per model. It only places the stage-1 ratios.
-///   GAUNTLET_REFINE   extra rounds of stage 2's placement on all battles so far, 16 seeds a ratio
-///                     (default 0, the fixed design). Use it when cells come back separated.
+///   GAUNTLET_ROUNDS   most stage-2 rounds (default 6); each gives an unresolved cell 4 seeds at
+///                     three sizes.
+///   GAUNTLET_TARGET_SE standard error of ln(break-even) at which a cell needs no more rounds
+///                     (default 0.2; the matchup sd tau was 0.58 on the *9 data).
 ///   GAUNTLET_MIRROR   1 (default) fights both orientations of a pair of references, so A-versus-B and
 ///                     B-versus-A are separate cells; 0 keeps only the first.
-///   GAUNTLET_RANGE    starting range in yards (default 200).
+///   GAUNTLET_RANGE    "assault" (default): each battle opens where a reciprocal assault between the two
+///                     forces would, with that setup's reallocation, burrowers and Attacker profiles
+///                     (SquadDuelDiagnostics.AssaultOpeningRange); or a fixed range in yards, the v1
+///                     design (the *9 runs used 200).
 ///   GAUNTLET_AGGR     Aggression for both sides (default Aggressive).
 ///   GAUNTLET_ROLES    which side is the battle's Attacker (BattleRole.Attacker, placed at x = 0): "alternate"
 ///                     (default; A attacks on odd seeds, B on even seeds, so each cell and ratio is balanced),
@@ -55,9 +70,11 @@ namespace OnlyWar.Diagnostics.Battles;
 ///                     squads are built in slot order, so a swapped battle is the same battle with the
 ///                     labels exchanged. The fit reports the attacker role as a coefficient (see below).
 ///   GAUNTLET_CAP      most models allowed on one side (default 200).
+///   GAUNTLET_CAP_MAX  the cap a cell gets once its stage-1 battles come back one-sided (default 1000), so a
+///                     single monster can be fought against enough cheap squads to find its break-even.
 ///   GAUNTLET_TAG      name for this run's output files (default "run").
 ///   GAUNTLET_OUT      output folder (default %TEMP%\GodotOnlyWar\gauntlet).
-///   DUEL_WORKERS      battles run at once (default 8).
+///   DUEL_WORKERS      battles run at once (default half the logical processors).
 ///
 /// Every battle is one row of battles-TAG.tsv, appended as it finishes and keyed by the rules
 /// database hash, a code hash (OnlyWar.Battles.dll plus SquadDuelDiagnostics.HarnessVersion, so a
@@ -84,8 +101,12 @@ namespace OnlyWar.Diagnostics.Battles;
 public class SquadGauntletDiagnostics
 {
     private const int Stage1Seeds = 8;
-    private const int Stage2Seeds = 16;
-    private const double OneSidedScore = 0.85;
+    // Stage 2 rounds (2026-10-25): seeds a size gets per round (even, so the roles stay balanced), the
+    // most rounds, and the standard error of ln(break-even) at which a cell is resolved. tau, the
+    // matchup sd, was 0.58 on the *9 data, so a cell sharper than 0.2 adds little to the fit.
+    private const int RoundSeeds = 4;
+    private const int DefaultRounds = 6;
+    private const double DefaultTargetSe = 0.2;
     private const double StepFactor = 4.0;
     private const double ProbeZ = 0.6744897501960817;
     private static readonly double[] Stage1Multipliers = [0.25, 0.5, 1.0, 2.0, 4.0];
@@ -123,11 +144,11 @@ public class SquadGauntletDiagnostics
 
         BattleRow first = rows[0];
         string header = $"Refit of {input}: {rows.Count} of {all.Count} stored battles; db {first.Db}, code {first.Code}, "
-            + $"range {first.Range} yd, aggression {first.Aggression}.{Environment.NewLine}{note}";
+            + $"range {SquadDuelDiagnostics.RangeText(first.Range)}, aggression {first.Aggression}.{Environment.NewLine}{note}";
         GauntletAnalysis.WriteReport(GauntletAnalysis.Analyze(rows), directory, tag, header);
     }
 
-    private sealed record Entry(string Key, string Spec, int Models, double Prior);
+    private sealed record Entry(string Key, string Spec, int Models, double Prior, int Side);
 
     private sealed class Cell
     {
@@ -135,8 +156,31 @@ public class SquadGauntletDiagnostics
         public Entry A;
         public Entry B;
 
+        /// <summary>Most models a side may field in this cell; raised for one-sided cells (GAUNTLET_CAP_MAX).</summary>
+        public int Cap;
+
         /// <summary>The (a, b) squad counts to fight and how many seeds each gets.</summary>
         public List<(int A, int B, int Seeds)> Points = [];
+
+        /// <summary>No more stage-2 rounds: its break-even is sharp enough, or beyond any allowed size.</summary>
+        public bool Resolved;
+
+        /// <summary>Why the cell was resolved, for the report.</summary>
+        public string ResolvedBy;
+
+        /// <summary>Adds <paramref name="seeds"/> more seeds at (a, b), after any it already has.</summary>
+        public void AddSeeds(int a, int b, int seeds)
+        {
+            int at = Points.FindIndex(point => point.A == a && point.B == b);
+            if (at < 0)
+            {
+                Points.Add((a, b, seeds));
+            }
+            else
+            {
+                Points[at] = (a, b, Points[at].Seeds + seeds);
+            }
+        }
 
         public void AddPoint(int a, int b, int seeds)
         {
@@ -164,6 +208,8 @@ public class SquadGauntletDiagnostics
         private readonly string _code;
         private readonly int _range;
         private readonly int _cap;
+        private readonly int _capMax;
+        private readonly double _targetSe;
         private readonly Aggression _aggression;
         private readonly string _tag;
         private readonly string _directory;
@@ -179,8 +225,12 @@ public class SquadGauntletDiagnostics
 
         public GauntletRun(string entriesText)
         {
-            _range = SquadDuelDiagnostics.ReadInt("GAUNTLET_RANGE", 200);
+            _range = SquadDuelDiagnostics.ParseRange(
+                Environment.GetEnvironmentVariable("GAUNTLET_RANGE") ?? SquadDuelDiagnostics.AssaultRangeText);
             _cap = SquadDuelDiagnostics.ReadInt("GAUNTLET_CAP", 200);
+            _capMax = System.Math.Max(_cap, SquadDuelDiagnostics.ReadInt("GAUNTLET_CAP_MAX", 1000));
+            _targetSe = double.TryParse(Environment.GetEnvironmentVariable("GAUNTLET_TARGET_SE"), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out double targetSe) ? targetSe : DefaultTargetSe;
             _aggression = SquadDuelDiagnostics.ReadAggression("GAUNTLET_AGGR");
             _roles = RoleModes.Read("GAUNTLET_ROLES", RoleMode.Alternate);
             _tag = Environment.GetEnvironmentVariable("GAUNTLET_TAG") ?? "run";
@@ -217,6 +267,8 @@ public class SquadGauntletDiagnostics
                 }
             }
 
+            Dictionary<int, int> sideOfFaction = ReadAllies(
+                Environment.GetEnvironmentVariable("GAUNTLET_ALLIES") ?? DefaultAllies);
             _entries = [];
             foreach (string text in entriesText.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
@@ -227,25 +279,33 @@ public class SquadGauntletDiagnostics
                 {
                     throw new ArgumentException($"Entry '{key}' must be one squad without x= ('{spec}').");
                 }
-                (int models, int value) = SquadDuelDiagnostics.Measure(_blob, SquadDuelDiagnostics.ParseSide(spec));
+                List<SquadSpec> squads = SquadDuelDiagnostics.ParseSide(spec);
+                (int models, int value) = SquadDuelDiagnostics.Measure(_blob, squads);
                 double prior = priors.TryGetValue(key, out double given) ? given : (double)value / models;
-                _entries.Add(new Entry(key, spec, models, prior));
+                int faction = _blob.Factions.First(f => f.SquadTemplates.ContainsKey(squads[0].TemplateId)).Id;
+                _entries.Add(new Entry(key, spec, models, prior, sideOfFaction.GetValueOrDefault(faction, faction)));
             }
             foreach (string key in priors.Keys.Where(key => _entries.All(entry => entry.Key != key)))
             {
                 throw new ArgumentException($"GAUNTLET_PRIOR names '{key}', which is not an entry.");
             }
 
-            string refText = Environment.GetEnvironmentVariable("GAUNTLET_REFS") ?? "";
+            // PANEL design (v2): every entry fights every panel squad of another side, so the panel
+            // squads also fight one another. REFS design (v1): every entry fights every reference,
+            // whatever its side.
+            string panelText = Environment.GetEnvironmentVariable("GAUNTLET_PANEL");
+            bool panel = !string.IsNullOrWhiteSpace(panelText);
+            string refText = panel ? panelText : Environment.GetEnvironmentVariable("GAUNTLET_REFS") ?? "";
             _refs = refText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
             if (_refs.Count == 0)
             {
-                throw new ArgumentException("GAUNTLET_REFS must name at least one entry key.");
+                throw new ArgumentException("GAUNTLET_PANEL (or GAUNTLET_REFS) must name at least one entry key.");
             }
             foreach (string key in _refs.Where(key => _entries.All(entry => entry.Key != key)))
             {
-                throw new ArgumentException($"GAUNTLET_REFS names '{key}', which is not an entry.");
+                throw new ArgumentException($"{(panel ? "GAUNTLET_PANEL" : "GAUNTLET_REFS")} names '{key}', which is not an entry.");
             }
+            _design = panel ? "panel" : "references";
 
             bool mirror = SquadDuelDiagnostics.ReadInt("GAUNTLET_MIRROR", 1) != 0;
             foreach (Entry a in _entries)
@@ -253,7 +313,7 @@ public class SquadGauntletDiagnostics
                 foreach (string refKey in _refs)
                 {
                     Entry b = _entries.First(entry => entry.Key == refKey);
-                    if (a.Key == b.Key)
+                    if (a.Key == b.Key || (panel && a.Side == b.Side))
                     {
                         continue;
                     }
@@ -261,9 +321,39 @@ public class SquadGauntletDiagnostics
                     {
                         continue;
                     }
-                    _cells.Add(new Cell { Index = _cells.Count, A = a, B = b });
+                    _cells.Add(new Cell { Index = _cells.Count, A = a, B = b, Cap = _cap });
                 }
             }
+            foreach (Entry orphan in _entries.Where(entry => _cells.All(cell => cell.A != entry && cell.B != entry)))
+            {
+                throw new ArgumentException($"Entry '{orphan.Key}' has no opponent: no panel squad is on another side.");
+            }
+        }
+
+        /// <summary>
+        /// Factions that fight on one side and never against each other: the Imperium's PDF (0) and
+        /// Space Marines (1), allied in the game (Sector sets the player and default faction Allied).
+        /// The Tyranids (2) and the Genestealer Cult (3) are hostile to each other in the game, so
+        /// since 2026-10-27 they are separate sides (Design/Active/GauntletV2.md section 1).
+        /// </summary>
+        private const string DefaultAllies = "0+1";
+
+        private readonly string _design;
+
+        /// <summary>Parses GAUNTLET_ALLIES ("0+1|2+3"): each group's factions share the group's first id as their side.</summary>
+        private static Dictionary<int, int> ReadAllies(string text)
+        {
+            Dictionary<int, int> side = [];
+            foreach (string group in text.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                int[] ids = group.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(id => int.Parse(id, CultureInfo.InvariantCulture)).ToArray();
+                foreach (int id in ids)
+                {
+                    side[id] = ids[0];
+                }
+            }
+            return side;
         }
 
         public void Execute()
@@ -289,43 +379,54 @@ public class SquadGauntletDiagnostics
                         cell.AddPoint(a, b, Stage1Seeds);
                     }
                 }
-                List<(int A, int B, int Seeds)>[] stage1 = _cells.Select(cell => cell.Points.ToList()).ToArray();
                 RunStage("stage 1", Tasks(_cells));
 
-                // Stage 2: where each cell's stage-1 fit says the fight is 25%, 50% and 75% for A.
-                foreach (Cell cell in _cells)
-                {
-                    List<BattleRow> rows = RowsOf(cell, stage1[cell.Index]);
-                    foreach ((int a, int b) in PlanStage2(cell, rows, stage1[cell.Index]))
-                    {
-                        cell.AddPoint(a, b, Stage2Seeds);
-                    }
-                }
-                RunStage("stage 2", Tasks(_cells));
-
-                // Optional further rounds of the same placement, on all the battles so far. A cell whose
-                // break-even sits far from the prior is one-sided or only bracketed coarsely after
-                // stage 2, and each round narrows it.
-                int rounds = System.Math.Max(0, SquadDuelDiagnostics.ReadInt("GAUNTLET_REFINE", 0));
+                // Stage 2, in rounds (2026-10-25). Each round refits every cell and the single scale on
+                // all the battles so far, gives every unresolved cell RoundSeeds more seeds at the sizes
+                // its estimate points to, and runs all of them in one pool. A cell is resolved when its
+                // break-even's standard error is under the target, or when the scale puts its break-even
+                // beyond any size the cap allows (it then stays a bound for the fit). Before, stage 2 gave
+                // every cell three sizes at 16 seeds at once, and a one-sided cell stepped blindly outward
+                // by factors of four up to 1000 models a side: 744 Gretchin against 16 Brood Brothers,
+                // hours a battle, still lost.
+                int rounds = System.Math.Max(0, SquadDuelDiagnostics.ReadInt("GAUNTLET_ROUNDS", DefaultRounds));
                 for (int round = 1; round <= rounds; round++)
                 {
-                    foreach (Cell cell in _cells)
+                    List<BattleRow> all = _cells.SelectMany(cell => RowsOf(cell, cell.Points)).ToList();
+                    Dictionary<string, double> scale = GauntletAnalysis
+                        .Analyze(all, _entries.Select(entry => entry.Key).ToList())
+                        .LeastSquares.Values.ToDictionary(value => value.Key, value => value.U);
+                    int planned = 0;
+                    foreach (Cell cell in _cells.Where(cell => !cell.Resolved))
                     {
-                        List<(int A, int B, int Seeds)> existing = cell.Points.ToList();
-                        foreach ((int a, int b) in PlanStage2(cell, RowsOf(cell, existing), existing))
+                        List<(int A, int B)> next = PlanRound(cell, RowsOf(cell, cell.Points), scale);
+                        foreach ((int a, int b) in next)
                         {
-                            cell.AddPoint(a, b, Stage2Seeds);
+                            cell.AddSeeds(a, b, RoundSeeds);
+                            planned++;
                         }
                     }
-                    RunStage($"refine {round}", Tasks(_cells));
+                    if (planned == 0)
+                    {
+                        break;
+                    }
+                    RunStage($"stage 2 round {round}", Tasks(_cells));
                 }
 
                 (long battlesAfter, long turnsAfter) = SquadDuelDiagnostics.Throughput;
                 List<BattleRow> design = _cells.SelectMany(cell => RowsOf(cell, cell.Points)).ToList();
                 GauntletFit fit = GauntletAnalysis.Analyze(design, _entries.Select(entry => entry.Key).ToList());
-                string header = $"Gauntlet '{_tag}': db {_db}, code {_code}, range {_range} yd, aggression {_aggression}, roles {_roles}, cap {_cap} models.{Environment.NewLine}"
-                    + $"Entries: {string.Join(", ", _entries.Select(e => $"{e.Key}={e.Spec} ({e.Models} models)"))}{Environment.NewLine}"
-                    + $"References: {string.Join(", ", _refs)}.";
+                string rangeText = _range <= SquadDuelDiagnostics.AssaultRange
+                    ? $"assault opening (mean {design.Average(row => row.OpeningRange):N0} yd, "
+                        + $"{design.Min(row => row.OpeningRange)}-{design.Max(row => row.OpeningRange)})"
+                    : $"range {_range} yd";
+                string resolved = string.Join(", ", _cells
+                    .GroupBy(cell => cell.ResolvedBy ?? "unresolved after the last round")
+                    .Select(group => $"{group.Key} {group.Count()}"));
+                string header = $"Gauntlet '{_tag}': db {_db}, code {_code}, {rangeText}, aggression {_aggression}, roles {_roles}, cap {_cap} (raised to {_capMax} for one-sided cells) models.{Environment.NewLine}"
+                    + $"Stage 2 rounds: target se(ln break-even) {_targetSe}; cells {resolved}.{Environment.NewLine}"
+                    + $"Entries: {string.Join(", ", _entries.Select(e => $"{e.Key}={e.Spec} ({e.Models} models, side {e.Side})"))}{Environment.NewLine}"
+                    + $"{(_design == "panel" ? "Panel" : "References")}: {string.Join(", ", _refs)}.";
                 GauntletAnalysis.WriteReport(fit, _directory, _tag, header);
 
                 _clock.Stop();
@@ -346,8 +447,8 @@ public class SquadGauntletDiagnostics
         /// </summary>
         private (int A, int B) Choose(Cell cell, double modelsX)
         {
-            int maxA = System.Math.Max(1, _cap / cell.A.Models);
-            int maxB = System.Math.Max(1, _cap / cell.B.Models);
+            int maxA = System.Math.Max(1, cell.Cap / cell.A.Models);
+            int maxB = System.Math.Max(1, cell.Cap / cell.B.Models);
             double target = System.Math.Clamp(
                 modelsX + System.Math.Log((double)cell.A.Models / cell.B.Models), -System.Math.Log(maxA), System.Math.Log(maxB));
             (int A, int B) best = (1, 1);
@@ -368,47 +469,73 @@ public class SquadGauntletDiagnostics
             return best;
         }
 
-        private List<(int A, int B)> PlanStage2(Cell cell, List<BattleRow> rows, List<(int A, int B, int Seeds)> stage1)
+        /// <summary>
+        /// The sizes one stage-2 round fights for a cell, or none when the cell is resolved.
+        ///
+        /// <para>A cell with a usable probit gets the sizes where it puts A's result at 25%, 50% and
+        /// 75%, as stage 2 always did. A cell without one (one-sided, extrapolated, bracketed, too few
+        /// sizes) is aimed by the single scale fitted to every cell so far: its break-even is predicted
+        /// as u_A - u_B (<paramref name="scale"/>), which the other matchups of both squads pin down,
+        /// kept at least a factor of two past any bound its own battles set. A prediction more than a
+        /// factor of two beyond the largest battle the cap allows resolves the cell as a bound, which
+        /// the fit still uses (GauntletAnalysis.FitLeastSquares).</para>
+        /// </summary>
+        private List<(int A, int B)> PlanRound(Cell cell, List<BattleRow> rows, IReadOnlyDictionary<string, double> scale)
         {
             CellFit fit = GauntletAnalysis.FitCell(cell.A.Key, cell.B.Key, rows);
-            double minX = fit.MinX;
-            double maxX = fit.MaxX;
-            List<double> targets = [];
-
-            bool allA = fit.Points.All(point => point.MeanScore >= OneSidedScore);
-            bool allB = fit.Points.All(point => point.MeanScore <= 1 - OneSidedScore);
-            if (allA || allB)
+            if ((fit.Status == "ok" || fit.Status == "bracketed") && fit.SeX0 <= _targetSe)
             {
-                // No crossing yet: step outward from the grid edge, toward more B if A won everywhere.
-                double edge = allA ? maxX : minX;
-                double direction = allA ? 1 : -1;
-                for (int step = 1; step <= 3; step++)
-                {
-                    targets.Add(edge + direction * step * System.Math.Log(StepFactor));
-                }
-                List<(int A, int B)> outward = [];
-                foreach (double x in targets)
-                {
-                    (int a, int b) = Choose(cell, x);
-                    // At the cap the step lands back on a stage-1 point, which has nothing new to learn.
-                    if (!stage1.Any(point => point.A == a && point.B == b) && !outward.Contains((a, b)))
-                    {
-                        outward.Add((a, b));
-                    }
-                }
-                return outward;
+                Resolve(cell, "sharp");
+                return [];
             }
 
-            double centre = System.Math.Log(cell.A.Prior / cell.B.Prior);
-            double[] z = [-ProbeZ, 0.0, ProbeZ];
+            double half = System.Math.Log(2.0);
             double slack = System.Math.Log(StepFactor);
-            foreach (double zp in z)
+            List<double> targets = [];
+            if (fit.Status == "ok" && fit.Beta < -0.1)
             {
                 // The fit says P(A) = Phi(alpha + beta x), so the score p sits at x = (z_p - alpha) / beta.
-                double x = fit.Fit != null && fit.Beta < -0.1
-                    ? (zp - fit.Alpha) / fit.Beta
-                    : centre - zp / ProbeZ * System.Math.Log(2.0);
-                targets.Add(System.Math.Clamp(x, minX - slack, maxX + slack));
+                foreach (double z in new[] { -ProbeZ, 0.0, ProbeZ })
+                {
+                    targets.Add(System.Math.Clamp((z - fit.Alpha) / fit.Beta, fit.MinX - slack, fit.MaxX + slack));
+                }
+            }
+            else
+            {
+                double? predicted = scale.TryGetValue(cell.A.Key, out double uA) && scale.TryGetValue(cell.B.Key, out double uB)
+                    ? uA - uB
+                    : null;
+                double centre;
+                if (fit.Status == "bracketed")
+                {
+                    centre = fit.X0;
+                }
+                else if (double.IsFinite(fit.LowerX))
+                {
+                    centre = System.Math.Max(predicted ?? fit.LowerX + slack, fit.LowerX + half);
+                }
+                else if (double.IsFinite(fit.UpperX))
+                {
+                    centre = System.Math.Min(predicted ?? fit.UpperX - slack, fit.UpperX - half);
+                }
+                else
+                {
+                    centre = predicted ?? System.Math.Log(cell.A.Prior / cell.B.Prior);
+                }
+
+                // A break-even past the base cap needs bigger battles; one far past the largest the cap
+                // allows is left as a bound.
+                if (centre > Reach(cell, cell.Cap).Max || centre < Reach(cell, cell.Cap).Min)
+                {
+                    cell.Cap = _capMax;
+                }
+                (double minReach, double maxReach) = Reach(cell, cell.Cap);
+                if (centre > maxReach + half || centre < minReach - half)
+                {
+                    Resolve(cell, "beyond reach");
+                    return [];
+                }
+                targets.AddRange([centre - half, centre, centre + half]);
             }
 
             List<(int A, int B)> chosen = [];
@@ -423,6 +550,22 @@ public class SquadGauntletDiagnostics
             return chosen;
         }
 
+        /// <summary>The smallest and largest ln(B models per A model) a cap allows in this cell.</summary>
+        private static (double Min, double Max) Reach(Cell cell, int cap)
+        {
+            int maxA = System.Math.Max(1, cap / cell.A.Models);
+            int maxB = System.Math.Max(1, cap / cell.B.Models);
+            return (
+                System.Math.Log((double)cell.B.Models / (maxA * cell.A.Models)),
+                System.Math.Log((double)(maxB * cell.B.Models) / cell.A.Models));
+        }
+
+        private static void Resolve(Cell cell, string why)
+        {
+            cell.Resolved = true;
+            cell.ResolvedBy = why;
+        }
+
         // ----- Running battles -----
 
         /// <summary>
@@ -431,7 +574,7 @@ public class SquadGauntletDiagnostics
         /// with A defending carries a "|bAtt" suffix, so it can never be confused with one of them.
         /// </summary>
         private string KeyOf(Cell cell, int a, int b, int seed) =>
-            $"{_db}|{_code}|{_range}|{_aggression}|{cell.A.Spec},x={a}|{cell.B.Spec},x={b}|s{seed}"
+            $"{_db}|{_code}|{SquadDuelDiagnostics.RangeText(_range)}|{_aggression}|{cell.A.Spec},x={a}|{cell.B.Spec},x={b}|s{seed}"
             + (_roles.AAttacksOn(seed) ? "" : "|bAtt");
 
         private List<BattleTask> Tasks(List<Cell> cells)
@@ -501,13 +644,18 @@ public class SquadGauntletDiagnostics
                         SquadDuelDiagnostics.ParseSide($"{task.Cell.A.Spec},x={task.A}"),
                         SquadDuelDiagnostics.ParseSide($"{task.Cell.B.Spec},x={task.B}"),
                         _range, task.Seed, _aggression, planningWorkers, aAttacks);
-                    double score = record.Holder == BattleSide.Attacker ? 1.0 : record.Holder == BattleSide.Opposing ? 0.0 : 0.5;
+                    double aLeft = (double)record.ALeft / record.ModelsA;
+                    double bLeft = (double)record.BLeft / record.ModelsB;
+                    double score = BattleRow.ScoreOf(
+                        record.Reason,
+                        record.Holder == BattleSide.Attacker ? 1.0 : record.Holder == BattleSide.Opposing ? 0.0 : 0.5,
+                        aLeft, bLeft);
                     BattleRow row = new(
                         task.Key, task.Cell.A.Key, task.Cell.B.Key, task.Cell.A.Spec, task.Cell.B.Spec,
                         task.A, task.B, record.ModelsA, record.ModelsB, task.Seed,
-                        score, (double)record.ALeft / record.ModelsA, (double)record.BLeft / record.ModelsB,
+                        score, aLeft, bLeft,
                         record.Turns, record.Reason, _db, _code, _range, _aggression.ToString(),
-                        aAttacks ? BattleRow.Attacker : BattleRow.Defender);
+                        aAttacks ? BattleRow.Attacker : BattleRow.Defender, record.OpeningRange);
                     _store[task.Key] = row;
                     lock (_gate)
                     {
@@ -524,6 +672,6 @@ public class SquadGauntletDiagnostics
         private void WriteProgress(string stage, int done, int total) =>
             File.WriteAllText(
                 Path.Combine(_directory, $"progress-{_tag}.txt"),
-                $"{stage}: {done} of {total} fresh battles done after {_clock.Elapsed:hh\\:mm\\:ss}{Environment.NewLine}");
+                $"{stage}: {done} of {total} fresh battles done after {SquadDuelDiagnostics.FormatElapsed(_clock.Elapsed)}{Environment.NewLine}");
     }
 }

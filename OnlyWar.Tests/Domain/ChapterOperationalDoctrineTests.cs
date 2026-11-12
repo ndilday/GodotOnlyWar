@@ -156,7 +156,7 @@ public class ChapterOperationalDoctrineTests
             TestModelFactory.DefaultWeapons,
             new List<SquadWeaponOption>(),
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 10)],
             SquadTypes.Administrative);
         Squad administrative = new("Administrative Pool", null, administrativeTemplate);
         PlayerSoldier character = CreatePlayer("Attached Character");
@@ -200,7 +200,7 @@ public class ChapterOperationalDoctrineTests
             TestModelFactory.DefaultWeapons,
             new List<SquadWeaponOption>(),
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 10)],
             SquadTypes.Administrative,
             FormationMobilityPolicy.MembersOnly)
         {
@@ -238,8 +238,8 @@ public class ChapterOperationalDoctrineTests
             new List<SquadWeaponOption>(),
             TestModelFactory.TestArmor,
             [
-                new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
-                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 9)
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 0, 1),
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 9)
             ],
             SquadTypes.None);
         Squad squad = new("Led Formation", null, template);

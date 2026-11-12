@@ -27,7 +27,7 @@ namespace OnlyWar.Operations.Missions.Ambush
         // caught in the ambush and the troops met on the following days are one garrison rather than two
         // independently generated forces. Nothing extra is needed to reconcile them: this step records
         // its kills through MissionContext.RecordDefenderLosses, and AssembleDefendingForce already
-        // deducts DefenderBattleValueDestroyed from the reserve it mobilises each morning.
+        // deducts DefenderStrategicValueDestroyed from the reserve it mobilises each morning.
         private readonly Func<MissionExecutionContext, float, List<OperationalMissionElement>> _opposingForce;
 
         public PositionAmbushMissionStep() { }
@@ -110,8 +110,8 @@ namespace OnlyWar.Operations.Missions.Ambush
             IEntityIdAllocator entityIds,
             IEngagementElementFactory engagementElements)
         {
-            long targetBattleValue =
-                AmbushMissionSizing.ResolveTargetBattleValue(mission, random);
+            long targetStrategicValue =
+                AmbushMissionSizing.ResolveTargetStrategicValue(mission, random);
 
             // generate opposing force
             var request = new ForceGenerationRequest
@@ -119,7 +119,7 @@ namespace OnlyWar.Operations.Missions.Ambush
                 Faction = enemyFaction.PlanetFaction.Faction,
                 // Intelligence-discovered ambushes persist this concrete budget when the opportunity
                 // is created. A mission without one (a culling) rolls it here instead.
-                TargetBattleValue = targetBattleValue,
+                TargetStrategicValue = targetStrategicValue,
                 Profile = ForceCompositionProfile.AmbushForce
             };
             return ForceGenerator.GenerateForce(request, random, entityIds)

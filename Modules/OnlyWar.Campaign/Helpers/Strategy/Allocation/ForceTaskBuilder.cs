@@ -125,7 +125,7 @@ internal sealed class ForceTaskBuilder
     {
         foreach (RegionFaction threat in states.SelectMany(state => ThreatsFacing(faction, state)).Distinct())
         {
-            threats.Declare(threat, FactionThreatAssessment.CalculateDefenderBattleValue(threat));
+            threats.Declare(threat, FactionThreatAssessment.CalculateDefenderStrategicValue(threat));
         }
     }
 
@@ -500,7 +500,7 @@ internal sealed class ForceTaskBuilder
                     && rf.PlanetFaction.Faction != faction
                     && FactionRelationshipService.AreHostile(
                         faction, rf.PlanetFaction.Faction, planet))
-                .Sum(FactionThreatAssessment.CalculateDefenderBattleValue);
+                .Sum(FactionThreatAssessment.CalculateDefenderStrategicValue);
             if (hostile > 0L) seeds[region] = hostile;
         }
         if (seeds.Count == 0) return [];
@@ -544,7 +544,7 @@ internal sealed class ForceTaskBuilder
     {
         if (offensives.Count == 0) return;
 
-        long scoutSquad = Math.Max(1L, FactionReconPatrolPlanner.CheapestScoutSquadBattleValue(faction));
+        long scoutSquad = Math.Max(1L, FactionReconPatrolPlanner.CheapestScoutSquadStrategicValue(faction));
 
         // Unscouted targets the faction can carry even if the worst case is true. The estimate on
         // unscouted ground is already an upper bound (FactionOffensiveEvaluator.CautiousDefenderEstimate),
@@ -668,7 +668,7 @@ internal sealed class ForceTaskBuilder
             // The gate is that the region reads as genuinely EMPTY. Because the estimate is coarsened
             // upward, an unscouted region never reads zero, so this cannot become a blind lunge: the
             // defender has to have watched the ground it walks into.
-            bool retakingOpenGround = offensive.EstimatedDefenderBattleValue <= 0L;
+            bool retakingOpenGround = offensive.EstimatedDefenderStrategicValue <= 0L;
             if (reconOnly && !retakingOpenGround) continue;
 
             long squadFloor = SquadFloor(faction);
@@ -685,7 +685,7 @@ internal sealed class ForceTaskBuilder
             long assaultSaturation = Math.Max(
                 carryPoint,
                 (long)Math.Ceiling(
-                    offensive.EstimatedDefenderBattleValue
+                    offensive.EstimatedDefenderStrategicValue
                     * StrategicCombatRules.EntrenchmentMultiplier(
                         RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment))
                     * StrategicCombatRules.OverrunForceRatio));
@@ -743,12 +743,12 @@ internal sealed class ForceTaskBuilder
             // the attacker occupies: that is there so a faction will engage a neighbour it can plainly
             // see, and it made local targets well known enough to raid as a side effect.
             if (!FactionCapabilities.GeneratesInvasions(faction)
-                && offensive.DefenderBattleValue > 0L
+                && offensive.DefenderStrategicValue > 0L
                 && !offensive.TargetRegion.RegionFactionMap.ContainsKey(faction.Id))
             {
                 long raidSaturation = Math.Max(
-                    FactionOffensiveEvaluator.MinimumRaidBattleValue,
-                    (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * 0.5
+                    FactionOffensiveEvaluator.MinimumRaidStrategicValue,
+                    (long)Math.Ceiling(offensive.EstimatedDefenderStrategicValue * 0.5
                         / FactionOffensiveEvaluator.RaidCommitFraction));
                 tasks.Add(new ForceTask
                 {
@@ -761,7 +761,7 @@ internal sealed class ForceTaskBuilder
                     Saturation = raidSaturation,
                     MinimumViableAward = Math.Max(
                         squadFloor,
-                        FactionOffensiveEvaluator.MinimumRaidBattleValue),
+                        FactionOffensiveEvaluator.MinimumRaidStrategicValue),
                     Shape = bv => ForceValueCurves.Linear(bv / (double)raidSaturation)
                 });
             }
@@ -781,7 +781,7 @@ internal sealed class ForceTaskBuilder
     /// main loop gates on the template's FULL price and only falls through to a partial squad, which
     /// can build nothing. Grist Nine, 2026-09-18: two Ork advances sized at 30 against near-dead
     /// defenders generated no force at all, while advances at 60, 100 and 142 all mustered.
-    /// Reconnaissance already prices its tasking off the full squad (CheapestScoutSquadBattleValue);
+    /// Reconnaissance already prices its tasking off the full squad (CheapestScoutSquadStrategicValue);
     /// this is the same rule for the offensive profiles.
     /// </remarks>
     private static long SquadFloor(Faction faction) =>
@@ -805,7 +805,7 @@ internal sealed class ForceTaskBuilder
             : FactionOffensiveEvaluator.OffensiveForceRatioThreshold;
         return Math.Max(
             SquadFloor(faction),
-            (long)Math.Ceiling(offensive.EstimatedDefenderBattleValue * ratio));
+            (long)Math.Ceiling(offensive.EstimatedDefenderStrategicValue * ratio));
     }
 
     /// <summary>
@@ -918,7 +918,7 @@ internal sealed class ForceTaskBuilder
         // A screen is a scout tasking (ForceCompositionProfile.ScoutPatrol). A faction with no scout
         // formation can never field one, so allocating battle value to it would simply lose that value:
         // the auction debits the region, the generator produces nothing, and the budget is gone.
-        long scoutSquad = FactionReconPatrolPlanner.CheapestScoutSquadBattleValue(faction);
+        long scoutSquad = FactionReconPatrolPlanner.CheapestScoutSquadStrategicValue(faction);
         if (scoutSquad <= 0L) return;
 
         foreach (RegionForceState state in states)
@@ -934,7 +934,7 @@ internal sealed class ForceTaskBuilder
             //
             // Grist Nine, 2026-09-16: the Orks posted roughly a thousand battle value of screen every
             // week, about a fifth of their army, without anyone choosing to.
-            // Measured against the DEFENCE TASK'S saturation, not RequiredDefensiveBattleValue. The
+            // Measured against the DEFENCE TASK'S saturation, not RequiredDefensiveStrategicValue. The
             // latter is the unbounded want - on Grist Nine it read 18,550 against an army of 4,818 -
             // so subtracting it left every region with nothing screenable and the Orks posted no
             // screen at all. The defence task's saturation is the same want already reconciled against

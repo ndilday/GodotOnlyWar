@@ -150,18 +150,18 @@ public class FactionStrategyController
         var regionalForceStates = new List<RegionForceState>();
         foreach (var regionFaction in factionRegionsOnPlanet)
         {
-            long requiredDefensiveBattleValue =
-                FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(regionFaction);
+            long requiredDefensiveStrategicValue =
+                FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue(regionFaction);
             long organizedTroops = regionFaction.GetDeployedStrength();
-            long defensiveShortfall = Math.Max(0, requiredDefensiveBattleValue - organizedTroops);
+            long defensiveShortfall = Math.Max(0, requiredDefensiveStrategicValue - organizedTroops);
             // Cleared before the auction runs, and set again by ForceTaskCommitter from what the
             // region actually committed. It stays persisted, and stays clamped to the troops that
             // exist: the tactical assault path materialises the defence days after this pass, and
             // reading an unbounded want there let a region field several times its entire organized
             // strength in soldiers generated from nothing.
-            regionFaction.AssignedDefensiveBattleValue = 0;
+            regionFaction.AssignedDefensiveStrategicValue = 0;
             regionalForceStates.Add(new RegionForceState(
-                regionFaction, requiredDefensiveBattleValue, 0,
+                regionFaction, requiredDefensiveStrategicValue, 0,
                 organizedTroops, defensiveShortfall));
         }
 
@@ -170,12 +170,12 @@ public class FactionStrategyController
         GameLog.Debug(() =>
             $"AI plan {faction.Name}/{planet.Name}: posture={(defensiveOnly ? "defensive" : "offensive")}, "
             + $"regions={factionRegionsOnPlanet.Count}, organized={organizedTotal}, "
-            + $"requiredDefensiveBv={regionalForceStates.Sum(s => s.RequiredDefensiveBattleValue)}, spare={regionalForceStates.Sum(s => s.SpareTroops)}");
+            + $"requiredDefensiveBv={regionalForceStates.Sum(s => s.RequiredDefensiveStrategicValue)}, spare={regionalForceStates.Sum(s => s.SpareTroops)}");
         GameLog.Trace(() =>
             $"AI plan {faction.Name}/{planet.Name}: force states "
             + string.Join("; ", regionalForceStates.Select(s =>
                 $"{s.RegionFaction.Region.Name}:pop={s.RegionFaction.Population},mil={s.RegionFaction.MilitaryStrength},"
-                + $"org={s.RegionFaction.Organization},required={s.RequiredDefensiveBattleValue},spare={s.SpareTroops}")));
+                + $"org={s.RegionFaction.Organization},required={s.RequiredDefensiveStrategicValue},spare={s.SpareTroops}")));
 
         // A defensive faction that is not yet under assault still raises listening posts on threatened
         // borders so it is not blind when the assault lands. Sensors only, and only there - no
@@ -190,7 +190,7 @@ public class FactionStrategyController
             foreach (RegionForceState state in regionalForceStates)
             {
                 state.SpareTroops = Math.Max(
-                    0, state.SpareTroops - state.RequiredDefensiveBattleValue);
+                    0, state.SpareTroops - state.RequiredDefensiveStrategicValue);
             }
             _developmentPlanner.GenerateBorderListeningPosts(
                 faction, regionalForceStates, allNewOrders);
@@ -224,7 +224,7 @@ public class FactionStrategyController
 
         GameLog.Debug(() =>
             $"AI plan {faction.Name}/{planet.Name}: tasks={tasks.Count}, awards={awards.Count}, "
-            + $"allocated={awards.Sum(a => a.BattleValue)}, unallocated={regionalForceStates.Sum(s => s.SpareTroops)}, "
+            + $"allocated={awards.Sum(a => a.StrategicValue)}, unallocated={regionalForceStates.Sum(s => s.SpareTroops)}, "
             + $"orders={allNewOrders.Count}, spend=[" + SummarizeAwards(awards) + "], "
             + SummarizeOffensiveReach(faction, offensives, tasks, awards));
     }
@@ -305,8 +305,8 @@ public class FactionStrategyController
     {
         return string.Join(", ", awards
             .GroupBy(award => award.Task.Kind)
-            .OrderByDescending(group => group.Sum(award => award.BattleValue))
-            .Select(group => $"{group.Key}={group.Sum(award => award.BattleValue)}"));
+            .OrderByDescending(group => group.Sum(award => award.StrategicValue))
+            .Select(group => $"{group.Key}={group.Sum(award => award.StrategicValue)}"));
     }
 
     private static string SummarizeConstructionOrders(IEnumerable<Order> orders)

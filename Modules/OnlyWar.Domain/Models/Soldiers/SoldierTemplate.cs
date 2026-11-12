@@ -23,16 +23,11 @@ namespace OnlyWar.Domain.Soldiers
         public IReadOnlyCollection<ValueTuple<BaseSkill, float>> MosTraining { get; }
         public TrainingProfile WorkExperienceTrainingProfile { get; }
         public IReadOnlyList<SoldierTemplateRequirement> PromotionRequirements { get; }
-        // The soldier's point value — its weight in force generation and in casualty/survivor
-        // accounting against the strategic pools. A squad's battle value is the sum of its members'
-        // (PRD §4.24). Optional/defaulted for templates that predate populated point values.
-        public int BattleValue { get; }
-        /// <summary>
-        /// Doctrinal share of canonical offensive output supplied by melee. Runtime battle roles
-        /// additionally weight this by the able roster, usable grips, ammunition and readiness.
-        /// </summary>
-        public float MeleeFraction { get; }
-        public bool HasAuthoredMeleeFraction { get; }
+        // No StrategicValue here: one soldier template stands in squads of very different worth (an Ork
+        // Nob in Nobz and in Meganobz), so the value lives on SquadTemplateElement.StrategicValuePerSoldier and
+        // a soldier reads it through ISoldier.StrategicValue. No MeleeFraction either (removed
+        // 2026-11-01): whether a soldier fights in melee depends on his armament and his target,
+        // and the battle measures it (TacticalValueTable.MeleeShares).
         /// <summary>
         /// Weapon-set menus this role may carry, grouped by option group. A group name is scoped
         /// to whatever SquadTemplateElement quota references it — "Command Weapon" for the
@@ -48,9 +43,7 @@ namespace OnlyWar.Domain.Soldiers
                                bool isSquadLeader, byte specialistType,
                                IReadOnlyCollection<ValueTuple<BaseSkill, float>> mosTraining,
                                TrainingProfile workExperienceTrainingProfile = null,
-                               int battleValue = 0,
                                IReadOnlyList<SoldierTemplateRequirement> promotionRequirements = null,
-                               float? meleeFraction = null,
                                IReadOnlyDictionary<string, IReadOnlyList<WeaponSet>> weaponOptionsByGroup = null,
                                IReadOnlyDictionary<string, IReadOnlyList<EquipmentKitTemplate>> equipmentKitOptionsByGroup = null)
         {
@@ -63,9 +56,6 @@ namespace OnlyWar.Domain.Soldiers
             Subrank = subrank;
             MosTraining = mosTraining;
             WorkExperienceTrainingProfile = workExperienceTrainingProfile;
-            BattleValue = battleValue;
-            HasAuthoredMeleeFraction = meleeFraction.HasValue;
-            MeleeFraction = System.Math.Clamp(meleeFraction ?? 0, 0, 1);
             PromotionRequirements = promotionRequirements ?? [];
             WeaponOptionsByGroup = weaponOptionsByGroup ?? EmptyWeaponOptions;
             EquipmentKitOptionsByGroup = equipmentKitOptionsByGroup ?? EmptyEquipmentOptions;

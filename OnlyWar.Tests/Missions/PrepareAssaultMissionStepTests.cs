@@ -46,10 +46,10 @@ public class PrepareAssaultMissionStepTests
             TestExecutionContextFactory.CreateMission(context, new FixedRNG()),
             new PrepareAssaultMissionStep()).RunToCompletion();
 
-        long expected = context.StartingMissionBattleValue
+        long expected = context.StartingMissionStrategicValue
             * MissionContext.MissionDurationDays;
         Assert.Equal(MissionContext.MissionDurationDays, context.DaysElapsed);
-        Assert.Equal(expected, context.DisorganizedDefenderBattleValueDestroyed);
+        Assert.Equal(expected, context.DisorganizedDefenderStrategicValueDestroyed);
         Assert.Equal(
             MissionContext.MissionDurationDays,
             context.Log.Count(line => line.Contains("unopposed")));
@@ -84,13 +84,13 @@ public class PrepareAssaultMissionStepTests
     }
 
     // The defence mobilises the region's RESERVE - the battle value its controller held back to hold the
-    // ground (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue) - and reads it in battle
+    // ground (FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue) - and reads it in battle
     // value directly. The budget is what changed here: it used to be raw RegionFaction.Garrison, which is
     // zero for every revealed non-Imperial faction. The original guard this test carries is still the
     // point of it, though: the generated force must not exceed its budget. An x10 conversion once lived
     // on this path and massively over-mobilised defenders.
     [Fact]
-    public void AssembleDefendingForce_MobilisesTheReserveInBattleValueDirectly()
+    public void AssembleDefendingForce_MobilisesTheReserveInStrategicValueDirectly()
     {
         var rules = RulesDatabaseFixture.LoadRules();
         Faction pdf = rules.Factions.Single(f => f.IsDefaultFaction);
@@ -107,7 +107,7 @@ public class PrepareAssaultMissionStepTests
         // recalibration ever makes it too small.
         target.Garrison = 1_000;
 
-        long reserve = FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(target);
+        long reserve = FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue(target);
 
         List<OperationalMissionElement> defenders = new PrepareAssaultMissionStep()
             .AssembleDefendingForce(
@@ -116,15 +116,15 @@ public class PrepareAssaultMissionStepTests
             new SeededRNG(1),
             engagementElements: TestExecutionContextFactory.CreateEngagementResolver());
 
-        long generatedBattleValue = defenders
+        long generatedStrategicValue = defenders
             .SelectMany(squad => squad.Members)
-            .Sum(soldier => (long)soldier.Template.BattleValue);
+            .Sum(soldier => (long)soldier.StrategicValue);
 
         Assert.True(reserve > 0, "fixture must reserve something to mobilise");
         Assert.True(reserve < target.Garrison, "the reserve is a share of strength, not all of it");
         Assert.NotEmpty(defenders);
-        Assert.InRange(generatedBattleValue, 1, reserve);
-        Assert.True(generatedBattleValue < StrategicCombatRules.MassCombatBattleValueFloor);
+        Assert.InRange(generatedStrategicValue, 1, reserve);
+        Assert.True(generatedStrategicValue < StrategicCombatRules.MassCombatStrategicValueFloor);
     }
 
     // --- patrol detection: whether a screen was looking the right way when the blow landed ---
@@ -141,7 +141,7 @@ public class PrepareAssaultMissionStepTests
         (OperationalMissionElement patrol, RegionFaction _) = CreatePatrol();
 
         Assert.True(PrepareAssaultMissionStep.PatrolDetectedAttack(
-            patrol, attackerBattleValue: 1_000, defenderTactics: null, random: null));
+            patrol, attackerStrategicValue: 1_000, defenderTactics: null, random: null));
     }
 
     // A full advance crossing into the region is near-impossible to overlook; a small raid slipping past
@@ -150,8 +150,8 @@ public class PrepareAssaultMissionStepTests
     [Fact]
     public void PatrolDetection_IsEasierAgainstALargerAttackingForce()
     {
-        int smallForce = CountDetections(attackerBattleValue: 1, committedAttention: 0f);
-        int largeForce = CountDetections(attackerBattleValue: 10_000_000, committedAttention: 0f);
+        int smallForce = CountDetections(attackerStrategicValue: 1, committedAttention: 0f);
+        int largeForce = CountDetections(attackerStrategicValue: 10_000_000, committedAttention: 0f);
 
         Assert.True(
             largeForce > smallForce,
@@ -163,8 +163,8 @@ public class PrepareAssaultMissionStepTests
     [Fact]
     public void PatrolDetection_IsHarderWhenAttentionHasBeenDrawnAway()
     {
-        int undiverted = CountDetections(attackerBattleValue: 10_000_000, committedAttention: 0f);
-        int diverted = CountDetections(attackerBattleValue: 10_000_000, committedAttention: 3f);
+        int undiverted = CountDetections(attackerStrategicValue: 10_000_000, committedAttention: 0f);
+        int diverted = CountDetections(attackerStrategicValue: 10_000_000, committedAttention: 3f);
 
         Assert.True(
             diverted < undiverted,
@@ -173,7 +173,7 @@ public class PrepareAssaultMissionStepTests
 
     private const int DetectionSampleCount = 200;
 
-    private static int CountDetections(long attackerBattleValue, float committedAttention)
+    private static int CountDetections(long attackerStrategicValue, float committedAttention)
     {
         int detections = 0;
         for (int seed = 0; seed < DetectionSampleCount; seed++)
@@ -181,7 +181,7 @@ public class PrepareAssaultMissionStepTests
             (OperationalMissionElement patrol, RegionFaction presence) = CreatePatrol();
             presence.CommittedAttention = committedAttention;
             if (PrepareAssaultMissionStep.PatrolDetectedAttack(
-                patrol, attackerBattleValue, TestSkills.Tactics, new SeededRNG(seed)))
+                patrol, attackerStrategicValue, TestSkills.Tactics, new SeededRNG(seed)))
             {
                 detections++;
             }

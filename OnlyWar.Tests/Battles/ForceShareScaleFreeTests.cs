@@ -32,7 +32,7 @@ public class ForceShareScaleFreeTests
         float AttackerForceDisadvantage,
         float OpposingForceDisadvantage);
 
-    private static SoldierTemplate Template(int id, int battleValue) => new(
+    private static SoldierTemplate Template(int id, int battleValue) => new TestSoldierTemplate(
         id,
         TestModelFactory.HumanSpecies,
         $"Share Template {id}",
@@ -41,7 +41,7 @@ public class ForceShareScaleFreeTests
         false,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: battleValue);
+        strategicValue: battleValue);
 
     // The attacker's two squads weigh 50/50 inside the side (60 BV each at scale 1); the
     // opposing squads weigh 20/80 (40 and 160 BV). Weights are the only BV the decisions use.

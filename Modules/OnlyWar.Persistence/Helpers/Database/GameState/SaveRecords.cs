@@ -26,7 +26,7 @@ public sealed record PresenceRequestRecord(
     int OfferedDeliveryDelayWeeks,
     RequestSeverity Severity,
     RequestHazard Hazard,
-    long ProgressBattleValueTime,
+    long ProgressStrategicValueTime,
     bool HasPlayerResponded,
     RequestStatus Status);
 

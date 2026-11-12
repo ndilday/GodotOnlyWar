@@ -19,7 +19,7 @@ public sealed class ForceCommitmentPackage
     public int ServiceWeeks { get; }
     public int CompletionDeadlineWeeks { get; }
     public int MaximumEffectivePackageCount { get; }
-    public long ReferenceBattleValuePerPackage { get; }
+    public long ReferenceStrategicValuePerPackage { get; }
     public IReadOnlyList<string> QualificationTags => _qualificationTags;
 
     public ForceCommitmentPackage(
@@ -29,7 +29,7 @@ public sealed class ForceCommitmentPackage
         int packageCount,
         int serviceWeeks,
         int completionDeadlineWeeks,
-        long referenceBattleValuePerPackage,
+        long referenceStrategicValuePerPackage,
         IEnumerable<string> qualificationTags = null,
         int maximumEffectivePackageCount = 0)
     {
@@ -45,8 +45,8 @@ public sealed class ForceCommitmentPackage
             throw new ArgumentOutOfRangeException(nameof(serviceWeeks));
         if (completionDeadlineWeeks <= 0)
             throw new ArgumentOutOfRangeException(nameof(completionDeadlineWeeks));
-        if (referenceBattleValuePerPackage <= 0)
-            throw new ArgumentOutOfRangeException(nameof(referenceBattleValuePerPackage));
+        if (referenceStrategicValuePerPackage <= 0)
+            throw new ArgumentOutOfRangeException(nameof(referenceStrategicValuePerPackage));
         if (maximumEffectivePackageCount == 0) maximumEffectivePackageCount = packageCount;
         if (maximumEffectivePackageCount < packageCount)
             throw new ArgumentOutOfRangeException(nameof(maximumEffectivePackageCount));
@@ -57,7 +57,7 @@ public sealed class ForceCommitmentPackage
         PackageCount = packageCount;
         ServiceWeeks = serviceWeeks;
         CompletionDeadlineWeeks = completionDeadlineWeeks;
-        ReferenceBattleValuePerPackage = referenceBattleValuePerPackage;
+        ReferenceStrategicValuePerPackage = referenceStrategicValuePerPackage;
         MaximumEffectivePackageCount = maximumEffectivePackageCount;
         _qualificationTags = qualificationTags?
             .Where(tag => !string.IsNullOrWhiteSpace(tag))

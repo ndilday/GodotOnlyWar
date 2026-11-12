@@ -584,6 +584,25 @@ namespace OnlyWar.Persistence.Database.GameRules
                     errors.Add(
                         $"Faction '{faction.Name}' SquadTemplate '{template.Name}' has an element with no soldier-template reference.");
                 }
+                else
+                {
+                    // A soldier reads his battle value from the one element his template fills
+                    // (SquadTemplate.StrategicValuePerSoldierOf), so a template may appear only once per squad.
+                    foreach (var duplicate in template.Elements
+                                 .GroupBy(element => element.SoldierTemplate)
+                                 .Where(group => group.Count() > 1))
+                    {
+                        errors.Add(
+                            $"Faction '{faction.Name}' SquadTemplate '{template.Name}' holds SoldierTemplate "
+                            + $"'{duplicate.Key.Name}' in more than one element.");
+                    }
+                    if (template.Elements.Any(element => element.StrategicValuePerSoldier <= 0))
+                    {
+                        errors.Add(
+                            $"Faction '{faction.Name}' SquadTemplate '{template.Name}' has an element with no "
+                            + "StrategicValuePerSoldier.");
+                    }
+                }
             }
         }
 

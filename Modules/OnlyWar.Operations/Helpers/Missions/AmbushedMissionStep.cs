@@ -54,7 +54,7 @@ namespace OnlyWar.Operations.Missions
             string opposingFaction = opposingSquads.First().Faction?.Name ?? "an unidentified force";
             string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {opposingFaction}\n";
             context.AddLog(log);
-            long opposingBattleValueBefore = AbleBattleValue(opposingSquads);
+            long opposingStrategicValueBefore = AbleStrategicValue(opposingSquads);
             EngagementResult engagement = execution.Engagements.Resolve(
                     new EngagementInput(
                         context.MissionParticipants,
@@ -68,7 +68,7 @@ namespace OnlyWar.Operations.Missions
             context.RecordBattleOutcome(engagement);
             context.AddBattleReport(engagement);
             context.RecordDefenderLosses(
-                opposingBattleValueBefore - AbleBattleValue(opposingSquads));
+                opposingStrategicValueBefore - AbleStrategicValue(opposingSquads));
             // A force left combat-ineffective by the ambush ends its mission here rather than
             // recursing into steps that assume a manned squad (placement/checks index into
             // able members and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
@@ -91,9 +91,9 @@ namespace OnlyWar.Operations.Missions
             return MissionStepResult.Continue(resumeStep, 0, this);
         }
 
-        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
+        private static long AbleStrategicValue(IEnumerable<OperationalMissionElement> squads) =>
             squads
                 .SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
+                .Sum(soldier => (long)soldier.StrategicValue);
     }
 }

@@ -30,14 +30,14 @@ namespace OnlyWar.Domain.Missions
         // Ambush opportunities roll their concrete opposing-force budget when intelligence
         // discovers them, so the player can make an informed commitment and execution can use
         // the same force strength. Other mission types leave this null.
-        public long? TargetBattleValue { get; private set; }
+        public long? TargetStrategicValue { get; private set; }
 
         public Mission(
             int id,
             MissionType missionType,
             RegionFaction regionFaction,
             int missionSize,
-            long? targetBattleValue = null)
+            long? targetStrategicValue = null)
         {
             Id = id;
             MissionType = missionType;
@@ -45,7 +45,7 @@ namespace OnlyWar.Domain.Missions
             TargetRegion = regionFaction?.Region;
             TargetFactionWithoutPresence = regionFaction?.PlanetFaction?.Faction;
             MissionSize = missionSize;
-            TargetBattleValue = targetBattleValue;
+            TargetStrategicValue = targetStrategicValue;
         }
 
         /// <summary>
@@ -58,7 +58,7 @@ namespace OnlyWar.Domain.Missions
             Region region,
             Faction targetFaction,
             int missionSize,
-            long? targetBattleValue = null)
+            long? targetStrategicValue = null)
         {
             Id = id;
             MissionType = missionType;
@@ -67,20 +67,20 @@ namespace OnlyWar.Domain.Missions
             TargetFactionWithoutPresence = targetFaction
                 ?? throw new ArgumentNullException(nameof(targetFaction));
             MissionSize = missionSize;
-            TargetBattleValue = targetBattleValue;
+            TargetStrategicValue = targetStrategicValue;
         }
 
         public Mission(
             MissionType missionType,
             RegionFaction regionFaction,
             int missionSize,
-            long? targetBattleValue = null)
+            long? targetStrategicValue = null)
             : this(
                 Guid.NewGuid().GetHashCode(),
                 missionType,
                 regionFaction,
                 missionSize,
-                targetBattleValue)
+                targetStrategicValue)
         { }
 
         public Mission(
@@ -88,14 +88,14 @@ namespace OnlyWar.Domain.Missions
             Region region,
             Faction targetFaction,
             int missionSize,
-            long? targetBattleValue = null)
+            long? targetStrategicValue = null)
             : this(
                 Guid.NewGuid().GetHashCode(),
                 missionType,
                 region,
                 targetFaction,
                 missionSize,
-                targetBattleValue)
+                targetStrategicValue)
         { }
     }
 
@@ -172,20 +172,20 @@ namespace OnlyWar.Domain.Missions
         // Battle value committed to feeding this turn. For a PopulationIsMilitary swarm the BV pool
         // and the headcount are the same number (RegionFaction.MilitaryStrength), so this drops
         // straight into the biomass allocator's "troops" term with no conversion.
-        public long CommittedBattleValue { get; private set; }
+        public long CommittedStrategicValue { get; private set; }
 
-        public FeedMission(int id, long committedBattleValue, RegionFaction regionFaction)
+        public FeedMission(int id, long committedStrategicValue, RegionFaction regionFaction)
             : base(
                 id,
                 MissionType.Feed,
                 regionFaction,
-                (int)System.Math.Clamp(committedBattleValue, 0L, int.MaxValue))
+                (int)System.Math.Clamp(committedStrategicValue, 0L, int.MaxValue))
         {
-            CommittedBattleValue = System.Math.Max(0L, committedBattleValue);
+            CommittedStrategicValue = System.Math.Max(0L, committedStrategicValue);
         }
 
-        public FeedMission(long committedBattleValue, RegionFaction regionFaction)
-            : this(Guid.NewGuid().GetHashCode(), committedBattleValue, regionFaction)
+        public FeedMission(long committedStrategicValue, RegionFaction regionFaction)
+            : this(Guid.NewGuid().GetHashCode(), committedStrategicValue, regionFaction)
         {
         }
     }

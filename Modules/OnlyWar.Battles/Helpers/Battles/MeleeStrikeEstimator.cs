@@ -9,7 +9,10 @@ namespace OnlyWar.Battles
 {
     /// <summary>
     /// What a melee is WORTH: the strikes a soldier would land, the battle value they would remove,
-    /// what a run-in costs under fire, and what a defender gives up by shooting instead of parrying.
+    /// and what a defender gives up by shooting instead of parrying. What a run-in costs under fire
+    /// is not priced here: the exchange forecast's Close continuation in
+    /// <see cref="EngagementPotential"/> prices the crossing, with the enemy's fire shared across
+    /// our squads.
     ///
     /// <para>Scoring only -- it takes a <see cref="SquadPlanningServices"/> and no
     /// <see cref="ActionSink"/>, so it cannot emit an action, and it never draws from the battle
@@ -25,26 +28,19 @@ namespace OnlyWar.Battles
         // against when estimating a melee's value. A charger reaches only the front of a squad;
         // this geometry/sample bound is independent of the score currency.
         private const int EngagementMeleeTargetSampleCount = 4;
-        // Cap on the number of turns of incoming fire charged against a run-in. Raised from four
-        // after adding the charge-arrival discount (see EstimateChargeNet) so long charges no
-        // longer get both an undiscounted payoff and an aggressively capped cost.
-        private const int EngagementMaxExposureTurns = 8;
-        // Enemies more than this far beyond the target contribute negligible fire during a run-in;
-        // the nearest-first distance scan stops there to stay bounded in large battles. This is a
-        // spatial scan bound, so the score-currency conversion does not change it.
-        private const float EngagementRearThreatCutoff = 30f;
+        // Contact frontage, measured 2026-10-23 with ForecastAgainstBattleDiagnostics (FRONTAGE
+        // table, Design/Active/ContactRateCalibration.md): an outnumbering side strikes with about
+        // 1.2-1.7 soldiers per defender standing (Hormagaunts and an Ork Mob alike), and a striker
+        // reaches fewer than one distinct defender a turn (0.4-0.8), however many attacks he has.
+        internal const float ContactStrikersPerDefender = 1.5f;
 
         private readonly SquadPlanningServices _services;
-        // Closing cost is priced from the ENEMY's perspective -- what their guns expect to remove
-        // from our charger -- so this estimator reads the same ranged scoring the shooters use.
-        private readonly RangedTargetSelector _ranged;
         private readonly BattleGridManager _grid;
         private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
 
-        internal MeleeStrikeEstimator(SquadPlanningServices services, RangedTargetSelector ranged)
+        internal MeleeStrikeEstimator(SquadPlanningServices services)
         {
             _services = services ?? throw new ArgumentNullException(nameof(services));
-            _ranged = ranged ?? throw new ArgumentNullException(nameof(ranged));
             _grid = _services.Grid;
             _soldierMap = _services.SoldierMap;
         }
@@ -62,43 +58,22 @@ namespace OnlyWar.Battles
             soldier?.FunctioningHands > 0
                 && (soldier.MeleeWeapons.Count > 0 || soldier.RangedWeapons.Count == 0);
 
-        // Net outcome of a soldier charging the engaged enemy squad: the battle value his strikes
-        // would remove on contact, and the friendly battle value expected to be lost crossing the
-        // gap under fire. NetValue < 0 means the run-in costs more than the melee gains.
-        internal readonly struct ChargeAssessment
-        {
-            public float MeleeBattleValue { get; }
-            public float ClosingCost { get; }
-            public bool ReachesContactThisTurn { get; }
-            public float NetValue => MeleeBattleValue - ClosingCost;
-
-            public ChargeAssessment(
-                float meleeBattleValue,
-                float closingCost,
-                bool reachesContactThisTurn)
-            {
-                MeleeBattleValue = meleeBattleValue;
-                ClosingCost = closingCost;
-                ReachesContactThisTurn = reachesContactThisTurn;
-            }
-        }
-
         /// <summary>
         /// Expected enemy battle value removed by one stationary melee exchange. This is the
         /// melee counterpart to <see cref="SquadPairRemovalRate.RateAtRange"/>: each attacker
         /// plans its projected strikes against the nearest contact sample, and each strike is
         /// credited with the same take-out/removal fraction used by melee action planning.
         /// </summary>
-        internal float EstimateContactRemovalRate(
+        internal ContactStrikes EstimateContactStrikes(
             BattleSquad attacker,
             BattleSquad target)
         {
             if (attacker == null || target == null)
             {
-                return 0f;
+                return ContactStrikes.None;
             }
 
-            return EstimateContactRemovalRate(
+            return EstimateContactStrikes(
                 attacker.AbleSoldiers
                     .Where(IsPlaced)
                     .Where(IsEngagementMeleeCapable)
@@ -111,8 +86,29 @@ namespace OnlyWar.Battles
         /// Grid-free form used while building engagement profiles. The inputs are already the
         /// placed members of the two sides, so the same scoring calculation can be shared with
         /// the planner without giving the frame builder a targeting context or an action sink.
+        ///
+        /// <para>Frontage: a melee is not every attacker striking at once. Each attacker's turn of
+        /// strikes is priced against one defender, his nearest (a striker reaches fewer than one
+        /// distinct defender a turn in battle), as a take-out probability <c>t</c>. Only the
+        /// strongest <see cref="ContactStrikersPerDefender"/> times the defenders' number engage,
+        /// each against a defender met at random, so a defender survives the strikers that met him
+        /// and the share removed is <c>1 - exp(-sum(t) / D)</c>. Measured 2026-10-23: that random
+        /// contact predicts the defenders struck a turn (9.5 against 8.2 for Genestealers on PDF,
+        /// 21.6 against 20.8 for Hormagaunts), and it is smooth in both sides' numbers. The same rule
+        /// prices a defending line's strikes back.</para>
         /// </summary>
         internal static float EstimateContactRemovalRate(
+            IReadOnlyCollection<BattleSoldier> attackers,
+            IReadOnlyCollection<BattleSoldier> targets) =>
+            EstimateContactStrikes(attackers, targets).RemovalRate();
+
+        /// <summary>
+        /// The parts of <see cref="EstimateContactRemovalRate(IReadOnlyCollection{BattleSoldier}, IReadOnlyCollection{BattleSoldier})"/>
+        /// that do not depend on how the two sides' squads share the melee: each attacker's take-out
+        /// probability against one defender in a turn, strongest first, and the defenders' number
+        /// and value.
+        /// </summary>
+        internal static ContactStrikes EstimateContactStrikes(
             IReadOnlyCollection<BattleSoldier> attackers,
             IReadOnlyCollection<BattleSoldier> targets)
         {
@@ -124,22 +120,22 @@ namespace OnlyWar.Battles
                 ?? [];
             if (attackerList.Count == 0 || targetList.Count == 0)
             {
-                return 0f;
+                return ContactStrikes.None;
             }
 
             Dictionary<int, BattleSoldier> targetMap = targetList
                 .GroupBy(soldier => soldier.Soldier.Id)
                 .ToDictionary(group => group.Key, group => group.First());
-            float total = 0f;
+            List<float> takeOuts = [];
             foreach (BattleSoldier attacker in attackerList.OrderBy(soldier => soldier.Soldier.Id))
             {
-                List<BattleSoldier> contactTargets = targetList
+                BattleSoldier contactTarget = targetList
                     .OrderBy(target => DistanceBetween(attacker, target))
                     .ThenBy(target => target.Soldier.Id)
-                    .Take(EngagementMeleeTargetSampleCount)
-                    .ToList();
+                    .First();
                 IReadOnlyList<MeleeWeapon> loadout = GetProjectedMeleeLoadoutCore(attacker);
-                if (contactTargets.Count == 0 || loadout.Count == 0)
+                float targetValue = GetBattleValue(contactTarget);
+                if (loadout.Count == 0 || targetValue <= 0)
                 {
                     continue;
                 }
@@ -149,16 +145,122 @@ namespace OnlyWar.Battles
                 List<MeleeWeapon> plannedWeapons = BuildProjectedWeaponSequence(
                     attacker, primary, secondary);
                 List<PlannedMeleeStrike> strikePlan = BuildStrikePlanCore(
-                    attacker, contactTargets, plannedWeapons, didMove: false);
-                total += EstimateProjectedMeleeBattleValueCore(
+                    attacker, [contactTarget], plannedWeapons, didMove: false);
+                float takeOut = EstimateProjectedMeleeBattleValueCore(
                     attacker,
                     strikePlan,
                     plannedWeapons,
                     targetMap,
-                    didMove: false);
+                    didMove: false) / targetValue;
+                takeOuts.Add(Math.Clamp(takeOut, 0f, 1f));
             }
 
-            return Math.Min(total, targetList.Sum(GetBattleValue));
+            return new ContactStrikes(
+                takeOuts.OrderByDescending(value => value).ToArray(),
+                targetList.Count,
+                targetList.Sum(GetBattleValue));
+        }
+
+        /// <summary>
+        /// Chance that one turn of this soldier's strikes, all at <paramref name="target"/>, takes
+        /// him out. No battle value goes in: the tactical value table
+        /// (<see cref="TacticalValueTable"/>) reads it. Any soldier with a functioning hand
+        /// strikes, with his weapons or unarmed.
+        /// </summary>
+        internal static float EstimateTurnTakeOutProbability(
+            BattleSoldier attacker,
+            BattleSoldier target)
+        {
+            if (attacker?.FunctioningHands is not > 0 || target == null)
+            {
+                return 0f;
+            }
+            IReadOnlyList<MeleeWeapon> loadout = GetProjectedMeleeLoadoutCore(attacker);
+            if (loadout.Count == 0)
+            {
+                return 0f;
+            }
+            List<MeleeWeapon> plannedWeapons = BuildProjectedWeaponSequence(
+                attacker, loadout[0], GetSecondaryMeleeWeapon(loadout));
+            float survival = 1f;
+            foreach (MeleeWeapon weapon in plannedWeapons)
+            {
+                survival *= 1f - EstimateTakeOutProbabilityCore(
+                    attacker, target, weapon, didMove: false);
+            }
+            return Math.Clamp(1f - survival, 0f, 1f);
+        }
+
+        /// <summary>
+        /// One squad's melee against another, before the frontage is applied.
+        /// </summary>
+        internal readonly record struct ContactStrikes(
+            float[] TakeOuts,
+            int Defenders,
+            float DefenderValue)
+        {
+            internal static ContactStrikes None { get; } = new([], 0, 0f);
+
+            internal int Attackers => TakeOuts?.Length ?? 0;
+
+            /// <summary>
+            /// Battle value removed a turn. <paramref name="attackerShare"/> is the share of the
+            /// attacking squad that fights these defenders, <paramref name="frontageShare"/> the
+            /// share of the defenders' frontage left to it when other squads strike the same
+            /// defenders, and <paramref name="defenderShare"/> the share of the defending squad it
+            /// fights (a force share: its friends fight the rest).
+            ///
+            /// <para><paramref name="otherTakeOuts"/> is the <see cref="EngagedTakeOuts"/> of the
+            /// other squads striking the same defenders: a defender met by strikers of two squads
+            /// is taken out once, so the defenders' loss is priced for all of them together and this
+            /// squad is credited its share of it.</para>
+            /// </summary>
+            internal float RemovalRate(
+                float attackerShare = 1f,
+                float frontageShare = 1f,
+                float defenderShare = 1f,
+                float otherTakeOuts = 0f)
+            {
+                float defenders = Defenders * defenderShare;
+                float takeOuts = EngagedTakeOuts(attackerShare, frontageShare, defenderShare);
+                if (takeOuts <= 0 || defenders <= 0)
+                {
+                    return 0f;
+                }
+                float allTakeOuts = takeOuts + Math.Max(0f, otherTakeOuts);
+                return DefenderValue * defenderShare * (1 - (float)Math.Exp(-allTakeOuts / defenders))
+                    * (takeOuts / allTakeOuts);
+            }
+
+            /// <summary>
+            /// The summed take-out probabilities of the attackers that engage: the strongest first,
+            /// up to the frontage, a share of a soldier for that share.
+            /// </summary>
+            internal float EngagedTakeOuts(
+                float attackerShare = 1f,
+                float frontageShare = 1f,
+                float defenderShare = 1f)
+            {
+                float defenders = Defenders * defenderShare;
+                if (Attackers == 0 || defenders <= 0)
+                {
+                    return 0f;
+                }
+                float engaging = Math.Min(
+                    attackerShare * Attackers,
+                    ContactStrikersPerDefender * defenders * frontageShare);
+                float takeOuts = 0f;
+                foreach (float takeOut in TakeOuts)
+                {
+                    if (engaging <= 0)
+                    {
+                        break;
+                    }
+                    takeOuts += takeOut * Math.Min(1f, engaging);
+                    engaging -= 1f;
+                }
+                return takeOuts;
+            }
         }
 
         private static float DistanceBetween(BattleSoldier first, BattleSoldier second)
@@ -173,15 +275,19 @@ namespace OnlyWar.Battles
             return (float)Math.Sqrt((dx * dx) + (dy * dy));
         }
 
-        internal ChargeAssessment EstimateChargeNet(
-            BattleSoldier soldier,
-            BattleSquad targetSquad,
-            float distance)
+        /// <summary>
+        /// The battle value this soldier's strikes would remove from <paramref name="targetSquad"/>
+        /// in one exchange, undiscounted. The caller credits it only when the squad is already in
+        /// contact at turn start: attacks resolve from turn-start geometry and movement after them
+        /// (TDD §6.6), so a soldier who arrives in contact this turn strikes next turn, and that
+        /// future melee is priced by the potential's contact rates, not here.
+        /// </summary>
+        internal float EstimateMeleeInContact(BattleSoldier soldier, BattleSquad targetSquad)
         {
             IReadOnlyList<MeleeWeapon> loadout = GetProjectedMeleeLoadout(soldier);
             if (loadout.Count == 0)
             {
-                return new ChargeAssessment(0f, 0f, false);
+                return 0f;
             }
 
             List<BattleSoldier> reachableEnemies = targetSquad.AbleSoldiers
@@ -193,7 +299,7 @@ namespace OnlyWar.Battles
                 .ToList();
             if (reachableEnemies.Count == 0)
             {
-                return new ChargeAssessment(0f, 0f, false);
+                return 0f;
             }
 
             MeleeWeapon primary = loadout.FirstOrDefault();
@@ -202,96 +308,8 @@ namespace OnlyWar.Battles
                 soldier, primary, secondary);
             List<PlannedMeleeStrike> strikePlan = BuildStrikePlan(
                 soldier, reachableEnemies, plannedWeapons, didMove: true);
-            float meleeBattleValue = EstimateProjectedMeleeBattleValue(
+            return EstimateProjectedMeleeBattleValue(
                 soldier, strikePlan, plannedWeapons, didMove: true);
-
-            float moveSpeed = soldier.GetMoveSpeed();
-            // TurnsUntilWeReachTarget (attacker's own speed, distance less the 1-cell contact
-            // allowance) -- see Design/Reference/BattleLogic.md Phase 0. This is the ONE
-            // arrival discount Phase 3 kept: a charge's payoff genuinely does not exist until the
-            // charger arrives, unlike a bolt, which lands the turn it is fired.
-            int turnsToContact = moveSpeed <= 0
-                ? int.MaxValue
-                : (int)Math.Ceiling(Math.Max(0f, distance - 1f) / moveSpeed);
-            // Quote future melee in the same present-value currency as ranged targeting.
-            //
-            // TWO DIFFERENT CLOCKS, and they were the same number until the turn structure changed
-            // (TDD §6.6). Attacks resolve from turn-start geometry and
-            // movement resolves after them, so ARRIVING in contact this turn does not buy a blow
-            // this turn -- the strike lands at the top of the next turn, as a charge. The payoff is
-            // therefore turnsToContact whole turns away, with no current-turn credit, and only a
-            // soldier ALREADY in contact at turn start (turnsToContact == 0) strikes undiscounted.
-            //
-            // The crossing itself is unchanged: it still takes turnsToContact turns, of which the
-            // current one is already priced by EngagementExchangeModel.EvaluateIncomingNow, so the
-            // run-in exposure keeps the old minus-one.
-            int futureTurnsBeforeStrike = turnsToContact;
-            int futureTurnsCrossing = turnsToContact == int.MaxValue
-                ? int.MaxValue
-                : Math.Max(0, turnsToContact - 1);
-            float chargeArrivalDiscount = futureTurnsBeforeStrike == int.MaxValue
-                ? 0f
-                : 1f / (1f + futureTurnsBeforeStrike);
-            meleeBattleValue *= chargeArrivalDiscount;
-            bool reachesContactThisTurn = turnsToContact <= 1;
-            // Incoming fire for the current turn is already part of the posture's immediate
-            // exchange. Do not charge that same shooting window again as run-in exposure.
-            float closingCost = EstimateClosingCost(soldier, distance, futureTurnsCrossing);
-            return new ChargeAssessment(meleeBattleValue, closingCost, reachesContactThisTurn);
-        }
-
-        // Expected friendly battle value lost while this soldier crosses to melee AFTER the
-        // current turn: the incoming ranged removal against him per future turn, integrated over
-        // the (capped) number of turns the run-in remains exposed. Current-turn incoming fire is
-        // already scored by the posture's immediate exchange. Threat is evaluated at the midpoint
-        // of the approach to each shooter, modeling the fact that fire grows more accurate as he
-        // closes.
-        private float EstimateClosingCost(
-            BattleSoldier soldier,
-            float distance,
-            int turnsToContact)
-        {
-            if (turnsToContact <= 0)
-            {
-                return 0f;
-            }
-            int exposedTurns = Math.Min(turnsToContact, EngagementMaxExposureTurns);
-            float perTurnLoss = 0f;
-            foreach ((int enemyId, float enemyDistance) in
-                _grid.GetEnemyDistances(soldier.Soldier.Id))
-            {
-                if (enemyDistance > distance + EngagementRearThreatCutoff)
-                {
-                    // GetEnemyDistances is nearest-first; everything past here is rear-area.
-                    break;
-                }
-                if (!_soldierMap.TryGetValue(enemyId, out BattleSoldier enemy)
-                    || !enemy.IsCombatEffective)
-                {
-                    continue;
-                }
-                float threatRange = Math.Max(1f, enemyDistance * 0.5f);
-                float best = 0f;
-                foreach (RangedWeapon weapon in enemy.EquippedRangedWeapons)
-                {
-                    if (weapon.LoadedAmmo <= 0
-                        || weapon.Template.IsTemplateWeapon
-                        || threatRange > weapon.Template.MaximumRange)
-                    {
-                        continue;
-                    }
-                    // Enemy-perspective evaluation: ExpectedEnemyBattleValueRemoved is the battle
-                    // value of *our* soldier the enemy expects to remove — exactly the run-in cost.
-                    RangedTargetEvaluation eval = _ranged.EvaluateRangedTarget(
-                        enemy, soldier, weapon, threatRange, -weapon.Template.Bulk);
-                    if (eval.ExpectedEnemyBattleValueRemoved > best)
-                    {
-                        best = eval.ExpectedEnemyBattleValueRemoved;
-                    }
-                }
-                perTurnLoss += best;
-            }
-            return perTurnLoss * exposedTurns;
         }
 
         // Deterministic sibling of BuildPlannedWeaponSequence for pure pre-move estimates: rounds

@@ -204,10 +204,10 @@ namespace OnlyWar.Application
                 return "Progress: suppress the identified threat";
             }
 
-            decimal packageWeeks = request.Commitment.ReferenceBattleValuePerPackage <= 0
+            decimal packageWeeks = request.Commitment.ReferenceStrategicValuePerPackage <= 0
                 ? 0
-                : (decimal)request.ProgressBattleValueTime
-                    / request.Commitment.ReferenceBattleValuePerPackage;
+                : (decimal)request.ProgressStrategicValueTime
+                    / request.Commitment.ReferenceStrategicValuePerPackage;
             decimal required = request.Commitment.PackageCount * request.Commitment.ServiceWeeks;
             string acceleration = request.Commitment.MaximumEffectivePackageCount
                 > request.Commitment.PackageCount

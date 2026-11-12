@@ -15,11 +15,11 @@ namespace OnlyWar.Operations.Missions.Ambush
     {
         /// <summary>
         /// Battle value of a squad template fielded at full strength, taken from the rules data
-        /// (<see cref="SquadTemplate.BattleValue"/>: every element at the strength generation
+        /// (<see cref="SquadTemplate.StrategicValue"/>: every element at the strength generation
         /// builds it to).
         /// </summary>
-        public static long FullStrengthBattleValue(SquadTemplate template) =>
-            template?.BattleValue ?? 0L;
+        public static long FullStrengthStrategicValue(SquadTemplate template) =>
+            template?.StrategicValue ?? 0L;
 
         // The ambushed force is a slice of the enemy region faction's deployed strength, never more
         // than all of it. The share is log-uniform across the band, so a picket of 1% and a main body
@@ -43,23 +43,23 @@ namespace OnlyWar.Operations.Missions.Ambush
         /// <paramref name="deployedStrength"/> that rises with <paramref name="intelligenceMargin"/>.
         /// Zero when there is nothing deployed to ambush.
         /// </summary>
-        public static long RollTargetBattleValue(
+        public static long RollTargetStrategicValue(
             long deployedStrength,
             double intelligenceMargin,
             IRNG random)
         {
             if (random == null) throw new ArgumentNullException(nameof(random));
-            return TargetBattleValue(deployedStrength, intelligenceMargin, random.GetLinearDouble());
+            return TargetStrategicValue(deployedStrength, intelligenceMargin, random.GetLinearDouble());
         }
 
         /// <summary>
         /// The target an ambush with no stored budget is expected to meet: the middle of the roll
         /// for a bare intelligence success. Used only where no roll has been made.
         /// </summary>
-        public static long EstimateTargetBattleValue(long deployedStrength) =>
-            TargetBattleValue(deployedStrength, intelligenceMargin: 0.0, roll: 0.5);
+        public static long EstimateTargetStrategicValue(long deployedStrength) =>
+            TargetStrategicValue(deployedStrength, intelligenceMargin: 0.0, roll: 0.5);
 
-        internal static long TargetBattleValue(
+        internal static long TargetStrategicValue(
             long deployedStrength,
             double intelligenceMargin,
             double roll)
@@ -81,21 +81,21 @@ namespace OnlyWar.Operations.Missions.Ambush
         /// The order-of-magnitude band shown for an ambush: floor(log10(target)), never below 1.
         /// Descriptive only; the stored target battle value is what sizes the fight.
         /// </summary>
-        public static int MissionSizeBand(long targetBattleValue) =>
-            targetBattleValue < 10
+        public static int MissionSizeBand(long targetStrategicValue) =>
+            targetStrategicValue < 10
                 ? 1
-                : Math.Max(1, (int)Math.Floor(Math.Log10(targetBattleValue)));
+                : Math.Max(1, (int)Math.Floor(Math.Log10(targetStrategicValue)));
 
         /// <summary>
         /// The budget the ambushed force is generated to. Intelligence-discovered ambushes store it
         /// when they are found; a mission without one (a dormant-population culling) rolls it now
         /// against the target's current deployed strength.
         /// </summary>
-        public static long ResolveTargetBattleValue(Mission mission, IRNG random)
+        public static long ResolveTargetStrategicValue(Mission mission, IRNG random)
         {
             if (mission == null) throw new ArgumentNullException(nameof(mission));
-            return mission.TargetBattleValue
-                ?? RollTargetBattleValue(
+            return mission.TargetStrategicValue
+                ?? RollTargetStrategicValue(
                     mission.RegionFaction?.GetDeployedStrength() ?? 0L,
                     intelligenceMargin: 0.0,
                     random);
@@ -105,20 +105,20 @@ namespace OnlyWar.Operations.Missions.Ambush
         /// How many full-strength reference squads reach parity with the target. A general measure
         /// for the player, deliberately not keyed to which squads happen to be in the region.
         /// </summary>
-        public static long RecommendSquads(long targetBattleValue, long referenceSquadBattleValue)
+        public static long RecommendSquads(long targetStrategicValue, long referenceSquadStrategicValue)
         {
-            if (referenceSquadBattleValue <= 0)
+            if (referenceSquadStrategicValue <= 0)
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(referenceSquadBattleValue),
+                    nameof(referenceSquadStrategicValue),
                     "A positive reference squad battle value is required.");
             }
 
-            long positiveTarget = Math.Max(1L, targetBattleValue);
-            long wholeSquads = positiveTarget / referenceSquadBattleValue;
+            long positiveTarget = Math.Max(1L, targetStrategicValue);
+            long wholeSquads = positiveTarget / referenceSquadStrategicValue;
             return Math.Max(
                 1L,
-                wholeSquads + (positiveTarget % referenceSquadBattleValue == 0 ? 0 : 1));
+                wholeSquads + (positiveTarget % referenceSquadStrategicValue == 0 ? 0 : 1));
         }
     }
 }

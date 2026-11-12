@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using OnlyWar.Domain;
+using OnlyWar.Domain.FactionBehaviors;
 using OnlyWar.Battles.Models;
 
 namespace OnlyWar.Battles
@@ -80,6 +81,36 @@ namespace OnlyWar.Battles
         /// outcome construction after live squads may have been disengaged.
         /// </summary>
         internal IReadOnlyCollection<int> EverRoutedSquadIds => _everRoutedSquadIds;
+
+        /// <summary>
+        /// One live morale check (not a rally), its inputs and result, for the forecast audit.
+        /// <see cref="Routed"/> is after any mob coercion; <see cref="Outcome"/> before it.
+        /// </summary>
+        internal readonly record struct MoraleCheckObservation(
+            int Turn,
+            BattleSquad Squad,
+            IReadOnlyList<BattleSquad> Friendly,
+            BattleGridManager Grid,
+            FactionBehaviorRulesProfile Rules,
+            float CasualtyThisTurn,
+            float CumulativeCasualty,
+            bool LeaderDead,
+            float RoutingVisible,
+            float LocalOutnumber,
+            float CommandAura,
+            float ForceDisadvantage,
+            float MobSupport,
+            float FailFraction,
+            MoraleState Outcome,
+            bool Routed);
+
+        /// <summary>
+        /// Diagnostics only (ForecastAgainstBattleDiagnostics): when set, every live morale check
+        /// is reported here, on the resolving thread, while the squad is in its checked state.
+        /// Null in the game.
+        /// </summary>
+        [ThreadStatic]
+        internal static Action<MoraleCheckObservation> CheckObserver;
 
         internal int StartingAbleCountFor(BattleSquad squad) =>
             _startingAbleCount.GetValueOrDefault(squad.Id, squad.AbleSoldiers.Count);
@@ -344,6 +375,23 @@ namespace OnlyWar.Battles
                             $"{squad.Name} broke and routed."));
                     }
                 }
+                CheckObserver?.Invoke(new MoraleCheckObservation(
+                    _state.TurnNumber,
+                    squad,
+                    friendly,
+                    _grid,
+                    _execution.Rules.FactionBehaviorRules,
+                    casualtyThisTurn,
+                    cumulativeCasualty,
+                    leaderDead,
+                    routingVisible,
+                    localOutnumber,
+                    commandAura,
+                    forceDisadvantage,
+                    mobSupport,
+                    result.FailFraction,
+                    result.Outcome,
+                    squad.WithdrawalRole == WithdrawalRole.Routing));
                 LogMoraleEval(
                     side,
                     squad,

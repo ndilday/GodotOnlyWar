@@ -107,8 +107,8 @@ public class ReciprocalAssaultCoordinatorTests
         Assert.Contains(fixture.Second.State.DebriefLines, line => line.HasBattle);
         Assert.Contains(fixture.First.State.Log, line =>
             line.Contains("neither side can use entrenchments"));
-        Assert.Equal(0, fixture.First.State.DefenderBattleValueDestroyed);
-        Assert.Equal(0, fixture.Second.State.DefenderBattleValueDestroyed);
+        Assert.Equal(0, fixture.First.State.DefenderStrategicValueDestroyed);
+        Assert.Equal(0, fixture.Second.State.DefenderStrategicValueDestroyed);
     }
 
     private static Fixture CreateFixture(bool secondStartsInBeta)
@@ -208,7 +208,7 @@ public class ReciprocalAssaultCoordinatorTests
             DecisiveMeleeWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 1, 1)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 1, 1)],
             SquadTypes.None)
         {
             Faction = faction

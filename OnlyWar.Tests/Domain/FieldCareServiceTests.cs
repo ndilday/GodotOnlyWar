@@ -26,31 +26,31 @@ public class FieldCareServiceTests
 {
     private static readonly Date TestDate = new(1, 1, 1);
 
-    private static readonly SoldierTemplate ApothecaryTemplate = new(
+    private static readonly SoldierTemplate ApothecaryTemplate = new TestSoldierTemplate(
         901, TestModelFactory.HumanSpecies, "Apothecary",
         rank: 4, subrank: 1, isSquadLeader: false, specialistType: 0,
-        Array.Empty<ValueTuple<BaseSkill, float>>(), battleValue: 2);
+        Array.Empty<ValueTuple<BaseSkill, float>>(), strategicValue: 2);
 
-    private static readonly SoldierTemplate MasterTemplate = new(
+    private static readonly SoldierTemplate MasterTemplate = new TestSoldierTemplate(
         902, TestModelFactory.HumanSpecies, "Master of the Apothecarion",
         rank: 6, subrank: 1, isSquadLeader: false, specialistType: 0,
-        Array.Empty<ValueTuple<BaseSkill, float>>(), battleValue: 2);
+        Array.Empty<ValueTuple<BaseSkill, float>>(), strategicValue: 2);
 
     // Two line templates that share a Rank, so the Subrank tie-break has something to decide.
-    private static readonly SoldierTemplate BrotherTemplate = new(
+    private static readonly SoldierTemplate BrotherTemplate = new TestSoldierTemplate(
         903, TestModelFactory.HumanSpecies, "Battle-Brother",
         rank: 1, subrank: 1, isSquadLeader: false, specialistType: 0,
-        Array.Empty<ValueTuple<BaseSkill, float>>(), battleValue: 2);
+        Array.Empty<ValueTuple<BaseSkill, float>>(), strategicValue: 2);
 
-    private static readonly SoldierTemplate SeniorBrotherTemplate = new(
+    private static readonly SoldierTemplate SeniorBrotherTemplate = new TestSoldierTemplate(
         904, TestModelFactory.HumanSpecies, "Senior Battle-Brother",
         rank: 1, subrank: 2, isSquadLeader: false, specialistType: 0,
-        Array.Empty<ValueTuple<BaseSkill, float>>(), battleValue: 2);
+        Array.Empty<ValueTuple<BaseSkill, float>>(), strategicValue: 2);
 
-    private static readonly SoldierTemplate SergeantTemplate = new(
+    private static readonly SoldierTemplate SergeantTemplate = new TestSoldierTemplate(
         905, TestModelFactory.HumanSpecies, "Sergeant",
         rank: 5, subrank: 1, isSquadLeader: true, specialistType: 0,
-        Array.Empty<ValueTuple<BaseSkill, float>>(), battleValue: 2);
+        Array.Empty<ValueTuple<BaseSkill, float>>(), strategicValue: 2);
 
     // ---- Capacity ---------------------------------------------------------------------------
 

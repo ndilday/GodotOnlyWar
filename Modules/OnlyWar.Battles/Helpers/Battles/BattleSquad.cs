@@ -72,6 +72,8 @@ namespace OnlyWar.Battles
         // WithdrawalRole.Routing. Read by the planner to degrade a Shaken squad's actions.
         public MoraleState MoraleState { get; set; }
         public EngagementOptionKind? LastEngagementOptionKind { get; set; }
+        // Turns running on which the planner's root forecast saw no continuation that wins.
+        internal int NoWayToWinTurns { get; set; }
         public int? LastScreenThreatSquadId { get; set; }
         public int? LastProtectedSquadId { get; set; }
         public bool MobSuppressionPending { get; set; }
@@ -229,6 +231,7 @@ namespace OnlyWar.Battles
             WithdrawalRole = WithdrawalRole.None;
             MoraleState = MoraleState.Steady;
             LastEngagementOptionKind = null;
+            NoWayToWinTurns = 0;
             LastScreenThreatSquadId = null;
             LastProtectedSquadId = null;
             MobSuppressionPending = false;
@@ -282,6 +285,7 @@ namespace OnlyWar.Battles
             WithdrawalRole = original.WithdrawalRole;
             MoraleState = original.MoraleState;
             LastEngagementOptionKind = original.LastEngagementOptionKind;
+            NoWayToWinTurns = original.NoWayToWinTurns;
             LastScreenThreatSquadId = original.LastScreenThreatSquadId;
             LastProtectedSquadId = original.LastProtectedSquadId;
             MobSuppressionPending = original.MobSuppressionPending;
@@ -563,6 +567,20 @@ namespace OnlyWar.Battles
         {
             return (int)BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(
                 this, opposingSquads, friendlySquads);
+        }
+
+        /// <summary>
+        /// <see cref="GetPreferredOpeningRange"/>, or null when the squad has no preference (no
+        /// ranged weapon, under the forecast model): it should not pull a reciprocal assault's
+        /// opening.
+        /// </summary>
+        public int? GetPreferredOpeningRangeOrNone(
+            IReadOnlyCollection<BattleSquad> opposingSquads,
+            IReadOnlyCollection<BattleSquad> friendlySquads = null)
+        {
+            float? range = BattleEngagementFrameBuilder.CalculatePreferredOpeningRangeOrNone(
+                this, opposingSquads, friendlySquads);
+            return range.HasValue ? (int)range.Value : null;
         }
 
         /// <summary>

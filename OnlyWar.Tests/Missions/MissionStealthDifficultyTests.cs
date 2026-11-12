@@ -110,7 +110,7 @@ public class MissionStealthDifficultyTests
         Region region = CreateRegion();
         RegionFaction pdf = AddGarrisonFaction(
             region, CreateFaction(20, "PDF"), garrison: 5_000, intel: 2f);
-        SendOnMission(pdf, MissionType.Patrol, battleValue: 500);
+        SendOnMission(pdf, MissionType.Patrol, strategicValue: 500);
 
         Assert.Equal(500L, pdf.GetPatrolStrength());
         Assert.Equal(5.20, TotalWatchScore(region), 2);
@@ -139,7 +139,7 @@ public class MissionStealthDifficultyTests
         Region patrolledRegion = CreateRegion();
         RegionFaction patrolling = AddGarrisonFaction(
             patrolledRegion, CreateFaction(20, "PDF"), garrison: 5_000, intel: 2f);
-        SendOnMission(patrolling, MissionType.Patrol, battleValue: 500);
+        SendOnMission(patrolling, MissionType.Patrol, strategicValue: 500);
 
         float idle = MissionStealthDifficulty
             .Calculate(idleRegion, intruderHeadcount: 5, intruder: null).Total;
@@ -167,7 +167,7 @@ public class MissionStealthDifficultyTests
         Region region = CreateRegion();
         RegionFaction pdf = AddGarrisonFaction(
             region, CreateFaction(20, "PDF"), garrison: 5_000, intel: 0f);
-        SendOnMission(pdf, missionType, battleValue: 40);
+        SendOnMission(pdf, missionType, strategicValue: 40);
 
         Assert.Equal(counted ? 40L : 0L, pdf.GetPatrolStrength());
         Assert.Equal(counted, MissionStealthDifficulty.CalculateWatchTerms(pdf).Patrol > 0f);
@@ -332,7 +332,7 @@ public class MissionStealthDifficultyTests
             region, CreateFaction(20, "Swarm"), population: 1_000_000, intel: 0f);
         float dormant = MissionStealthDifficulty.CalculateWatchScore(horde);
 
-        SendOnMission(horde, MissionType.Patrol, battleValue: 200);
+        SendOnMission(horde, MissionType.Patrol, strategicValue: 200);
         float hunting = MissionStealthDifficulty.CalculateWatchScore(horde);
 
         Assert.Equal(MissionStealthDifficulty.AmbientSearchCap, dormant);
@@ -384,7 +384,7 @@ public class MissionStealthDifficultyTests
         Region region = CreateRegion();
         RegionFaction hunters = AddGarrisonFaction(
             region, CreateFaction(20, "Hunters"), garrison: 1_000, intel: 0f);
-        SendOnMission(hunters, MissionType.Patrol, battleValue: 100);
+        SendOnMission(hunters, MissionType.Patrol, strategicValue: 100);
         RegionFaction idlers = AddGarrisonFaction(
             region, CreateFaction(21, "Idlers"), garrison: 1_000, intel: 0f);
 
@@ -517,7 +517,7 @@ public class MissionStealthDifficultyTests
         // fuller note.
         MissionContext context = CreateSabotageContext(
             hordePopulation: 100_000_000, trained: false, defenderIntel: 6f,
-            defenderPatrolBattleValue: 60);
+            defenderPatrolStrategicValue: 60);
         MissionStepDriver driver = new(
             CreateExecution(context), new SabotageStealthMissionStep());
 
@@ -594,7 +594,7 @@ public class MissionStealthDifficultyTests
         long hordePopulation,
         bool trained,
         float defenderIntel = 0f,
-        int defenderPatrolBattleValue = 0)
+        int defenderPatrolStrategicValue = 0)
     {
         Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Target Region", new RegionCoordinate(0, 0), 0);
@@ -607,9 +607,9 @@ public class MissionStealthDifficultyTests
         };
         planetFaction.SetRegionAwareness(region, defenderIntel);
         region.RegionFactionMap[horde.Id] = target;
-        if (defenderPatrolBattleValue > 0)
+        if (defenderPatrolStrategicValue > 0)
         {
-            SendOnMission(target, MissionType.Patrol, defenderPatrolBattleValue);
+            SendOnMission(target, MissionType.Patrol, defenderPatrolStrategicValue);
         }
 
         Squad squad = TestModelFactory.CreateSquad(
@@ -642,11 +642,11 @@ public class MissionStealthDifficultyTests
     private static MissionExecutionContext CreateExecution(MissionContext context) =>
         TestExecutionContextFactory.CreateMission(context, new FixedRNG());
 
-    // Every soldier TestModelFactory builds carries battleValue: 2, so a squad's battle value is
+    // Every soldier TestModelFactory builds carries strategicValue: 2, so a squad's battle value is
     // twice its headcount. Named here because the patrol fixtures are specified in BATTLE VALUE - the
     // currency GetDeployedStrength and GetPatrolStrength are both denominated in - and the conversion
     // to bodies is an artifact of the fixture, not of the model.
-    private const int TestSoldierBattleValue = 2;
+    private const int TestSoldierStrategicValue = 2;
 
     // Puts a body of this faction's own troops into the region under an order of the given type,
     // sized to a requested BATTLE VALUE rather than a headcount. GetPatrolStrength returns battle
@@ -743,12 +743,12 @@ public class MissionStealthDifficultyTests
         Assert.Equal(0f, drawn.Total, precision: 4);
     }
 
-    private static Squad SendOnMission(RegionFaction rf, MissionType missionType, int battleValue)
+    private static Squad SendOnMission(RegionFaction rf, MissionType missionType, int strategicValue)
     {
         Assert.True(
-            battleValue % TestSoldierBattleValue == 0,
-            $"Patrol fixture battle value {battleValue} must be a whole number of test soldiers.");
-        int soldiers = battleValue / TestSoldierBattleValue;
+            strategicValue % TestSoldierStrategicValue == 0,
+            $"Patrol fixture battle value {strategicValue} must be a whole number of test soldiers.");
+        int soldiers = strategicValue / TestSoldierStrategicValue;
         Squad squad = CreateSquadOfSize($"{rf.PlanetFaction.Faction.Name} {missionType}", soldiers);
         // The Order constructor is what wires Squad.CurrentOrders back to the order, which is the
         // link GetPatrolStrength reads; constructing it is not a no-op even though the result is

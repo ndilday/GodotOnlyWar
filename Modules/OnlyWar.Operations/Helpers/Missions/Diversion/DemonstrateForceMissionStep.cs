@@ -86,11 +86,11 @@ namespace OnlyWar.Operations.Missions.Diversion
             // Read once and shared by both rolls: how much force is actually putting on the show. Using
             // ABLE soldiers means a feint force whittled down by counterattacks earlier in the week
             // becomes less convincing as it bleeds, which is the right direction.
-            long feintBattleValue = FeintBattleValue(context);
+            long feintStrategicValue = FeintStrategicValue(context);
 
-            float drawn = RunDrawCheck(execution, context, enemyFaction, tactics, feintBattleValue);
+            float drawn = RunDrawCheck(execution, context, enemyFaction, tactics, feintStrategicValue);
             MissionStepResult response = RunResponseCheck(
-                execution, context, enemyFaction, tactics, drawn, feintBattleValue);
+                execution, context, enemyFaction, tactics, drawn, feintStrategicValue);
             if (response.Next != null)
             {
                 return response;
@@ -109,7 +109,7 @@ namespace OnlyWar.Operations.Missions.Diversion
             MissionContext context,
             RegionFaction enemyFaction,
             BaseSkill tactics,
-            long feintBattleValue)
+            long feintStrategicValue)
         {
             // The harder the enemy is to bluff (better detection, more troops fielded to appraise the
             // threat), the harder it is to project a convincing feint.
@@ -130,7 +130,7 @@ namespace OnlyWar.Operations.Missions.Diversion
             // "prising defenders loose takes commitment" property the draw priority exists to create
             // had no way to be paid for. Same shape LightningRaidMissionStep uses to price a raid
             // against its target.
-            difficulty -= MissionStealthDifficulty.Magnitude(feintBattleValue);
+            difficulty -= MissionStealthDifficulty.Magnitude(feintStrategicValue);
             // Boldness is what draws attention, so this is aggression's EFFECT axis.
             difficulty += MissionAggressionModifiers.EffectDifficulty(context.Order.LevelOfAggression);
 
@@ -157,7 +157,7 @@ namespace OnlyWar.Operations.Missions.Diversion
             enemyFaction.CommittedAttention += drawn;
             GameLog.Debug(() =>
                 $"Diversion draw {DescribeTarget(enemyFaction)} day {context.DaysElapsed}: "
-                + $"difficulty={difficulty:F2} (feintBV={feintBattleValue}), margin={margin:F2}, "
+                + $"difficulty={difficulty:F2} (feintBV={feintStrategicValue}), margin={margin:F2}, "
                 + $"patrolTerm={patrolTerm:F2}, fraction={fraction:F2} -> drawn={drawn:F2} "
                 + $"(committed now {enemyFaction.CommittedAttention:F2})");
             return drawn;
@@ -171,7 +171,7 @@ namespace OnlyWar.Operations.Missions.Diversion
             RegionFaction enemyFaction,
             BaseSkill tactics,
             float drawn,
-            long feintBattleValue)
+            long feintStrategicValue)
         {
             float difficulty = ResponseBaseDifficulty
                 + drawn * ResponseDifficultyPerDraw
@@ -191,7 +191,7 @@ namespace OnlyWar.Operations.Missions.Diversion
             }
 
             List<OperationalMissionElement> responders =
-                GenerateResponse(execution, enemyFaction, drawn, feintBattleValue);
+                GenerateResponse(execution, enemyFaction, drawn, feintStrategicValue);
             if (responders.Count == 0)
             {
                 GameLog.Trace(() =>
@@ -224,21 +224,21 @@ namespace OnlyWar.Operations.Missions.Diversion
             MissionExecutionContext execution,
             RegionFaction enemyFaction,
             float drawn,
-            long feintBattleValue)
+            long feintStrategicValue)
         {
             long available = enemyFaction.GetDeployedStrength();
             if (available <= 0) return new List<OperationalMissionElement>();
 
-            long target = (long)Math.Round(feintBattleValue * (1.0 + drawn));
+            long target = (long)Math.Round(feintStrategicValue * (1.0 + drawn));
             target = Math.Max(target, enemyFaction.PlanetFaction.Faction.MinimumForceRequest);
             target = Math.Min(target, available);
-            target = Math.Min(target, StrategicCombatRules.MassCombatBattleValueFloor - 1);
+            target = Math.Min(target, StrategicCombatRules.MassCombatStrategicValueFloor - 1);
             if (target <= 0) return new List<OperationalMissionElement>();
 
             var request = new ForceGenerationRequest
             {
                 Faction = enemyFaction.PlanetFaction.Faction,
-                TargetBattleValue = target,
+                TargetStrategicValue = target,
                 Profile = ForceCompositionProfile.Garrison
             };
             return ForceGenerator.GenerateForce(request, execution.Random, execution.EntityIds)
@@ -246,10 +246,10 @@ namespace OnlyWar.Operations.Missions.Diversion
                 .ToList();
         }
 
-        private static long FeintBattleValue(MissionContext context) =>
+        private static long FeintStrategicValue(MissionContext context) =>
             Math.Max(1L, context.MissionSquads
                 .SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0)));
+                .Sum(soldier => (long)soldier.StrategicValue));
 
         private static string DescribeTarget(RegionFaction target) =>
             $"{target.Region.Planet.Name}/{target.Region.Name}/{target.PlanetFaction.Faction.Name}";

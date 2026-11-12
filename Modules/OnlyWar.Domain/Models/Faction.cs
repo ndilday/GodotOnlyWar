@@ -56,7 +56,7 @@ namespace OnlyWar.Domain
         // its minimum and returns nothing when even that will not fit — so order budgets sized off a
         // near-dead defender must be clamped up to it, or the target is never attacked.
         //
-        // This prices the minimum squad, not SquadTemplate.BattleValue, which prices the expected
+        // This prices the minimum squad, not SquadTemplate.StrategicValue, which prices the expected
         // (for a fixed element, the maximum) one. The two are identical for a fixed-size template
         // and diverge as soon as an element allows a range: a PDF infantry squad of one sergeant
         // plus four-to-nineteen troopers is worth 100 at full strength but can be fielded for 25.
@@ -68,9 +68,9 @@ namespace OnlyWar.Domain
         public long MinimumForceRequest =>
             _minimumForceRequest ??= SquadTemplates?.Values
                 .Where(st => st.IsPresentOperationalForce
-                    && st.MinimumBattleValue > 0
+                    && st.MinimumStrategicValue > 0
                     && (st.SquadType & SquadTypes.HQ) == 0)
-                .Select(st => (long)st.MinimumBattleValue)
+                .Select(st => (long)st.MinimumStrategicValue)
                 .DefaultIfEmpty(0)
                 .Min() ?? 0;
 
@@ -79,22 +79,22 @@ namespace OnlyWar.Domain
         // template at its FULL price.
         //
         // MinimumForceRequest is the lower bound and it is not a safe floor for an order. The
-        // generic generator's main loop gates on SquadTemplate.BattleValue - the full price - and
+        // generic generator's main loop gates on SquadTemplate.StrategicValue - the full price - and
         // only falls through to GeneratePartialRemainderSquad when nothing is affordable at it. That
         // fallback can return null, and then the whole request produces an EMPTY force.
         //
         // Grist Nine, 2026-09-18: two Ork advances were sized at MinimumForceRequest (30) against
         // near-dead defenders, generated nothing, and were returned unissued - while advances at 60,
         // 100 and 142 all mustered. Reconnaissance already prices its tasking this way, through
-        // FactionReconPatrolPlanner.CheapestScoutSquadBattleValue, which reads the same full price.
+        // FactionReconPatrolPlanner.CheapestScoutSquadStrategicValue, which reads the same full price.
         //
         // Squad templates are fixed at load, so this is computed once.
         public long MinimumFullSquadRequest =>
             _minimumFullSquadRequest ??= SquadTemplates?.Values
                 .Where(st => st.IsPresentOperationalForce
-                    && st.BattleValue > 0
+                    && st.StrategicValue > 0
                     && (st.SquadType & SquadTypes.HQ) == 0)
-                .Select(st => (long)st.BattleValue)
+                .Select(st => (long)st.StrategicValue)
                 .DefaultIfEmpty(0)
                 .Min() ?? 0;
 

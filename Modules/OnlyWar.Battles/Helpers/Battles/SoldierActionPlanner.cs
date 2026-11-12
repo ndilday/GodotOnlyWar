@@ -79,6 +79,16 @@ namespace OnlyWar.Battles
                     ReadinessValue: GetBattleValue(soldier) * 0.025f);
             }
 
+            if (RangedTargetSelector.DroppedAimSink != null && soldier.Aim.HasValue)
+            {
+                string dropped = tier != SquadMovementTier.Stationary
+                    ? $"squad {tier}"
+                    : _ranged.ExistingAimFailure(soldier);
+                if (dropped != null)
+                {
+                    RangedTargetSelector.DroppedAimSink(dropped);
+                }
+            }
             if (tier == SquadMovementTier.Stationary
                 && soldier.Aim is ValueTuple<int, RangedWeapon, int> stickyAim
                 && _soldierMap.TryGetValue(stickyAim.Item1, out BattleSoldier stickyTarget)

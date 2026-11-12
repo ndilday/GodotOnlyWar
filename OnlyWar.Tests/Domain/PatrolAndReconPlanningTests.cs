@@ -120,7 +120,7 @@ public class PatrolAndReconPlanningTests
     // ----- The screen is a designation, not a force -----
 
     [Fact]
-    public void IssueAllocatedPatrol_PostsTheScreenAsBattleValueAndRaisesNoForce()
+    public void IssueAllocatedPatrol_PostsTheScreenAsStrategicValueAndRaisesNoForce()
     {
         // 396,030 is the budget Diocesan Prime Delta was handed on the turn-1 save of 2026-09-20,
         // because a patrol's saturation is a fraction of MilitaryStrength and that is a population
@@ -133,7 +133,7 @@ public class PatrolAndReconPlanningTests
 
         new FactionReconPatrolPlanner().IssueAllocatedPatrol(faction, planet, rf, 396_030);
 
-        Assert.Equal(396_030, rf.PatrolScreenBattleValue);
+        Assert.Equal(396_030, rf.PatrolScreenStrategicValue);
         Assert.Empty(rf.LandedSquads);
     }
 
@@ -147,11 +147,11 @@ public class PatrolAndReconPlanningTests
         Planet planet = CreatePlanet();
         RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 5_000);
         rf.Garrison = 1_000;
-        rf.PatrolScreenBattleValue = 800;
+        rf.PatrolScreenStrategicValue = 800;
 
         rf.RemoveOrganizedMilitaryStrength(900);
 
-        Assert.Equal(100, rf.PatrolScreenBattleValue);
+        Assert.Equal(100, rf.PatrolScreenStrategicValue);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class PatrolAndReconPlanningTests
         Planet planet = CreatePlanet();
         RegionFaction rf = AddRegionFaction(planet, planet.Regions[0], faction, population: 5_000);
         rf.Garrison = 1_000;
-        rf.PatrolScreenBattleValue = 450;
+        rf.PatrolScreenStrategicValue = 450;
 
         Assert.Equal(450, rf.GetPatrolStrength());
     }
@@ -172,7 +172,7 @@ public class PatrolAndReconPlanningTests
     // --- fixtures ---
 
     private static RegionForceState State(RegionFaction rf) =>
-        new(rf, requiredDefensiveBattleValue: 0, assignedDefensiveBattleValue: 0,
+        new(rf, requiredDefensiveStrategicValue: 0, assignedDefensiveStrategicValue: 0,
             spareTroops: 10_000, defensiveShortfall: 0);
 
     private static RegionFaction AddRegionFaction(

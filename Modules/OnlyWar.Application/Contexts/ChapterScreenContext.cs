@@ -823,7 +823,7 @@ internal sealed class ChapterScreenContext
             [
                 new ChapterBrowserMetric(squad.Members.Count.ToString(), "Soldiers"),
                 new ChapterBrowserMetric(woundedCount.ToString(), "Wounded"),
-                new ChapterBrowserMetric(squad.SquadTemplate.BattleValue.ToString(), "Battle Value")
+                new ChapterBrowserMetric(squad.SquadTemplate.StrategicValue.ToString(), "Battle Value")
             ],
             cards);
     }

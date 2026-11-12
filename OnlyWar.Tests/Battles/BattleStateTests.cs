@@ -156,7 +156,7 @@ public class BattleStateTests
         Assert.Equal(Aggression.Cautious, state.AttackerSide.Aggression);
         Assert.Equal(BattleRole.Ambusher, state.AttackerSide.BattleRole);
         Assert.Equal(2, state.AttackerSide.StartingSoldierCount);
-        Assert.Equal(squad.Soldiers.Sum(s => s.Soldier.Template.BattleValue),
+        Assert.Equal(squad.Soldiers.Sum(s => s.Soldier.StrategicValue),
             state.AttackerSide.StartingBattleValue);
         Assert.Equal(Aggression.Aggressive, state.OpposingSide.Aggression);
         Assert.Equal(BattleRole.Ambushed, state.OpposingSide.BattleRole);
@@ -190,7 +190,7 @@ public class BattleStateTests
         Assert.DoesNotContain(killed.Id, state.Soldiers.Keys);
         Assert.DoesNotContain(incapacitated.Id, state.Soldiers.Keys);
         Assert.Equal(1, state.AttackerSide.StartingSoldierCount);
-        Assert.Equal(survivor.Template.BattleValue, state.AttackerSide.StartingBattleValue);
+        Assert.Equal(survivor.StrategicValue, state.AttackerSide.StartingBattleValue);
 
         // The mission-level wrapper remains intact for aftermath and persistent roster handling.
         Assert.Equal(3, missionSquad.Soldiers.Count);

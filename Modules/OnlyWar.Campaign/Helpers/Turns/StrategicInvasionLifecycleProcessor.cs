@@ -239,16 +239,16 @@ namespace OnlyWar.Campaign.Turns
         {
             if (invasionForce?.IsActive != true || region == null || random == null) return false;
 
-            long regionalBattleValue = invasionForce.KnownRegions
+            long regionalStrategicValue = invasionForce.KnownRegions
                 .Where(presence => presence?.StrategicInvasionForceId == invasionForce.Id
                     && presence.Region == region)
                 .Sum(presence => presence.OrganizedMilitaryStrength);
-            long totalBattleValue = invasionForce.KnownRegions
+            long totalStrategicValue = invasionForce.KnownRegions
                 .Where(presence => presence?.StrategicInvasionForceId == invasionForce.Id)
                 .Sum(presence => presence.OrganizedMilitaryStrength);
-            double concentration = totalBattleValue <= 0
+            double concentration = totalStrategicValue <= 0
                 ? 0.0
-                : Math.Clamp(regionalBattleValue / (double)totalBattleValue, 0.0, 1.0);
+                : Math.Clamp(regionalStrategicValue / (double)totalStrategicValue, 0.0, 1.0);
             double successQuality = Math.Clamp(
                 successMargin / (rules?.ExceptionalAssassinationMargin
                     ?? DormantPopulationRules.ExceptionalAssassinationMargin),
@@ -319,7 +319,7 @@ namespace OnlyWar.Campaign.Turns
                 if (invasionForce == null) continue;
 
                 bool invasionAttacked = invasionForce.Faction == result.Attacker;
-                long committed = invasionAttacked ? result.CommittedBattleValue : result.DefenderBattleValue;
+                long committed = invasionAttacked ? result.CommittedStrategicValue : result.DefenderStrategicValue;
                 long losses = invasionAttacked ? result.AttackerLosses : result.DefenderLosses;
                 double chance = 0.5 * Math.Clamp(
                     losses / (double)Math.Max(1L, committed), 0.0, 1.0);
@@ -384,31 +384,31 @@ namespace OnlyWar.Campaign.Turns
 
         private void FormInvasionFromGhostSource(Sector sector, GhostPopulationSource source, Faction invasionFaction)
         {
-            long dispatchedBattleValue = (long)Math.Floor(
+            long dispatchedStrategicValue = (long)Math.Floor(
                 source.Population * DormantPopulationRules.MobilizationFraction(
                     _turn.Rules.FactionBehaviorRules,
                     _turn.Random.NextRandomZValue()));
-            dispatchedBattleValue = Math.Clamp(dispatchedBattleValue, 0, source.Population);
-            source.Population -= dispatchedBattleValue;
+            dispatchedStrategicValue = Math.Clamp(dispatchedStrategicValue, 0, source.Population);
+            source.Population -= dispatchedStrategicValue;
             source.Consolidation = source.PopulationCapacity <= 0
                 ? 0.0
                 : Math.Clamp(source.Population / (double)source.PopulationCapacity, 0.0, 1.0);
 
-            if (dispatchedBattleValue <= 0)
+            if (dispatchedStrategicValue <= 0)
             {
                 // Do not create an empty command identity when a tiny remainder rounds below the
                 // minimum representable BV. The ecosystem remains latent and can grow normally.
                 return;
             }
 
-            Planet target = ChooseLandingPlanet(sector, invasionFaction, dispatchedBattleValue);
+            Planet target = ChooseLandingPlanet(sector, invasionFaction, dispatchedStrategicValue);
             if (target == null)
             {
                 // Keep a latent ecosystem intact if a degenerate sector has no landing world.
                 // This should not occur in normal campaigns, but it prevents a threshold crossing
                 // from silently deleting population when a test or future mode supplies an empty
                 // sector.
-                source.Population += dispatchedBattleValue;
+                source.Population += dispatchedStrategicValue;
                 source.Consolidation = source.PopulationCapacity <= 0
                     ? 0.0
                     : Math.Clamp(source.Population / (double)source.PopulationCapacity, 0.0, 1.0);
@@ -416,17 +416,17 @@ namespace OnlyWar.Campaign.Turns
             }
 
             long invasionForceId = sector.GetNextStrategicInvasionForceId();
-            List<(Region Region, long BattleValue)> allocations = AllocateLanding(target, invasionFaction, dispatchedBattleValue);
-            Region primary = allocations.FirstOrDefault(item => item.BattleValue > 0).Region
+            List<(Region Region, long StrategicValue)> allocations = AllocateLanding(target, invasionFaction, dispatchedStrategicValue);
+            Region primary = allocations.FirstOrDefault(item => item.StrategicValue > 0).Region
                 ?? target.Regions.OrderByDescending(region => region.Population).ThenBy(region => region.Id).First();
             Squad commandSquad = CreateCommandSquad(invasionFaction, invasionForceId, _turn.Random);
             RegisterCommandUnit(sector, invasionFaction, commandSquad, invasionForceId);
             commandSquad.CurrentRegion = primary;
             StrategicInvasionForce invasionForce = new(invasionForceId, invasionFaction, commandSquad, primary, target);
 
-            foreach (var allocation in allocations.Where(item => item.BattleValue > 0))
+            foreach (var allocation in allocations.Where(item => item.StrategicValue > 0))
             {
-                RegionFaction presence = EstablishFactionPresence(invasionFaction, allocation.Region, allocation.BattleValue);
+                RegionFaction presence = EstablishFactionPresence(invasionFaction, allocation.Region, allocation.StrategicValue);
                 presence.StrategicInvasionForceId = invasionForce.Id;
                 presence.DormantConsolidation = 1.0;
                 invasionForce.TrackRegion(presence);
@@ -434,8 +434,8 @@ namespace OnlyWar.Campaign.Turns
 
             sector.AddStrategicInvasionForce(invasionForce);
             GameLog.Info(() =>
-                $"Strategic invasion force {invasionForce.Id} formed at {target.Name}: dispatchedBV={dispatchedBattleValue}, "
-                + $"regions={allocations.Count(item => item.BattleValue > 0)}, "
+                $"Strategic invasion force {invasionForce.Id} formed at {target.Name}: dispatchedBV={dispatchedStrategicValue}, "
+                + $"regions={allocations.Count(item => item.StrategicValue > 0)}, "
                 + $"sourceRemainder={source.Population}");
         }
 
@@ -459,7 +459,7 @@ namespace OnlyWar.Campaign.Turns
             }
 
             foreach (RegionFaction presence in surviving
-                .Where(item => item.OrganizedMilitaryStrength >= _turn.Rules.FactionBehaviorRules.SuccessorGenerationMinimumBattleValue))
+                .Where(item => item.OrganizedMilitaryStrength >= _turn.Rules.FactionBehaviorRules.SuccessorGenerationMinimumStrategicValue))
             {
                 CreateSuccessorForce(sector, invasionForce.Faction, presence);
             }
@@ -470,7 +470,7 @@ namespace OnlyWar.Campaign.Turns
             long id = sector.GetNextStrategicInvasionForceId();
             Squad command = CreateCommandSquad(faction, id, _turn.Random);
             RegisterCommandUnit(sector, faction, command, id);
-            long survivingBattleValue = presence.OrganizedMilitaryStrength;
+            long survivingStrategicValue = presence.OrganizedMilitaryStrength;
             Planet destination = ChooseSuccessorDestination(sector, faction, presence);
             Region currentRegion = destination == presence.Region.Planet
                 ? presence.Region
@@ -481,15 +481,15 @@ namespace OnlyWar.Campaign.Turns
                 TravelWeeksRemaining = currentRegion == null
                     ? CalculateInvasionTravelWeeks(sector, presence.Region.Planet, destination)
                     : 0,
-                TransitBattleValue = currentRegion == null ? survivingBattleValue : 0
+                TransitStrategicValue = currentRegion == null ? survivingStrategicValue : 0
             };
             command.CurrentRegion = currentRegion;
-            if (currentRegion == null && survivingBattleValue > 0)
+            if (currentRegion == null && survivingStrategicValue > 0)
             {
                 // A traveling splinter leaves no active population behind. The indelible
                 // RegionFaction remains as a zero-strength, hidden ecological marker and will
                 // regrow only if the traveling identity does not return.
-                presence.RemoveMilitaryStrength(survivingBattleValue);
+                presence.RemoveMilitaryStrength(survivingStrategicValue);
                 presence.IsPublic = false;
             }
             presence.StrategicInvasionForceId = id;
@@ -518,10 +518,10 @@ namespace OnlyWar.Campaign.Turns
 
         private bool IsViableLanding(Region region, Faction faction, long available)
         {
-            long defending = DefendingBattleValue(region, faction);
+            long defending = DefendingStrategicValue(region, faction);
             long required = defending > 0
                 ? (long)Math.Ceiling(defending * _turn.Rules.FactionBehaviorRules.DefendedLandingRatio)
-                : _turn.Rules.FactionBehaviorRules.UndefendedLandingBattleValue;
+                : _turn.Rules.FactionBehaviorRules.UndefendedLandingStrategicValue;
             return available >= required;
         }
 
@@ -553,13 +553,13 @@ namespace OnlyWar.Campaign.Turns
                 .GroupBy(invasionForce => invasionForce.DestinationPlanet))
             {
                 List<StrategicInvasionForce> invasionForces = group
-                    .OrderByDescending(invasionForce => invasionForce.OrganizedBattleValue)
+                    .OrderByDescending(invasionForce => invasionForce.OrganizedStrategicValue)
                     .ThenBy(invasionForce => invasionForce.Id)
                     .ToList();
                 if (invasionForces.Count < 2) continue;
 
                 StrategicInvasionForce strongest = invasionForces[0];
-                long combined = invasionForces.Sum(invasionForce => invasionForce.OrganizedBattleValue);
+                long combined = invasionForces.Sum(invasionForce => invasionForce.OrganizedStrategicValue);
                 long merged = (long)Math.Floor(combined * Math.Max(
                     0.0,
                     1.0 - _turn.Rules.FactionBehaviorRules.SuccessorMergeLeaderLoss * (invasionForces.Count - 1)));
@@ -593,12 +593,12 @@ namespace OnlyWar.Campaign.Turns
                 // applied. The transit payload then carries the rest, so the leader-loss formula is
                 // accounted for exactly once even when a successor left a hidden organized remnant
                 // behind at its departure world.
-                long regionalBattleValue = mergedForce.KnownRegions
+                long regionalStrategicValue = mergedForce.KnownRegions
                     .Where(presence => presence.StrategicInvasionForceId == mergedId)
                     .Sum(presence => presence.OrganizedMilitaryStrength);
-                long commandBattleValue = CommandBattleValue(mergedForce.CommandSquad);
-                long maximumRegionalBattleValue = Math.Max(0L, merged - commandBattleValue);
-                long regionalLoss = Math.Max(0L, regionalBattleValue - maximumRegionalBattleValue);
+                long commandStrategicValue = CommandStrategicValue(mergedForce.CommandSquad);
+                long maximumRegionalStrategicValue = Math.Max(0L, merged - commandStrategicValue);
+                long regionalLoss = Math.Max(0L, regionalStrategicValue - maximumRegionalStrategicValue);
                 foreach (RegionFaction presence in mergedForce.KnownRegions
                     .Where(presence => presence.StrategicInvasionForceId == mergedId)
                     .OrderByDescending(presence => presence.OrganizedMilitaryStrength))
@@ -606,12 +606,12 @@ namespace OnlyWar.Campaign.Turns
                     if (regionalLoss <= 0) break;
                     regionalLoss -= presence.RemoveOrganizedMilitaryStrength(regionalLoss);
                 }
-                regionalBattleValue = mergedForce.KnownRegions
+                regionalStrategicValue = mergedForce.KnownRegions
                     .Where(presence => presence.StrategicInvasionForceId == mergedId)
                     .Sum(presence => presence.OrganizedMilitaryStrength);
-                mergedForce.TransitBattleValue = Math.Max(
+                mergedForce.TransitStrategicValue = Math.Max(
                     0L,
-                    merged - commandBattleValue - regionalBattleValue);
+                    merged - commandStrategicValue - regionalStrategicValue);
             }
         }
 
@@ -628,7 +628,7 @@ namespace OnlyWar.Campaign.Turns
             {
                 StrategicInvasionForce attractor = active
                     .Where(invasionForce => invasionForce.CurrentRegion.GetAdjacentRegions().Contains(source.Region))
-                    .OrderByDescending(invasionForce => invasionForce.CurrentBattleValue)
+                    .OrderByDescending(invasionForce => invasionForce.CurrentStrategicValue)
                     .ThenBy(invasionForce => invasionForce.Id)
                     .FirstOrDefault();
                 if (attractor == null) continue;
@@ -669,7 +669,7 @@ namespace OnlyWar.Campaign.Turns
                 bool canEmerge = canGenerateInvasions
                     && presence.Population >= rules.DormantEmergenceMinimumPopulation
                     && presence.DormantConsolidation >= 1.0
-                    && presence.OrganizedMilitaryStrength >= rules.SuccessorGenerationMinimumBattleValue;
+                    && presence.OrganizedMilitaryStrength >= rules.SuccessorGenerationMinimumStrategicValue;
                 if (canEmerge && _turn.Random.GetLinearDouble() < rules.DormantEmergenceChance)
                 {
                     CreateSuccessorForce(sector, invasionFaction, presence);
@@ -735,7 +735,7 @@ namespace OnlyWar.Campaign.Turns
             {
                 Planet = planet,
                 Defended = planet.Regions
-                    .Select(region => DefendingBattleValue(region, invasionFaction))
+                    .Select(region => DefendingStrategicValue(region, invasionFaction))
                     .DefaultIfEmpty(0)
                     .Max()
             }).ToList();
@@ -761,13 +761,13 @@ namespace OnlyWar.Campaign.Turns
         /// </summary>
         private long LandingCost(Region region, Faction invasionFaction)
         {
-            long defending = DefendingBattleValue(region, invasionFaction);
+            long defending = DefendingStrategicValue(region, invasionFaction);
             return defending > 0
                 ? (long)Math.Ceiling(defending * _turn.Rules.FactionBehaviorRules.DefendedLandingRatio)
-                : _turn.Rules.FactionBehaviorRules.UndefendedLandingBattleValue;
+                : _turn.Rules.FactionBehaviorRules.UndefendedLandingStrategicValue;
         }
 
-        private List<(Region Region, long BattleValue)> AllocateLanding(
+        private List<(Region Region, long StrategicValue)> AllocateLanding(
             Planet planet, Faction invasionFaction, long available)
         {
             // Two rules, both about landing a force that can actually fight rather than the largest
@@ -785,7 +785,7 @@ namespace OnlyWar.Campaign.Turns
             //    landing an enormous defensive requirement for enemies it had invited on itself.
             //    Clustering keeps the frontage short.
             long remaining = Math.Max(0, available);
-            List<(Region Region, long BattleValue)> result = [];
+            List<(Region Region, long StrategicValue)> result = [];
             HashSet<Region> chosen = [];
             List<Region> pool = planet.Regions.ToList();
 
@@ -797,8 +797,8 @@ namespace OnlyWar.Campaign.Turns
                     // Adjacency first, but only once there is something to be adjacent to.
                     .OrderByDescending(region => chosen.Count > 0
                         && region.GetAdjacentRegions().Any(chosen.Contains))
-                    .ThenByDescending(region => DefendingBattleValue(region, invasionFaction) > 0)
-                    .ThenByDescending(region => DefendingBattleValue(region, invasionFaction))
+                    .ThenByDescending(region => DefendingStrategicValue(region, invasionFaction) > 0)
+                    .ThenByDescending(region => DefendingStrategicValue(region, invasionFaction))
                     .ThenByDescending(region => region.Population)
                     .ThenBy(region => region.Id)
                     .FirstOrDefault();
@@ -813,7 +813,7 @@ namespace OnlyWar.Campaign.Turns
             if (remaining > 0 && result.Count > 0)
             {
                 // Everything unspent reinforces the first beachhead rather than buying a losing one.
-                result[0] = (result[0].Region, result[0].BattleValue + remaining);
+                result[0] = (result[0].Region, result[0].StrategicValue + remaining);
             }
             else if (result.Count == 0 && remaining > 0)
             {
@@ -828,15 +828,15 @@ namespace OnlyWar.Campaign.Turns
             return result;
         }
 
-        private long DefendingBattleValue(Region region, Faction invasionFaction) =>
+        private long DefendingStrategicValue(Region region, Faction invasionFaction) =>
             region.RegionFactionMap.Values
                 .Where(presence => presence.PlanetFaction.Faction != invasionFaction
                     && FactionRelationshipService.AreHostile(
                         invasionFaction, presence.PlanetFaction.Faction, region.Planet))
-                .Sum(presence => StrategicCombatResolver.CalculateDefenderBattleValue(
+                .Sum(presence => StrategicCombatResolver.CalculateDefenderStrategicValue(
                     presence, _turn.Sector.StrategicInvasionForces));
 
-        private static RegionFaction EstablishFactionPresence(Faction invasionFaction, Region region, long battleValue)
+        private static RegionFaction EstablishFactionPresence(Faction invasionFaction, Region region, long strategicValue)
         {
             if (!region.Planet.PlanetFactionMap.TryGetValue(invasionFaction.Id, out PlanetFaction planetFaction))
             {
@@ -855,18 +855,18 @@ namespace OnlyWar.Campaign.Turns
                 region.RegionFactionMap[invasionFaction.Id] = presence;
             }
             presence.IsPublic = true;
-            presence.AddMilitaryStrength(Math.Max(0, battleValue));
+            presence.AddMilitaryStrength(Math.Max(0, strategicValue));
             return presence;
         }
 
         private Squad CreateCommandSquad(Faction faction, long invasionForceId, IRNG random)
         {
             SquadTemplate template = faction.SquadTemplates?.Values
-                .Where(candidate => candidate.BattleValue > 0
+                .Where(candidate => candidate.StrategicValue > 0
                     && candidate.SquadType.HasFlag(SquadTypes.HQ))
                 .OrderByDescending(candidate => candidate.Elements
                     .Count(element => element.SoldierTemplate?.IsSquadLeader == true))
-                .ThenByDescending(candidate => candidate.BattleValue)
+                .ThenByDescending(candidate => candidate.StrategicValue)
                 .ThenBy(candidate => candidate.Id)
                 .FirstOrDefault();
             if (template == null)
@@ -918,8 +918,8 @@ namespace OnlyWar.Campaign.Turns
                 .SelectMany(region => region.RegionFactionMap.Values)
                 .Where(presence => presence.PlanetFaction.Faction == invasionFaction);
 
-        private static long CommandBattleValue(Squad commandSquad) => commandSquad?.Members
-            .Sum(member => (long)(member.Template?.BattleValue ?? 0)) ?? 0L;
+        private static long CommandStrategicValue(Squad commandSquad) => commandSquad?.Members
+            .Sum(member => (long)member.StrategicValue) ?? 0L;
 
         private static StrategicInvasionForce ResolveInvasionForceForOrder(Sector sector, Order order)
         {
@@ -967,29 +967,29 @@ namespace OnlyWar.Campaign.Turns
                 if (invasionForce.TravelWeeksRemaining <= 0)
                 {
                     Planet destination = invasionForce.DestinationPlanet;
-                    long available = invasionForce.TransitBattleValue + CommandBattleValue(invasionForce.CommandSquad);
-                    List<(Region Region, long BattleValue)> allocations = destination == null
+                    long available = invasionForce.TransitStrategicValue + CommandStrategicValue(invasionForce.CommandSquad);
+                    List<(Region Region, long StrategicValue)> allocations = destination == null
                         ? []
                         : AllocateLanding(destination, invasionForce.Faction, available);
-                    Region primary = allocations.FirstOrDefault(item => item.BattleValue > 0).Region
+                    Region primary = allocations.FirstOrDefault(item => item.StrategicValue > 0).Region
                         ?? destination?.Regions.OrderByDescending(region => region.Population)
                             .ThenBy(region => region.Id).FirstOrDefault();
                     if (primary != null && available > 0)
                     {
-                        foreach ((Region Region, long BattleValue) allocation in allocations
-                            .Where(item => item.BattleValue > 0))
+                        foreach ((Region Region, long StrategicValue) allocation in allocations
+                            .Where(item => item.StrategicValue > 0))
                         {
                             RegionFaction presence = EstablishFactionPresence(
                                 invasionForce.Faction,
                                 allocation.Region,
-                                allocation.BattleValue);
+                                allocation.StrategicValue);
                             presence.StrategicInvasionForceId = invasionForce.Id;
                             presence.DormantConsolidation = 1.0;
                             invasionForce.TrackRegion(presence);
                         }
                         invasionForce.CurrentRegion = primary;
                     }
-                    invasionForce.TransitBattleValue = 0;
+                    invasionForce.TransitStrategicValue = 0;
                     invasionForce.DestinationPlanet = null;
                 }
             }

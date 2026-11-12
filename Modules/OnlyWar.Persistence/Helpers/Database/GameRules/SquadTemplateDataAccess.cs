@@ -572,7 +572,7 @@ namespace OnlyWar.Persistence.Database.GameRules
             {
                 command.CommandText =
                     "SELECT Id, SquadTemplateId, SoldierTemplateId, MinimumRequired, MaximumAllowed, "
-                    + "DefaultWeaponSetId, RollsStrength FROM SquadTemplateElement";
+                    + "DefaultWeaponSetId, RollsStrength, StrategicValuePerSoldier FROM SquadTemplateElement";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -589,6 +589,9 @@ namespace OnlyWar.Persistence.Database.GameRules
                         : null;
                     bool rollsStrength = reader[6].GetType() != typeof(DBNull)
                         && reader.GetInt32(6) != 0;
+                    // Battle value per soldier lives on the element, not the soldier template: it is
+                    // measured from the squad as fielded, kit and armour included (BattleLogic §4).
+                    int bvPerSoldier = reader.GetInt32(7);
                     ArmorTemplate defaultArmor = elementArmorMap.GetValueOrDefault(id);
 
                     SoldierTemplate template = RulesDatabaseLookup.Require(
@@ -631,7 +634,7 @@ namespace OnlyWar.Persistence.Database.GameRules
                     elementsMap[squadTemplateId].Add(
                         new SquadTemplateElement(
                             template, (byte)min, (byte)max, id, defaultWeapons, quotas, rollsStrength,
-                            personalRole, defaultArmor));
+                            personalRole, defaultArmor, bvPerSoldier));
                 }
             }
             return elementsMap;
@@ -718,7 +721,7 @@ namespace OnlyWar.Persistence.Database.GameRules
                     int defaultArmorId = reader.GetInt32(3);
                     int defaultWeaponSetId = reader.GetInt32(4);
                     int squadType = reader.GetInt32(5);
-                    // BattleValue is no longer stored on SquadTemplate — it is derived from the
+                    // StrategicValue is no longer stored on SquadTemplate — it is derived from the
                     // members' point values (PRD §4.24). BodyguardSquadTemplateId and the leader
                     // work-experience profile shift up one column with its removal.
                     if (reader[6].GetType() != typeof(DBNull))
@@ -992,14 +995,8 @@ namespace OnlyWar.Persistence.Database.GameRules
                             profileId,
                             $"SoldierTemplate {id}.WorkExperienceTrainingProfileId");
                     }
-                    // BattleValue was appended after WorkExperienceTrainingProfileId; rows without a
-                    // populated value (e.g. player soldiers, pending a later pass) default to 0.
-                    int battleValue = reader.FieldCount > 9 && reader[9].GetType() != typeof(DBNull)
-                        ? reader.GetInt32(9)
-                        : 0;
-                    float? meleeFraction = reader.FieldCount > 10 && reader[10].GetType() != typeof(DBNull)
-                        ? Convert.ToSingle(reader[10])
-                        : null;
+                    // The MeleeFraction column is no longer read (2026-11-01): the battle measures
+                    // each soldier's melee share against his targets.
                     List<ValueTuple<BaseSkill, float>> trainingList = null;
                     if (soldierTemplateTrainingMap.ContainsKey(id))
                     {
@@ -1029,8 +1026,8 @@ namespace OnlyWar.Persistence.Database.GameRules
                     SoldierTemplate soldierTemplate =
                         new SoldierTemplate(id, species, name, (byte)rank, (byte)subrank,
                                              isSquadLeader, (byte)specialistType, trainingList,
-                                             workExperienceTrainingProfile, battleValue,
-                                             promotionRequirements, meleeFraction,
+                                             workExperienceTrainingProfile,
+                                             promotionRequirements,
                                              weaponOptionsByGroup);
 
                     if (!soldierTemplatesByFactionId.ContainsKey(factionId))

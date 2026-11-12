@@ -172,7 +172,7 @@ namespace OnlyWar.Campaign.Turns
         private float ConvertPopulation(Region region, RegionFaction regionFaction, float newPop)
         {
             RegionFaction defaultFaction = region.RegionFactionMap.Values
-                .First(pf => pf.PlanetFaction.Faction.IsDefaultFaction);
+                .FirstOrDefault(pf => pf.PlanetFaction.Faction.IsDefaultFaction);
             if (defaultFaction?.Population > 0)
             {
                 defaultFaction.Population--;

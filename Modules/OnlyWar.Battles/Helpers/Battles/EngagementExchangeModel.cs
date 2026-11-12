@@ -8,11 +8,11 @@ namespace OnlyWar.Battles
 {
     /// <summary>
     /// The per-turn exchange model behind posture choice: what a squad and its enemies would remove
-    /// from each other now, plus the current-turn contact terms.
+    /// from each other now, plus the melee a squad already in contact lands this turn.
     ///
     /// <para>Three questions live here. <b>Now</b> -- what is already landing on us this turn
-    /// (<see cref="EvaluateIncomingNow"/>) and what a charge would trade (<see
-    /// cref="EvaluateContactTerms"/>). Future position value belongs to the state-only
+    /// (<see cref="EvaluateIncomingNow"/>) and what a squad already in contact strikes (<see
+    /// cref="EvaluateContactMeleeNow"/>). Future position value belongs to the state-only
     /// <see cref="EngagementPotential"/> collaborator, so this class does not own option-specific
     /// arrival or continuation shaping.</para>
     ///
@@ -171,7 +171,22 @@ namespace OnlyWar.Battles
             return response;
         }
 
-        internal (float MeleeValue, float Commitment) EvaluateContactTerms(
+        /// <summary>
+        /// The melee a CloseToContact option lands THIS turn: non-zero only when the squad is
+        /// already in contact with its primary at turn start, since a squad that arrives this turn
+        /// strikes next turn (TDD §6.6).
+        ///
+        /// <para>Nothing else about a charge is priced here. Until 2026-10-19 this also returned a
+        /// run-in cost and a gun-lock cost, and credited a charge from range with its melee
+        /// divided by (1 + turns to contact). All three are what the potential's Close
+        /// continuation already prices: the crossing under fire, the guns given up in contact
+        /// (contact is fought at melee rates), and the melee after arrival. The run-in cost also
+        /// summed, for every charger, the fire of every enemy shooter as if each shot at him alone,
+        /// so it did not share the enemy's fire across our soldiers and squads. 60 Kommandos at 200
+        /// yards against 60 PDF priced every charge about 20 battle value below holding and stood in
+        /// a pistol-against-autogun firefight they lost.</para>
+        /// </summary>
+        internal float EvaluateContactMeleeNow(
             BattleSquad squad,
             EngagementOptionKind kind,
             BattleSquad primary,
@@ -179,42 +194,22 @@ namespace OnlyWar.Battles
         {
             if (kind != EngagementOptionKind.CloseToContact || primary == null)
             {
-                return (0, 0);
+                return 0;
             }
-            float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
+            // In contact means within the 1-cell contact allowance, the distance at which the old
+            // turns-to-contact count was zero.
+            if (BattleEngagementFrameBuilder.MinimumDistance(squad, primary) > 1f)
+            {
+                return 0;
+            }
             float melee = 0;
-            float closing = 0;
-            int reaches = 0;
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(member => member.Soldier.Id))
             {
-                MeleeStrikeEstimator.ChargeAssessment estimate =
-                    _melee.EstimateChargeNet(soldier, primary, distance);
-                closing += estimate.ClosingCost;
-                // EstimateChargeNet has already present-valued this: a soldier who is not in
-                // contact at turn start cannot strike this turn, so his payoff is discounted by the
-                // full turns-to-contact. The current turn's incoming fire is represented by
-                // EvaluateIncomingNow; this commitment is only the remaining exposure while contact
-                // is pending.
-                melee += estimate.MeleeBattleValue;
-                if (estimate.ReachesContactThisTurn)
-                {
-                    reaches++;
-                }
+                melee += _melee.EstimateMeleeInContact(soldier, primary);
             }
             float seatFraction = Math.Min(1f,
                 profile.ContactCapacity / (float)Math.Max(1, squad.AbleSoldiers.Count));
-            float currentContactFraction = reaches > 0
-                ? Math.Min(seatFraction,
-                    reaches / (float)Math.Max(1, squad.AbleSoldiers.Count))
-                : seatFraction;
-            melee *= currentContactFraction;
-            float lockCost = reaches > 0
-                ? Math.Max(0, profile.UsableRangedBattleValue - profile.UsableMeleeBattleValue)
-                    * 0.12f
-                : 0;
-            return (
-                Math.Min(melee, primary.AbleSoldiers.Sum(GetBattleValue)),
-                Math.Min(closing, profile.TotalAbleBattleValue) + lockCost);
+            return Math.Min(melee * seatFraction, primary.AbleSoldiers.Sum(GetBattleValue));
         }
 
         /// <summary>
@@ -224,8 +219,13 @@ namespace OnlyWar.Battles
         /// </summary>
         internal float EvaluateContactRemovalRate(
             BattleSquad attacker,
-            BattleSquad target) =>
-            MeleeRemovalRate(attacker, target, 1f);
+            BattleSquad target,
+            float attackerShare = 1f,
+            float frontageShare = 1f,
+            float defenderShare = 1f) =>
+            attacker == null || target == null
+                ? 0f
+                : ContactStrikes(attacker, target).RemovalRate(attackerShare, frontageShare, defenderShare);
 
         /// <summary>
         /// How fast the quarry is opening the range, when this squad is the one chasing.
@@ -312,6 +312,10 @@ namespace OnlyWar.Battles
         /// of the standing phases of <see cref="EngagementExchangeForecast"/>. See
         /// <see cref="SquadPairRemovalRate.SustainedRateAtRange"/>.
         /// </summary>
+        /// <summary>The removal-rate table's cells for one shooter squad (diagnostics read the terms).</summary>
+        internal IReadOnlyDictionary<int, SquadPairRemovalRate> PairRemovalRates(BattleSquad squad) =>
+            _removalRates.GetPairRemovalRates(squad);
+
         internal float EvaluateSustainedOutgoingRate(
             BattleSquad squad,
             BattleSquad enemy,
@@ -330,6 +334,131 @@ namespace OnlyWar.Battles
             return Math.Min(
                 opposing.TotalAbleBattleValue,
                 Math.Max(ranged, outgoingAllocation * MeleeRemovalRate(squad, enemy, range)));
+        }
+
+        /// <summary>
+        /// <see cref="EvaluateSustainedOutgoingRate"/> with the rounds that fire spends per turn, for
+        /// the forecast's ammunition budget. No rounds when melee is the larger part.
+        /// </summary>
+        internal (float Removal, float Rounds) EvaluateSustainedOutgoing(
+            BattleSquad squad,
+            BattleSquad enemy,
+            BattleSquadCapabilityProfile opposing,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            float range)
+        {
+            float removal = EvaluateSustainedOutgoingRate(squad, enemy, opposing, frames, range);
+            if (!_removalRates.GetPairRemovalRates(squad).TryGetValue(enemy.Id, out SquadPairRemovalRate rate))
+            {
+                return (removal, 0f);
+            }
+            bool rangedLeads = rate.SustainedRateAtRange(range) >= removal - 0.0001f;
+            return (removal, rangedLeads ? rate.SustainedRoundsAtRange(range) : 0f);
+        }
+
+        /// <summary>
+        /// This squad's fire on <paramref name="enemy"/> while it moves (2026-11-08, fire on the
+        /// approach): every soldier fires un-aimed each turn with the bulk penalty of its movement
+        /// tier (<paramref name="shooterBulkMultiplier"/>, <see cref="PostureBulkMultiplier"/>),
+        /// against a target that stands. With the rounds it spends per turn.
+        /// </summary>
+        internal (float Removal, float Rounds) EvaluateMovingOutgoing(
+            BattleSquad squad,
+            BattleSquad enemy,
+            BattleSquadCapabilityProfile opposing,
+            float range,
+            float shooterBulkMultiplier)
+        {
+            if (float.IsPositiveInfinity(shooterBulkMultiplier)
+                || !_removalRates.GetPairRemovalRates(squad).TryGetValue(enemy.Id, out SquadPairRemovalRate rate))
+            {
+                return (0f, 0f);
+            }
+            return (
+                Math.Min(opposing.TotalAbleBattleValue, rate.RateAtRange(range, 0f, shooterBulkMultiplier)),
+                rate.RoundsPerTurnAtRange(range));
+        }
+
+        /// <summary>
+        /// <see cref="EvaluateIncomingExchangeRate"/> with the rounds the enemy spends per turn on
+        /// this squad (its whole-squad rounds times the same allocation).
+        /// </summary>
+        internal (float Removal, float Rounds) EvaluateIncoming(
+            BattleSquad squad,
+            BattleSquad enemy,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            float range,
+            float targetSpeed)
+        {
+            float removal = EvaluateIncomingExchangeRate(squad, enemy, profile, frames, range, targetSpeed);
+            float allocation = frames.TryGetValue(enemy.Id, out SquadEngagementFrame theirFrame)
+                ? theirFrame.PairWeights.GetValueOrDefault(squad.Id)
+                : 0f;
+            if (removal <= 0f || allocation <= 0f || MeleeRemovalRate(enemy, squad, range) > 0f)
+            {
+                return (removal, 0f);
+            }
+            float rounds = 0f;
+            foreach (SquadPairRemovalRate rate in _removalRates.GetPairRemovalRates(enemy).Values)
+            {
+                rounds += rate.RoundsPerTurnAtRange(range);
+            }
+            return (removal, allocation * rounds);
+        }
+
+        /// <summary>
+        /// <see cref="EvaluateSustainedIncomingRate"/> with the rounds the enemy spends per turn on
+        /// this squad.
+        /// </summary>
+        internal (float Removal, float Rounds) EvaluateSustainedIncoming(
+            BattleSquad squad,
+            BattleSquad enemy,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            float range)
+        {
+            float incomingBulk = PostureBulkMultiplier(
+                ForecastFiringPosture(frames.GetValueOrDefault(enemy.Id)));
+            if (incomingBulk != 0f)
+            {
+                return EvaluateIncoming(squad, enemy, profile, frames, range, 0f);
+            }
+            float removal = EvaluateSustainedIncomingRate(squad, enemy, profile, frames, range);
+            float allocation = frames.TryGetValue(enemy.Id, out SquadEngagementFrame theirFrame)
+                ? theirFrame.PairWeights.GetValueOrDefault(squad.Id)
+                : 0f;
+            if (removal <= 0f || allocation <= 0f || MeleeRemovalRate(enemy, squad, range) > 0f)
+            {
+                return (removal, 0f);
+            }
+            float rounds = 0f;
+            foreach (SquadPairRemovalRate rate in _removalRates.GetPairRemovalRates(enemy).Values)
+            {
+                rounds += rate.SustainedRoundsAtRange(range);
+            }
+            return (removal, allocation * rounds);
+        }
+
+        /// <summary>
+        /// The rounds a squad's able soldiers carry for the weapons whose supply runs down
+        /// (<see cref="RangedTargetSelector.RoundsCarried"/>), pooled for the squad as the opening
+        /// forecast pools them.
+        /// </summary>
+        internal static float RoundsCarried(BattleSquad squad)
+        {
+            float rounds = 0f;
+            foreach (BattleSoldier soldier in squad?.AbleSoldiers ?? [])
+            {
+                foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons)
+                {
+                    if (!RangedTargetSelector.IsNeverScarce(weapon))
+                    {
+                        rounds += RangedTargetSelector.RoundsCarried(weapon);
+                    }
+                }
+            }
+            return rounds;
         }
 
         /// <summary>
@@ -444,10 +573,19 @@ namespace OnlyWar.Battles
                 return 0f;
             }
 
-            return _context.MeleeContactRemovalRates.GetOrAdd(
-                (attacker.Id, target.Id),
-                _ => _melee.EstimateContactRemovalRate(attacker, target));
+            return ContactStrikes(attacker, target).RemovalRate();
         }
+
+        /// <summary>
+        /// One squad's melee against another before the frontage is shared out (see
+        /// <see cref="MeleeStrikeEstimator.ContactStrikes"/>), memoized for the turn.
+        /// </summary>
+        internal MeleeStrikeEstimator.ContactStrikes ContactStrikes(
+            BattleSquad attacker,
+            BattleSquad target) =>
+            _context.MeleeContactStrikes.GetOrAdd(
+                (attacker.Id, target.Id),
+                _ => _melee.EstimateContactStrikes(attacker, target));
 
         /// <summary>
         /// This squad's per-turn removal against ONE enemy squad at a projected separation, from

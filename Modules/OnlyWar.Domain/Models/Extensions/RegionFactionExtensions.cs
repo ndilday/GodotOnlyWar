@@ -74,7 +74,7 @@ namespace OnlyWar.Domain.Extensions
         // denominated in and the two are subtracted from each other. Garrison and Population are BV
         // pools (RegionFaction.AddMilitaryStrength: "forces are raised, lost, and returned in the same
         // currency"), and the faction strategy facade proves it by seeding SpareTroops from
-        // GetDeployedStrength and then decrementing that same variable by SquadBattleValue. Summing
+        // GetDeployedStrength and then decrementing that same variable by SquadStrategicValue. Summing
         // Members.Count here instead would subtract headcount from battle value: the ambient remainder
         // would be under-subtracted, and - far worse - the patrol term would be computed on a number
         // one to two orders of magnitude smaller than the scale it was calibrated against, quietly
@@ -85,14 +85,14 @@ namespace OnlyWar.Domain.Extensions
         // to use them, which is most of what BV already measures.
         // The abstract standing screen and the real squads are ADDED, not maxed, and they do not
         // overlap: the screen is what an NPC controller designated out of its organized pool
-        // (RegionFaction.PatrolScreenBattleValue) and the squads below are formations physically on a
+        // (RegionFaction.PatrolScreenStrategicValue) and the squads below are formations physically on a
         // Patrol or Recon order — the player's own patrols, and the recon sweeps that are still real
         // forces for every faction. Before the screen became abstract both arrived as LandedSquads and
         // this loop was the whole of it; the term is unchanged in meaning and in scale.
         public static long GetPatrolStrength(this RegionFaction rf)
         {
             if (rf == null) return 0L;
-            long total = rf.PatrolScreenBattleValue;
+            long total = rf.PatrolScreenStrategicValue;
             if (rf.LandedSquads == null) return total;
             foreach (Squad squad in rf.LandedSquads)
             {
@@ -101,7 +101,7 @@ namespace OnlyWar.Domain.Extensions
                 if (mission.MissionType == MissionType.Patrol
                     || mission.MissionType == MissionType.Recon)
                 {
-                    total += squad.Members.Sum(member => (long)member.Template.BattleValue);
+                    total += squad.Members.Sum(member => (long)member.StrategicValue);
                 }
             }
             return total;

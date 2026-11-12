@@ -158,8 +158,8 @@ public class MechanicusPostingTests
             [],
             TestModelFactory.TestArmor,
             [
-                new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
-                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 0, 1),
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)
             ],
             SquadTypes.None);
         Squad source = new("Source Squad", chapter, lineTemplate);
@@ -222,7 +222,7 @@ public class MechanicusPostingTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 10)],
             SquadTypes.Administrative,
             FormationMobilityPolicy.MembersOnly);
         Squad squad = new("Armory", null, template);

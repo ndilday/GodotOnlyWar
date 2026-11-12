@@ -24,13 +24,13 @@ namespace OnlyWar.Operations.Missions.Recon
 
         public DetectedMissionStep(){}
 
-        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
+        private static long AbleStrategicValue(IEnumerable<OperationalMissionElement> squads) =>
             squads
                 .SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
+                .Sum(soldier => (long)soldier.StrategicValue);
 
-        private static long AbleBattleValue(OperationalMissionElement squad) =>
-            squad?.AbleMembers.Sum(member => (long)(member.Template?.BattleValue ?? 0)) ?? 0;
+        private static long AbleStrategicValue(OperationalMissionElement squad) =>
+            squad?.AbleMembers.Sum(member => (long)member.StrategicValue) ?? 0;
 
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
@@ -73,10 +73,10 @@ namespace OnlyWar.Operations.Missions.Recon
             // unit of strength - the old rule generated one conjured squad per intruding squad plus one
             // per sigma of failure, which meant a region's actual screen had no bearing at all on what
             // showed up.
-            long intruderBattleValue = AbleBattleValue(context.MissionSquads);
+            long intruderStrategicValue = AbleStrategicValue(context.MissionSquads);
             double requiredMultiple = InterceptionBaseMultiple
                 + Math.Abs(marginOfSuccess) * InterceptionMultiplePerSigma;
-            long requiredBattleValue = (long)Math.Round(intruderBattleValue * requiredMultiple);
+            long requiredStrategicValue = (long)Math.Round(intruderStrategicValue * requiredMultiple);
 
             // Only forces actually out looking can intercept: squads on a Patrol or Recon order in the
             // spotter's region, plus the standing screen the spotter's controller posted over it.
@@ -104,13 +104,13 @@ namespace OnlyWar.Operations.Missions.Recon
             // rather than for the whole screen: a region screening ten thousand points does not turn
             // ten thousand points of soldiers into objects to catch one scout squad. What is left over
             // stays a number and carries on screening.
-            long screenShortfall = requiredBattleValue - screen.Sum(AbleBattleValue);
-            if (screenShortfall > 0 && spotter.PatrolScreenBattleValue > 0)
+            long screenShortfall = requiredStrategicValue - screen.Sum(AbleStrategicValue);
+            if (screenShortfall > 0 && spotter.PatrolScreenStrategicValue > 0)
             {
                 var request = new ForceGenerationRequest
                 {
                     Faction = spotter.PlanetFaction.Faction,
-                    TargetBattleValue = Math.Min(screenShortfall, spotter.PatrolScreenBattleValue),
+                    TargetStrategicValue = Math.Min(screenShortfall, spotter.PatrolScreenStrategicValue),
                     Profile = ForceCompositionProfile.ScoutPatrol
                 };
                 screen.AddRange(ForceGenerator
@@ -121,20 +121,20 @@ namespace OnlyWar.Operations.Missions.Recon
 
             // Largest first, so the screen commits the fewest squads that will do the job and the
             // rest carry on screening.
-            screen = screen.OrderByDescending(AbleBattleValue).ToList();
-            long screenBattleValue = screen.Sum(AbleBattleValue);
+            screen = screen.OrderByDescending(AbleStrategicValue).ToList();
+            long screenStrategicValue = screen.Sum(AbleStrategicValue);
 
             // Below parity with the intruder the screen declines to engage rather than feeding itself in
             // piecemeal. The intrusion is still DETECTED - that already happened - it simply goes
             // uncontested.
-            if (screen.Count == 0 || screenBattleValue < intruderBattleValue)
+            if (screen.Count == 0 || screenStrategicValue < intruderStrategicValue)
             {
                 context.AddLog(
                     $"Day {context.DaysElapsed}: Force was spotted in {spotter.Region.Name}, but no "
                     + "force strong enough to engage it is in position; the mission presses on.");
                 GameLog.Trace(() =>
                     $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
-                    + $"screenBV={screenBattleValue} < intruderBV={intruderBattleValue}; "
+                    + $"screenBV={screenStrategicValue} < intruderBV={intruderStrategicValue}; "
                     + "screen declines to engage, recon uncontested");
                 return resumeStep == null
                     ? MissionStepResult.Complete
@@ -144,15 +144,15 @@ namespace OnlyWar.Operations.Missions.Recon
             // Commit squads until the requirement is met. Reaching parity but falling short of the ideal
             // still engages - with less than it wanted, which is the cost of a thin screen.
             List<OperationalMissionElement> interceptors = new();
-            long committedBattleValue = 0;
+            long committedStrategicValue = 0;
             foreach (OperationalMissionElement squad in screen)
             {
-                // A modded or legacy combatant may carry zero BattleValue. Still commit one real
+                // A modded or legacy combatant may carry zero StrategicValue. Still commit one real
                 // squad rather than letting a zero requirement produce an empty "interception".
                 if (interceptors.Count > 0
-                    && committedBattleValue >= requiredBattleValue) break;
+                    && committedStrategicValue >= requiredStrategicValue) break;
                 interceptors.Add(squad);
-                committedBattleValue += AbleBattleValue(squad);
+                committedStrategicValue += AbleStrategicValue(squad);
             }
             context.OpposingSquads = interceptors;
 
@@ -160,9 +160,9 @@ namespace OnlyWar.Operations.Missions.Recon
                 $"Day {context.DaysElapsed}: Force was detected and intercepted in {spotter.Region.Name}.");
             GameLog.Debug(() =>
                 $"Interception {DescribeRegion(context)} day {context.DaysElapsed}: "
-                + $"intruderBV={intruderBattleValue}, margin={marginOfSuccess:F2}, "
-                + $"requiredBV={requiredBattleValue} (x{requiredMultiple:F2}), screenBV={screenBattleValue} "
-                + $"-> committed {interceptors.Count} squad(s), {committedBattleValue} BV");
+                + $"intruderBV={intruderStrategicValue}, margin={marginOfSuccess:F2}, "
+                + $"requiredBV={requiredStrategicValue} (x{requiredMultiple:F2}), screenBV={screenStrategicValue} "
+                + $"-> committed {interceptors.Count} squad(s), {committedStrategicValue} BV");
 
             // The scout's leader now tries to slip past the responders (a Tactics contest); the more
             // defenders were scrambled, the harder that is. Difficulty reads the ACTUAL generated

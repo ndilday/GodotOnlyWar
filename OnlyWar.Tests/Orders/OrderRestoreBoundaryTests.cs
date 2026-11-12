@@ -243,7 +243,7 @@ public class OrderRestoreBoundaryTests
     {
         SquadTemplate template = new(991, "Specialists", TestModelFactory.DefaultWeapons,
             [], TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)], kind)
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)], kind)
         { Faction = fixture.Sector.PlayerForce.Faction };
         Squad home = new("Specialists", null, template, fixture.Identity);
         PlayerSoldier character = new(TestModelFactory.CreateSoldier(), "Specialist");

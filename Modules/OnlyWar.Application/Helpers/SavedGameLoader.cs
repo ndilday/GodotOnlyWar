@@ -237,7 +237,7 @@ namespace OnlyWar.Application.Storage
                     record.OfferedDeliveryDelayWeeks,
                     record.Severity,
                     record.Hazard,
-                    record.ProgressBattleValueTime,
+                    record.ProgressStrategicValueTime,
                     record.HasPlayerResponded,
                     record.Status,
                     record.ResolvedDateWeeks is int resolvedWeeks
@@ -384,7 +384,7 @@ namespace OnlyWar.Application.Storage
                 {
                     DestinationPlanet = destinationPlanet,
                     TravelWeeksRemaining = saved.TravelWeeksRemaining,
-                    TransitBattleValue = saved.TransitBattleValue,
+                    TransitStrategicValue = saved.TransitStrategicValue,
                     IsActive = saved.IsActive
                 };
                 commandSquad.CurrentRegion = currentRegion;

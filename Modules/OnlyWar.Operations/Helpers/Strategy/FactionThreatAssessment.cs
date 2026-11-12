@@ -56,7 +56,7 @@ public static class FactionThreatAssessment
         return region.RegionFactionMap.Values.Any(rf =>
             rf.IsPublic
             && FactionRelationshipService.AreHostile(faction, rf.PlanetFaction.Faction, region.Planet)
-            && CalculateDefenderBattleValue(rf) > 0);
+            && CalculateDefenderStrategicValue(rf) > 0);
     }
 
     public static long VisibleAdjacentEnemyMilitary(Faction faction, Region region)
@@ -73,7 +73,7 @@ public static class FactionThreatAssessment
             .SelectMany(adjacent => adjacent.RegionFactionMap.Values)
             .Where(rf => rf.IsPublic && FactionRelationshipService.AreHostile(
                 faction, rf.PlanetFaction.Faction, region.Planet))
-            .Sum(CalculateDefenderBattleValue);
+            .Sum(CalculateDefenderStrategicValue);
     }
 
     public static IReadOnlyList<StrategicTarget> GetBelievedTargets(
@@ -99,7 +99,7 @@ public static class FactionThreatAssessment
     /// This is deliberately a planning want, not a promise that the troops exist. It observes public
     /// activity when a ledger is present and falls back to live detached-fixture values otherwise.
     /// </remarks>
-    public static long CalculateRequiredDefensiveBattleValue(RegionFaction defender)
+    public static long CalculateRequiredDefensiveStrategicValue(RegionFaction defender)
     {
         Faction defenderFaction = defender.PlanetFaction.Faction;
         Region region = defender.Region;
@@ -128,7 +128,7 @@ public static class FactionThreatAssessment
                 .Where(rf => !ReferenceEquals(rf, defender)
                     && FactionRelationshipService.AreHostile(
                         defenderFaction, rf.PlanetFaction.Faction, region.Planet))
-                .Sum(CalculateDefenderBattleValue);
+                .Sum(CalculateDefenderStrategicValue);
         }
 
         // The requirement is a share of EVERY believed neighbour, not all of the largest one. A
@@ -167,7 +167,7 @@ public static class FactionThreatAssessment
                 adjacentThreat = adjacentRegion.RegionFactionMap.Values
                     .Where(rf => FactionRelationshipService.AreHostile(
                         defenderFaction, rf.PlanetFaction.Faction, region.Planet))
-                    .Sum(rf => (long)(CalculateDefenderBattleValue(rf) * sight));
+                    .Sum(rf => (long)(CalculateDefenderStrategicValue(rf) * sight));
             }
 
             adjacentThreatTotal += adjacentThreat;
@@ -203,9 +203,9 @@ public static class FactionThreatAssessment
     /// <summary>
     /// Strategy's estimate of a defender's battle value, distinct from resolver-side fieldable value.
     /// </summary>
-    public static long CalculateDefenderBattleValue(RegionFaction defender)
+    public static long CalculateDefenderStrategicValue(RegionFaction defender)
     {
         return defender.MilitaryStrength
-             + defender.LandedSquads.Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
+             + defender.LandedSquads.Sum(s => s.Members.Sum(m => (long)m.StrategicValue));
     }
 }

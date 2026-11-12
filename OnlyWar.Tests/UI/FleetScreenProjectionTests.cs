@@ -66,7 +66,7 @@ public class FleetScreenProjectionTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)],
             SquadTypes.Fast);
         Squad betaSquad = CreateSquad(11, "Beta Squad", secondCompany);
         Squad assaultSquad = CreateSquad(13, "Aardvark Squad", secondCompany, template: assaultTemplate);
@@ -135,7 +135,7 @@ public class FleetScreenProjectionTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 5)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 5)],
             SquadTypes.Administrative,
             FormationMobilityPolicy.MembersOnly);
         Squad squad = CreateSquad(

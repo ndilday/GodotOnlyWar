@@ -436,7 +436,7 @@ public class TurnTrainingTests
                 TestModelFactory.DefaultWeapons,
                 [],
                 TestModelFactory.TestArmor,
-                [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
+                [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 10)],
                 SquadTypes.None);
             squadTemplate.Faction = playerFaction;
             return squadTemplate;
@@ -452,7 +452,7 @@ public class TurnTrainingTests
                 TestModelFactory.DefaultWeapons,
                 [],
                 TestModelFactory.TestArmor,
-                [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 1, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 1, 5)],
+                [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 1, 1), OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 1, 5)],
                 SquadTypes.Scout | SquadTypes.HQ);
             squadTemplate.Faction = playerFaction;
             return squadTemplate;
@@ -466,7 +466,7 @@ public class TurnTrainingTests
                 TestModelFactory.DefaultWeapons,
                 [],
                 TestModelFactory.TestArmor,
-                [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 1, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 1, 10)],
+                [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 1, 1), OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 1, 10)],
                 SquadTypes.Scout);
             squadTemplate.Faction = playerFaction;
             return squadTemplate;

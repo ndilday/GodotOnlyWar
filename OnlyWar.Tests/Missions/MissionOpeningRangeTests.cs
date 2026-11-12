@@ -136,6 +136,42 @@ public class MissionOpeningRangeTests
             + "weapon reach, not the derived engagement band");
     }
 
+    // RULE B (product owner 2026-10-22, built 2026-10-24): a reciprocal assault opens at the LONGER
+    // preference, whichever force is listed first. The midpoint it replaced handed a melee force half
+    // of a gunline's chosen distance in open ground.
+    [Fact]
+    public void ReciprocalAssault_OpensAtTheLongerPreference_InEitherOrder()
+    {
+        OperationalMissionElement shooters = ToMissionElement(CreateRangedSquad());
+        OperationalMissionElement brawlers = ToMissionElement(CreateMeleeSquad());
+        IEngagementResolver resolver = TestExecutionContextFactory.CreateEngagementResolver();
+        int shooterPreference = resolver.GetPreferredOpeningRange(
+            shooters.ToEngagementParticipant(), [brawlers.ToEngagementParticipant()],
+            [shooters.ToEngagementParticipant()]);
+
+        Assert.Equal(shooterPreference, MissionOpeningRange.ReciprocalAssault([shooters], [brawlers], resolver));
+        Assert.Equal(shooterPreference, MissionOpeningRange.ReciprocalAssault([brawlers], [shooters], resolver));
+    }
+
+    // A squad with no preference does not pull its side's: a gunline with a melee squad beside it
+    // opens where the gunline wants, not at the average with the melee squad's contact.
+    [Fact]
+    public void ReciprocalAssault_SquadWithoutAPreference_DoesNotPullItsSide()
+    {
+        OperationalMissionElement shooters = ToMissionElement(CreateRangedSquad());
+        OperationalMissionElement escort = ToMissionElement(CreateMeleeSquad());
+        OperationalMissionElement brawlers = ToMissionElement(CreateMeleeSquad());
+        IEngagementResolver resolver = TestExecutionContextFactory.CreateEngagementResolver();
+        int? alone = resolver.GetPreferredOpeningRangeOrNone(
+            shooters.ToEngagementParticipant(), [brawlers.ToEngagementParticipant()],
+            [shooters.ToEngagementParticipant(), escort.ToEngagementParticipant()]);
+
+        Assert.True(alone > 0, "fixture: the shooters must want some standoff");
+        Assert.Null(resolver.GetPreferredOpeningRangeOrNone(
+            escort.ToEngagementParticipant(), [brawlers.ToEngagementParticipant()]));
+        Assert.Equal(alone.Value, MissionOpeningRange.ReciprocalAssault([shooters, escort], [brawlers], resolver));
+    }
+
     // --- fixtures ---
 
     private const int LongRifleReach = 1_000;
@@ -185,7 +221,7 @@ public class MissionOpeningRangeTests
         LongRifleWeapons,
         [],
         TestModelFactory.TestArmor,
-        [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+        [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)],
         SquadTypes.None);
 
     // Melee only, so the effectiveness curve is empty, there is no ranged weapon to stand off with,
@@ -204,7 +240,7 @@ public class MissionOpeningRangeTests
         MeleeOnlyWeapons,
         [],
         TestModelFactory.TestArmor,
-        [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+        [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)],
         SquadTypes.None);
 
     private static BattleSquad CreateSquad(

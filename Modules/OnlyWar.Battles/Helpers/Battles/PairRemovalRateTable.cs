@@ -99,6 +99,7 @@ namespace OnlyWar.Battles
             BattleSquad shooterSquad)
         {
             Dictionary<int, List<PairRemovalTerm>> termsByTargetSquad = [];
+            Dictionary<int, List<ShooterGroup>> groupsByTargetSquad = [];
             foreach (BattleSoldier soldier in shooterSquad.AbleSoldiers
                 .OrderBy(member => member.Soldier.Id))
             {
@@ -150,12 +151,40 @@ namespace OnlyWar.Battles
                     continue;
                 }
                 int targetSquadId = evaluation.Target.BattleSquad.Id;
+                if (!groupsByTargetSquad.TryGetValue(targetSquadId, out List<ShooterGroup> groups))
+                {
+                    groups = [];
+                    groupsByTargetSquad[targetSquadId] = groups;
+                }
+                ShooterGroup candidate = new(soldier, evaluation);
+                ShooterGroup match = GroupShooters
+                    ? groups.Find(group => group.Accepts(candidate))
+                    : null;
+                if (match == null)
+                {
+                    groups.Add(candidate);
+                }
+                else
+                {
+                    match.Add(candidate);
+                }
+            }
+
+            foreach ((int targetSquadId, List<ShooterGroup> groups) in groupsByTargetSquad)
+            {
                 if (!termsByTargetSquad.TryGetValue(targetSquadId, out List<PairRemovalTerm> terms))
                 {
                     terms = [];
                     termsByTargetSquad[targetSquadId] = terms;
                 }
-                terms.Add(BuildPairRemovalTerm(soldier, evaluation));
+                foreach (ShooterGroup group in groups)
+                {
+                    terms.Add(BuildPairRemovalTerm(
+                        group.Shooter,
+                        group.Evaluation,
+                        group.Count,
+                        group.Count == 1 ? null : group.TargetShares()));
+                }
             }
 
             Dictionary<int, SquadPairRemovalRate> rates = [];
@@ -306,7 +335,9 @@ namespace OnlyWar.Battles
 
         private PairRemovalTerm BuildPairRemovalTerm(
             BattleSoldier shooter,
-            RangedTargetEvaluation evaluation)
+            RangedTargetEvaluation evaluation,
+            int count = 1,
+            IReadOnlyList<(int TargetId, int Shooters)> targetShares = null)
         {
             RangedWeaponTemplate template = evaluation.Weapon.Template;
             // The aimed shots the shot planner weighs against firing now, through the same
@@ -379,7 +410,134 @@ namespace OnlyWar.Battles
                 aimPlans,
                 scarcity,
                 fixedRounds,
-                standingShot);
+                standingShot)
+            {
+                CountsRounds = !RangedTargetSelector.IsNeverScarce(weapon),
+                // The inputs of the scarcity, so the term can price a round at other ranges.
+                ScarcityRounds = template.IsTemplateWeapon || RangedTargetSelector.IsNeverScarce(weapon)
+                    ? float.NaN
+                    : RangedTargetSelector.RoundsCarried(weapon),
+                ScarcityWork = template.IsTemplateWeapon || RangedTargetSelector.IsNeverScarce(weapon)
+                    ? float.NaN
+                    : _ranged.WorkPerShooter(shooter, weapon),
+                Count = count,
+                TargetShares = targetShares,
+            };
+        }
+
+        /// <summary>
+        /// Whether interchangeable shooters share one <see cref="PairRemovalTerm"/> (true since
+        /// 2026-11-11, step 2 of Design/Active/CoarseForecastTables.md). Process-wide so the
+        /// diagnostics can compare (DUEL_GROUP_SHOOTERS=0).
+        /// </summary>
+        internal static bool GroupShooters = true;
+
+        /// <summary>
+        /// Shooters of one squad whose best shots land in the same enemy squad and are close enough
+        /// to price as copies of the first one's (soldier-id order, as
+        /// <see cref="RangedEffectivenessCurve"/> buckets its shooters).
+        ///
+        /// <para>WHY (2026-11-11). Each term carries its own removal-fraction table and cycle memo,
+        /// and the terms are built again every turn, so almost all the removal-fraction solves that
+        /// remained after step 1 were the same nodes solved again for each of ten soldiers with the
+        /// same lasgun aimed at the same kind of target. The forecast only ranks a few options, and
+        /// a squad's rate is a sum, so pricing ten copies of one shot ten times buys nothing.</para>
+        ///
+        /// <para>TOLERANCES (judgment calls, 2026-11-11). Same weapon template and the same burst
+        /// (the reference shot's <c>ShotsToFire</c>). Pre-roll to-hit totals within
+        /// <see cref="HitTotalTolerance"/>: the CDF's slope peaks at 0.133 a point, so half a point
+        /// moves a hit chance by at most 0.067, and the representative is the first member, so the
+        /// error has no fixed sign. Ranges within <see cref="RangeTolerance"/> of each other, so
+        /// the range rescaling, which works in ln(range), does not spread the members apart when
+        /// the forecast projects them close. The same target profile: take-out and wound fill per
+        /// hit each within 0.02, target battle value within 5%, the same reach to the yard, the same
+        /// aim accuracy, and for weapons that run down, rounds carried within 25%.</para>
+        /// </summary>
+        private sealed class ShooterGroup
+        {
+            private const float HitTotalTolerance = 0.5f;
+            private const float RangeTolerance = 0.1f;
+            private const float MinimumRangeTolerance = 5f;
+            private const float RemovalPerHitTolerance = 0.02f;
+            private const float BattleValueTolerance = 0.05f;
+            private const float ReachTolerance = 1f;
+            private const float AimAccuracyTolerance = 0.25f;
+            private const float RoundsTolerance = 0.25f;
+
+            internal BattleSoldier Shooter { get; }
+            internal RangedTargetEvaluation Evaluation { get; }
+            internal int Count { get; private set; } = 1;
+
+            private readonly float _targetBattleValue;
+            private readonly float _reach;
+            private readonly float _aimAccuracy;
+            private readonly float _rounds;
+            private readonly List<(int TargetId, int Shooters)> _targets;
+
+            internal ShooterGroup(BattleSoldier shooter, RangedTargetEvaluation evaluation)
+            {
+                Shooter = shooter;
+                Evaluation = evaluation;
+                RangedWeaponTemplate template = evaluation.Weapon.Template;
+                _targetBattleValue = GetBattleValue(evaluation.Target);
+                _reach = BattleModifiersUtil.GetEffectiveMaxRange(shooter.Soldier, template);
+                _aimAccuracy = template.IsTemplateWeapon
+                    ? 0f
+                    : RangedTargetSelector.AimAccuracy(shooter, template);
+                _rounds = RangedTargetSelector.IsNeverScarce(evaluation.Weapon)
+                    ? float.NaN
+                    : RangedTargetSelector.RoundsCarried(evaluation.Weapon);
+                _targets = [(evaluation.Target.Soldier.Id, 1)];
+            }
+
+            internal bool Accepts(ShooterGroup other)
+            {
+                RangedTargetEvaluation mine = Evaluation;
+                RangedTargetEvaluation theirs = other.Evaluation;
+                if (!ReferenceEquals(mine.Weapon.Template, theirs.Weapon.Template)
+                    || mine.ShotsToFire != theirs.ShotsToFire
+                    || RangedTargetSelector.IsNeverScarce(mine.Weapon)
+                        != RangedTargetSelector.IsNeverScarce(theirs.Weapon)
+                    || mine.Weapon.IsConsumableItem != theirs.Weapon.IsConsumableItem
+                    || Math.Abs(mine.PreRollHitTotal - theirs.PreRollHitTotal) > HitTotalTolerance
+                    || Math.Abs(mine.TargetSpeed - theirs.TargetSpeed) > HitTotalTolerance
+                    || Math.Abs(mine.Range - theirs.Range)
+                        > Math.Max(MinimumRangeTolerance, RangeTolerance * Math.Min(mine.Range, theirs.Range))
+                    || Math.Abs(mine.TakeOutProbabilityOnHit - theirs.TakeOutProbabilityOnHit)
+                        > RemovalPerHitTolerance
+                    || Math.Abs(mine.WoundProgressOnHit - theirs.WoundProgressOnHit)
+                        > RemovalPerHitTolerance
+                    || Math.Abs(_targetBattleValue - other._targetBattleValue)
+                        > BattleValueTolerance * Math.Max(_targetBattleValue, other._targetBattleValue)
+                    || Math.Abs(_reach - other._reach) > ReachTolerance
+                    || Math.Abs(_aimAccuracy - other._aimAccuracy) > AimAccuracyTolerance)
+                {
+                    return false;
+                }
+                if (float.IsNaN(_rounds))
+                {
+                    return true;
+                }
+                return Math.Abs(_rounds - other._rounds)
+                    <= RoundsTolerance * Math.Max(_rounds, other._rounds);
+            }
+
+            internal void Add(ShooterGroup other)
+            {
+                Count++;
+                int targetId = other.Evaluation.Target.Soldier.Id;
+                int index = _targets.FindIndex(share => share.TargetId == targetId);
+                if (index < 0)
+                {
+                    _targets.Add((targetId, 1));
+                }
+                else
+                {
+                    _targets[index] = (targetId, _targets[index].Shooters + 1);
+                }
+            }
+
+            internal IReadOnlyList<(int TargetId, int Shooters)> TargetShares() => _targets;
         }
     }
 }

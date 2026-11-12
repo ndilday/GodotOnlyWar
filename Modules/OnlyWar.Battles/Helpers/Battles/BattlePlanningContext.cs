@@ -89,6 +89,24 @@ namespace OnlyWar.Battles
              int RoundValueBits),
             RangedTargetEvaluation> RangedEvaluations { get; } = new();
 
+        // The score of every burst length of one shot (RangedShotEvaluator.ScoreBursts), keyed by
+        // everything the scores read -- the round price is NOT in it. The same shot is scored by
+        // BurstProfile to set the price and again by ChooseShotsToFire at that price, and once
+        // more for every other price a decision charges, so the burst function ran several times
+        // over identical inputs (463 M calls in two 8 v 8 battles; 2026-11-11). The arrays are
+        // read-only once stored.
+        internal ConcurrentDictionary<
+            (int ShooterId,
+             int TargetId,
+             int WeaponId,
+             int RangeBits,
+             int ModifierBits,
+             int RangeModifierBits,
+             bool FiringIntoMelee,
+             int MinShots,
+             int MaxShots),
+            float[]> BurstScores { get; } = new();
+
         // (Side, WeaponTemplateId) -> one shooter's share of the enemy battle value that weapon can
         // hurt (RangedShotEvaluator.WorkPerShooter), which sets how scarce rounds are this turn.
         internal ConcurrentDictionary<(bool Side, int WeaponTemplateId), float>
@@ -140,13 +158,22 @@ namespace OnlyWar.Battles
         // table this is pure for the frozen planning pass, and the exchange model can ask for the
         // same contact rate repeatedly across candidates and across the current and projected
         // states the potential compares.
-        internal ConcurrentDictionary<(int AttackerSquadId, int TargetSquadId), float>
-            MeleeContactRemovalRates { get; } = new();
+        internal ConcurrentDictionary<(int AttackerSquadId, int TargetSquadId), MeleeStrikeEstimator.ContactStrikes>
+            MeleeContactStrikes { get; } = new();
 
         // Each squad's morale inputs for the exchange forecast's break hazard (resolve from Ego,
         // leader, synapse coverage, mission losses so far). Frozen for the planning pass like
         // everything else here.
         internal ConcurrentDictionary<int, SquadBreakProfile> SquadBreakProfiles { get; } = new();
+
+        // The faction morale rules the live check's mob support reads, so the break hazard can
+        // read them too. Null for a standalone planner: no mob support is priced.
+        internal OnlyWar.Domain.FactionBehaviors.FactionBehaviorRulesProfile FactionBehaviorRules { get; init; }
+
+        // Every able soldier's tactical value for the turn (Design/Active/StrategicAndTacticalValue.md).
+        // Built once by the planning coordinator before any squad plans. Phase 1: nothing plans
+        // from it yet. Empty for a standalone planner.
+        internal TacticalValueTable TacticalValues { get; init; } = TacticalValueTable.Empty;
 
         // Each squad's soldier cells, centroid and radius, for the potential's contact test
         // (EngagementPotential.NearestSoldierSeparation). Soldiers do not move during a pass.

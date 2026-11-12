@@ -2,6 +2,9 @@ using System;
 using System.Linq;
 
 using OnlyWar.Battles;
+using OnlyWar.Domain;
+using OnlyWar.Domain.Squads;
+using OnlyWar.Persistence.Database.GameRules;
 
 using Xunit;
 
@@ -87,6 +90,128 @@ public class EngagementExchangeForecastTests
         Assert.Equal(
             0,
             EngagementExchangeForecast.BreakHazard(SquadBreakProfile.Unbreakable, 1, 1, 1));
+    }
+
+    // A breakable gaunt brood charging a gunline: fire rises as it closes, and melee is heavy.
+    private static ExchangeLane Charge(float start) => new(
+        100,
+        Gaunts,
+        start,
+        false,
+        start,
+        8,
+        8,
+        start,
+        RangeRates.None,
+        RangeRates.Sample([2f, 10f, 30f, 60f, 120f, 200f], range => 150f / (range + 5f), _ => 0f),
+        true,
+        1,
+        0,
+        40);
+
+    private static float Value(EngagementExchangeForecast.Result result) =>
+        result.EnemyValueRemoved - result.OwnValueLost;
+
+    [Fact]
+    public void WithoutLuck_TheExpectedForecastIsTheForecast()
+    {
+        EngagementExchangeForecast.Result plain = EngagementExchangeForecast.Run(
+            100, SquadBreakProfile.Unbreakable, [Charge(80)], 60);
+        EngagementExchangeForecast.Result expected = EngagementExchangeForecast.RunExpected(
+            100, SquadBreakProfile.Unbreakable, [Charge(80)], 60, luckSpread: 0f);
+
+        Assert.Equal(plain, expected);
+    }
+
+    [Fact]
+    public void AveragingOverLuck_TurnsTheBreakOrArriveCliffIntoARamp()
+    {
+        // Whether the brood breaks before contact flips across a few yards of opening; the
+        // luck-free value jumps there, the expected value does not jump as far.
+        float LargestStep(float spread)
+        {
+            float largest = 0f;
+            float previous = float.NaN;
+            for (float start = 10f; start <= 200f; start += 2f)
+            {
+                float value = Value(EngagementExchangeForecast.RunExpected(
+                    100, SquadBreakProfile.Unbreakable, [Charge(start)], 60, luckSpread: spread));
+                if (!float.IsNaN(previous))
+                {
+                    largest = System.Math.Max(largest, System.Math.Abs(value - previous));
+                }
+                previous = value;
+            }
+            return largest;
+        }
+
+        float cliff = LargestStep(0f);
+        float ramp = LargestStep(0.5f);
+
+        string series = string.Join(" ", Enumerable.Range(0, 20).Select(step =>
+        {
+            EngagementExchangeForecast.Result result = EngagementExchangeForecast.Run(
+                100, SquadBreakProfile.Unbreakable, [Charge(10f + 10f * step)], 60);
+            return $"{10 + 10 * step}:{Value(result):F0}/{result.EnemyBreakChance:F2}/{result.EnemyCasualties:F0}";
+        }));
+        Assert.True(cliff > 10f, $"fixture must have a cliff; largest step {cliff:F1}; {series}");
+        Assert.True(ramp < cliff * 0.75f, $"largest step {ramp:F1} with luck, {cliff:F1} without");
+    }
+
+    [Fact]
+    public void MobSupport_LowersTheBreakHazard_AsItLowersTheLiveChecksShock()
+    {
+        SquadBreakProfile supported = Gaunts with { ShockRelief = 0.3f };
+
+        float without = EngagementExchangeForecast.BreakHazard(Gaunts, 0.1f, 0.35f, 1f);
+        float with = EngagementExchangeForecast.BreakHazard(supported, 0.1f, 0.35f, 1f);
+
+        Assert.True(with < without, $"supported {with:F3}, unsupported {without:F3}");
+    }
+
+    [Fact]
+    public void AMobLeadersCoercion_MakesASquadFailTwoChecksRunningToBreak()
+    {
+        // Steady losses that put the gaunts near the rout bar for several turns.
+        SquadBreakProfile coerced = Gaunts with { HasLeader = true, LeaderCoerces = true };
+        SquadBreakProfile led = Gaunts with { HasLeader = true };
+        ExchangeLane lane = Lane(1_000, outgoing: 0, incoming: 2.5f);
+
+        EngagementExchangeForecast.Result plain = EngagementExchangeForecast.Run(
+            100, led, [lane], horizonTurns: 16, turnDiscount: 1f);
+        EngagementExchangeForecast.Result withCoercion = EngagementExchangeForecast.Run(
+            100, coerced, [lane], horizonTurns: 16, turnDiscount: 1f);
+
+        Assert.True(
+            withCoercion.OwnBreakChance < plain.OwnBreakChance,
+            $"coerced {withCoercion.OwnBreakChance:F3}, plain {plain.OwnBreakChance:F3}");
+    }
+
+    [Fact]
+    public void AnOrkSquadAmongOthers_GetsMobSupportAndCoercion_APdfSquadNeither()
+    {
+        OnlyWar.Domain.GameRulesBlob blob = OnlyWar.Tests.Fixtures.RulesDatabaseFixture.LoadRules();
+        OnlyWar.Domain.FactionBehaviors.FactionBehaviorRulesProfile rules =
+            blob.FactionBehaviorRulesProfiles.First();
+        OnlyWar.Abstractions.IEntityIdAllocator ids =
+            new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
+        BattleSquad Build(int templateId) => new(false, SquadFactory.GenerateSquad(
+            blob.Factions
+                .Where(faction => faction.SquadTemplates.ContainsKey(templateId))
+                .Select(faction => faction.SquadTemplates[templateId])
+                .First(),
+            new StaticRNG(), ids, $"Squad {templateId}"));
+        // 44: Kommandos (Orks, mob mentality); 34: PDF.
+        BattleSquad[] kommandos = [Build(44), Build(44), Build(44)];
+        BattleSquad[] pdf = [Build(34), Build(34)];
+
+        SquadBreakProfile ork = EngagementExchangeForecast.ProfileOf(kommandos[0], kommandos, null, rules);
+        SquadBreakProfile human = EngagementExchangeForecast.ProfileOf(pdf[0], pdf, null, rules);
+
+        Assert.True(ork.ShockRelief > 0, $"Kommando relief {ork.ShockRelief}");
+        Assert.Equal(kommandos[0].SquadLeader != null, ork.LeaderCoerces);
+        Assert.Equal(0f, human.ShockRelief);
+        Assert.False(human.LeaderCoerces);
     }
 
     [Fact]

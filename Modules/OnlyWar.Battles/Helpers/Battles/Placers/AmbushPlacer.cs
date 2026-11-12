@@ -215,6 +215,9 @@ namespace OnlyWar.Battles.Placers
                 int legThickness = longLeg.Max(s => (int)s.GetSquadBoxSize().Y);
                 int westFace = killZone.MinX - standoff - legThickness;
                 int ySpan = Math.Max(0, killZone.MaxY - killZone.MinY);
+                // A short kill zone cannot hold several HQs side by side at the even spread, so
+                // each one also stays clear of the HQ placed before it; they overrun south.
+                int nextTop = int.MaxValue;
                 for (int i = 0; i < behindLong.Count; i++)
                 {
                     BattleSquad squad = behindLong[i];
@@ -222,6 +225,11 @@ namespace OnlyWar.Battles.Placers
                     int left = westFace - HqRearOffset - squadSize.Y;
                     int centerY = killZone.MaxY - ySpan * (i + 1) / (behindLong.Count + 1);
                     int bottom = centerY - squadSize.X / 2;
+                    if (nextTop != int.MaxValue)
+                    {
+                        bottom = Math.Min(bottom, nextTop - squadSize.X);
+                    }
+                    nextTop = bottom - 1;
                     ValueTuple<int, int> position = new(left, bottom);
                     squadPositionMap[squad] = position;
                     BattleSquadPlacer.PlaceBattleSquad(_grid, squad, position, false, false, false);
@@ -236,12 +244,15 @@ namespace OnlyWar.Battles.Placers
                 int legLength = shortLeg.Sum(s => s.GetSquadBoxSize().X)
                     + Math.Max(0, shortLeg.Count - 1);
                 int legWest = Math.Max(killZone.MinX, killZone.CenterX - legLength / 2);
+                // As behind the long leg: a short leg can overrun east rather than overlap.
+                int nextLeft = int.MinValue;
                 for (int i = 0; i < behindShort.Count; i++)
                 {
                     BattleSquad squad = behindShort[i];
                     Coordinate squadSize = squad.GetSquadBoxSize();
                     int centerX = legWest + legLength * (i + 1) / (behindShort.Count + 1);
-                    int left = centerX - squadSize.X / 2;
+                    int left = Math.Max(centerX - squadSize.X / 2, nextLeft);
+                    nextLeft = left + squadSize.X + 1;
                     int bottom = northFace + HqRearOffset;
                     ValueTuple<int, int> position = new(left, bottom);
                     squadPositionMap[squad] = position;

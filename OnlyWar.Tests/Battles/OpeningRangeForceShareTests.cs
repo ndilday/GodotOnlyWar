@@ -27,26 +27,92 @@ public class OpeningRangeForceShareTests
     private const int ShootaBoyzTemplateId = 39;
     private const int SluggaBoyzTemplateId = 40;
 
+    private static readonly float[] Openings = [10, 20, 40, 80, 120, 160, 240, 320, 480, 640, 1000];
+    private const float ShortOpening = 20f;
+    // "Clearly better": a tenth of the squad's own battle value. Measured 2026-10-27 the gap at
+    // 20 yards was about 617 on an own pool of 890 (+134 in force against -483 alone).
+    private const float ClearlyBetterShare = 0.1f;
+
+    // This test used to assert that the squad in a force OPENS nearer than alone. That stopped
+    // holding on 2026-10-27, and not because force share stopped working. The chosen opening is
+    // the shortest within 1% of the best expected net, then within 1% of the best unlucky net
+    // among those (BattleEngagementFrameBuilder.CalculateForecastOpeningRange). Force share makes
+    // the walk in cheap, which flattens the expected ladder into a plateau (110-300 yd here), and
+    // on a plateau the unlucky tie-break decides, and it prefers range: 230 yd in force against
+    // 144 yd alone, where a sharp expected peak at 160 yd decided instead. So the claim is
+    // asserted on the forecast itself: the squad plans its share of the kill and of the fire.
     [Fact]
-    public void SquadInALargerForce_OpensNearerThanTheSameSquadAlone()
+    public void SquadInALargerForce_ForecastsAShortOpeningBetterThanTheSameSquadAlone()
     {
-        (List<BattleSquad> marines, List<BattleSquad> boyz) = CreateForces(squadsPerSide: 3);
+        // Three Tactical Squads against two Boyz squads, so the squad alone still has a fight it
+        // can win. Against three Boyz squads (Boyz at 11 since 2026-10-27) one Tactical Squad
+        // forecasts a loss at every opening, which says nothing about force share.
+        (List<BattleSquad> marines, List<BattleSquad> boyz) = CreateForces(marineSquads: 3, boyzSquads: 2);
         BattleSquad squad = marines[0];
 
-        float alone = BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(squad, boyz);
-        float inForce = BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(
-            squad, boyz, marines);
+        // Force share alone. Since 2026-10-26 a squad with friends also prices their rout as shock
+        // (EngagementExchangeForecast.RoutingFriends), which the squad alone has no friends to
+        // fear, so it is off for both forecasts.
+        bool routingFriends = EngagementExchangeForecast.PriceRoutingFriends;
+        OpeningExchangeForecast alone;
+        OpeningExchangeForecast inForce;
+        float aloneBest;
+        float inForceBest;
+        float aloneShort;
+        float inForceShort;
+        string ladders;
+        try
+        {
+            EngagementExchangeForecast.PriceRoutingFriends = false;
+            alone = OpeningExchangeForecast.Build(squad, boyz);
+            inForce = OpeningExchangeForecast.Build(squad, boyz, marines);
+            aloneBest = Openings.Max(opening => ExpectedNet(alone, opening));
+            inForceBest = Openings.Max(opening => ExpectedNet(inForce, opening));
+            aloneShort = ExpectedNet(alone, ShortOpening);
+            inForceShort = ExpectedNet(inForce, ShortOpening);
+            ladders = "\nalone:    " + Ladder(alone) + "\nin force: " + Ladder(inForce);
+        }
+        finally
+        {
+            EngagementExchangeForecast.PriceRoutingFriends = routingFriends;
+        }
 
+        // The premise: alone, the squad faces a harder fight it still expects to win. If it
+        // expects to lose at every opening, the comparison below measures nothing.
         Assert.True(
-            inForce < alone - 50,
-            $"one of three squads opened at {inForce}, against {alone} when it planned the whole "
-                + "kill alone -- the squad is still planning the whole force's share");
+            aloneBest > 0,
+            $"the squad alone forecasts at best {aloneBest}; the fixture no longer gives it a "
+                + "winnable fight" + ladders);
+        Assert.True(
+            inForceBest > 0,
+            $"the squad in its force forecasts at best {inForceBest}" + ladders);
+        // Against each forecast's own best opening. Until 2026-11-01 this compared the raw nets,
+        // which in database values put the lone squad at a loss at 20 yd; in tactical values it
+        // wins there (+170 against a best of 428), and the squad in its force is capped by its
+        // share of the enemy (146), so the raw nets stopped saying anything about force share.
+        // What force share must do is make the short opening cost little against the best.
+        float aloneShortfall = aloneBest - aloneShort;
+        float inForceShortfall = inForceBest - inForceShort;
+        Assert.True(
+            aloneShortfall - inForceShortfall > ClearlyBetterShare * alone.OwnPool,
+            $"at {ShortOpening} yd the squad in its force falls {inForceShortfall} short of its best, "
+                + $"against {aloneShortfall} alone -- it is still planning the whole force's share of "
+                + "the kill and of the enemy's fire" + ladders);
     }
+
+    private static float ExpectedNet(OpeningExchangeForecast forecast, float opening) =>
+        OpeningExchangeForecast.Net(forecast.Evaluate(opening));
+
+    // Forecast net, expected (unlucky), at a ladder of openings, for a failure message.
+    private static string Ladder(OpeningExchangeForecast forecast) => string.Join("  ",
+        Openings.Select(opening =>
+            $"{opening}: {ExpectedNet(forecast, opening):F1}"
+            + $" ({OpeningExchangeForecast.Net(forecast.EvaluateUnlucky(opening)):F1})"));
 
     [Fact]
     public void SquadThatIsItsWholeForce_OpensWhereItWouldAlone()
     {
-        (List<BattleSquad> marines, List<BattleSquad> boyz) = CreateForces(squadsPerSide: 1);
+        (List<BattleSquad> marines, List<BattleSquad> boyz) = CreateForces(marineSquads: 1, boyzSquads: 1);
         BattleSquad squad = marines[0];
 
         Assert.Equal(
@@ -54,38 +120,16 @@ public class OpeningRangeForceShareTests
             BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(squad, boyz, marines));
     }
 
-    // Grist Nine Epsilon (2026-09-22): with the kill share met early, extra opening range looked
-    // free and tactical squads opened at ~1050, near weapon reach. The orks broke at ~500 and the
-    // marines, one cell a turn faster, never brought them back into range. The expected break must
-    // now land inside the squad's useful band, so the opening sits inside it too.
-    [Fact]
-    public void SquadInALargerForce_OpensInsideItsUsefulBand()
-    {
-        (List<BattleSquad> marines, List<BattleSquad> boyz) = CreateForces(squadsPerSide: 3);
-        BattleSquad squad = marines[0];
-        RangedEffectivenessCurve curve = RangedEffectivenessCurve.Build(
-            squad.AbleSoldiers.ToList(),
-            new EngagementTargetProfile(
-                boyz.Average(s => s.GetAverageSize()),
-                boyz.Average(s => s.GetAverageArmor()),
-                boyz.Average(s => s.GetAverageConstitution()),
-                boyz.Average(s => s.GetAverageRangedEvasion()),
-                boyz.SelectMany(s => s.AbleSoldiers)
-                    .Average(s => (float)System.Math.Max(1, s.EffectiveBattleValue))));
-        float usefulBand = curve.SaturationRange(RangedEffectivenessCurve.SaturationFraction);
-
-        float opening = BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(
-            squad, boyz, marines);
-
-        Assert.True(usefulBand > 0, "fixture must give the tactical squad a useful band");
-        Assert.True(
-            opening <= usefulBand,
-            $"opened at {opening}, outside its {usefulBand:F0}-yard useful band -- the enemy "
-                + "would break where this squad can no longer punish the retreat");
-    }
+    // SquadInALargerForce_OpensInsideItsUsefulBand (Grist Nine Epsilon, 2026-09-22) was removed on
+    // 2026-10-24 with the sufficiency sweep (OpeningRangeRefactor.md, phase 5). It pinned that
+    // sweep's break limit: the opening had to sit inside the useful band so the marines could punish
+    // a retreat. The opening forecast prices a break as the enemy's value leaving the fight, as the
+    // gauntlet counts who holds the field, and the measured best opening for Tactical against Shoota
+    // Boyz is the end of the 600-yard ladder.
 
     private static (List<BattleSquad> Marines, List<BattleSquad> Boyz) CreateForces(
-        int squadsPerSide)
+        int marineSquads,
+        int boyzSquads)
     {
         GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
         Faction marines = blob.Factions.Single(faction => faction.Id == SpaceMarineFactionId);
@@ -93,12 +137,12 @@ public class OpeningRangeForceShareTests
         RNG.Reset(4243);
         OnlyWar.Abstractions.IEntityIdAllocator ids =
             new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator();
-        List<BattleSquad> boyz = Enumerable.Range(0, squadsPerSide)
+        List<BattleSquad> boyz = Enumerable.Range(0, boyzSquads)
             .Select(i => new BattleSquad(false, SquadFactory.GenerateSquad(
                 orks.SquadTemplates[i % 2 == 0 ? SluggaBoyzTemplateId : ShootaBoyzTemplateId],
                 new StaticRNG(), ids, $"Boyz {i}")))
             .ToList();
-        List<BattleSquad> tacticals = Enumerable.Range(0, squadsPerSide)
+        List<BattleSquad> tacticals = Enumerable.Range(0, marineSquads)
             .Select(i => new BattleSquad(false, SquadFactory.GenerateSquad(
                 marines.SquadTemplates[TacticalSquadTemplateId],
                 new StaticRNG(), ids, $"Tactical {i}")))

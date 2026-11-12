@@ -46,10 +46,10 @@ namespace OnlyWar.Battles
         /// <summary>
         /// The battle value a soldier is worth to remove -- the currency every planning score is
         /// denominated in. It uses the tactical equipment-aware value while leaving the intrinsic
-        /// SoldierTemplate.BattleValue untouched for strategic force generation.
+        /// value (the squad element's StrategicValuePerSoldier) untouched for strategic force generation.
         /// </summary>
         internal static float BattleValueOf(BattleSoldier soldier) =>
-            Math.Max(0, soldier?.EffectiveBattleValue ?? soldier?.Soldier?.Template?.BattleValue ?? 0);
+            Math.Max(0, soldier?.PlanningValue ?? 0);
     }
 
     /// <summary>

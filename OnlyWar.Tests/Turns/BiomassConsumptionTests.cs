@@ -228,7 +228,7 @@ public class BiomassConsumptionTests
     // A feed order is squad-less and resolves instantly, on the ConstructionMission precedent: the
     // committed battle value on the mission is what reaches the allocator.
     [Fact]
-    public void ProcessFeedOrders_ResolvesTheCommittedBattleValueWithoutSquads()
+    public void ProcessFeedOrders_ResolvesTheCommittedStrategicValueWithoutSquads()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];

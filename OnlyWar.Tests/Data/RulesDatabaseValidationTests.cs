@@ -503,11 +503,11 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
         var rules = RulesDatabaseFixture.LoadRules();
         var pdf = rules.Factions.Single(f => f.IsDefaultFaction);
 
-        const long targetBattleValue = 700;
+        const long targetStrategicValue = 700;
         List<Squad> force = ForceGenerator.GenerateForce(new ForceGenerationRequest
         {
             Faction = pdf,
-            TargetBattleValue = targetBattleValue,
+            TargetStrategicValue = targetStrategicValue,
             Profile = ForceCompositionProfile.Garrison
         }, new StaticRNG());
 
@@ -516,10 +516,10 @@ WHERE FactionId = (SELECT Id FROM Faction WHERE IsPlayerFaction = 1);";
         {
             Assert.True((squad.SquadTemplate.SquadType & SquadTypes.HQ) == 0);
             Assert.NotEmpty(squad.Members);
-            Assert.True(squad.Members.Sum(member => (long)member.Template.BattleValue) > 0);
+            Assert.True(squad.Members.Sum(member => (long)member.StrategicValue) > 0);
         });
-        long generatedBattleValue = force.Sum(squad =>
-            squad.Members.Sum(member => (long)member.Template.BattleValue));
-        Assert.InRange(generatedBattleValue, 1, targetBattleValue);
+        long generatedStrategicValue = force.Sum(squad =>
+            squad.Members.Sum(member => (long)member.StrategicValue));
+        Assert.InRange(generatedStrategicValue, 1, targetStrategicValue);
     }
 }

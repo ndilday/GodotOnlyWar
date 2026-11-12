@@ -73,12 +73,12 @@ public sealed class OperationalMissionElement
     public ISoldier SquadLeader => AbleMembers
         .FirstOrDefault(member => member.Template?.IsSquadLeader == true);
 
-    public long AbleBattleValue => AbleMembers
-        .Sum(member => (long)(member.Template?.BattleValue ?? 0));
+    public long AbleStrategicValue => AbleMembers
+        .Sum(member => (long)member.StrategicValue);
 
-    public long FallenBattleValue => Members
+    public long FallenStrategicValue => Members
         .Where(member => !member.IsCombatEffective)
-        .Sum(member => (long)(member.Template?.BattleValue ?? 0));
+        .Sum(member => (long)member.StrategicValue);
 
     public float GetSquadMove() => AbleMembers
         .Select(member => member.MoveSpeed * member.MotiveSpeedMultiplier)

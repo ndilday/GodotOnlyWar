@@ -36,6 +36,22 @@ namespace OnlyWar.Battles
     }
 
     /// <summary>
+    /// How a force fires for <see cref="RangedEffectivenessCurve.SustainedAt"/>: one burst every
+    /// turn, or the best aim-then-fire cycle per shooter.
+    /// </summary>
+    internal enum CurveFireModel
+    {
+        Unaimed,
+        SustainedAimed,
+        /// <summary>
+        /// The cycle the shot planner really fires: each round charged at its price
+        /// (<see cref="RangedTargetSelector.RoundPrice"/>), then the planner's own held-aim rule
+        /// (<see cref="RangedTargetSelector.PlannerCycle"/>).
+        /// </summary>
+        PlannerPriced,
+    }
+
+    /// <summary>
     /// PHASE 6 (Design/Reference/BattleLogic.md). THE engagement-range model.
     ///
     /// <para>Expected battle value removed per turn, as a smooth function of range, by a set of
@@ -167,24 +183,38 @@ namespace OnlyWar.Battles
             internal bool Degrades;
             internal IReadOnlyList<TakeOutLocationTerm> Locations;
             internal float FlatRemovalFraction;
+            /// <summary>
+            /// <see cref="Locations"/> against <see cref="Template"/> on 50-yard nodes, for a weapon
+            /// whose damage falls with range (Design/Active/CoarseForecastTables.md, step 1).
+            /// </summary>
+            internal RemovalFractionTable Removal;
+            /// <summary>Rounds one burst spends: 0 for a weapon that never runs down.</summary>
+            internal int RoundsPerBurst;
+            /// <summary>Rounds one shooter carries for this weapon (loaded and in reserve, or items).</summary>
+            internal float RoundsCarried;
+            /// <summary>
+            /// What an aimed shot adds over an unaimed one at aim bonus 0: the weapon Accuracy
+            /// (capped by skill) and the +1 of the all-out attack (ShootAction.CalculateToHitModifiers).
+            /// <see cref="BaseHitTotal"/> includes it, so the curve is the shot aimed for one turn.
+            /// </summary>
+            internal float AimedShotBonus;
 
-            internal float RemovalAt(float range)
+            internal float RemovalAt(float range, float targetSpeed = 0f, float extraModifier = 0f)
             {
                 if (range > MaximumEffectiveRange)
                 {
                     return 0f;
                 }
                 float fraction = Degrades
-                    ? RemovalMath.EvaluateRemovalFraction(
-                        Locations,
-                        BattleModifiersUtil.CalculateDamageAtRange(Template, range))
+                    ? Removal.At(range)
                     : FlatRemovalFraction;
                 if (fraction <= 0f)
                 {
                     return 0f;
                 }
                 float total = BaseHitTotal
-                    + BattleModifiersUtil.CalculateRangeModifier(range, 0f);
+                    + extraModifier
+                    + BattleModifiersUtil.CalculateRangeModifier(range, targetSpeed);
                 // The burst model, matching EvaluateRangedTarget and PairRemovalTerm.RemovalAt --
                 // this curve is only useful because it is in the same currency as those two.
                 // BaseHitTotal already carries the rate-of-fire modifier for the full RateOfFire,
@@ -252,14 +282,151 @@ namespace OnlyWar.Battles
 
         internal bool IsEmpty => _shooters.Count == 0;
 
+        /// <summary>
+        /// Rounds these shooters carry for the weapons that run down (loaded and in reserve, or
+        /// items). Weapons that never run down count nothing here and spend nothing in
+        /// <see cref="SustainedAt"/>.
+        /// </summary>
+        internal float RoundsCarried { get; }
+
         private RangedEffectivenessCurve(
             List<ShooterGroup> shooters,
             float reach,
-            float targetBattleValue)
+            float targetBattleValue,
+            float roundsCarried = 0f)
         {
             _shooters = shooters;
             Reach = reach;
             _negligibleRemoval = NegligibleRemovalFraction * Math.Max(1f, targetBattleValue);
+            RoundsCarried = roundsCarried;
+        }
+
+        /// <summary>
+        /// Removal per turn and rounds spent per turn at <paramref name="range"/> under a firing
+        /// pattern. <see cref="CurveFireModel.Unaimed"/> is one unaimed burst every turn.
+        /// <see cref="CurveFireModel.SustainedAimed"/> lets each shooter pick, per weapon, the
+        /// aim-then-fire cycle with the most removal per turn, as the shot planner does when rounds
+        /// are free (RangedTargetSelector.EvaluateFireTiming): fire now unaimed, or aim to bonus b
+        /// (b + 1 aim turns, from 0) and fire on turn b + 2, up to the full aim bonus. The rounds
+        /// are those of the cycle chosen, spread over its turns. <paramref name="targetSpeed"/> is
+        /// the target's movement, which the engine adds to the range in the hit modifier.
+        ///
+        /// <para>Unaimed is NOT <see cref="RemovalAt"/>: that curve's hit total carries the aimed
+        /// shot's Accuracy and +1 (<see cref="WeaponCurve.AimedShotBonus"/>), which the engine
+        /// adds only to a shot fired after an aim. Pricing the unaimed shot with it made firing
+        /// every turn beat aiming nearly everywhere, and the forecast spent the PDF's rounds about
+        /// three times faster than the battles do (2026-10-23).</para>
+        /// </summary>
+        /// <param name="workPerShooter">
+        /// For <see cref="CurveFireModel.PlannerPriced"/>: one shooter's share of the work, the enemy
+        /// battle value over the shooters on his side (as <c>RangedShotEvaluator.WorkPerShooter</c>).
+        /// It sets how scarce his rounds are.
+        /// </param>
+        internal (float Removal, float Rounds) SustainedAt(
+            float range,
+            CurveFireModel model,
+            float targetSpeed = 0f,
+            float workPerShooter = 0f)
+        {
+            float removal = 0f;
+            float rounds = 0f;
+            for (int shooter = 0; shooter < _shooters.Count; shooter++)
+            {
+                ShooterGroup group = _shooters[shooter];
+                float best = 0f;
+                float bestRounds = 0f;
+                foreach (WeaponCurve weapon in group.Weapons)
+                {
+                    if (model == CurveFireModel.PlannerPriced)
+                    {
+                        (float cycleRemoval, float cycleRounds) =
+                            PlannerPricedCycle(weapon, range, targetSpeed, workPerShooter);
+                        if (cycleRemoval > best)
+                        {
+                            best = cycleRemoval;
+                            bestRounds = cycleRounds;
+                        }
+                        continue;
+                    }
+                    float now = weapon.RemovalAt(range, targetSpeed, -weapon.AimedShotBonus);
+                    if (now > best)
+                    {
+                        best = now;
+                        bestRounds = weapon.RoundsPerBurst;
+                    }
+                    if (model != CurveFireModel.SustainedAimed)
+                    {
+                        continue;
+                    }
+                    for (int bonus = 0; bonus <= RangedTargetSelector.FullAimBonusTurns; bonus++)
+                    {
+                        int turns = bonus + 2;
+                        float rate = weapon.RemovalAt(range, targetSpeed, bonus) / turns;
+                        if (rate > best)
+                        {
+                            best = rate;
+                            bestRounds = weapon.RoundsPerBurst / (float)turns;
+                        }
+                    }
+                }
+                removal += best * group.Count;
+                rounds += bestRounds * group.Count;
+            }
+            return (removal, rounds);
+        }
+
+        /// <summary>
+        /// One weapon's removal and rounds per turn as the shot planner fires it at a standing
+        /// target (RangedTargetSelector.EvaluateFireTiming, fresh, at a fixed range). The plans are
+        /// firing now and aiming to bonus 0-3; a round is priced at scarcity x the best value per
+        /// round on offer, with scarcity set by the fastest plan's pace against the shooter's share
+        /// of the work (<see cref="RangedTargetSelector.Scarcity"/>); and the planner's held-aim rule
+        /// picks the cycle on the net values. Removal is that cycle's gross removal per turn.
+        /// Bursts are the weapon's full rate of fire; the planner may shorten them when rounds are
+        /// dear, which this does not model.
+        /// </summary>
+        private static (float Removal, float Rounds) PlannerPricedCycle(
+            WeaponCurve weapon,
+            float range,
+            float targetSpeed,
+            float workPerShooter)
+        {
+            int plans = RangedTargetSelector.FullAimBonusTurns + 1;
+            float now = weapon.RemovalAt(range, targetSpeed, -weapon.AimedShotBonus);
+            Span<float> gross = stackalloc float[plans];
+            Span<int> turns = stackalloc int[plans];
+            float fastestRate = now;
+            float fastestGross = now;
+            float bestGross = now;
+            for (int bonus = 0; bonus < plans; bonus++)
+            {
+                gross[bonus] = weapon.RemovalAt(range, targetSpeed, bonus);
+                turns[bonus] = bonus + 2;
+                if (gross[bonus] / turns[bonus] > fastestRate)
+                {
+                    fastestRate = gross[bonus] / turns[bonus];
+                    fastestGross = gross[bonus];
+                }
+                bestGross = Math.Max(bestGross, gross[bonus]);
+            }
+            float burst = weapon.RoundsPerBurst;
+            float price = 0f;
+            if (burst > 0)
+            {
+                float scarcity = RangedTargetSelector.Scarcity(
+                    weapon.RoundsCarried, workPerShooter, fastestGross / burst);
+                // Scarcity x the best value per round, charged for the burst's rounds.
+                price = scarcity * bestGross;
+            }
+            Span<float> net = stackalloc float[plans];
+            for (int bonus = 0; bonus < plans; bonus++)
+            {
+                net[bonus] = gross[bonus] - price;
+            }
+            int fired = RangedTargetSelector.PlannerCycle(now - price, net, turns);
+            return fired < 0
+                ? (now, burst)
+                : (gross[fired] / turns[fired], burst / turns[fired]);
         }
 
         /// <summary>
@@ -287,12 +454,22 @@ namespace OnlyWar.Battles
             return total;
         }
 
+        /// <param name="representativeTarget">
+        /// Optional: a soldier whose real hit locations (weights, natural armor, the wound that
+        /// disables each) price a hit, in place of the single synthetic location built from the
+        /// profile's scalar armor and constitution. The synthetic location overstates what a hit
+        /// removes: against Genestealers it gave a PDF squad about three times the planner's rate
+        /// table (46 against 14.5 battle value a turn at 50 yards, 2026-10-23). Only the opening
+        /// forecast passes one; the engagement-range consumers keep the synthetic location.
+        /// </param>
         internal static RangedEffectivenessCurve Build(
             IEnumerable<BattleSoldier> shooters,
-            EngagementTargetProfile target)
+            EngagementTargetProfile target,
+            BattleSoldier representativeTarget = null)
         {
             List<ShooterGroup> built = [];
             float reach = 0f;
+            float roundsCarried = 0f;
             foreach (BattleSoldier soldier in shooters ?? Array.Empty<BattleSoldier>())
             {
                 int freeHands = soldier?.FunctioningHands ?? 0;
@@ -307,10 +484,21 @@ namespace OnlyWar.Battles
                     {
                         continue;
                     }
-                    WeaponCurve curve = BuildWeaponCurve(soldier, weapon, target, freeHands);
+                    WeaponCurve curve = BuildWeaponCurve(
+                        soldier, weapon, target, freeHands, representativeTarget);
                     if (curve == null)
                     {
                         continue;
+                    }
+                    // As RangedTargetSelector counts a shot's rounds: one item for a consumable,
+                    // the burst otherwise, nothing for a supply that never runs down.
+                    if (!RangedTargetSelector.IsNeverScarce(weapon))
+                    {
+                        curve.RoundsPerBurst = weapon.IsConsumableItem
+                            ? 1
+                            : Math.Max(1, (int)weapon.Template.RateOfFire);
+                        curve.RoundsCarried = RangedTargetSelector.RoundsCarried(weapon);
+                        roundsCarried += curve.RoundsCarried;
                     }
                     weapons.Add(curve);
                     if (curve.MaximumEffectiveRange > reach)
@@ -340,7 +528,7 @@ namespace OnlyWar.Battles
                     bucket.Count++;
                 }
             }
-            return new RangedEffectivenessCurve(built, reach, target.BattleValue);
+            return new RangedEffectivenessCurve(built, reach, target.BattleValue, roundsCarried);
         }
 
         /// <summary>
@@ -380,7 +568,8 @@ namespace OnlyWar.Battles
             BattleSoldier soldier,
             RangedWeapon weapon,
             EngagementTargetProfile target,
-            int freeHands)
+            int freeHands,
+            BattleSoldier representativeTarget = null)
         {
             RangedWeaponTemplate template = weapon.Template;
             float maximumRange = BattleModifiersUtil.GetEffectiveMaxRange(
@@ -410,17 +599,23 @@ namespace OnlyWar.Battles
             // value, ignoring cybernetic parts, and the profile carries no natural armor (decided
             // 2026-10-12, OnlyWar_TDD.md §5.3).
             float damagePerRatio = Math.Max(0f, target.Constitution) / woundMultiplier;
-            TakeOutLocationTerm[] locations =
-            [
-                new TakeOutLocationTerm(
-                    1f,
-                    effectiveArmor + damagePerRatio,
-                    1f,
-                    effectiveArmor,
-                    effectiveArmor,
-                    damagePerRatio,
-                    RemovalMath.WoundCounterValue((uint)OnlyWar.Domain.Soldiers.WoundLevel.Critical))
-            ];
+            IReadOnlyList<TakeOutLocationTerm> locations = representativeTarget != null
+                ? RemovalMath.BuildTakeOutLocationTerms(
+                    representativeTarget,
+                    representativeTarget.Armor?.Template.ArmorProvided ?? 0,
+                    template.ArmorMultiplier,
+                    template.WoundMultiplier)
+                :
+                [
+                    new TakeOutLocationTerm(
+                        1f,
+                        effectiveArmor + damagePerRatio,
+                        1f,
+                        effectiveArmor,
+                        effectiveArmor,
+                        damagePerRatio,
+                        RemovalMath.WoundCounterValue((uint)OnlyWar.Domain.Soldiers.WoundLevel.Critical))
+                ];
             bool degrades = template.DoesDamageDegradeWithRange;
             return new WeaponCurve
             {
@@ -429,12 +624,12 @@ namespace OnlyWar.Battles
                 MaximumEffectiveRange = maximumRange,
                 TargetBattleValue = Math.Max(1f, target.BattleValue),
                 Degrades = degrades,
+                AimedShotBonus = RangedTargetSelector.AimAccuracy(soldier, template) + 1f,
                 Locations = locations,
+                Removal = degrades ? RemovalFractionTable.For(locations, template) : null,
                 FlatRemovalFraction = degrades
                     ? 0f
-                    : RemovalMath.EvaluateRemovalFraction(
-                        locations,
-                        BattleModifiersUtil.CalculateDamageAtRange(template, 0f))
+                    : RemovalFractionTable.For(locations, template).At(0f)
             };
         }
 

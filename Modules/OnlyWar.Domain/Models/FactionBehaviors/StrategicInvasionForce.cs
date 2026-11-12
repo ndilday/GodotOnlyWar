@@ -23,7 +23,7 @@ namespace OnlyWar.Domain.FactionBehaviors
         public Planet OriginPlanet { get; }
         public Planet DestinationPlanet { get; set; }
         public int TravelWeeksRemaining { get; set; }
-        public long TransitBattleValue { get; set; }
+        public long TransitStrategicValue { get; set; }
         public bool IsActive { get; set; } = true;
         public IReadOnlyList<RegionFaction> KnownRegions => _knownRegions;
         public bool IsInTransit => DestinationPlanet != null && CurrentRegion == null;
@@ -32,17 +32,17 @@ namespace OnlyWar.Domain.FactionBehaviors
             .FirstOrDefault(member => member.Template?.IsSquadLeader == true)
             ?? CommandSquad?.Members.FirstOrDefault();
 
-        public long OrganizedBattleValue => _knownRegions
+        public long OrganizedStrategicValue => _knownRegions
             .Where(regionFaction => regionFaction?.StrategicInvasionForceId == Id)
             .Sum(regionFaction => regionFaction.OrganizedMilitaryStrength)
-            + TransitBattleValue
-            + SquadBattleValue(CommandSquad);
+            + TransitStrategicValue
+            + SquadStrategicValue(CommandSquad);
 
-        public long CurrentBattleValue => _knownRegions
+        public long CurrentStrategicValue => _knownRegions
             .Where(regionFaction => regionFaction?.StrategicInvasionForceId == Id)
             .Sum(regionFaction => regionFaction.MilitaryStrength)
-            + TransitBattleValue
-            + SquadBattleValue(CommandSquad);
+            + TransitStrategicValue
+            + SquadStrategicValue(CommandSquad);
 
         public StrategicInvasionForce(long id, Faction faction, Squad commandSquad,
             Region currentRegion, Planet originPlanet)
@@ -60,8 +60,8 @@ namespace OnlyWar.Domain.FactionBehaviors
             if (regionFaction != null && !_knownRegions.Contains(regionFaction)) _knownRegions.Add(regionFaction);
         }
 
-        private static long SquadBattleValue(Squad squad) => squad?.Members
-            .Sum(member => (long)(member.Template?.BattleValue ?? 0)) ?? 0L;
+        private static long SquadStrategicValue(Squad squad) => squad?.Members
+            .Sum(member => (long)member.StrategicValue) ?? 0L;
     }
 
     /// <summary>Persistence projection for a strategic invasion force.</summary>
@@ -74,7 +74,7 @@ namespace OnlyWar.Domain.FactionBehaviors
         public int? OriginPlanetId { get; set; }
         public int? DestinationPlanetId { get; set; }
         public int TravelWeeksRemaining { get; set; }
-        public long TransitBattleValue { get; set; }
+        public long TransitStrategicValue { get; set; }
         public bool IsActive { get; set; }
     }
 }

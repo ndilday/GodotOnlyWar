@@ -57,7 +57,7 @@ internal sealed class ForceTaskCommitter
         foreach (IGrouping<ForceTask, ForceTaskAward> group in awards.GroupBy(award => award.Task))
         {
             ForceTask task = group.Key;
-            long total = group.Sum(award => award.BattleValue);
+            long total = group.Sum(award => award.StrategicValue);
             if (total <= 0L) continue;
 
             switch (task.Kind)
@@ -108,7 +108,7 @@ internal sealed class ForceTaskCommitter
         Planet planet,
         ForceTask task,
         IEnumerable<ForceTaskAward> awards,
-        long battleValue)
+        long strategicValue)
     {
         // A neighbour that won a share of this region's defence is reinforcing it, so the strength has
         // to physically move. This is the whole of troop movement in the new system: there is no
@@ -118,7 +118,7 @@ internal sealed class ForceTaskCommitter
             RegionFaction source = award.Source.RegionFaction;
             if (ReferenceEquals(source, task.Home)) continue;
 
-            long moved = Math.Min(award.BattleValue, source.MilitaryStrength);
+            long moved = Math.Min(award.StrategicValue, source.MilitaryStrength);
             if (moved <= 0L) continue;
             source.RemoveMilitaryStrength(moved);
             task.Home.AddMilitaryStrength(moved);
@@ -129,21 +129,21 @@ internal sealed class ForceTaskCommitter
         }
 
         long organized = task.Home.GetDeployedStrength();
-        task.Home.AssignedDefensiveBattleValue = Math.Min(organized, battleValue);
+        task.Home.AssignedDefensiveStrategicValue = Math.Min(organized, strategicValue);
     }
 
     private static void CommitWithdraw(
         Faction faction,
         Planet planet,
         ForceTask task,
-        long battleValue,
+        long strategicValue,
         IReadOnlyList<RegionForceState> states)
     {
         RegionForceState destination = states
             .FirstOrDefault(state => state.RegionFaction.Region == task.Destination);
         if (destination == null) return;
 
-        long moved = Math.Min(battleValue, task.Home.MilitaryStrength);
+        long moved = Math.Min(strategicValue, task.Home.MilitaryStrength);
         if (moved <= 0L) return;
 
         task.Home.RemoveMilitaryStrength(moved);
@@ -171,14 +171,14 @@ internal sealed class ForceTaskCommitter
         Faction faction,
         Planet planet,
         ForceTask task,
-        long battleValue,
+        long strategicValue,
         IReadOnlyList<RegionForceState> states)
     {
         RegionForceState destination = states
             .FirstOrDefault(state => state.RegionFaction.Region == task.Destination);
         if (destination == null) return;
 
-        long moved = Math.Min(battleValue, task.Home.MilitaryStrength);
+        long moved = Math.Min(strategicValue, task.Home.MilitaryStrength);
         if (moved <= 0L) return;
 
         task.Home.RemoveMilitaryStrength(moved);
@@ -217,9 +217,9 @@ internal sealed class ForceTaskCommitter
             return;
         }
 
-        List<(RegionFaction Staging, long BattleValue)> contributions = group
+        List<(RegionFaction Staging, long StrategicValue)> contributions = group
             .GroupBy(award => award.Source.RegionFaction)
-            .Select(regionGroup => (regionGroup.Key, regionGroup.Sum(award => award.BattleValue)))
+            .Select(regionGroup => (regionGroup.Key, regionGroup.Sum(award => award.StrategicValue)))
             .Where(contribution => contribution.Item2 > 0L)
             .ToList();
         if (contributions.Count == 0) return;
@@ -237,7 +237,7 @@ internal sealed class ForceTaskCommitter
     }
 
     private static RegionFaction LargestSource(IEnumerable<ForceTaskAward> group) =>
-        group.OrderByDescending(award => award.BattleValue)
+        group.OrderByDescending(award => award.StrategicValue)
             .Select(award => award.Source.RegionFaction)
             .FirstOrDefault();
 }

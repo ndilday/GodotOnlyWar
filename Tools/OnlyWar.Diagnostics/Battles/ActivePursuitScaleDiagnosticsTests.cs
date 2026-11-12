@@ -234,7 +234,7 @@ public sealed class ActivePursuitScaleDiagnosticsTests
         int marineSquadCount,
         int idBase)
     {
-        SoldierTemplate routingTemplate = new(
+        SoldierTemplate routingTemplate = new TestSoldierTemplate(
             idBase,
             TestModelFactory.HumanSpecies,
             "Routing Ork",
@@ -243,7 +243,7 @@ public sealed class ActivePursuitScaleDiagnosticsTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 1);
+            strategicValue: 1);
         // Keep this a normal, damageable routing force. An earlier probe used Constitution 5,000
         // and BattleValue 0, which intentionally made the quarry almost impossible to finish and
         // tested the inert watchdog more than it tested pursuit resolution.
@@ -342,7 +342,7 @@ public sealed class ActivePursuitScaleDiagnosticsTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(soldierTemplate, 0, (byte)count)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(soldierTemplate, 0, (byte)count)],
             SquadTypes.None)
         {
             Faction = faction

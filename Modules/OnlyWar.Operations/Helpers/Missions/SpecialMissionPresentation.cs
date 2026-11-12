@@ -65,7 +65,7 @@ namespace OnlyWar.Operations.Missions
         public static string FormatRecommendedForce(
             Mission mission,
             int currentWeek,
-            long referenceSquadBattleValue)
+            long referenceSquadStrategicValue)
         {
             if (mission == null) return null;
             FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
@@ -74,11 +74,11 @@ namespace OnlyWar.Operations.Missions
             IntelLevel level = belief?.Level ?? IntelLevel.Rumor;
             // Only ambushes store a target. For any other special mission the estimate is taken
             // against what the enemy has deployed; with no presence there is nothing to size.
-            long target = mission.TargetBattleValue
-                ?? AmbushMissionSizing.EstimateTargetBattleValue(
+            long target = mission.TargetStrategicValue
+                ?? AmbushMissionSizing.EstimateTargetStrategicValue(
                     mission.RegionFaction?.GetDeployedStrength() ?? 0L);
             if (target <= 0) return null;
-            long squads = AmbushMissionSizing.RecommendSquads(target, referenceSquadBattleValue);
+            long squads = AmbushMissionSizing.RecommendSquads(target, referenceSquadStrategicValue);
             string unit = squads == 1 ? "squad" : "squads";
             bool imperial = FactionRelationshipService.IsImperial(
                 mission.RegionFaction?.PlanetFaction?.Faction);

@@ -23,6 +23,7 @@ namespace OnlyWar.Battles
         private readonly BattleState _state;
         private readonly BattleGridManager _grid;
         private readonly BattleExecutionContext _execution;
+        private TacticalValueTable _previousTacticalValues;
 
         internal BattleActionPlanningCoordinator(
             BattleState state,
@@ -74,15 +75,25 @@ namespace OnlyWar.Battles
 
             PrepareParallelPlanningState();
 
-            // One fresh memo for the whole planning pass. Movement, reloads, and casualties do not
-            // occur until after this coordinator returns and action execution begins.
-            BattlePlanningContext planningContext = new();
             List<BattleSquad> orderedAttacker = attacker
                 .OrderBy(squad => squad.Id)
                 .ToList();
             List<BattleSquad> orderedOpposing = opposing
                 .OrderBy(squad => squad.Id)
                 .ToList();
+            // The previous turn's values weight this turn's take-outs (TacticalValueTable).
+            _previousTacticalValues = TacticalValueTable.Build(
+                orderedAttacker, orderedOpposing, _previousTacticalValues);
+            // The planner reads each soldier's value from the soldier (SquadPlanningServices).
+            _previousTacticalValues.AssignTo(orderedAttacker.Concat(orderedOpposing));
+
+            // One fresh memo for the whole planning pass. Movement, reloads, and casualties do not
+            // occur until after this coordinator returns and action execution begins.
+            BattlePlanningContext planningContext = new()
+            {
+                FactionBehaviorRules = _execution.Rules?.FactionBehaviorRules,
+                TacticalValues = _previousTacticalValues,
+            };
             ActionSink actions = new(shootActions, moveActions, meleeActions);
             Dictionary<BattleSide, BattleSquadPlanner> planners = new()
             {
@@ -105,7 +116,6 @@ namespace OnlyWar.Battles
                 paired.Profiles,
                 paired.Frames,
                 _execution.MaxPlanningDegreeOfParallelism);
-
             List<PlanningJob> jobs = [];
             foreach ((BattleSide side, List<BattleSquad> friendly, List<BattleSquad> enemy) in new[]
             {

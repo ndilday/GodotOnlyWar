@@ -42,6 +42,7 @@
 
     <Compile Include="../../OnlyWar.Tests/Fixtures/RulesDatabaseFixture.cs" Link="Fixtures/RulesDatabaseFixture.cs" />
     <Compile Include="../../OnlyWar.Tests/Fixtures/TestModelFactory.cs" Link="Fixtures/TestModelFactory.cs" />
+    <Compile Include="../../OnlyWar.Tests/Fixtures/TestSoldierTemplate.cs" Link="Fixtures/TestSoldierTemplate.cs" />
     <Compile Include="../../OnlyWar.Tests/Fixtures/TestSkills.cs" Link="Fixtures/TestSkills.cs" />
     <Compile Include="../../OnlyWar.Tests/Fixtures/BattleGridTestPlacement.cs" Link="Fixtures/BattleGridTestPlacement.cs" />
     <Compile Include="../../OnlyWar.Tests/Fixtures/TestPersonnelComposition.cs" Link="Fixtures/TestPersonnelComposition.cs" />

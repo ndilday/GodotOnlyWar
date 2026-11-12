@@ -139,7 +139,7 @@ public class MissionAvailabilityTests
     [InlineData(91L, "Recommended Minimum Force: 2 squads")]
     [InlineData(270L, "Recommended Minimum Force: 3 squads")]
     public void AmbushLabelsKeepRecommendedForceOutOfCompactButtonText(
-        long targetBattleValue,
+        long targetStrategicValue,
         string expected)
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
@@ -149,7 +149,7 @@ public class MissionAvailabilityTests
             MissionType.Ambush,
             target,
             missionSize: 1,
-            targetBattleValue);
+            targetStrategicValue);
         target.Region.SpecialMissions.Add(mission);
 
         AvailableMission available = MissionAvailability

@@ -210,4 +210,15 @@ public interface IEngagementResolver
         EngagementParticipant element,
         IReadOnlyList<EngagementParticipant> opposingElements,
         IReadOnlyList<EngagementParticipant> friendlyElements = null);
+
+    /// <summary>
+    /// <see cref="GetPreferredOpeningRange"/>, or null when the element has no preference (a squad
+    /// with no ranged weapon has nothing to stand off for). A reciprocal assault leaves such an
+    /// element out of its side's preference.
+    /// </summary>
+    int? GetPreferredOpeningRangeOrNone(
+        EngagementParticipant element,
+        IReadOnlyList<EngagementParticipant> opposingElements,
+        IReadOnlyList<EngagementParticipant> friendlyElements = null) =>
+        GetPreferredOpeningRange(element, opposingElements, friendlyElements);
 }

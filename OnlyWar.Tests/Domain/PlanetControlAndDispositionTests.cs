@@ -135,9 +135,9 @@ public class PlanetControlAndDispositionTests
         hiddenCult.IsPublic = false;
 
         Assert.Equal(300,
-            StrategicCombatResolver.CalculateDefenderBattleValueAgainst(loyalists, xenos));
+            StrategicCombatResolver.CalculateDefenderStrategicValueAgainst(loyalists, xenos));
         Assert.Equal(100,
-            StrategicCombatResolver.CalculateDefenderBattleValueAgainst(loyalists, cult));
+            StrategicCombatResolver.CalculateDefenderStrategicValueAgainst(loyalists, cult));
     }
 
     private static RegionFaction HiddenPresence(Planet planet, Faction faction)

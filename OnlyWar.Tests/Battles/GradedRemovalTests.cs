@@ -22,7 +22,7 @@ public class GradedRemovalTests
 {
     private static BattleSoldier Target(string name, int soldierId, int constitution)
     {
-        SoldierTemplate template = new(
+        SoldierTemplate template = new TestSoldierTemplate(
             30_000 + soldierId,
             // The species median, because that is the toughness the planner reads
             // (RemovalMath.PerceivedConstitution); the soldier's own is set below as well.
@@ -33,7 +33,7 @@ public class GradedRemovalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 10);
+            strategicValue: 10);
         Soldier soldier = TestModelFactory.CreateSoldier(template, name);
         soldier.Id = soldierId;
         soldier.Constitution = constitution;

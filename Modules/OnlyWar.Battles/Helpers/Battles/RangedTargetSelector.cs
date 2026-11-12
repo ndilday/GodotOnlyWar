@@ -131,28 +131,48 @@ namespace OnlyWar.Battles
         // SelectBestRangedTarget scan every turn just to confirm the aim was still globally optimal.
         // Here the aim is kept while it stays viable and worthwhile — a hysteresis band that both
         // preserves the invested aim and skips the scan.
-        internal bool IsExistingAimStillViable(BattleSoldier soldier)
+        internal bool IsExistingAimStillViable(BattleSoldier soldier) =>
+            ExistingAimFailure(soldier) == null;
+
+        /// <summary>
+        /// Diagnostics only (the duel's shot log): when set, the soldier action planner reports
+        /// every held aim it does not keep, with the reason. Process-wide and called from planning
+        /// workers, so the sink must be thread-safe. Null in the game.
+        /// </summary>
+        internal static Action<string> DroppedAimSink;
+
+        /// <summary>
+        /// Why a held aim is no longer kept (<see cref="IsExistingAimStillViable"/>), or null when
+        /// it is.
+        /// </summary>
+        internal string ExistingAimFailure(BattleSoldier soldier)
         {
-            if (soldier.Aim is not ValueTuple<int, RangedWeapon, int> aim
-                || !_soldierMap.TryGetValue(aim.Item1, out BattleSoldier target)
+            if (soldier.Aim is not ValueTuple<int, RangedWeapon, int> aim)
+            {
+                return "no aim";
+            }
+            if (!_soldierMap.TryGetValue(aim.Item1, out BattleSoldier target)
                 || !target.IsCombatEffective
                 || !IsPlaced(target)
                 || _grid.GetSoldierSide(aim.Item1) == _grid.GetSoldierSide(soldier.Soldier.Id))
             {
-                return false;
+                return "target gone";
             }
 
             RangedWeapon weapon = aim.Item2;
             if (weapon.LoadedAmmo <= 0 || !soldier.EquippedRangedWeapons.Contains(weapon))
             {
-                return false;
+                return "weapon empty or stowed";
             }
 
             float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, aim.Item1);
-            if (range > weapon.Template.MaximumRange
-                || ShouldInterruptStickyTarget(soldier, target))
+            if (range > weapon.Template.MaximumRange)
             {
-                return false;
+                return "out of range";
+            }
+            if (ShouldInterruptStickyTarget(soldier, target))
+            {
+                return "nearer enemy about to reach melee";
             }
 
             // Judge the shot the aim is being HELD FOR, not the one available part-way through it.
@@ -171,7 +191,13 @@ namespace OnlyWar.Battles
                 weapon,
                 range,
                 AimAccuracy(soldier, weapon.Template) + Math.Max(aim.Item3, FullAimBonusTurns) + 1);
-            return evaluation.Score > 0 && evaluation.HitProbability > StickyMinimumHitProbability;
+            if (evaluation.Score <= 0)
+            {
+                return "fully aimed shot worth nothing";
+            }
+            return evaluation.HitProbability > StickyMinimumHitProbability
+                ? null
+                : "fully aimed hit chance under the floor";
         }
 
         /// <summary>
@@ -302,8 +328,72 @@ namespace OnlyWar.Battles
                     preparedGrossRate = shot.Score / turns;
                 }
             }
+
+            // A FRESH AIM IS WORTH THE CYCLE THE SOLDIER WILL REALLY FIRE (2026-10-23). Once aiming,
+            // he fires at the first bonus whose shot now beats every further aim per turn it still
+            // takes (the held-aim decision above, which counts the turns already spent as free), so
+            // he usually fires after one or two aim turns, not at the bonus the best cycle aims for.
+            // Readiness is that cycle's gross removal per turn: the same rate the removal-rate table
+            // prices (PairRemovalTerm.SustainedRateAt), so the immediate term and the forecast agree.
+            if (currentAimBonus == null && prepared.Count > 0)
+            {
+                Span<float> net = stackalloc float[prepared.Count];
+                Span<int> cycleTurns = stackalloc int[prepared.Count];
+                for (int index = 0; index < prepared.Count; index++)
+                {
+                    net[index] = NetShotValue(prepared[index].Shot, aimPrice);
+                    cycleTurns[index] = prepared[index].Turns;
+                }
+                int fired = PlannerCycle(shootNowValue, net, cycleTurns);
+                if (fired >= 0)
+                {
+                    preparedGrossRate = prepared[fired].Shot.Score / prepared[fired].Turns;
+                }
+            }
             return new FireTiming(
                 shootNowValue, preparedRate, shootNow?.Score ?? 0, preparedGrossRate, shootNow);
+        }
+
+        /// <summary>
+        /// The aim the shot planner really fires at, replaying its own decisions over one cycle.
+        /// <paramref name="preparedNet"/>[b] is the net value of the shot aimed to bonus b (from a
+        /// fresh start, <paramref name="turns"/>[b] = b + 2 turns: the aim turns and the shot).
+        /// Fresh: fire unaimed every turn (-1) when <paramref name="shootNowNet"/> is at least
+        /// every plan's net per turn. Otherwise aim, and at each bonus b fire when net(b) is at
+        /// least net(b + j) / (j + 1) for every further aim of j turns (the held-aim decision of
+        /// <see cref="EvaluateFireTiming"/>, at the same range), or at the last plan.
+        /// </summary>
+        internal static int PlannerCycle(
+            float shootNowNet,
+            ReadOnlySpan<float> preparedNet,
+            ReadOnlySpan<int> turns)
+        {
+            if (preparedNet.Length == 0)
+            {
+                return -1;
+            }
+            float bestRate = float.MinValue;
+            for (int index = 0; index < preparedNet.Length; index++)
+            {
+                bestRate = Math.Max(bestRate, preparedNet[index] / Math.Max(1, turns[index]));
+            }
+            if (shootNowNet >= bestRate)
+            {
+                return -1;
+            }
+            for (int bonus = 0; bonus < preparedNet.Length - 1; bonus++)
+            {
+                float further = float.MinValue;
+                for (int next = bonus + 1; next < preparedNet.Length; next++)
+                {
+                    further = Math.Max(further, preparedNet[next] / (next - bonus + 1));
+                }
+                if (preparedNet[bonus] >= further)
+                {
+                    return bonus;
+                }
+            }
+            return preparedNet.Length - 1;
         }
 
         /// <summary>
@@ -402,9 +492,25 @@ namespace OnlyWar.Battles
             {
                 return 0f;
             }
-            float roundsNeeded = workPerShooter / fastValuePerRound;
+            float roundsNeeded = ScarcityMargin * workPerShooter / fastValuePerRound;
             return Math.Clamp(1f - (roundsCarried / roundsNeeded), 0f, 1f);
         }
+
+        /// <summary>
+        /// ADOPTED 2026-11-09 at 1.5. The rounds a soldier needs for his work are multiplied by this
+        /// before they are set against the rounds he carries, so the price starts to rise before
+        /// the rounds are only just enough. The work is an expectation with nothing for losses or
+        /// bad luck: 4 Brood Brother squads against 1 Warrior squad at 195 yards carried 320 rounds
+        /// a man against a need of about 315, paid nothing for their rounds, fired ten-round bursts
+        /// and ran dry with one Warrior of nine left, which then routed them. 1 is the rule as it
+        /// was. At 1.5 those Brood Brothers win 62% of the fights at 195 yards (12% at 1), and the
+        /// controls hold (Design/Active/StrategicAndTacticalValue.md). A static field so the
+        /// diagnostics can compare (DUEL_SCARCITY_MARGIN).
+        /// </summary>
+        internal const float DefaultScarcityMargin = 1.5f;
+
+        /// <inheritdoc cref="DefaultScarcityMargin"/>
+        internal static float ScarcityMargin = DefaultScarcityMargin;
 
         /// <summary>
         /// One plan in a firing decision: its best value per round over every burst length, the
@@ -964,53 +1070,78 @@ namespace OnlyWar.Battles
                 soldier,
                 movementDirection))
             {
-                SquadLaneFrame laneFrame = GetSquadLaneFrame(soldier.BattleSquad, candidateSquad);
-                foreach (BattleSoldier target in candidateSquad.AbleSoldiers
-                    .Where(IsPlaced)
-                    .OrderBy(candidate => candidate.Soldier.Id))
-                {
-                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
-                    float lanePenalty = LaneSpreadPenaltyFraction(laneFrame, soldier, target);
-                    for (int weaponIndex = 0; weaponIndex < sortedWeapons.Count; weaponIndex++)
-                    {
-                        RangedWeapon weapon = sortedWeapons[weaponIndex];
-                        if (weapon.LoadedAmmo <= 0
-                            || weapon.Template.IsTemplateWeapon
-                            || range > weapon.Template.MaximumRange)
-                        {
-                            continue;
-                        }
-
-                        float toHitModifier = -weapon.Template.Bulk * bulkMultiplier;
-                        if (includeExistingAim
-                            && soldier.Aim?.Item1 == target.Soldier.Id
-                            && soldier.Aim?.Item2.Template.Id == weapon.Template.Id)
-                        {
-                            toHitModifier += AimAccuracy(soldier, weapon.Template)
-                                + soldier.Aim.Value.Item3 + 1;
-                        }
-
-                        RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
-                            soldier,
-                            target,
-                            weapon,
-                            range,
-                            toHitModifier);
-                        // Candidate squads, soldiers, and weapons are ordered nearest-first and
-                        // deterministically, so an exact tie naturally stays on the closer option.
-                        float weightedScore = evaluation.Score * TargetSelectionWeight(target);
-                        float effectiveScore =
-                            weightedScore - (MathF.Abs(weightedScore) * lanePenalty);
-                        if (best == null || effectiveScore > bestEffectiveScore)
-                        {
-                            best = evaluation;
-                            bestEffectiveScore = effectiveScore;
-                        }
-                    }
-                }
+                ScoreSquadTargets(
+                    soldier,
+                    candidateSquad,
+                    sortedWeapons,
+                    bulkMultiplier,
+                    includeExistingAim,
+                    ref best,
+                    ref bestEffectiveScore);
             }
 
             return best;
+        }
+
+        /// <summary>
+        /// Scores every placed soldier of one enemy squad with every usable weapon and keeps the
+        /// best in <paramref name="best"/> (strictly better only, so an exact tie stays on the
+        /// earlier, nearer option). The selection score weighs fleeing targets and the squad's
+        /// firing lanes (Phase 3 fire distribution); the evaluation keeps its true score.
+        /// </summary>
+        private void ScoreSquadTargets(
+            BattleSoldier soldier,
+            BattleSquad candidateSquad,
+            IReadOnlyList<RangedWeapon> sortedWeapons,
+            float bulkMultiplier,
+            bool includeExistingAim,
+            ref RangedTargetEvaluation best,
+            ref float bestEffectiveScore)
+        {
+            SquadLaneFrame laneFrame = GetSquadLaneFrame(soldier.BattleSquad, candidateSquad);
+            foreach (BattleSoldier target in candidateSquad.AbleSoldiers
+                .Where(IsPlaced)
+                .OrderBy(candidate => candidate.Soldier.Id))
+            {
+                float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
+                float lanePenalty = LaneSpreadPenaltyFraction(laneFrame, soldier, target);
+                for (int weaponIndex = 0; weaponIndex < sortedWeapons.Count; weaponIndex++)
+                {
+                    RangedWeapon weapon = sortedWeapons[weaponIndex];
+                    if (weapon.LoadedAmmo <= 0
+                        || weapon.Template.IsTemplateWeapon
+                        || range > weapon.Template.MaximumRange)
+                    {
+                        continue;
+                    }
+
+                    float toHitModifier = -weapon.Template.Bulk * bulkMultiplier;
+                    if (includeExistingAim
+                        && soldier.Aim?.Item1 == target.Soldier.Id
+                        && soldier.Aim?.Item2.Template.Id == weapon.Template.Id)
+                    {
+                        toHitModifier += AimAccuracy(soldier, weapon.Template)
+                            + soldier.Aim.Value.Item3 + 1;
+                    }
+
+                    RangedTargetEvaluation evaluation = _shotEvaluator.EvaluateRangedTarget(
+                        soldier,
+                        target,
+                        weapon,
+                        range,
+                        toHitModifier);
+                    // Candidate squads, soldiers, and weapons are ordered nearest-first and
+                    // deterministically, so an exact tie naturally stays on the closer option.
+                    float weightedScore = evaluation.Score * TargetSelectionWeight(target);
+                    float effectiveScore =
+                        weightedScore - (MathF.Abs(weightedScore) * lanePenalty);
+                    if (best == null || effectiveScore > bestEffectiveScore)
+                    {
+                        best = evaluation;
+                        bestEffectiveScore = effectiveScore;
+                    }
+                }
+            }
         }
 
         internal TemplateFiringLineEvaluation SelectBestTemplateFiringLine(

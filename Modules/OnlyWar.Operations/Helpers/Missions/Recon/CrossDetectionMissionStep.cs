@@ -18,9 +18,9 @@ namespace OnlyWar.Operations.Missions.Recon
             // decide whether to fight or flee
             // compare size of each force
             float opForSize = context.OpposingSquads.Sum(s => s.AbleMembers
-                .Sum(member => member.Template?.BattleValue ?? 0));
+                .Sum(member => member.StrategicValue));
             float attackerSize = context.MissionSquads.Sum(s => s.AbleMembers
-                .Sum(member => member.Template?.BattleValue ?? 0));
+                .Sum(member => member.StrategicValue));
             if(context.Order.LevelOfAggression == Aggression.Attritional)
             {
                 attackerSize *= 2;

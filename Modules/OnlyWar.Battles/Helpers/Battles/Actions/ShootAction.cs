@@ -115,6 +115,10 @@ namespace OnlyWar.Battles.Actions
 
                 var skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
                 bool firingIntoMelee = _grid?.IsTargetEngagedWithShootersAllies(ShooterId, TargetId) == true;
+                // The aim held on this target, read before the shot clears it (diagnostics only).
+                int? aimBonus = shooter.Aim?.Item1 == target.Soldier.Id && shooter.Aim?.Item2 == weapon
+                    ? shooter.Aim.Value.Item3
+                    : null;
                 var modifier = CalculateToHitModifiers(shooter, target, weapon, skill, firingIntoMelee);
                 var roll = 10.5f + (3.0f * (float)_random.NextRandomZValue());
                 var total = skill + modifier - roll;
@@ -166,8 +170,40 @@ namespace OnlyWar.Battles.Actions
                 weapon.TryConsume(weapon.GetAmmunitionUnitsForAttack(CommittedShots));
                 shooter.TurnsShooting++;
                 _isResolved = true;
+                Observer?.Invoke(new ShotObservation(
+                    shooter, target, weapon, Range, target.CurrentSpeed, skill, modifier, aimBonus,
+                    CommittedShots, HitCount, firingIntoMelee,
+                    shooter.BattleSquad?.MoraleState == MoraleState.Shaken, WoundResolutions));
             }
         }
+
+        /// <summary>
+        /// Diagnostics only (ShotAuditDiagnostics): when set, every shot this thread resolves is
+        /// reported with the to-hit inputs the engine actually used, so the planner's assumptions
+        /// (a full aim, the target's speed) can be set against them. Null in the game.
+        /// </summary>
+        [ThreadStatic]
+        internal static Action<ShotObservation> Observer;
+
+        /// <summary>
+        /// One resolved shot: the pre-roll total is <see cref="Skill"/> + <see cref="Modifier"/>;
+        /// <see cref="AimBonus"/> is the aim turns held on this target with this weapon (null:
+        /// fired unaimed); <see cref="Wounds"/> are the hits that penetrated.
+        /// </summary>
+        internal readonly record struct ShotObservation(
+            BattleSoldier Shooter,
+            BattleSoldier Target,
+            RangedWeapon Weapon,
+            float Range,
+            float TargetSpeed,
+            float Skill,
+            float Modifier,
+            int? AimBonus,
+            int Shots,
+            int Hits,
+            bool IntoMelee,
+            bool Shaken,
+            IReadOnlyList<WoundResolution> Wounds);
 
         public float CalculateToHitModifiers(
             BattleSoldier shooter,

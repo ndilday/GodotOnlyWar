@@ -49,7 +49,7 @@ public class BattleTurnResolverWithdrawalTests
     [Fact]
     public void ProcessNextTurn_EnemyWipedDuringExistingWithdrawalWinsTheBattle()
     {
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_005,
             TestModelFactory.HumanSpecies,
             "Zero Value Human",
@@ -58,7 +58,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            strategicValue: 0);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_006, zeroValueHuman);
         EquipAccurateLongGun(withdrawing.Soldiers[0]);
         withdrawing.Soldiers[0].EquippedRangedWeapons.Single().LoadedAmmo = 0;
@@ -98,7 +98,7 @@ public class BattleTurnResolverWithdrawalTests
     [Fact]
     public void ProcessNextTurn_VoluntaryWithdrawalWithBreakOffEmitsTypedEventsAndOutcome()
     {
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_010,
             TestModelFactory.HumanSpecies,
             "Zero Value Human",
@@ -107,7 +107,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            strategicValue: 0);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_011, zeroValueHuman);
         BattleSquad holder = CreateSquad(
             "Holder",
@@ -154,7 +154,7 @@ public class BattleTurnResolverWithdrawalTests
     {
         // Two of its three soldiers are knocked out before turn one (AddReserves/KnockOut), so
         // the force evaluator elects to withdraw, the same way the BreakOff case above does.
-        SoldierTemplate zeroValueBurrower = new(
+        SoldierTemplate zeroValueBurrower = new TestSoldierTemplate(
             73_020,
             TestModelFactory.BurrowerSpecies,
             "Zero Value Burrower",
@@ -163,7 +163,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            strategicValue: 0);
         BattleSquad burrowers = CreateSquad(
             "Burrowers",
             73_021,
@@ -202,7 +202,7 @@ public class BattleTurnResolverWithdrawalTests
         // could neither close nor land anything kept the engagement alive for hundreds of turns.
         // The weapon here reaches 2000 yards on paper and is useless at any of them, so the gates
         // must now report no worthwhile shot and let the withdrawal succeed.
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_030,
             TestModelFactory.HumanSpecies,
             "Zero Value Human",
@@ -211,7 +211,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            strategicValue: 0);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_031, zeroValueHuman);
         BattleSquad pursuer = CreateSquad(
             "Pursuer",
@@ -247,7 +247,7 @@ public class BattleTurnResolverWithdrawalTests
         // The paired case that proves the test above turns on the weapon rather than the distance.
         // Identical geometry and aggression; only the gun differs. This one can genuinely hit and
         // hurt at 400 yards, so there IS a worthwhile shot and the pursuit continues.
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_050,
             TestModelFactory.HumanSpecies,
             "Zero Value Human",
@@ -256,7 +256,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 1);
+            strategicValue: 1);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_051, zeroValueHuman);
         // Tough enough to live through the first turn's hits. The pursuer's gun genuinely hits at
         // 400 yards (its bearer has the skill the engine requires for its Accuracy), and a frail
@@ -298,7 +298,7 @@ public class BattleTurnResolverWithdrawalTests
         // fire. It must therefore survive the resolver handoff as a distinct squad role; mapping
         // it to generic Pursuit also exposes the full contact-closing score and permits a run to
         // win over an otherwise worthwhile shot.
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_055,
             TestModelFactory.HumanSpecies,
             "Zero Value Runner",
@@ -307,12 +307,12 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 1);
+            strategicValue: 1);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_056, zeroValueHuman);
         withdrawing.Soldiers[0].RangedWeapons.Clear();
         withdrawing.Soldiers[0].ClearReadiedRangedWeapons();
         ((Soldier)withdrawing.Soldiers[0].Soldier).Constitution = 5_000;
-        SoldierTemplate highValuePursuer = new(
+        SoldierTemplate highValuePursuer = new TestSoldierTemplate(
             73_058,
             TestModelFactory.HumanSpecies,
             "High Value Pursuer",
@@ -321,7 +321,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 10);
+            strategicValue: 10);
         BattleSquad pursuer = CreateSquad(
             "Rifle Pursuer",
             73_057,
@@ -374,7 +374,7 @@ public class BattleTurnResolverWithdrawalTests
     [Fact]
     public void ProcessNextTurn_UnpursuedBoundBeyondRelativeRetargetHorizonDisengages()
     {
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_070,
             TestModelFactory.HumanSpecies,
             "Zero Value Runner",
@@ -383,7 +383,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            strategicValue: 0);
         BattleSquad firstRunner = CreateSquad("First Runner", 73_071, zeroValueHuman);
         BattleSquad secondRunner = CreateSquad("Second Runner", 73_072, zeroValueHuman);
         BattleSquad pursuer = CreateSquad(
@@ -447,7 +447,7 @@ public class BattleTurnResolverWithdrawalTests
         //
         // Melee-only so no gun can end the fight instead: there is genuinely nothing this pursuer
         // can ever do, which is precisely when the engagement must be allowed to end.
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_090,
             TestModelFactory.HumanSpecies,
             "Zero Value Runner",
@@ -456,7 +456,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            strategicValue: 0);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_091, zeroValueHuman);
         BattleSquad pursuer = CreateSquad(
             "Matched Pursuer",
@@ -526,7 +526,7 @@ public class BattleTurnResolverWithdrawalTests
         // position, so running scored the full worth of closing six yards that the quarry
         // immediately reopened, and beat standing and firing every turn. With the withdrawal
         // netted out there is no arrival left to buy and the guns settle it quickly.
-        SoldierTemplate zeroValueHuman = new(
+        SoldierTemplate zeroValueHuman = new TestSoldierTemplate(
             73_100,
             TestModelFactory.HumanSpecies,
             "Zero Value Runner",
@@ -535,7 +535,7 @@ public class BattleTurnResolverWithdrawalTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 0);
+            strategicValue: 0);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_101, zeroValueHuman);
         BattleSquad pursuer = CreateSquad(
             "Armed Matched Pursuer",
@@ -686,7 +686,7 @@ public class BattleTurnResolverWithdrawalTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(soldierTemplate, 0, 1)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(soldierTemplate, 0, 1)],
             SquadTypes.None)
         {
             Faction = faction

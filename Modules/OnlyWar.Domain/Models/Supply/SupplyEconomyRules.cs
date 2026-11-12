@@ -71,7 +71,7 @@ namespace OnlyWar.Domain.Supply
         {
             return new SupplyEconomyRules(
                 new RequestValuationRules(
-                    requisitionPerBattleValueTime: 0.25m,
+                    requisitionPerStrategicValueTime: 0.25m,
                     throughputBands: new ThroughputPremiumBand[]
                     {
                         new(100, 1.0m),

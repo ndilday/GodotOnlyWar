@@ -103,34 +103,34 @@ namespace OnlyWar.Operations.Missions
         // pedantic - the tactical state resets its engagement baseline every fight, so day 2's fight opens
         // reading 100% remaining no matter what day 1 cost, and without a mission-scope baseline the
         // across-days rule simply would not fire.
-        public long StartingMissionBattleValue { get; }
+        public long StartingMissionStrategicValue { get; }
 
-        public long CurrentMissionBattleValue => SumBattleValue(MissionSquads);
+        public long CurrentMissionStrategicValue => SumStrategicValue(MissionSquads);
 
         // Defender battle value this mission has destroyed, accumulated across every engagement within
         // it. A multi-day assault needs this: RegionFaction.Garrison is not reduced until
         // MissionAftermathProcessor runs at the END of the turn, so without it every day's
         // AssembleDefendingForce call raises a fresh full-strength garrison and the assault re-fights an
         // identical battle it can never win - it can only run out of days or of tolerance.
-        public long DefenderBattleValueDestroyed { get; private set; }
+        public long DefenderStrategicValueDestroyed { get; private set; }
 
         // Disorganized troops overrun after an assault has destroyed the fielded defence. Kept
         // separate because ordinary engagement losses debit organized BV in aftermath.
-        public long DisorganizedDefenderBattleValueDestroyed { get; private set; }
+        public long DisorganizedDefenderStrategicValueDestroyed { get; private set; }
 
-        public void RecordDefenderLosses(long battleValueDestroyed)
+        public void RecordDefenderLosses(long strategicValueDestroyed)
         {
-            if (battleValueDestroyed > 0)
+            if (strategicValueDestroyed > 0)
             {
-                DefenderBattleValueDestroyed += battleValueDestroyed;
+                DefenderStrategicValueDestroyed += strategicValueDestroyed;
             }
         }
 
-        public void RecordDisorganizedDefenderLosses(long battleValueDestroyed)
+        public void RecordDisorganizedDefenderLosses(long strategicValueDestroyed)
         {
-            if (battleValueDestroyed > 0)
+            if (strategicValueDestroyed > 0)
             {
-                DisorganizedDefenderBattleValueDestroyed += battleValueDestroyed;
+                DisorganizedDefenderStrategicValueDestroyed += strategicValueDestroyed;
             }
         }
 
@@ -160,11 +160,11 @@ namespace OnlyWar.Operations.Missions
         {
             get
             {
-                if (StartingMissionBattleValue <= 0) return false;
+                if (StartingMissionStrategicValue <= 0) return false;
                 double? threshold = GetMissionLossThreshold(
                     Order?.LevelOfAggression ?? Aggression.Normal);
                 if (threshold == null) return false;
-                double remaining = (double)CurrentMissionBattleValue / StartingMissionBattleValue;
+                double remaining = (double)CurrentMissionStrategicValue / StartingMissionStrategicValue;
                 return remaining < threshold.Value;
             }
         }
@@ -297,7 +297,7 @@ namespace OnlyWar.Operations.Missions
                 .Distinct()
                 .ToList();
             OpposingSquads = opposingForces;
-            StartingMissionBattleValue = SumBattleValue(playerSquads);
+            StartingMissionStrategicValue = SumStrategicValue(playerSquads);
             DaysElapsed = 0;
             MissionsToAdd = new List<Mission>();
             MissionsToRemove = new List<Mission>();
@@ -377,10 +377,10 @@ namespace OnlyWar.Operations.Missions
             ReadinessIssues.Add(issue);
         }
 
-        private static long SumBattleValue(IEnumerable<OperationalMissionElement> squads) =>
+        private static long SumStrategicValue(IEnumerable<OperationalMissionElement> squads) =>
             squads?
                 .SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0))
+                .Sum(soldier => (long)soldier.StrategicValue)
             ?? 0L;
 
         private static double? GetMissionLossThreshold(Aggression aggression) => aggression switch

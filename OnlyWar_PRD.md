@@ -1376,7 +1376,7 @@ behavior changed.
 **Description.** Techmarines are trained by the Adeptus Mechanicus on Mars, not by the chapter, and the round trip is measured in decades. The deferred-cohort pipeline gives the young chapter a long capability arc — its first two decades are spent as a relationship-building infantry force — and supplies the gate on machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (§5.8): armor cannot be fielded until the chapter has Techmarines to wake and maintain its machine spirits.
 
 **Acceptance Criteria (Implemented — 0.8.1, except the vehicle role, which is later work; implementation in TDD §6.14 and, for cybernetic repair, §6.6.1):**
-- **The bar is Tech > 60.** The same threshold selects founding candidates and gates the Techmarine template for later drafts, so a founder and a later volunteer are held to one standard. With the worthiness test below, a founding sends roughly 5–25 brothers per 1,000 (mean about 13 over 40 seeds); that is accepted, below the original 15–25 aim.
+- **The bar is Tech > 61.5.** The same threshold selects founding candidates and gates the Techmarine template for later drafts, so a founder and a later volunteer are held to one standard. With the worthiness test below, a founding sends roughly 3–25 brothers per 1,000 (mean about 14 over 40 seeds); that is accepted, below the original 15–25 aim. (The bar was 60 until the skill-bonus curve change raised every rating; 61.5 restores the earlier cohort size.)
 - **The chapter starts with none.** Every founder who clears the bar **and** qualifies for a line-marine role — so is worth making a full Battle Brother — leaves for Mars after his first training phase. The cohort comes out of the founding 1,000; there is no cap on its size.
 - **Training takes 20 years.** The founding cohort left two years before game start and returns together 18 years into the campaign. Everyone sent at the same time returns at the same time; individually varied return dates are a later refinement. Equipment promises maturing around the cohort's return is a deliberate convergence to tune toward.
 - **A brother on Mars is on the roll but absent.** He is carried in the Armory with the Techmarine rank from the day he leaves, marked as away on Mars with his return date, and is unavailable for any duty, transfer, promotion, or berth. He trains every turn while away, so his skills show his progress.
@@ -1554,8 +1554,9 @@ tables to kit ids in a later cleanup, then remove the compatibility type. This r
 tracked here rather than kept as an active design document.
 
 **Battle Value tier 2 — matchups, hard targets, kit.** Tier 1 (one measured value per template, §4.14
-*Battle Value calibration*) is done for every template. Method and findings: `Design/Reference/BattleLogic.md`
-§4. Open, in rough order:
+*Battle Value calibration*) is done for every template; the Kommandos were measured last (gauntlet
+`kom1`, 2026-10-19: Kommando 9 → 5, Kommando Nob 14 → 8, the Nob keeping its old ratio to the
+Kommando). Method and findings: `Design/Reference/BattleLogic.md` §4. Open, in rough order:
 
 1. **Hard targets.** Weight `HardnessDiagnostics`' hits-to-disable by each attack's expected hits per
    turn, and check that one "anti-hard share" axis explains the Carnifex's ×0.3–×3 matchup spread.
@@ -1566,14 +1567,17 @@ tracked here rather than kept as an active design document.
 2. **Matchup term for battle sizing.** Fit the hard-target axis, then a low-rank remainder if the
    infantry residuals still need it; validate on held-out direct pairs. Battle sizing uses the
    matchup-aware prediction; strategic code keeps the scalar.
-3. **Few-model variance.** A side of one to three monsters is close to all-or-nothing. Decide whether
-   the strategic resolver's σ grows when a side has few models, and fit `CombatSigma` and the 0.65
-   loss exponent from gauntlet data.
+3. **Few-model variance.** A side of one to three monsters is close to all-or-nothing. In gauntlet
+   `tyr8` the per-cell slopes give σ ≈ 0.4–0.6 for single monsters against Tactical Marines, against
+   0.13 for Hormagaunts against PDF; `CombatSigma` is 0.12. Decide whether the strategic resolver's
+   σ grows when a side has few models, and fit `CombatSigma` and the 0.65 loss exponent from gauntlet
+   data.
 4. **Kit.** Measure player loadout options as changes to a template's measured profile, replacing the
    armor/2 and weapon terms of `EffectiveBattleValueCalculator`, which cannot see target dependence
    (a lascannon is worth little against PDF and much against a Carnifex).
-5. **Start range and terrain.** All measurements use 200 yards on open ground; use the game's opening
-   range as a covariate, and rerun when terrain arrives.
+5. **Start range and terrain.** All measurements use 200 yards on open ground. The gauntlet already
+   takes another start range (`GAUNTLET_RANGE`); what remains is to fit the game's opening range as a
+   covariate, and to rerun when terrain arrives.
 6. **Unexplained:** Tactical : Genestealer breaks even at 1.85 Genestealers per marine at about 290
    models against 2.0 at 30, with a nearly deterministic outcome.
 
@@ -1586,10 +1590,15 @@ Related planner questions found during calibration, each needing a product decis
 - **Mob run-in.** The forecast predicts no break on an Insurrectionist Mob's run-in, where real Mob
   squads routed at 20–30% losses with the leader dead.
 - **Out-ranged shooters.** Shoota Boyz facing a squad that out-ranges them hold rather than close or
-  charge, and the battles run to 200+ turns. Decide whether they should charge, and whether hordes
-  should trade bodies for elites as doctrine (an option-mask or doctrine term, never the BV ratio).
-- **Hormagaunts** lose to PDF at every size measured now that PDF hold their ground. Decide whether
-  that is the intended balance.
+  charge. Battles against Tactical Marines average about 100 turns, and about 5% pass 200 (gauntlets
+  `full8` and `tyr8`). The longest battles are now elsewhere: Melee Carnifex against PDF averages
+  about 300 turns, and most of those battles pass 200 or reach the 600-turn cap. Decide whether Shoota Boyz
+  should charge, and whether hordes should trade bodies for elites as doctrine (an option-mask or
+  doctrine term, never the BV ratio).
+- **Hormagaunts** need about 2.4 per PDF trooper to break even now that PDF hold their ground
+  (gauntlet `tyr8`, 2026-10-12): they won about 60% of the battles at 150 against 60, and none at 90
+  against 80. Their single BV rates one Hormagaunt about equal to one PDF trooper, because they do
+  better against Orks than that value predicts. Decide whether that is the intended balance.
 
 `BattleValueCalculator.CalculateMeleeSwingFraction`'s `D` = 30 and `N` = 6 are still placeholders, but
 the calculator no longer writes stored values, so they matter only to that offline tool.

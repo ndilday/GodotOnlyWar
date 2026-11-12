@@ -43,10 +43,10 @@ public class BattleSquadPlannerTests
     private static BattleSquad CreateSquad(
         string name,
         int soldierId,
-        int battleValue = 2,
+        int strategicValue = 2,
         float size = 1)
     {
-        SoldierTemplate template = new(
+        SoldierTemplate template = new TestSoldierTemplate(
             10_000 + soldierId,
             TestModelFactory.HumanSpecies,
             $"{name} Template",
@@ -55,7 +55,7 @@ public class BattleSquadPlannerTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: battleValue);
+            strategicValue: strategicValue);
         Soldier soldier = TestModelFactory.CreateSoldier(template, name);
         soldier.Id = soldierId;
         soldier.Size = size;
@@ -64,12 +64,12 @@ public class BattleSquadPlannerTests
 
     private static BattleSquad CreateSquad(
         string name,
-        params (int SoldierId, int BattleValue)[] members)
+        params (int SoldierId, int StrategicValue)[] members)
     {
         List<Soldier> soldiers = members
             .Select(member =>
             {
-                SoldierTemplate template = new(
+                SoldierTemplate template = new TestSoldierTemplate(
                     20_000 + member.SoldierId,
                     TestModelFactory.HumanSpecies,
                     $"{name} {member.SoldierId} Template",
@@ -78,7 +78,7 @@ public class BattleSquadPlannerTests
                     false,
                     0,
                     Array.Empty<ValueTuple<BaseSkill, float>>(),
-                    battleValue: member.BattleValue);
+                    strategicValue: member.StrategicValue);
                 Soldier soldier = TestModelFactory.CreateSoldier(
                     template,
                     $"{name} {member.SoldierId}");
@@ -327,7 +327,7 @@ public class BattleSquadPlannerTests
         BattleSquad softMass = CreateSquad(
             "Soft Mass",
             91_012,
-            battleValue: 1_000);
+            strategicValue: 1_000);
         BattleSoldier shooter = shooters.Soldiers[0];
         ((Soldier)shooter.Soldier).Dexterity = 20;
         RangedWeapon sniper = new(new RangedWeaponTemplate(
@@ -1047,7 +1047,7 @@ public class BattleSquadPlannerTests
         // chance, but it also brings a melee-only enemy in sooner, and the derived standoff is
         // where those two stop trading evenly.
         BattleSquad crackShots = CreateSquad("Crack Shots", 90_150);
-        BattleSquad bigEnemy = CreateSquad("Big Enemy", 90_151, battleValue: 30, size: 8f);
+        BattleSquad bigEnemy = CreateSquad("Big Enemy", 90_151, strategicValue: 30, size: 8f);
         EquipLongReachRifle(crackShots.Soldiers[0], 99_264);
         ((Soldier)crackShots.Soldiers[0].Soldier).Dexterity = 20;
         bigEnemy.Soldiers[0].ClearReadiedRangedWeapons();
@@ -1246,7 +1246,7 @@ public class BattleSquadPlannerTests
 
     private static EngagedDecisionScenario CreateEngagedDecisionScenario(int attackerCount)
     {
-        BattleSquad shooterSquad = CreateSquad("Engaged Shooter", 500, battleValue: 10);
+        BattleSquad shooterSquad = CreateSquad("Engaged Shooter", 500, strategicValue: 10);
         BattleSoldier shooter = shooterSquad.Soldiers[0];
         ((Soldier)shooter.Soldier).Dexterity = 17;
 
@@ -1331,7 +1331,7 @@ public class BattleSquadPlannerTests
             BattleSquad attackerSquad = CreateSquad(
                 $"Attacker {index + 1}",
                 510 + index,
-                battleValue: 10);
+                strategicValue: 10);
             BattleSoldier attacker = attackerSquad.Soldiers[0];
             MeleeWeapon attackerWeapon = new(attackerWeaponTemplate);
             attacker.RangedWeapons.Clear();
@@ -1401,7 +1401,7 @@ public class BattleSquadPlannerTests
     public void SelectBestRangedTarget_PrefersCleanFartherTargetOverEntangledNearTarget()
     {
         BattleSquad shooters = CreateSquad("Shooter", 1);
-        BattleSquad allySquad = CreateSquad("Ally", 2, battleValue: 20);
+        BattleSquad allySquad = CreateSquad("Ally", 2, strategicValue: 20);
         BattleSquad entangledEnemy = CreateSquad("Entangled", 10);
         BattleSquad cleanEnemy = CreateSquad("Clean", 20);
         BattleSoldier shooter = shooters.Soldiers[0];
@@ -1448,8 +1448,8 @@ public class BattleSquadPlannerTests
     public void SelectBestRangedTarget_StillShootsLargeHighValueMonsterInMelee()
     {
         BattleSquad shooters = CreateSquad("Shooter", 101);
-        BattleSquad allySquad = CreateSquad("Ally", 102, battleValue: 20);
-        BattleSquad monsterSquad = CreateSquad("Monster", 110, battleValue: 30, size: 12);
+        BattleSquad allySquad = CreateSquad("Ally", 102, strategicValue: 20);
+        BattleSquad monsterSquad = CreateSquad("Monster", 110, strategicValue: 30, size: 12);
         BattleSquad cleanEnemy = CreateSquad("Clean", 120);
         BattleSoldier shooter = shooters.Soldiers[0];
         BattleSoldier ally = allySquad.Soldiers[0];
@@ -1489,7 +1489,7 @@ public class BattleSquadPlannerTests
         BattleSquad first = CreateSquad("First", 210);
         BattleSquad second = CreateSquad("Second", 220);
         BattleSquad third = CreateSquad("Third", 230);
-        BattleSquad fourth = CreateSquad("Fourth", 240, battleValue: 10_000, size: 20);
+        BattleSquad fourth = CreateSquad("Fourth", 240, strategicValue: 10_000, size: 20);
         BattleSoldier shooter = shooters.Soldiers[0];
 
         BattleGridManager grid = new();
@@ -1621,7 +1621,7 @@ public class BattleSquadPlannerTests
 
     private static EngagedDecisionScenario CreateGunAndBladeScenario(byte? attackerArmor = null)
     {
-        BattleSquad shooterSquad = CreateSquad("Gun And Blade", 520, battleValue: 10);
+        BattleSquad shooterSquad = CreateSquad("Gun And Blade", 520, strategicValue: 10);
         BattleSoldier shooter = shooterSquad.Soldiers[0];
         ((Soldier)shooter.Soldier).Dexterity = 17;
 
@@ -1663,7 +1663,7 @@ public class BattleSquadPlannerTests
         shooter.MeleeWeapons.Add(blade);
         shooter.ReadyWeapon(blade);
 
-        BattleSquad attackerSquad = CreateSquad("Blade Attacker", 530, battleValue: 10);
+        BattleSquad attackerSquad = CreateSquad("Blade Attacker", 530, strategicValue: 10);
         BattleSoldier attacker = attackerSquad.Soldiers[0];
         MeleeWeapon attackerWeapon = new(new MeleeWeaponTemplate(
             99_112,
@@ -1840,8 +1840,8 @@ public class BattleSquadPlannerTests
     public void TemplateWeaponBearer_ClosesInsteadOfFiringWhenFriendlyCostIsGreater()
     {
         BattleSquad shooters = CreateSquad("Flamer Bearer", 650);
-        BattleSquad allies = CreateSquad("Valuable Ally", 651, battleValue: 100);
-        BattleSquad enemies = CreateSquad("Enemy", 660, battleValue: 2);
+        BattleSquad allies = CreateSquad("Valuable Ally", 651, strategicValue: 100);
+        BattleSquad enemies = CreateSquad("Enemy", 660, strategicValue: 2);
         BattleSoldier shooter = shooters.Soldiers[0];
         EquipTemplateWeapon(shooter);
         BattleGridManager grid = new();
@@ -1869,8 +1869,8 @@ public class BattleSquadPlannerTests
     [Fact]
     public void EngagedTemplateWeaponBearer_UsesAreaAttackForPointBlankShot()
     {
-        BattleSquad shooters = CreateSquad("Engaged Flamer Bearer", 670, battleValue: 2);
-        BattleSquad enemies = CreateSquad("Adjacent Enemy", 680, battleValue: 10);
+        BattleSquad shooters = CreateSquad("Engaged Flamer Bearer", 670, strategicValue: 2);
+        BattleSquad enemies = CreateSquad("Adjacent Enemy", 680, strategicValue: 10);
         BattleSoldier shooter = shooters.Soldiers[0];
         EquipTemplateWeapon(shooter, baseDamage: 20);
         BattleGridManager grid = new();
@@ -2215,7 +2215,7 @@ public class BattleSquadPlannerTests
     private static BattleSquad CreateFactionSquad(
         string name,
         Faction faction,
-        params (int SoldierId, int BattleValue)[] members)
+        params (int SoldierId, int StrategicValue)[] members)
     {
         SquadTemplate template = new(
             40_000 + faction.Id,
@@ -2231,7 +2231,7 @@ public class BattleSquadPlannerTests
         Squad squad = new(name, null, template);
         foreach ((int soldierId, int battleValue) in members)
         {
-            SoldierTemplate soldierTemplate = new(
+            SoldierTemplate soldierTemplate = new TestSoldierTemplate(
                 40_000 + soldierId,
                 TestModelFactory.HumanSpecies,
                 $"{name} {soldierId} Template",
@@ -2240,7 +2240,7 @@ public class BattleSquadPlannerTests
                 false,
                 0,
                 Array.Empty<ValueTuple<BaseSkill, float>>(),
-                battleValue: battleValue);
+                strategicValue: battleValue);
             Soldier soldier = TestModelFactory.CreateSoldier(soldierTemplate, $"{name} {soldierId}");
             soldier.Id = soldierId;
             squad.AddSquadMember(soldier);

@@ -26,7 +26,7 @@ namespace OnlyWar.Domain.FactionBehaviors
             RegionFaction target,
             FactionIntelBelief belief,
             FactionBehaviorRulesProfile profile,
-            long effectivePdfBattleValue,
+            long effectivePdfStrategicValue,
             bool falsePositive = false)
         {
             bool eligible = CanTarget(target, belief);
@@ -37,7 +37,7 @@ namespace OnlyWar.Domain.FactionBehaviors
                     falsePositive,
                     0,
                     0,
-                    effectivePdfBattleValue < profile.DormantCullingOutsideHelpEffectivePdfFloor);
+                    effectivePdfStrategicValue < profile.DormantCullingOutsideHelpEffectivePdfFloor);
             }
 
             long removed = System.Math.Min(target.Population, System.Math.Max(0L, (long)System.Math.Floor(
@@ -49,7 +49,7 @@ namespace OnlyWar.Domain.FactionBehaviors
                 false,
                 removed,
                 consolidationRemoved,
-                effectivePdfBattleValue < profile.DormantCullingOutsideHelpEffectivePdfFloor);
+                effectivePdfStrategicValue < profile.DormantCullingOutsideHelpEffectivePdfFloor);
         }
     }
 }

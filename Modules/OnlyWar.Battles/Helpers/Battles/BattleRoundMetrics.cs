@@ -248,7 +248,23 @@ namespace OnlyWar.Battles
                 cover,
                 squads.Any(squad => squad.IsInMelee),
                 _damageActionHistory[side].Any(value => value),
-                soldiers.Count > 0);
+                soldiers.Count > 0,
+                EngagementPotential.NoWayToWinWithdrawal && NoSquadHasWayToWin(squads));
+        }
+
+        /// <summary>
+        /// Every squad still under orders has seen no way to win for the whole patience. A routing
+        /// squad has no say, but a side that is all routing is not withdrawing by choice.
+        /// </summary>
+        private static bool NoSquadHasWayToWin(List<BattleSquad> squads)
+        {
+            List<BattleSquad> underOrders = squads
+                .Where(squad => squad.WithdrawalRole != WithdrawalRole.Routing
+                    && squad.MoraleState != MoraleState.Routing)
+                .ToList();
+            return underOrders.Count > 0
+                && underOrders.All(squad =>
+                    squad.NoWayToWinTurns >= EngagementPotential.NoWayToWinPatienceTurns);
         }
 
         /// <summary>
@@ -284,14 +300,15 @@ namespace OnlyWar.Battles
         private static Dictionary<int, SquadStart> BuildSquadStarts(
             IReadOnlyCollection<BattleSquad> squads)
         {
-            List<(int Id, int Able, long BattleValue)> raw = squads
+            List<(int Id, int Able, long StrategicValue)> raw = squads
                 .Where(squad => squad.AbleSoldiers.Count > 0)
                 .Select(squad => (
                     squad.Id,
                     squad.AbleSoldiers.Count,
-                    squad.AbleSoldiers.Sum(soldier => (long)soldier.EffectiveBattleValue)))
+                    // Strategic value, fixed at battle start: these weights outlive any one turn.
+                    squad.AbleSoldiers.Sum(soldier => (long)soldier.Soldier.StrategicValue)))
                 .ToList();
-            long totalBattleValue = raw.Sum(item => item.BattleValue);
+            long totalStrategicValue = raw.Sum(item => item.StrategicValue);
             long totalAble = raw.Sum(item => (long)item.Able);
             // A side whose battle value is all zero has no within-side proportion to take, so
             // fall back to headcount weights rather than dividing by zero.
@@ -300,8 +317,8 @@ namespace OnlyWar.Battles
                 item => new SquadStart(
                     item.Id,
                     item.Able,
-                    totalBattleValue > 0
-                        ? (double)item.BattleValue / totalBattleValue
+                    totalStrategicValue > 0
+                        ? (double)item.StrategicValue / totalStrategicValue
                         : (double)item.Able / totalAble));
         }
 

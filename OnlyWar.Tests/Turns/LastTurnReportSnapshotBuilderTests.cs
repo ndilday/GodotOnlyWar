@@ -85,8 +85,8 @@ public class LastTurnReportSnapshotBuilderTests
         result.StrategicCombatResults.Add(new StrategicCombatResult(
             target: null,
             attacker: null,
-            committedBattleValue: 10,
-            defenderBattleValue: 10,
+            committedStrategicValue: 10,
+            defenderStrategicValue: 10,
             attackerEffectiveStrength: 10,
             defenderEffectiveStrength: 10,
             attackerLosses: 1,

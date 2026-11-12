@@ -264,9 +264,26 @@ namespace OnlyWar.Battles
                 }
                 expected += reachesK * weight;
                 weight *= survive;
+                // THE TAIL CUTOFF (2026-11-12). Every later term is at most reachesK * weight (both
+                // factors are non-increasing), so the rounds left can add at most this bound. Once
+                // it is under BurstTailTolerance of the sum so far, the loop stops. Before, it ran
+                // on to z = -6: with recoil 2 against a deviation of 3, a fifteen-round burst spent
+                // six CDFs past z = -2 on terms nothing downstream can resolve.
+                if (BurstTailTolerance > 0f
+                    && (shots - k) * reachesK * weight <= BurstTailTolerance * expected)
+                {
+                    break;
+                }
             }
             return Math.Clamp(perHit * expected, 0f, 1f);
         }
+
+        /// <summary>
+        /// The share of a burst's score that its remaining rounds may leave out before
+        /// <see cref="ExpectedBurstRemovalFraction"/> stops (0: run to the deep tail, as before
+        /// 2026-11-12). Process-wide so the diagnostics can compare (DUEL_BURST_TAIL_TOLERANCE).
+        /// </summary>
+        internal static float BurstTailTolerance = 1e-4f;
 
         /// <summary>
         /// The range-INDEPENDENT half of <see cref="CalculateTakeOutProbabilityOnHit"/>: one

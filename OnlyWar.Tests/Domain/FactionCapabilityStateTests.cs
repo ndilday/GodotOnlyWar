@@ -130,7 +130,7 @@ public sealed class FactionCapabilityStateTests
             target,
             belief,
             rules.FactionBehaviorRules,
-            effectivePdfBattleValue: 100_000);
+            effectivePdfStrategicValue: 100_000);
 
         Assert.True(result.WasBeliefEligible);
         Assert.False(result.WasFalsePositive);
@@ -228,7 +228,7 @@ public sealed class FactionCapabilityStateTests
             GameStateDataBlob blob = roundTrip.Load(dbPath);
             Assert.Single(blob.StrategicInvasionForces);
             Assert.Equal(77, blob.StrategicInvasionForces[0].Id);
-            Assert.Equal(0, blob.StrategicInvasionForces[0].TransitBattleValue);
+            Assert.Equal(0, blob.StrategicInvasionForces[0].TransitStrategicValue);
 
             GameRulesData loadedRules = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
             Sector loadedSector = SavedGameLoader.BuildSectorFromBlob(

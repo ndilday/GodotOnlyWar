@@ -157,9 +157,8 @@ public sealed record SquadEngagementFrame(
 /// of the state-potential transition γΦ(s') − Φ(s): FutureExchange stores the discounted next-state
 /// net-rate component, ArrivalTimeValue stores the root-state offset, and the readiness/role/fire
 /// columns carry their corresponding potential differences. Immediate exchange remains the
-/// current-turn trade; ContactCommitmentCost is the current-turn contact exchange cost. Morale,
-/// command and contribution-access values are state-potential deltas, kept as separate trace
-/// columns.
+/// current-turn trade. Morale, command and contribution-access values are state-potential deltas,
+/// kept as separate trace columns.
 /// </summary>
 public sealed record EngagementOptionEvaluation(
     EngagementOptionKind Kind,
@@ -174,9 +173,8 @@ public sealed record EngagementOptionEvaluation(
     // Change in the pursuit fire-window component of the screen potential.
     float FireWindowValue,
     float IncomingNow,
-    // Present-valued melee payoff for a contact-seeking option. NOT a current-turn term despite
-    // sitting beside IncomingNow: only a soldier already in contact at turn start strikes this
-    // turn, and arriving in contact pays off one turn later. See MeleeStrikeEstimator's two clocks.
+    // Melee a CloseToContact option lands this turn: non-zero only for a squad already in contact
+    // at turn start. A charge that arrives this turn strikes next turn, which the potential prices.
     float MeleeValue,
     IReadOnlyList<float> FutureExchange,
     // Negative root-state offset from the net-rate component of Φ. Kept separate from
@@ -184,14 +182,26 @@ public sealed record EngagementOptionEvaluation(
     float ArrivalTimeValue,
     // Change in the screen-role component of Φ, including pursuit contact progress.
     float RoleTerm,
-    float ContactCommitmentCost,
     float Score,
     IReadOnlyList<PlannedSoldierAction> RootActions = null,
     float MoralePotentialValue = 0,
     float CommandPotentialValue = 0,
     // How much closing beats standing from the CURRENT state (EngagementPotential.Breakdown
     // .CloseAdvantage). Positive means there is somewhere more useful to be.
-    float RootCloseAdvantage = 0);
+    float RootCloseAdvantage = 0,
+    // Whether, from the CURRENT state, the Close continuation removes more enemy battle value than
+    // Stay (EngagementPotential.Breakdown.CloseRemovesMore). Read by the commitment mask.
+    bool RootCloseRemovesMore = false,
+    // From the CURRENT state, standing exchanges nothing in either direction
+    // (EngagementPotential.Breakdown.StayIsInert). Read by the stand-off mask.
+    bool RootStayIsInert = false,
+    // From the CURRENT state, no continuation wins (EngagementPotential.Breakdown.NoWayToWin).
+    bool RootNoWayToWin = false,
+    // From the CURRENT state, the option that moves as the winning Close continuation moves
+    // (EngagementPotential.Breakdown.CloseMove): RunToward for the run and its halfway stops,
+    // JogToward or StepForward for the approaches that fire. Null when there is no approach.
+    // Read by the follow-the-plan mask.
+    EngagementOptionKind? RootCloseMove = null);
 
 /// <summary>Pure Layer-2 result.  Declaration and action construction happen later.</summary>
 public sealed record SquadEngagementDecision(

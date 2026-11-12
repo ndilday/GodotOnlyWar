@@ -72,7 +72,7 @@ internal static class BattleEngagementFrameBuilder
         foreach (BattleSoldier soldier in squad?.AbleSoldiers
             .Where(soldier => soldier.TopLeft.HasValue) ?? [])
         {
-            float bv = Math.Max(1, soldier.EffectiveBattleValue);
+            float bv = Math.Max(TacticalValueTable.MinimumValue, soldier.PlanningValue);
             (float rangedShare, float meleeShare) = SoldierCombatShares(soldier);
             melee += bv * meleeShare;
             ranged += bv * rangedShare;
@@ -88,6 +88,26 @@ internal static class BattleEngagementFrameBuilder
             && ranged > melee
                 ? PursuitDoctrine.FireSupport
                 : PursuitDoctrine.Mixed;
+    }
+
+    /// <summary>
+    /// Whether a squad seeks contact, from the same value shares and band as
+    /// <see cref="BattleSquadCapabilityProfile.IsContactSeeking"/>, over all its able soldiers
+    /// whether placed or not: the opening range is asked before a grid exists.
+    /// </summary>
+    internal static bool IsContactSeekingBeforePlacement(BattleSquad squad)
+    {
+        float ranged = 0;
+        float melee = 0;
+        foreach (BattleSoldier soldier in squad?.AbleSoldiers ?? [])
+        {
+            float bv = Math.Max(TacticalValueTable.MinimumValue, soldier.PlanningValue);
+            (float rangedShare, float meleeShare) = SoldierCombatShares(soldier);
+            melee += bv * meleeShare;
+            ranged += bv * rangedShare;
+        }
+        return melee + ranged > 0
+            && melee / (melee + ranged) >= BattleSquadCapabilityProfile.ContactSeekingMeleeFraction;
     }
 
     /// <param name="friendlySquads">
@@ -120,7 +140,7 @@ internal static class BattleEngagementFrameBuilder
         Dictionary<int, float> groups = [];
         foreach (BattleSoldier soldier in able)
         {
-            float bv = Math.Max(1, soldier.EffectiveBattleValue);
+            float bv = Math.Max(TacticalValueTable.MinimumValue, soldier.PlanningValue);
             total += bv;
             bool usableRanged = soldier.FunctioningHands > 0
                 && soldier.RangedWeapons.Any(weapon => weapon.LoadedAmmo > 0)
@@ -315,15 +335,11 @@ internal static class BattleEngagementFrameBuilder
         // comes out first-order low rather than O(step^2) low. peakRemovalFraction then feeds
         // BattleSquadPlanner.HasNoViableRangedOption, which is a threshold test, so a first-order
         // error there flips squads between engagement postures.
-        // Outgoing is converted into our currency before it is netted against what we lose; see
-        // EngagementCurrency. Until 2026-10-05 the raw difference let the ratio of the two
-        // factions' battle values place the standoff: a Neophyte Hybrid squad facing Scouts worth
-        // ten times as much per soldier found its "best exchange" at contact.
-        float rate = curves.EnemyValueRate;
+        // Outgoing and incoming are both tactical value, so they net directly.
         float chosen = Math.Clamp(
             RangedEffectivenessCurve.Argmax(
                 band,
-                range => (rate * curves.Outgoing.RemovalAt(range))
+                range => curves.Outgoing.RemovalAt(range)
                     - (incomingShare * curves.Incoming.RemovalAt(range))
                     - (meleeThreat
                         / (1f + (Math.Max(0f, range - ContactGap) / speed)))),
@@ -336,7 +352,8 @@ internal static class BattleEngagementFrameBuilder
         // representative opponent's worth to land on "share of one enemy, per shooter, per turn"
         // -- the scale NegligibleRemovalFraction is quoted on.
         peakRemovalFraction = outgoingPeak
-            / (Math.Max(1, curves.OurSoldierCount) * Math.Max(1f, curves.Target.BattleValue));
+            / (Math.Max(1, curves.OurSoldierCount)
+                * Math.Max(TacticalValueTable.MinimumValue, curves.Target.BattleValue));
         return chosen;
     }
 
@@ -377,7 +394,7 @@ internal static class BattleEngagementFrameBuilder
         {
             samples.Add((
                 range,
-                curves.EnemyValueRate * curves.Outgoing.RemovalAt(range),
+                curves.Outgoing.RemovalAt(range),
                 share * curves.Incoming.RemovalAt(range),
                 share * curves.MeleeThreat
                     / (1f + (Math.Max(0f, range - ContactGap) / curves.ClosingSpeed))));
@@ -395,8 +412,7 @@ internal static class BattleEngagementFrameBuilder
         float OpposingBattleValue,
         float OurBattleValue,
         int OurSoldierCount,
-        float OutgoingSaturationRange,
-        float EnemyValueRate);
+        float OutgoingSaturationRange);
 
     /// <param name="degenerateRange">
     /// What the caller must return when this yields null: <paramref name="reach"/> for "there is
@@ -441,7 +457,7 @@ internal static class BattleEngagementFrameBuilder
                 .OrderBy(member => member.Soldier.Id))
             {
                 opposingSoldiers.Add(soldier);
-                float bv = Math.Max(1, soldier.EffectiveBattleValue);
+                float bv = Math.Max(TacticalValueTable.MinimumValue, soldier.PlanningValue);
                 battleValue += bv;
             }
         }
@@ -486,52 +502,14 @@ internal static class BattleEngagementFrameBuilder
             meleeRemovalRate,
             Math.Max(0.1f, closingSpeed),
             battleValue,
-            ourSoldiers.Sum(soldier => Math.Max(1, soldier.EffectiveBattleValue)),
+            ourSoldiers.Sum(soldier => Math.Max(TacticalValueTable.MinimumValue, soldier.PlanningValue)),
             ourSoldiers.Count,
-            saturationRange,
-            // The outgoing curve prices removal in THEIR battle value and the incoming curve in
-            // OURS; EngagementCurrency converts one into the other (battle value parity).
-            EngagementCurrency.EnemyValueRate);
+            saturationRange);
     }
 
     // How close the two forces are when the shooting phase ends and the melee begins. Shared with
     // the mid-fight melee arrival term so "turns until contact" means one thing in this file.
     private const float ContactGap = 1.5f;
-    // Ceiling on the approach integral below, so a force that closes at a crawl (or not at all)
-    // cannot make the opening-range sweep unbounded. 200 turns at any realistic closing speed
-    // covers more ground than any weapon in the game reaches.
-    private const int MaximumApproachTurns = 200;
-    // The share of the opposing force's battle value the approach must be expected to remove: the
-    // loss at which the enemy is expected to BREAK. A squad setting up an engagement cannot read
-    // the enemy's orders, so it assumes a stubborn one -- Attritional, the most committed
-    // aggression that still withdraws (at 25% of its battle value remaining, so after losing 75%).
-    // Aggressive never withdraws voluntarily, so assuming it would plan for an approach all the
-    // way to contact. Until 2026-09-22 this was a 1.5 margin over the WHOLE enemy force.
-    internal static readonly float ApproachRemovalShare =
-        1f - (float)BattleForceEvaluator.AttritionalEligibilityThreshold;
-    // Tie-break, not a trade-off. Past the range that destroys the enemy before contact the
-    // approach exchange is exactly flat, and a flat score leaves the answer to whichever coarse
-    // sample the sweep happened to reach first -- quantizing the opening range to reach/32 (31
-    // yards at a bolter's 1000) and hiding real differences between targets underneath it. Tilting
-    // the plateau by at most this share of its own height across the whole band makes the SHORTEST
-    // sufficient range the true maximum, so the refinement pass resolves it properly. Shorter also
-    // matters in its own right: an opening range twice what the fight needs is a battle twice as
-    // many turns long for the same outcome.
-    private const float ApproachRangeParsimony = 0.01f;
-    // TUNABLE. Turns of enemy movement held back from the saturation floor below, so a force does
-    // not open the engagement at the very outer edge of its own useful band.
-    //
-    // The logic is that the attacker wants time to shoot at RETREATING enemies. Opening at the
-    // saturation range spends the whole band up front: it buys turns of fire while the enemy closes,
-    // but the moment that enemy turns and withdraws it is immediately outside the band and every
-    // remaining shot is wasted -- which is the Xibarrus Nu shape (2026-08-05), where the withdrawal
-    // triggered at 42.9% battle value and the pursuers had no useful range left to punish it with.
-    // Holding back ten bounds of the enemy's own speed reserves roughly ten turns of fire against a
-    // quarry running flat out, in the quantity that decides how fast that band is spent.
-    //
-    // It is a floor adjustment only. An enemy tough enough that `sufficient` exceeds the reduced
-    // floor still pushes the opening range back out, so this never overrides the sufficiency branch.
-    private const float RetreatFireTurns = 10f;
 
     /// <summary>
     /// The range at which a squad wants an engagement to OPEN against a specific opposing force,
@@ -548,106 +526,120 @@ internal static class BattleEngagementFrameBuilder
     /// decreasing, so the argmax is the lower bound. No loadout changes that -- the shape is the
     /// same for bolters, plasma and heavy weapons alike.</para>
     ///
-    /// <para>PHASE 7 ARGUED THE APPROACH COST WAS ZERO AT <c>r = band</c>, and it is -- WHEN YOU ARE
-    /// THE ONE CLOSING. Opening far then buys turns of walking at reduced effect. When the ENEMY
-    /// closes on you, opening far buys turns of unanswered fire and costs nothing, and the per-turn
-    /// snapshot cannot see the difference because it never counts turns. Phase 7 claimed the free
-    /// shots "are already inside the band, as the melee arrival term"; they are not. That term
-    /// discounts a single turn's arrival value. It never credits the fifty turns of shooting that
-    /// opening at 400 yards actually buys.</para>
-    ///
-    /// <para>SO COUNT THE TURNS. For a candidate opening range the enemy closes at its own speed and
-    /// this squad collects <c>outgoing - incoming</c> each turn until contact (incoming scaled to
-    /// this squad's share of its force, see <see cref="ForceShare"/>); the score is that running
-    /// total, saturated at <see cref="ApproachRemovalShare"/> times the opposing force's battle
-    /// value times the same share, because an enemy cannot be killed twice and range bought past the point of
-    /// destroying them buys nothing. <see cref="RangedEffectivenessCurve.Argmax"/> breaks ties
-    /// toward the SMALLER range, so that half of the answer is the shortest opening range that still
-    /// expects to destroy the enemy before they arrive -- not the longest range on the board. It is
-    /// then floored by the range at which this force's own fire is still worth using, because an
-    /// expected-value plan is a poor thing to stand on at knife range; see the body.</para>
-    ///
-    /// <para>The high-constitution case then handles itself, in the half of the space where it is
-    /// the binding constraint: an enemy too tough to destroy inside the useful band needs more turns
-    /// of fire, more turns is more distance, and the opening range moves outward on its own with no
-    /// toughness term anywhere in the formula. Measured against five Carnifexes (2026-08-05), the
-    /// answer holds at the floor -- 75 and 67 yards -- through constitution 120 and 224, then climbs
-    /// 94 / 242 / 687 / 996 as constitution goes 400 / 800 / 1600 / 3200. Below the crossover the
-    /// floor decides and toughness does not move the answer at all; that is the intended shape, not
-    /// a gap in it.</para>
+    /// <para>THE ANSWER IS THE OPENING FORECAST'S (2026-10-24, Design/Active/OpeningRangeRefactor.md,
+    /// phase 5): the opening whose forecast fight this squad likes best, see
+    /// <see cref="CalculateForecastOpeningRange"/>. It replaced the shortest-sufficient sweep, which
+    /// summed the approach fire up to an assumed break share and floored the answer by the useful
+    /// band, a retreat reserve and a minimum of three turns of fire. Against the measured approach
+    /// curves the sweep put a PDF line 26-28 yards from Hormagaunts (best measured: 450) and a
+    /// Tactical squad 761 yards from PDF (best: 450); the forecast is within one ladder step of the
+    /// measured best for every panel side but the flat-curved Carnifex.</para>
     /// </summary>
     /// <remarks>
-    /// A force with no usable ranged weapon, or one that cannot penetrate the opposition at any
-    /// range, gets 0 here -- open in contact -- exactly as the same degenerate cases resolve
-    /// mid-fight. The mid-fight band keeps the snapshot argmax, which is the right question there:
-    /// "where do I want to stand THIS turn" genuinely is a per-turn quantity.
+    /// A squad with no usable ranged weapon has no preference (null from
+    /// <see cref="CalculatePreferredOpeningRangeOrNone"/>), read here as 0: open in contact.
     /// </remarks>
     /// <param name="friendlySquads">
     /// The squad's whole force, itself included or not. The squad plans only its own part of the
-    /// fight: its proportional share of the kill target, and its proportional share of the
-    /// enemy's fire (see <see cref="ForceShare"/>). Null or empty means the squad fights alone.
+    /// fight: its proportional share of the enemy, and its proportional share of the enemy's fire
+    /// (see <see cref="ForceShare"/>). Null or empty means the squad fights alone.
     /// </param>
     internal static float CalculatePreferredOpeningRange(
         BattleSquad squad,
         IReadOnlyCollection<BattleSquad> opposingSquads,
         IReadOnlyCollection<BattleSquad> friendlySquads = null)
-        => CalculatePreferredOpeningRange(
-            squad, opposingSquads, friendlySquads, ApproachRemovalShare);
+        => CalculateForecastOpeningRange(squad, opposingSquads, friendlySquads) ?? 0f;
 
-    /// <param name="removalShare">
-    /// The share of the opposing force's battle value the whole friendly force must be expected
-    /// to remove during the approach before more opening range stops being worth anything.
-    /// </param>
-    internal static float CalculatePreferredOpeningRange(
+    /// <summary>
+    /// The preferred opening range, or null when the squad has no preference: a squad with no
+    /// ranged weapon has nothing to stand off for (OpeningRangeRefactor.md section 2.3), and a
+    /// reciprocal assault must not let it pull the opening (section 3, rule B).
+    /// </summary>
+    internal static float? CalculatePreferredOpeningRangeOrNone(
         BattleSquad squad,
         IReadOnlyCollection<BattleSquad> opposingSquads,
-        IReadOnlyCollection<BattleSquad> friendlySquads,
-        float removalShare)
-    {
-        if (squad == null) return 0;
-        List<BattleSoldier> able = squad.AbleSoldiers.ToList();
-        if (able.Count == 0) return 0;
-        EngagementCurves curves = BuildEngagementCurves(
-            squad,
-            opposingSquads,
-            WeaponReach(able),
-            requirePlacement: false,
-            out float degenerateRange);
-        if (curves == null) return degenerateRange;
+        IReadOnlyCollection<BattleSquad> friendlySquads = null)
+        => CalculateForecastOpeningRange(squad, opposingSquads, friendlySquads);
 
-        float forceShare = ForceShare(squad, friendlySquads);
-        float parsimony = curves.OpposingBattleValue
-            * removalShare
-            * forceShare
-            * ApproachRangeParsimony
-            / Math.Max(1f, curves.Band);
-        // The expected break must land where this squad can still punish the retreat: inside its
-        // useful band, less RetreatFireTurns of the enemy's own movement -- the floor below.
-        float breakLimit = Math.Max(
-            0,
-            curves.OutgoingSaturationRange - (RetreatFireTurns * curves.ClosingSpeed));
-        float sufficient = CalculateSufficientOpeningRange(
-            curves, parsimony, removalShare, forceShare, breakLimit);
-        // FLOOR: never open inside the range our own fire is still worth using, less the headroom
-        // below.
-        //
-        // `sufficient` is the shortest range whose EXPECTED removal destroys them before contact,
-        // and expectation is a poor thing to stand on at knife range: against lightly armoured
-        // monsters it lands at 12 yards, where the plan works on average and one cold streak puts a
-        // Broodlord into the line at full strength. The saturation range is the authored answer to
-        // "how far out is this force still doing real work", it costs nothing to take when the
-        // enemy is the one closing, and it is the quantity Phase 6 used before Phase 7 replaced it
-        // for a reason that only holds when WE close.
-        //
-        // The two branches divide the space cleanly. Ordinary enemies are destroyed well inside the
-        // useful band, so the floor decides and the opening range is stable. An enemy tough enough
-        // that the useful band does not buy enough turns pushes `sufficient` outside it, and then
-        // sufficiency decides -- which is exactly the high-constitution case moving the answer
-        // outward with no toughness term in the formula.
-        float useful = Math.Max(
-            0,
-            curves.OutgoingSaturationRange - (RetreatFireTurns * curves.ClosingSpeed));
-        return Math.Clamp(Math.Max(sufficient, useful), 0, curves.Band);
+    // Candidate openings for the forecast argmax: log-spaced from the shortest to the squad's
+    // reach, then one refinement between the best candidate's neighbours.
+    private const float ForecastOpeningMinimum = 1.5f;
+    private const int ForecastOpeningCandidates = 32;
+    private const int ForecastOpeningRefinement = 9;
+    // The indifference band of the argmax, as a share of the squad's own battle value: an
+    // opening within this of the best net is as good, and the shortest such opening wins, because
+    // a longer battle for the same result is worse.
+    private const float ForecastOpeningIndifferenceShare = 0.01f;
+
+    /// <summary>
+    /// The opening whose forecast this squad likes best (Design/Active/OpeningRangeRefactor.md,
+    /// section 2): the argmax over candidate openings of
+    /// <see cref="OpeningExchangeForecast.Net"/>, taking the shortest opening within
+    /// <see cref="ForecastOpeningIndifferenceShare"/> of the best, on the expected path AND on the
+    /// unlucky one (<see cref="OpeningExchangeForecast.EvaluateUnlucky"/>). Null for a squad with
+    /// no usable ranged weapon: it has nothing to stand off for, which is no preference, not a
+    /// preference for contact.
+    /// </summary>
+    /// <remarks>
+    /// THE UNLUCKY PATH (2026-10-24). A flat plateau's shortest point is its edge, where a little
+    /// bad luck turns "they die before they arrive" into contact. One bolter squad against five
+    /// lone monsters (the Xibarrus Zeta fixture) expected to kill them all from 24 yards out or
+    /// more and lose 0.5 battle value at 9, so the expected argmax opened at 9 yards: the opening
+    /// at which 29 of 30 marines died in the 2026-08-04 battle. On the unlucky path 9 yards loses
+    /// heavily and the plateau starts farther out.
+    /// </remarks>
+    internal static float? CalculateForecastOpeningRange(
+        BattleSquad squad,
+        IReadOnlyCollection<BattleSquad> opposingSquads,
+        IReadOnlyCollection<BattleSquad> friendlySquads = null,
+        OpeningForecastOptions options = null)
+    {
+        OpeningExchangeForecast forecast = OpeningExchangeForecast.Build(
+            squad, opposingSquads, friendlySquads, options);
+        if (forecast == null)
+        {
+            return null;
+        }
+        if (!forecast.HasRangedWeapon || forecast.Reach <= ForecastOpeningMinimum)
+        {
+            return null;
+        }
+
+        float low = ForecastOpeningMinimum;
+        float high = forecast.Reach;
+        List<(float Range, float Net)> scored = [];
+        for (int index = 0; index < ForecastOpeningCandidates; index++)
+        {
+            float range = low * MathF.Pow(high / low, index / (float)(ForecastOpeningCandidates - 1));
+            scored.Add((range, OpeningExchangeForecast.Net(forecast.Evaluate(range))));
+        }
+        int best = 0;
+        for (int index = 1; index < scored.Count; index++)
+        {
+            if (scored[index].Net > scored[best].Net)
+            {
+                best = index;
+            }
+        }
+        float refineLow = scored[Math.Max(0, best - 1)].Range;
+        float refineHigh = scored[Math.Min(scored.Count - 1, best + 1)].Range;
+        for (int index = 1; index < ForecastOpeningRefinement; index++)
+        {
+            float range = refineLow + ((refineHigh - refineLow) * index / ForecastOpeningRefinement);
+            scored.Add((range, OpeningExchangeForecast.Net(forecast.Evaluate(range))));
+        }
+
+        float bestNet = scored.Max(candidate => candidate.Net);
+        float tolerance = ForecastOpeningIndifferenceShare * Math.Max(1f, forecast.OwnPool);
+        List<(float Range, float Net)> plateau = scored
+            .Where(candidate => candidate.Net >= bestNet - tolerance)
+            .Select(candidate => (candidate.Range,
+                OpeningExchangeForecast.Net(forecast.EvaluateUnlucky(candidate.Range))))
+            .ToList();
+        float bestUnlucky = plateau.Max(candidate => candidate.Item2);
+        return plateau
+            .Where(candidate => candidate.Item2 >= bestUnlucky - tolerance)
+            .Min(candidate => candidate.Range);
     }
 
     /// <summary>
@@ -673,221 +665,14 @@ internal static class BattleEngagementFrameBuilder
     }
 
     private static float SquadBattleValue(BattleSquad squad) => squad.AbleSoldiers
-        .Sum(soldier => (float)Math.Max(1, soldier.EffectiveBattleValue));
+        .Sum(soldier => (float)Math.Max(TacticalValueTable.MinimumValue, soldier.PlanningValue));
 
-    /// <summary>
-    /// Ceiling on the shared sample grid below. Only binds for a force that closes so slowly that
-    /// the grid would be finer than the approach itself can resolve.
-    /// </summary>
-    private const int MaximumApproachSamples = 8192;
-
-    /// <summary>
-    /// The opening range whose whole approach trades best: for each candidate, what this squad
-    /// removes from the closing force less what that force removes from it, each saturated at the
-    /// point where there is nobody left to remove, and tilted by <paramref name="parsimony"/> so
-    /// the shortest sufficient range wins a flat plateau.
-    ///
-    /// <para>WHY IT IS NOT A <see cref="RangedEffectivenessCurve.Argmax"/> OVER AN EXCHANGE
-    /// FUNCTION, which is what it was. That shape evaluated the exchange at 50 candidate ranges,
-    /// and each evaluation walked up to <see cref="MaximumApproachTurns"/> turns of approach
-    /// evaluating BOTH force-wide curves per turn -- up to 10,000 whole-force curve evaluations per
-    /// squad, per battle setup, for every squad on both sides, since
-    /// <c>MissionOpeningRange.Interpolate</c> asks this of each side in turn. It was the single
-    /// largest consumer of the removal math in the engine.</para>
-    ///
-    /// <para>THE REDUNDANCY IT REMOVES. The approach from an opening range <c>r</c> visits
-    /// <c>r, r - s, r - 2s, ...</c> for a fixed closing speed <c>s</c>, so two candidate ranges that
-    /// differ by a multiple of <c>s</c> visit overlapping gaps and re-evaluate the same curves at
-    /// the same points. Sampling both curves ONCE on a grid whose spacing divides <c>s</c> makes
-    /// every candidate's approach a stride-<c>stride</c> sub-sequence of one shared array, and its
-    /// running total a difference of two entries in a strided cumulative sum. The sweep goes from
-    /// O(candidates x turns) curve evaluations to O(grid), and the grid is finer than the 50-sample
-    /// search it replaces -- spacing is at worst <c>span/1024</c> against the old refined
-    /// <c>span/512</c>, so this RAISES resolution while cutting the work.</para>
-    ///
-    /// <para>The early break is preserved exactly rather than approximated away. Because removals
-    /// are non-negative, a cumulative sum is non-decreasing along a residue class, so "the first
-    /// turn at which this side is spent" is a binary search over the same array -- see
-    /// <see cref="FirstSaturatedTurn"/>. Both sides' break turns and the turn cap are then combined
-    /// exactly as the sequential loop combined them.</para>
-    /// </summary>
-    private static float CalculateSufficientOpeningRange(
-        EngagementCurves curves,
-        float parsimony,
-        float removalShare,
-        float forceShare,
-        float breakLimit)
-    {
-        // The old Argmax's lower bound, and the range an approach that never opens is scored at.
-        float lower = Math.Min(1f, curves.Band);
-        float span = curves.Band - ContactGap;
-        float closingSpeed = curves.ClosingSpeed;
-        if (span <= 0f || closingSpeed <= 0f)
-        {
-            return lower;
-        }
-
-        // Grid geometry: spacing must DIVIDE the closing speed, or the descent from one candidate
-        // would land between samples and the sharing argument above collapses.
-        float targetSpacing = Math.Max(span / 1024f, 1e-4f);
-        int stride = Math.Max(1, (int)MathF.Round(closingSpeed / targetSpacing));
-        float spacing = closingSpeed / stride;
-        int count = (int)MathF.Ceiling(span / spacing);
-        if (count > MaximumApproachSamples)
-        {
-            count = MaximumApproachSamples;
-            spacing = span / count;
-            stride = Math.Max(1, (int)MathF.Round(closingSpeed / spacing));
-        }
-
-        // Cumulative along the residue class, so entry i already holds the sum over
-        // i, i - stride, i - 2*stride, ... -- one curve evaluation per grid point, not per
-        // (candidate, turn) pair.
-        float[] enemyCumulative = new float[count + 1];
-        float[] ourCumulative = new float[count + 1];
-        for (int index = 1; index <= count; index++)
-        {
-            float gap = ContactGap + (spacing * index);
-            float carriedEnemy = index >= stride ? enemyCumulative[index - stride] : 0f;
-            float carriedOurs = index >= stride ? ourCumulative[index - stride] : 0f;
-            enemyCumulative[index] = carriedEnemy + curves.Outgoing.RemovalAt(gap);
-            // The enemy's whole force fires at our whole force, not at this one squad.
-            ourCumulative[index] = carriedOurs + (curves.Incoming.RemovalAt(gap) * forceShare);
-        }
-
-        float enemyCeiling = curves.OpposingBattleValue * removalShare * forceShare;
-        // The enemy side of the score (removal, its ceiling and the parsimony tilt, which is quoted
-        // on the opposing battle value) is in enemy currency; convert it before netting it against
-        // our losses. See EngagementCurrency.
-        float rate = curves.EnemyValueRate;
-        float bestRange = lower;
-        // An opening range at or inside contact buys no turns of approach at all, so its exchange
-        // is zero and the parsimony tilt is all that is left of its score -- exactly what the
-        // sequential loop returned for a gap that never cleared ContactGap.
-        float bestScore = -rate * parsimony * lower;
-        // THE BREAK MUST LAND INSIDE OUR USEFUL BAND. Once this squad's share of the break loss is
-        // met, the score above is flat in range except for the fire it takes, so every extra yard
-        // looked free and the answer ran out to weapon reach -- but the enemy does not keep coming
-        // after it breaks. It turns and runs from wherever the break happened, and a longer
-        // opening makes that happen farther out. Grist Nine Epsilon (2026-09-22): tactical squads
-        // opened at ~1050 against a ~420 floor, the orks broke at ~500 with half their strength,
-        // and the marines -- one cell a turn faster -- could never bring them back into range.
-        // So a candidate whose expected break lands at or inside breakLimit is preferred over any
-        // that does not; only if none does (an enemy too tough to break inside the band) does the
-        // unconstrained best stand.
-        float bestBreakingRange = float.NaN;
-        float bestBreakingScore = float.NegativeInfinity;
-        for (int index = 1; index <= count; index++)
-        {
-            // Turns before the descent walks inside contact: the number of grid points in this
-            // residue class at or below index.
-            int available = Math.Min(
-                MaximumApproachTurns, (index + stride - 1) / stride);
-            int enemyBreakTurn = FirstSaturatedTurn(
-                enemyCumulative, index, stride, available, enemyCeiling);
-            int ourSpentTurn = FirstSaturatedTurn(
-                ourCumulative, index, stride, available, curves.OurBattleValue);
-            int turns = Math.Min(available, Math.Min(enemyBreakTurn, ourSpentTurn));
-            int floorIndex = index - (turns * stride);
-            float removedEnemy = enemyCumulative[index]
-                - (floorIndex > 0 ? enemyCumulative[floorIndex] : 0f);
-            float removedUs = ourCumulative[index]
-                - (floorIndex > 0 ? ourCumulative[floorIndex] : 0f);
-            float range = ContactGap + (spacing * index);
-            float score = (rate * (Math.Min(removedEnemy, enemyCeiling) - (parsimony * range)))
-                - Math.Min(removedUs, curves.OurBattleValue);
-            // Strict >, scanning ascending: ties go to the SHORTER range, which is the tie-break
-            // RangedEffectivenessCurve.Argmax gave and which ApproachRangeParsimony exists to make
-            // meaningful.
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestRange = range;
-            }
-
-            // The enemy breaks on turn enemyBreakTurn, at the gap that turn is fired from, and only
-            // if it does so before this squad is spent. FirstSaturatedTurn reports `available`
-            // both for a crossing on the last turn and for no crossing, so confirm the total.
-            bool enemyBreaks = removedEnemy >= enemyCeiling && enemyBreakTurn <= ourSpentTurn;
-            if (!enemyBreaks || breakLimit <= 0) continue;
-            float breakGap = ContactGap + (spacing * (index - ((enemyBreakTurn - 1) * stride)));
-            if (breakGap <= breakLimit && score > bestBreakingScore)
-            {
-                bestBreakingScore = score;
-                bestBreakingRange = range;
-            }
-        }
-        return float.IsNaN(bestBreakingRange) ? bestRange : bestBreakingRange;
-    }
-
-    /// <summary>
-    /// The first turn of the approach from <paramref name="index"/> at which the running total
-    /// reaches <paramref name="threshold"/>, or <paramref name="available"/> if it never does --
-    /// the turn the sequential loop used to break on.
-    /// </summary>
-    private static int FirstSaturatedTurn(
-        float[] cumulative,
-        int index,
-        int stride,
-        int available,
-        float threshold)
-    {
-        float total = cumulative[index];
-        int low = 1;
-        int high = available;
-        int firstCrossing = available;
-        while (low <= high)
-        {
-            int middle = low + ((high - low) / 2);
-            int floorIndex = index - (middle * stride);
-            float accumulated = total - (floorIndex > 0 ? cumulative[floorIndex] : 0f);
-            if (accumulated >= threshold)
-            {
-                firstCrossing = middle;
-                high = middle - 1;
-            }
-            else
-            {
-                low = middle + 1;
-            }
-        }
-        return firstCrossing;
-    }
-
-    /// <summary>
-    /// Battle-value-weighted mean of the able soldiers' effective weapon reach: the same quantity
-    /// <see cref="BuildProfile"/> stores as <c>PreferredBandUpper</c>, computed without requiring
-    /// the soldiers to be on a grid. Kept separate rather than factored out of that method, whose
-    /// single pass also produces the lower band edge and the capability groups.
-    /// </summary>
-    private static float WeaponReach(IReadOnlyList<BattleSoldier> soldiers)
-    {
-        float weighted = 0;
-        float weight = 0;
-        foreach (BattleSoldier soldier in soldiers)
-        {
-            if (soldier.FunctioningHands <= 0
-                || !soldier.RangedWeapons.Any(weapon => weapon.LoadedAmmo > 0)
-                || !soldier.EquippedRangedWeapons.Any())
-            {
-                continue;
-            }
-            float bv = Math.Max(1, soldier.EffectiveBattleValue);
-            weighted += bv * soldier.EquippedRangedWeapons
-                .Where(weapon => weapon.LoadedAmmo > 0)
-                .Select(weapon => EffectiveMaximumRange(soldier, weapon))
-                .DefaultIfEmpty(0)
-                .Max();
-            weight += bv;
-        }
-        return weight > 0 ? weighted / weight : 1f;
-    }
 
     /// <summary>
     /// A representative member of a force, for the OTHER side's curve to shoot at. Able-soldier
     /// mean of the same four scalars, plus mean battle value so the two curves are commensurable.
     /// </summary>
-    private static EngagementTargetProfile RepresentativeProfile(
+    internal static EngagementTargetProfile RepresentativeProfile(
         IReadOnlyList<BattleSoldier> soldiers)
     {
         if (soldiers.Count == 0) return new EngagementTargetProfile(1, 0, 1, 0, 1);
@@ -902,7 +687,7 @@ internal static class BattleEngagementFrameBuilder
             armor += soldier.Armor?.Template.ArmorProvided ?? 0;
             constitution += RemovalMath.RepresentativeConstitution(soldier);
             evasion += soldier.Soldier.Template.Species.RangedEvasion;
-            battleValue += Math.Max(1, soldier.EffectiveBattleValue);
+            battleValue += Math.Max(TacticalValueTable.MinimumValue, soldier.PlanningValue);
         }
         return new EngagementTargetProfile(
             size / soldiers.Count,
@@ -913,9 +698,17 @@ internal static class BattleEngagementFrameBuilder
     }
 
     /// <summary>
-    /// The ranged/melee split of one soldier's battle value. Extracted verbatim from
-    /// <see cref="BuildProfile"/> so <see cref="CalculateEffectiveEngagementRange"/> can price an
-    /// opposing force's melee threat before that force's own profiles have been built.
+    /// The ranged/melee split of one soldier's value, so
+    /// <see cref="CalculateEffectiveEngagementRange"/> can price an opposing force's melee threat
+    /// before that force's own profiles have been built.
+    ///
+    /// <para>FROM ARMAMENT AND TARGET (2026-11-01, Design/Active/StrategicAndTacticalValue.md
+    /// section 3). The split is the soldier's tactical melee share: his melee take-outs at contact
+    /// against the enemy on the field over those plus his ranged take-outs across his reach. It
+    /// replaced <c>SoldierTemplate.MeleeFraction</c>, one authored number per template, which made
+    /// every Ork Boy squad (shoota or choppa) a 0.5 and so Slugga Boyz never sought contact. A
+    /// soldier no table has seen (a coordinator-free fixture) is split by armament alone, the old
+    /// rule for an unauthored template.</para>
     /// </summary>
     private static (float Ranged, float Melee) SoldierCombatShares(BattleSoldier soldier)
     {
@@ -924,8 +717,12 @@ internal static class BattleEngagementFrameBuilder
             && soldier.EquippedRangedWeapons.Any();
         bool usableMelee = soldier.FunctioningHands > 0
             && (soldier.MeleeWeapons.Count > 0 || soldier.RangedWeapons.Count == 0);
-        float authoredMelee = soldier.Soldier.Template.MeleeFraction;
-        if (!soldier.Soldier.Template.HasAuthoredMeleeFraction)
+        float meleeShare;
+        if (soldier.TacticalMeleeShare is float measured)
+        {
+            meleeShare = measured;
+        }
+        else
         {
             float bestRangedReach = usableRanged
                 ? soldier.EquippedRangedWeapons
@@ -934,14 +731,14 @@ internal static class BattleEngagementFrameBuilder
                     .DefaultIfEmpty(0)
                     .Max()
                 : 0;
-            authoredMelee = usableMelee && !usableRanged ? 0.9f
+            meleeShare = usableMelee && !usableRanged ? 0.9f
                 : usableMelee && bestRangedReach <= 50 ? 0.7f
                 : usableMelee && usableRanged ? 0.25f
                 : 0.05f;
         }
         return (
-            usableRanged ? 1f - authoredMelee : 0,
-            usableMelee ? authoredMelee : 0);
+            usableRanged ? 1f - meleeShare : 0,
+            usableMelee ? meleeShare : 0);
     }
 
     private static float EffectiveMaximumRange(BattleSoldier soldier, RangedWeapon weapon)

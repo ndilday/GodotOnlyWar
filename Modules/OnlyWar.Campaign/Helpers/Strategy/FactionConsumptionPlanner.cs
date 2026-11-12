@@ -54,6 +54,6 @@ internal sealed class FactionConsumptionPlanner
         GameLog.Debug(() =>
             $"AI feed {faction.Name}/{regionFaction.Region.Planet.Name}/{regionFaction.Region.Name}: "
             + $"committedBV={budget}, deployed={regionFaction.GetDeployedStrength()}, "
-            + $"defensiveReserve={regionFaction.AssignedDefensiveBattleValue}");
+            + $"defensiveReserve={regionFaction.AssignedDefensiveStrategicValue}");
     }
 }

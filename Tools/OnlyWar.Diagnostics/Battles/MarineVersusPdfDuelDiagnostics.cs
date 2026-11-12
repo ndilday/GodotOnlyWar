@@ -76,13 +76,17 @@ public class MarineVersusPdfDuelDiagnostics
         SquadTemplate marineTemplate = new(
             990_001, "Duel Marine", boltgun, [], powerArmor,
             [new SquadTemplateElement(marines.SoldierTemplates[MarineSoldierTemplateId], 1, 1,
-                defaultWeapons: boltgun, defaultArmor: powerArmor)],
+                defaultWeapons: boltgun, defaultArmor: powerArmor,
+                bvPerSoldier: marines.SquadTemplates[TacticalSquadTemplateId]
+                    .StrategicValuePerSoldierOf(marines.SoldierTemplates[MarineSoldierTemplateId]))],
             SquadTypes.None)
         { Faction = marines };
         SquadTemplate pdfTemplate = new(
             990_002, "Duel PDF", lasgun, [], lightArmor,
             [new SquadTemplateElement(imperial.SoldierTemplates[PdfSoldierTemplateId], (byte)pdfCount, (byte)pdfCount,
-                defaultWeapons: lasgun, defaultArmor: lightArmor)],
+                defaultWeapons: lasgun, defaultArmor: lightArmor,
+                bvPerSoldier: imperial.SquadTemplates[PdfInfantrySquadTemplateId]
+                    .StrategicValuePerSoldierOf(imperial.SoldierTemplates[PdfSoldierTemplateId]))],
             SquadTypes.None)
         { Faction = imperial };
 

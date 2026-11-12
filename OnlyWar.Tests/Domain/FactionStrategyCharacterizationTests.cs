@@ -119,16 +119,16 @@ public sealed class FactionStrategyCharacterizationTests
             TargetRegion = firstRegion,
             TargetFaction = firstTarget,
             Reward = 500,
-            DefenderBattleValue = 100,
-            EstimatedDefenderBattleValue = 100
+            DefenderStrategicValue = 100,
+            EstimatedDefenderStrategicValue = 100
         };
         PotentialOffensive second = new()
         {
             TargetRegion = secondRegion,
             TargetFaction = secondTarget,
             Reward = 500,
-            DefenderBattleValue = 100,
-            EstimatedDefenderBattleValue = 100
+            DefenderStrategicValue = 100,
+            EstimatedDefenderStrategicValue = 100
         };
 
         // Two identical targets score identically, which is what makes the ordering that consumes this
@@ -220,8 +220,8 @@ public sealed class FactionStrategyCharacterizationTests
 
         Assert.Same(regionFaction, state.RegionFaction);
         Assert.Equal(350, state.SpareTroops);
-        Assert.Equal(200, state.RequiredDefensiveBattleValue);
-        Assert.Equal(200, state.AssignedDefensiveBattleValue);
+        Assert.Equal(200, state.RequiredDefensiveStrategicValue);
+        Assert.Equal(200, state.AssignedDefensiveStrategicValue);
     }
 
     private static List<Order> BuildKnownInvasionPlan(double defendedLandingRatio)
@@ -282,7 +282,7 @@ public sealed class FactionStrategyCharacterizationTests
 
     private static SquadTemplate CreateLineSquadTemplate()
     {
-        SoldierTemplate trooper = new(
+        SoldierTemplate trooper = new TestSoldierTemplate(
             50,
             TestModelFactory.HumanSpecies,
             "Strategy Trooper",
@@ -299,13 +299,13 @@ public sealed class FactionStrategyCharacterizationTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(trooper, 5, 5)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(trooper, 5, 5)],
             SquadTypes.None);
     }
 
     private static SquadTemplate CreateScoutSquadTemplate()
     {
-        SoldierTemplate scout = new(
+        SoldierTemplate scout = new TestSoldierTemplate(
             51,
             TestModelFactory.HumanSpecies,
             "Strategy Scout",
@@ -316,7 +316,7 @@ public sealed class FactionStrategyCharacterizationTests
             [],
             null,
             2);
-        SoldierTemplate scoutLeader = new(
+        SoldierTemplate scoutLeader = new TestSoldierTemplate(
             52,
             TestModelFactory.HumanSpecies,
             "Strategy Scout Leader",
@@ -333,8 +333,8 @@ public sealed class FactionStrategyCharacterizationTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(scout, 4, 4),
-             new SquadTemplateElement(scoutLeader, 1, 1)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(scout, 4, 4),
+             OnlyWar.Tests.Fixtures.TestModelFactory.Element(scoutLeader, 1, 1)],
             SquadTypes.Scout);
     }
 

@@ -65,7 +65,7 @@ internal static class ForceAllocationConstants
     /// Defend absorbs the residue and beats doing nothing, and can never outbid real work. This is what
     /// lets Defend serve as the reserve sink, so there is no separate "hold in reserve" task.
     /// </summary>
-    internal const double DefenceEpsilonTailPerBattleValue = 1e-9;
+    internal const double DefenceEpsilonTailPerStrategicValue = 1e-9;
 
     /// <summary>
     /// Weight of the "a hopeless defence still buys time" term against the "hold the region" term.
@@ -175,7 +175,7 @@ internal static class ForceAllocationConstants
 
     // A MaxPatrolSquadsPerRegion sat here briefly on 2026-09-20, capping the patrol task's saturation
     // because a screen was the one defensive task that spent its award by instantiating soldiers. The
-    // screen is now abstract (RegionFaction.PatrolScreenBattleValue), so the cap was removed rather
+    // screen is now abstract (RegionFaction.PatrolScreenStrategicValue), so the cap was removed rather
     // than kept: it would have constrained balance to solve a problem that no longer exists. The
     // ceiling that matters now is StrategicCombatRules.MaxGeneratedSquads / MaxTacticalActors, which
     // bounds every force that actually reaches a battle.
@@ -369,16 +369,16 @@ internal static class ForceValueCurves
     /// The tail is LINEAR. It is not a second threshold: every point of it makes the mop-up more
     /// complete, and the overrun ratio is where that stops rather than where it starts.
     /// </remarks>
-    internal static double Assault(long battleValue, long carryPoint, long annihilationPoint)
+    internal static double Assault(long strategicValue, long carryPoint, long annihilationPoint)
     {
         if (carryPoint <= 0L) return 0.0;
         double carried = Threshold(
-            battleValue / (double)carryPoint, ForceAllocationConstants.AssaultKnee);
+            strategicValue / (double)carryPoint, ForceAllocationConstants.AssaultKnee);
         if (annihilationPoint <= carryPoint) return carried;
 
         double carryShare = 1.0 / ForceAllocationConstants.AnnihilationValueMultiple;
         double surplus = Math.Clamp(
-            (battleValue - carryPoint) / (double)(annihilationPoint - carryPoint), 0.0, 1.0);
+            (strategicValue - carryPoint) / (double)(annihilationPoint - carryPoint), 0.0, 1.0);
         return carried * carryShare + surplus * (1.0 - carryShare);
     }
 
@@ -530,9 +530,9 @@ internal sealed class ForceTask
 
     internal long Remaining => Math.Max(0L, Saturation - Assigned);
 
-    internal void Award(long battleValue, bool fromOutside)
+    internal void Award(long strategicValue, bool fromOutside)
     {
-        long amount = Math.Max(0L, battleValue);
+        long amount = Math.Max(0L, strategicValue);
         Assigned += amount;
         if (fromOutside) AssignedFromOutside += amount;
         // An exclusion is claimed by the task that becomes VIABLE, not by the one that took the first
@@ -546,9 +546,9 @@ internal sealed class ForceTask
     /// <summary>True when an alternative to this task has already taken the force.</summary>
     internal bool ExcludedByRival => Exclusion?.Winner != null && !ReferenceEquals(Exclusion.Winner, this);
 
-    internal double TotalValue(long battleValue)
+    internal double TotalValue(long strategicValue)
     {
-        if (battleValue <= 0L || Saturation <= 0L) return 0.0;
+        if (strategicValue <= 0L || Saturation <= 0L) return 0.0;
         // A task holding less than its viable award is worth NOTHING, because the committer will
         // refuse it. MinimumViableAward is a hard gate and the value curve did not know about it, so
         // the curve happily reported an assault at 1,387 of a 1,400 floor as worth about half its
@@ -560,22 +560,22 @@ internal sealed class ForceTask
         // best buy on the planet instead of an ordinary one. Grist Nine, 2026-09-18: 3,621 battle
         // value was drawn into tasks over three weeks and handed back by the refund pass, one of them
         // 13 points short, and all of it ended up garrisoning.
-        if (battleValue < MinimumViableAward) return 0.0;
-        long within = Math.Min(battleValue, Saturation);
+        if (strategicValue < MinimumViableAward) return 0.0;
+        long within = Math.Min(strategicValue, Saturation);
         double value = Importance * Shape(within);
         // Defend keeps a small positive slope above saturation so it can absorb battle value nothing
         // else wants. Every other task is flat there, and a flat task simply stops bidding.
-        if (Kind == ForceTaskKind.Defend && battleValue > Saturation)
+        if (Kind == ForceTaskKind.Defend && strategicValue > Saturation)
         {
-            value += (battleValue - Saturation)
-                * ForceAllocationConstants.DefenceEpsilonTailPerBattleValue;
+            value += (strategicValue - Saturation)
+                * ForceAllocationConstants.DefenceEpsilonTailPerStrategicValue;
         }
         return value;
     }
 
     /// <summary>Worth of adding this much battle value on top of what is already assigned.</summary>
-    internal double MarginalValue(long battleValue) =>
-        TotalValue(Assigned + battleValue) - TotalValue(Assigned);
+    internal double MarginalValue(long strategicValue) =>
+        TotalValue(Assigned + strategicValue) - TotalValue(Assigned);
 
     /// <summary>What a bid of this size is worth for RANKING, which is not always its margin.</summary>
     /// <remarks>
@@ -591,15 +591,15 @@ internal sealed class ForceTask
     /// Tasks with no real floor are unaffected: their MinimumViableAward is 1, so the first point is
     /// priced at Importance x Shape(1), which is what the margin would have been anyway.
     /// </remarks>
-    internal double BidValue(long battleValue)
+    internal double BidValue(long strategicValue)
     {
-        if (battleValue <= 0L) return 0.0;
-        if (!ShortOfViableAward) return MarginalValue(battleValue);
+        if (strategicValue <= 0L) return 0.0;
+        if (!ShortOfViableAward) return MarginalValue(strategicValue);
 
         // A bid that carries the task over its floor is worth the whole of what that unlocks, and
         // MarginalValue now says so on its own because TotalValue is zero below the floor.
         long toFloor = MinimumViableAward - Assigned;
-        if (battleValue >= toFloor) return MarginalValue(battleValue);
+        if (strategicValue >= toFloor) return MarginalValue(strategicValue);
 
         // A bid that does NOT reach the floor is worth nothing yet. Pricing it at nothing would mean
         // a task no single region can afford never starts at all - the defect this whole change set
@@ -609,7 +609,7 @@ internal sealed class ForceTask
         // concave, so priced marginally the first squad of a three-squad sweep would earn 58% of the
         // value for 33% of the cost, and a region would buy one squad every week and have it refunded
         // every week.
-        return TotalValue(MinimumViableAward) / MinimumViableAward * battleValue;
+        return TotalValue(MinimumViableAward) / MinimumViableAward * strategicValue;
     }
 
     /// <summary>
@@ -652,10 +652,10 @@ internal sealed class SharedThreatLedger
 {
     private readonly Dictionary<RegionFaction, long> _unanswered = new();
 
-    internal void Declare(RegionFaction threat, long battleValue)
+    internal void Declare(RegionFaction threat, long strategicValue)
     {
-        if (threat == null || battleValue <= 0L) return;
-        _unanswered[threat] = Math.Max(_unanswered.GetValueOrDefault(threat), battleValue);
+        if (threat == null || strategicValue <= 0L) return;
+        _unanswered[threat] = Math.Max(_unanswered.GetValueOrDefault(threat), strategicValue);
     }
 
     internal long Unanswered(IReadOnlyList<RegionFaction> threats) =>
@@ -665,10 +665,10 @@ internal sealed class SharedThreatLedger
     /// Books battle value against the threats a task answers, largest first. A garrison raised in one
     /// region reduces what its neighbour still needs against the same enemy.
     /// </summary>
-    internal void Answer(IReadOnlyList<RegionFaction> threats, long battleValue)
+    internal void Answer(IReadOnlyList<RegionFaction> threats, long strategicValue)
     {
-        if (threats == null || battleValue <= 0L) return;
-        long remaining = battleValue;
+        if (threats == null || strategicValue <= 0L) return;
+        long remaining = strategicValue;
         foreach (RegionFaction threat in threats
             .OrderByDescending(t => _unanswered.GetValueOrDefault(t)))
         {
@@ -689,4 +689,4 @@ internal sealed class TaskExclusionGroup
 }
 
 /// <summary>One award made by the auction: this much battle value, from this region, to this task.</summary>
-internal sealed record ForceTaskAward(ForceTask Task, RegionForceState Source, long BattleValue, int Hops);
+internal sealed record ForceTaskAward(ForceTask Task, RegionForceState Source, long StrategicValue, int Hops);

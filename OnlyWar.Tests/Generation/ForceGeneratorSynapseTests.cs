@@ -53,7 +53,7 @@ public class ForceGeneratorSynapseTests
         List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = budget,
+            TargetStrategicValue = budget,
             Profile = ForceCompositionProfile.AssaultForce
         });
 
@@ -79,7 +79,7 @@ public class ForceGeneratorSynapseTests
         List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = budget,
+            TargetStrategicValue = budget,
             Profile = ForceCompositionProfile.AssaultForce
         });
 
@@ -100,7 +100,7 @@ public class ForceGeneratorSynapseTests
         int smallCount = SynapseSquadCount(GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = 300,
+            TargetStrategicValue = 300,
             Profile = ForceCompositionProfile.AssaultForce
         }));
 
@@ -108,7 +108,7 @@ public class ForceGeneratorSynapseTests
         int largeCount = SynapseSquadCount(GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = 3000,
+            TargetStrategicValue = 3000,
             Profile = ForceCompositionProfile.AssaultForce
         }));
 
@@ -134,13 +134,13 @@ public class ForceGeneratorSynapseTests
         List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = 4500,
+            TargetStrategicValue = 4500,
             Profile = ForceCompositionProfile.AssaultForce
         });
 
         long coverageNeedingBv = generated
             .Where(s => !s.SquadTemplate.ProvidesSynapse && s.SquadTemplate.SquadEgo < MoraleConstants.RearGuardEgoThreshold)
-            .Sum(s => (long)s.SquadTemplate.BattleValue);
+            .Sum(s => (long)s.SquadTemplate.StrategicValue);
         int synapseSquads = SynapseSquadCount(generated);
         int minimumOwed = (int)(coverageNeedingBv / MoraleConstants.SynapseRatioBV);
 
@@ -163,12 +163,12 @@ public class ForceGeneratorSynapseTests
         List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = 20,
+            TargetStrategicValue = 20,
             Profile = ForceCompositionProfile.AssaultForce
         });
 
         Assert.Contains(generated, s => s.SquadTemplate.ProvidesSynapse);
-        long totalBv = generated.Sum(s => (long)s.SquadTemplate.BattleValue);
+        long totalBv = generated.Sum(s => (long)s.SquadTemplate.StrategicValue);
         Assert.True(totalBv > 20, $"expected the floor to push the force above budget, got {totalBv}");
     }
 
@@ -188,7 +188,7 @@ public class ForceGeneratorSynapseTests
         List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = 300,
+            TargetStrategicValue = 300,
             Profile = ForceCompositionProfile.AssaultForce
         });
 
@@ -207,13 +207,13 @@ public class ForceGeneratorSynapseTests
         List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = 400,
+            TargetStrategicValue = 400,
             Profile = ForceCompositionProfile.AssaultForce
         });
 
         Assert.NotEmpty(generated);
         Assert.All(generated, s => Assert.False(s.SquadTemplate.ProvidesSynapse));
-        Assert.Equal(400, generated.Sum(s => (long)s.SquadTemplate.BattleValue));
+        Assert.Equal(400, generated.Sum(s => (long)s.SquadTemplate.StrategicValue));
     }
 
     private static int SynapseSquadCount(IEnumerable<Squad> squads) =>
@@ -244,19 +244,19 @@ public class ForceGeneratorSynapseTests
         SquadTypes squadTypes,
         Species species,
         byte maxSoldiers,
-        int battleValue,
+        int strategicValue,
         byte minSoldiers = 0)
     {
-        SoldierTemplate trooper = new(
+        SoldierTemplate trooper = new TestSoldierTemplate(
             id, species, name + " Trooper",
-            1, 1, false, 0, [], null, battleValue / maxSoldiers);
+            1, 1, false, 0, [], null, strategicValue / maxSoldiers);
         return new SquadTemplate(
             id,
             name,
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(trooper, minSoldiers, maxSoldiers)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(trooper, minSoldiers, maxSoldiers)],
             squadTypes);
     }
 

@@ -20,12 +20,12 @@ public class RemovalRateTableTests
 {
     private static BattleSquad CreateSquad(
         string name,
-        params (int SoldierId, int BattleValue)[] members)
+        params (int SoldierId, int StrategicValue)[] members)
     {
         List<Soldier> soldiers = members
             .Select(member =>
             {
-                SoldierTemplate template = new(
+                SoldierTemplate template = new TestSoldierTemplate(
                     70_000 + member.SoldierId,
                     TestModelFactory.HumanSpecies,
                     $"{name} {member.SoldierId} Template",
@@ -34,7 +34,7 @@ public class RemovalRateTableTests
                     false,
                     0,
                     Array.Empty<ValueTuple<BaseSkill, float>>(),
-                    battleValue: member.BattleValue);
+                    strategicValue: member.StrategicValue);
                 Soldier soldier = TestModelFactory.CreateSoldier(
                     template, $"{name} {member.SoldierId}");
                 soldier.Id = member.SoldierId;
@@ -214,8 +214,17 @@ public class RemovalRateTableTests
             "the degrading weapon should be able to take this target out at point blank");
     }
 
+    /// <summary>
+    /// The term's removal fraction per hit comes from RemovalFractionTable: exact at its 50-yard
+    /// nodes and interpolated between them (Design/Active/CoarseForecastTables.md, step 1). The
+    /// to-hit side is still exact at every range. Since 2026-11-11 the shot evaluator itself reads
+    /// removal tables of its own on 10-yard nodes (RemovalFractionTable.ShotNodeSpacing), so its take-out
+    /// chance is interpolated while the term's TakeOutProbabilityAt stays exact. Between nodes the
+    /// two are held to 2% plus 0.001: in the tail at 125 yards take-out is 0.0182 against 0.0176
+    /// exact, 3% of a 2% chance.
+    /// </summary>
     [Fact]
-    public void PairRemovalTerm_TracksDirectEvaluationForDegradingWeapon()
+    public void PairRemovalTerm_MatchesDirectEvaluationAtNodesAndClosely_Between()
     {
         BattleSquad shooters = CreateSquad("Shooter", (80_130, 10));
         BattleSquad enemies = CreateSquad("Enemy", (80_230, 10));
@@ -232,7 +241,7 @@ public class RemovalRateTableTests
         SquadPairRemovalRate rate = planner.GetPairRemovalRates(shooters)[enemies.Id];
         PairRemovalTerm term = Assert.Single(rate.Terms);
 
-        foreach (float range in new[] { 5f, 30f, 80f, 150f })
+        foreach (float range in new[] { 0f, 50f, 100f, 150f })
         {
             RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
                 shooter, target, rifle, range, 0f, term.ReferenceTargetSpeed);
@@ -240,6 +249,20 @@ public class RemovalRateTableTests
                 direct.TakeOutProbabilityOnHit, term.TakeOutProbabilityAt(range), 6);
             Assert.Equal(
                 direct.ExpectedEnemyBattleValueRemoved, term.RemovalAt(range), 5);
+        }
+        foreach (float range in new[] { 5f, 30f, 80f, 125f })
+        {
+            RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
+                shooter, target, rifle, range, 0f, term.ReferenceTargetSpeed);
+            float exactTakeOut = term.TakeOutProbabilityAt(range);
+            Assert.True(
+                System.Math.Abs(direct.TakeOutProbabilityOnHit - exactTakeOut) <= 0.02f * exactTakeOut + 0.001f,
+                $"take-out between nodes at {range} yd: {direct.TakeOutProbabilityOnHit} against {exactTakeOut} exact");
+            float expected = direct.ExpectedEnemyBattleValueRemoved;
+            float actual = term.RemovalAt(range);
+            Assert.True(
+                System.Math.Abs(actual - expected) <= 0.02f * expected + 1e-6f,
+                $"between nodes at {range} yd: {actual} against {expected} direct");
         }
     }
 
@@ -267,7 +290,10 @@ public class RemovalRateTableTests
 
         SquadPairRemovalRate rate = planner.GetPairRemovalRates(shooters)[enemies.Id];
 
-        Assert.Equal(shooters.Soldiers.Count, rate.Terms.Count);
+        // Interchangeable shooters share one term (PairRemovalRateTable.GroupShooters); the
+        // terms still stand for every soldier.
+        Assert.Equal(shooters.Soldiers.Count, rate.ShooterCount);
+        Assert.Equal(shooters.Soldiers.Count, rate.Terms.Sum(term => term.Count));
         Assert.Equal(shooters.Id, rate.ShooterSquadId);
         Assert.Equal(enemies.Id, rate.TargetSquadId);
         Assert.Equal(rate.ReferenceRate, rate.RateAtRange(rate.ReferencePairRange), 5);

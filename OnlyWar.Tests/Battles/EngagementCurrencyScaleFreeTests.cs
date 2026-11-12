@@ -18,7 +18,8 @@ namespace OnlyWar.Tests.Battles;
 /// <summary>
 /// The engagement option a squad chooses must not depend on the SCALE of battle value: multiplying
 /// every soldier on both sides by the same factor changes no decision. Battle value is one
-/// currency across factions (battle value parity, EngagementCurrency, 2026-10-12), so the RATIO
+/// currency across factions (battle value parity, 2026-10-12; tactical value since 2026-11-01,
+/// which these coordinator-free fixtures replace with the strategic value), so the RATIO
 /// between the sides does decide -- a cheap force trades with an elite one at the calibrated
 /// rate -- but its unit must not.
 ///
@@ -28,7 +29,7 @@ namespace OnlyWar.Tests.Battles;
 /// still stand on headcount shares.</para>
 ///
 /// <para>Each frame is a real squad pair from the rules database, planned once at the database's
-/// values and again with both sides' soldier templates at ten times their battle value. These
+/// values and again with both sides' squad elements at ten times their battle value. These
 /// fixtures load rules without a sector, so a soldier's effective battle value is exactly its
 /// template's and the rescale is exact.</para>
 /// </summary>
@@ -158,41 +159,47 @@ public class EngagementCurrencyScaleFreeTests
         int battleValueScale)
     {
         SquadTemplate template = faction.SquadTemplates[squadTemplateId];
-        Squad squad = SquadFactory.GenerateSquad(template, new StaticRNG(), entityIds, template.Name);
-        BattleSquad battleSquad = new(false, squad);
         if (battleValueScale != 1)
         {
-            // After BattleSquad has issued the template's weapons, so the rescale touches nothing
-            // but battle value. Fresh template objects, so the shared rules blob is not mutated.
-            Dictionary<int, SoldierTemplate> rescaled = [];
-            foreach (Soldier soldier in squad.Members.Cast<Soldier>())
-            {
-                if (!rescaled.TryGetValue(soldier.Template.Id, out SoldierTemplate scaled))
-                {
-                    scaled = Rescale(soldier.Template, battleValueScale);
-                    rescaled[soldier.Template.Id] = scaled;
-                }
-                soldier.Template = scaled;
-            }
+            // A fresh squad template whose elements differ only in StrategicValuePerSoldier, so the shared
+            // rules blob is not mutated and the squad's soldiers and weapons (same StaticRNG) are
+            // the ones the unscaled run builds.
+            template = Rescale(template, battleValueScale);
         }
-        return battleSquad;
+        Squad squad = SquadFactory.GenerateSquad(template, new StaticRNG(), entityIds, template.Name);
+        return new BattleSquad(false, squad);
     }
 
-    private static SoldierTemplate Rescale(SoldierTemplate template, int scale) => new(
-        template.Id,
-        template.Species,
-        template.Name,
-        template.Rank,
-        template.Subrank,
-        template.IsSquadLeader,
-        template.SpecialistType,
-        template.MosTraining,
-        template.WorkExperienceTrainingProfile,
-        template.BattleValue * scale,
-        template.PromotionRequirements,
-        template.HasAuthoredMeleeFraction ? template.MeleeFraction : null,
-        template.WeaponOptionsByGroup,
-        template.EquipmentKitOptionsByGroup);
+    private static SquadTemplate Rescale(SquadTemplate template, int scale)
+    {
+        List<SquadTemplateElement> elements = template.Elements
+            .Select(element => new SquadTemplateElement(
+                element.SoldierTemplate,
+                element.MinimumNumber,
+                element.MaximumNumber,
+                element.Id,
+                element.DefaultWeapons,
+                element.Quotas,
+                element.RollsStrength,
+                element.PersonalEquipmentRole,
+                element.DefaultArmor,
+                element.StrategicValuePerSoldier * scale))
+            .ToList();
+        return new SquadTemplate(
+            template.Id,
+            template.Name,
+            template.DefaultWeapons,
+            template.WeaponOptions?.ToList(),
+            template.Armor,
+            elements,
+            template.SquadType,
+            template.MobilityPolicy)
+        {
+            Faction = template.Faction,
+            BodyguardSquadTemplate = template.BodyguardSquadTemplate,
+            LeaderWorkExperienceProfile = template.LeaderWorkExperienceProfile
+        };
+    }
 
     /// <summary>A two-deep line abreast, so the squads face each other across the x axis.</summary>
     private static void PlaceLine(BattleGridManager grid, BattleSquad squad, bool side, int x)

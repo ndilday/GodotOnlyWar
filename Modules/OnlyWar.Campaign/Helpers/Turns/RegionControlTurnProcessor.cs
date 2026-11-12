@@ -84,7 +84,7 @@ namespace OnlyWar.Campaign.Turns
                 if (FactionRelationshipService.IsImperial(faction))
                 {
                     loyal += regionFaction.MilitaryStrength;
-                    loyal += SquadBattleValue(regionFaction.LandedSquads);
+                    loyal += SquadStrategicValue(regionFaction.LandedSquads);
                 }
                 else
                 {
@@ -306,10 +306,10 @@ namespace OnlyWar.Campaign.Turns
             return planet.PlanetFactionMap.Values.FirstOrDefault(pf => pf.Faction.IsDefaultFaction);
         }
 
-        private static long SquadBattleValue(IEnumerable<Squad> squads)
+        private static long SquadStrategicValue(IEnumerable<Squad> squads)
         {
             return squads.SelectMany(squad => squad.Members)
-                .Sum(member => (long)member.Template.BattleValue);
+                .Sum(member => (long)member.StrategicValue);
         }
 
         private static string DescribeRegionFaction(RegionFaction regionFaction)

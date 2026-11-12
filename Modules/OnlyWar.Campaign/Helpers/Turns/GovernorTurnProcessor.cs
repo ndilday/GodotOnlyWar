@@ -352,7 +352,7 @@ namespace OnlyWar.Campaign.Turns
             int packageCount = hostileStrength <= 0
                 ? 1
                 : (int)Math.Clamp(
-                    (hostileStrength + reference.BattleValue - 1) / reference.BattleValue,
+                    (hostileStrength + reference.StrategicValue - 1) / reference.StrategicValue,
                     1,
                     5);
             return new ForceCommitmentPackage(
@@ -362,7 +362,7 @@ namespace OnlyWar.Campaign.Turns
                 packageCount,
                 rules.DefaultServiceWeeks,
                 deadlineWeeks,
-                reference.BattleValue,
+                reference.StrategicValue,
                 ["Astartes"],
                 maximumEffectivePackageCount: Math.Min(10, packageCount * 2));
         }

@@ -166,6 +166,121 @@ public class HardnessDiagnostics
     }
 
     /// <summary>
+    /// Opt-in (RUN_HARDNESS_FIT, 2026-10-26): the calibration of RemovalMath's softening across
+    /// ranges. The q sweep above ran at one range; at 250 yards a PDF autogun against a Tyranid
+    /// Warrior was credited 515 hits per take-out against the engine's 963, where hits are weak.
+    /// For every ranged attack of every entry against every entry at each of HARDNESS_RANGES
+    /// (default "30|60|120|250|450"; melee once, at no range), the engine's mean hits to disable
+    /// against the planner's 1 / (take-out + s x softening) over a grid of the combining exponent q
+    /// and the softening scale s (s = 1 is the planner as it is). Reports the rms and worst factor
+    /// per (q, s) overall and per range, and the cells of the current and the best setting. Same
+    /// HARDNESS_ENTRIES, HARDNESS_TRIALS, HARDNESS_CAP; output HARDNESS_OUT (default
+    /// %TEMP%\GodotOnlyWar\hardness-fit.txt).
+    /// </summary>
+    [Fact]
+    public void Hardness_FitsSofteningAcrossRanges()
+    {
+        string entriesText = Environment.GetEnvironmentVariable("HARDNESS_ENTRIES");
+        if (Environment.GetEnvironmentVariable("RUN_HARDNESS_FIT") == null || string.IsNullOrWhiteSpace(entriesText))
+        {
+            return;
+        }
+
+        int trials = SquadDuelDiagnostics.ReadInt("HARDNESS_TRIALS", 60);
+        int cap = SquadDuelDiagnostics.ReadInt("HARDNESS_CAP", 20_000);
+        int[] ranges = (Environment.GetEnvironmentVariable("HARDNESS_RANGES") ?? "30|60|120|250|450")
+            .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(text => int.Parse(text, CultureInfo.InvariantCulture))
+            .ToArray();
+        string output = Environment.GetEnvironmentVariable("HARDNESS_OUT")
+            ?? Path.Combine(Path.GetTempPath(), "GodotOnlyWar", "hardness-fit.txt");
+        List<(string Key, string Spec)> entries = entriesText
+            .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(text => text.Split('=', 2))
+            .Select(parts => (parts[0].Trim(), parts[1].Trim()))
+            .ToList();
+        GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
+        Dictionary<string, List<Attack>> attacks = entries.ToDictionary(e => e.Key, e => AttacksOf(blob, e.Spec));
+        float[] exponents = [1f, 2f, 4f];
+        float[] scales = [0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.75f, 1f];
+
+        // Each cell: label, range (0 for melee), measured, and per (q, s) the model's hits.
+        List<(string Label, int Range, double Measured, double[,] Model)> cells = [];
+        foreach ((string attackerKey, _) in entries)
+        {
+            foreach (Attack attack in attacks[attackerKey])
+            {
+                int[] cellRanges = attack.Ranged != null ? ranges : [0];
+                foreach (int range in cellRanges)
+                {
+                    foreach ((string targetKey, string targetSpec) in entries)
+                    {
+                        double measured = MeanHitsToDisable(blob, targetSpec, attack, range, trials, cap);
+                        if (measured >= cap)
+                        {
+                            continue;
+                        }
+                        double[,] model = ModelGrid(blob, targetSpec, attack, range, exponents, scales, trials);
+                        cells.Add(($"{attackerKey} {attack.Weapon} vs {targetKey}", range, measured, model));
+                    }
+                }
+            }
+        }
+
+        StringBuilder report = new();
+        report.AppendLine($"Softening fit: planner hits to disable 1 / (take-out + s x softening) against the engine's, "
+            + $"{cells.Count} cells, ranges {string.Join("/", ranges)} yd (melee at 0), {trials} targets a cell, cap {cap}.");
+        report.AppendLine("  rms factor (worst factor) per q and s; 'bias' = geometric mean of model / measured (under 1: the planner thinks targets die faster).");
+        (double Rms, double Worst, double Bias) Score(IEnumerable<(string Label, int Range, double Measured, double[,] Model)> set, int qi, int si)
+        {
+            List<double> logs = set.Select(cell => Math.Log(cell.Model[qi, si] / cell.Measured)).ToList();
+            if (logs.Count == 0)
+            {
+                return (double.NaN, double.NaN, double.NaN);
+            }
+            return (Math.Exp(Math.Sqrt(logs.Average(value => value * value))),
+                Math.Exp(logs.Max(Math.Abs)),
+                Math.Exp(logs.Average()));
+        }
+        int[] groups = [-1, 0, .. ranges];
+        foreach (int group in groups)
+        {
+            List<(string Label, int Range, double Measured, double[,] Model)> set = group < 0
+                ? cells
+                : cells.Where(cell => cell.Range == group).ToList();
+            report.AppendLine();
+            report.AppendLine(group < 0 ? $"ALL ({set.Count} cells)" : group == 0 ? $"MELEE ({set.Count})" : $"{group} yd ({set.Count})");
+            report.AppendLine("     q \\ s " + string.Join("", scales.Select(s => s.ToString("0.00", CultureInfo.InvariantCulture).PadLeft(20))));
+            for (int qi = 0; qi < exponents.Length; qi++)
+            {
+                StringBuilder line = new($"  {exponents[qi],8:0}");
+                for (int si = 0; si < scales.Length; si++)
+                {
+                    (double rms, double worst, double bias) = Score(set, qi, si);
+                    line.Append($"  {rms,5:F2} ({worst,5:F2}) b{bias,4:F2}");
+                }
+                report.AppendLine(line.ToString());
+            }
+        }
+
+        // Cells, measured against the current setting (q = 2, s = 1) and the best overall.
+        (int bestQ, int bestS) = Enumerable.Range(0, exponents.Length)
+            .SelectMany(qi => Enumerable.Range(0, scales.Length).Select(si => (qi, si)))
+            .MinBy(pair => Score(cells, pair.qi, pair.si).Rms);
+        int currentQ = Array.IndexOf(exponents, 2f);
+        int currentS = Array.IndexOf(scales, 1f);
+        report.AppendLine();
+        report.AppendLine($"Cells: measured | now (q=2, s=1) | best (q={exponents[bestQ]}, s={scales[bestS]}) | take-out only (s=0, q=2)");
+        foreach ((string label, int range, double measured, double[,] model) in cells.OrderBy(cell => cell.Range).ThenBy(cell => cell.Label))
+        {
+            report.AppendLine($"  {range,4} {label,-48} {measured,10:F1} | {model[currentQ, currentS],10:F1} | {model[bestQ, bestS],10:F1} | {model[currentQ, 0],10:F1}");
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output)));
+        File.WriteAllText(output, report.ToString());
+    }
+
+    /// <summary>
     /// HARDNESS_EXPLAIN="attackerKey:Weapon Name:targetKey": for that one cell, why each simulated
     /// target left the fight (which vital crippled, no functioning hand, cannot move, severed
     /// limb) and the planner's per-location fill rate -- the comparison that shows which route
@@ -289,6 +404,45 @@ public class HardnessDiagnostics
             total += perHit > 0 ? 1.0 / perHit : 1e9;
         }
         return total / trials;
+    }
+
+    // ModelHitsToDisable over a grid of exponents and softening scales, building each target once.
+    private static double[,] ModelGrid(
+        GameRulesBlob blob, string targetSpec, Attack attack, int range, float[] exponents, float[] scales, int trials)
+    {
+        WeaponTemplate weapon = (WeaponTemplate)attack.Ranged ?? attack.Melee;
+        float damageCoefficient = attack.Ranged != null
+            ? BattleModifiersUtil.CalculateDamageAtRange(attack.Ranged, range)
+            : attack.Strength * attack.Melee.StrengthMultiplier;
+        double[,] total = new double[exponents.Length, scales.Length];
+        for (int trial = 0; trial < trials; trial++)
+        {
+            BattleSoldier target = SquadDuelDiagnostics.BuildSquads(
+                    blob, SquadDuelDiagnostics.ParseSide(targetSpec),
+                    new OnlyWar.Runtime.Allocators.TacticalEntityIdAllocator(), "T", new SeededRNG(90_000 + trial))
+                .SelectMany(s => s.Soldiers)
+                .OrderBy(s => s.Soldier.Template.IsSquadLeader)
+                .First();
+            IReadOnlyList<TakeOutLocationTerm> terms = RemovalMath.BuildTakeOutLocationTerms(
+                target, target.Armor?.Template.ArmorProvided ?? 0, weapon.ArmorMultiplier, weapon.WoundMultiplier);
+            for (int qi = 0; qi < exponents.Length; qi++)
+            {
+                (float takeOut, float progress) = RemovalMath.EvaluateRemovalTerms(terms, damageCoefficient, exponents[qi]);
+                for (int si = 0; si < scales.Length; si++)
+                {
+                    float perHit = Math.Clamp(takeOut + (scales[si] * progress), 0f, 1f);
+                    total[qi, si] += perHit > 0 ? 1.0 / perHit : 1e9;
+                }
+            }
+        }
+        for (int qi = 0; qi < exponents.Length; qi++)
+        {
+            for (int si = 0; si < scales.Length; si++)
+            {
+                total[qi, si] /= trials;
+            }
+        }
+        return total;
     }
 
     /// <summary>

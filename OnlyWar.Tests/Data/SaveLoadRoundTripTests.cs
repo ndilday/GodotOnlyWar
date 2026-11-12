@@ -142,7 +142,7 @@ public class SaveLoadRoundTripTests
             1,
             4,
             6,
-            _data.ChapterDoctrine.ScoutSquad.BattleValue,
+            _data.ChapterDoctrine.ScoutSquad.StrategicValue,
             ["Scout", "Covert"]);
         PresenceRequest savedRequest = new(
             requestId,
@@ -153,7 +153,7 @@ public class SaveLoadRoundTripTests
             new Date(39, 500, 7),
             savedCommitment,
             offeredRequisition: 145,
-            progressBattleValueTime: savedCommitment.ReferenceBattleValuePerPackage,
+            progressStrategicValueTime: savedCommitment.ReferenceStrategicValuePerPackage,
             status: RequestStatus.InProgress);
         sector.PlayerForce.Requests.Add(savedRequest);
 
@@ -414,8 +414,8 @@ public class SaveLoadRoundTripTests
             Assert.Equal(RequestStatus.InProgress, loadedRequest.Status);
             Assert.Equal("Reconnaissance investigation", loadedRequest.Commitment.DisplayName);
             Assert.Equal(new[] { "Scout", "Covert" }, loadedRequest.Commitment.QualificationTags);
-            Assert.Equal(savedCommitment.ReferenceBattleValuePerPackage,
-                loadedRequest.ProgressBattleValueTime);
+            Assert.Equal(savedCommitment.ReferenceStrategicValuePerPackage,
+                loadedRequest.ProgressStrategicValueTime);
             Assert.Equal(145, loadedRequest.OfferedRequisition);
             Assert.Equal(new Date(39, 500, 7).GetTotalWeeks(), loadedRequest.DeadlineWeeks);
             Assert.Equal(2, loaded.Pledges.Count);

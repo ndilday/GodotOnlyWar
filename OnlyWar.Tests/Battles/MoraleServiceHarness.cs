@@ -152,10 +152,10 @@ internal sealed class MoraleServiceHarness
         SoldierTemplate troopTemplate = null)
     {
         troopTemplate ??= TestModelFactory.MarineTemplate;
-        List<SquadTemplateElement> elements = [new(troopTemplate, 0, (byte)troops)];
+        List<SquadTemplateElement> elements = [TestModelFactory.Element(troopTemplate, 0, (byte)troops)];
         if (withLeader)
         {
-            elements.Insert(0, new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1));
+            elements.Insert(0, TestModelFactory.Element(TestModelFactory.SergeantTemplate, 0, 1));
         }
         SquadTemplate template = new(
             templateId,

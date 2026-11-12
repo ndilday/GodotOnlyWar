@@ -21,8 +21,8 @@ namespace OnlyWar.Domain.FactionBehaviors
         public double MobilizationMinimum { get; }
         public double MobilizationMaximum { get; }
         public double DefendedLandingRatio { get; }
-        public long UndefendedLandingBattleValue { get; }
-        public long SuccessorGenerationMinimumBattleValue { get; }
+        public long UndefendedLandingStrategicValue { get; }
+        public long SuccessorGenerationMinimumStrategicValue { get; }
         public double SuccessorMergeLeaderLoss { get; }
         public double TravelMultiplier { get; }
         public double GhostLogisticGrowthRate { get; }
@@ -55,8 +55,8 @@ namespace OnlyWar.Domain.FactionBehaviors
             double mobilizationMinimum,
             double mobilizationMaximum,
             double defendedLandingRatio,
-            long undefendedLandingBattleValue,
-            long successorGenerationMinimumBattleValue,
+            long undefendedLandingStrategicValue,
+            long successorGenerationMinimumStrategicValue,
             double successorMergeLeaderLoss,
             double travelMultiplier,
             double ghostLogisticGrowthRate,
@@ -88,8 +88,8 @@ namespace OnlyWar.Domain.FactionBehaviors
             MobilizationMinimum = mobilizationMinimum;
             MobilizationMaximum = mobilizationMaximum;
             DefendedLandingRatio = defendedLandingRatio;
-            UndefendedLandingBattleValue = undefendedLandingBattleValue;
-            SuccessorGenerationMinimumBattleValue = successorGenerationMinimumBattleValue;
+            UndefendedLandingStrategicValue = undefendedLandingStrategicValue;
+            SuccessorGenerationMinimumStrategicValue = successorGenerationMinimumStrategicValue;
             SuccessorMergeLeaderLoss = successorMergeLeaderLoss;
             TravelMultiplier = travelMultiplier;
             GhostLogisticGrowthRate = ghostLogisticGrowthRate;
@@ -149,8 +149,8 @@ namespace OnlyWar.Domain.FactionBehaviors
                 || MobilizationSigma < 0
                 || MobilizationMinimum < 0 || MobilizationMaximum > 1
                 || MobilizationMinimum > MobilizationMaximum
-                || DefendedLandingRatio <= 0 || UndefendedLandingBattleValue < 0
-                || SuccessorGenerationMinimumBattleValue < 0 || SuccessorMergeLeaderLoss < 0
+                || DefendedLandingRatio <= 0 || UndefendedLandingStrategicValue < 0
+                || SuccessorGenerationMinimumStrategicValue < 0 || SuccessorMergeLeaderLoss < 0
                 || SuccessorMergeLeaderLoss >= 1 || TravelMultiplier <= 0
                 || GhostLogisticGrowthRate < 0 || OccupiedCivilianDeclineRate < 0
                 || ExceptionalAssassinationMargin <= 0

@@ -83,6 +83,8 @@ namespace OnlyWar.Domain.Soldiers
             set { _assignedSquad = value; }
         }
 
+        public int StrategicValue => _assignedSquad?.SquadTemplate?.StrategicValuePerSoldierOf(Template) ?? 0;
+
         public bool CanFight
         {
             get

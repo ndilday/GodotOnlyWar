@@ -80,7 +80,7 @@ namespace OnlyWar.Operations.Missions.Assassinate
                 var request = new ForceGenerationRequest
                 {
                     Faction = context.Order.Mission.RegionFaction.PlanetFaction.Faction,
-                    TargetBattleValue = (int)margin,
+                    TargetStrategicValue = (int)margin,
                     Profile = ForceCompositionProfile.SpecialHQTarget,
                     Tier = context.Order.Mission.MissionSize
                 };

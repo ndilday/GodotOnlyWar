@@ -15,7 +15,7 @@ namespace OnlyWar.Domain.Planets
         private long _garrison;
         private long _armedCivilians;
         private long? _organizedMilitaryStrength;
-        private long _patrolScreenBattleValue;
+        private long _patrolScreenStrategicValue;
         private int _legacyOrganization = 100;
         private float _contentment = 70f;
 
@@ -114,7 +114,7 @@ namespace OnlyWar.Domain.Planets
 
         // The battle value this faction's controller actually COMMITTED to holding this region in its
         // last planning pass — the assignment, as opposed to the demand.
-        // FactionThreatAssessment.CalculateRequiredDefensiveBattleValue answers "how much defence
+        // FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue answers "how much defence
         // does this ground want, given what is massing next door", and is deliberately unbounded: it
         // is a want, and the planner needs the raw want to compute a shortfall it can reinforce
         // against. What it is NOT is a promise that the troops exist. The planner clamps it to
@@ -130,7 +130,7 @@ namespace OnlyWar.Domain.Planets
         // That is deliberately distinguishable from a planned assignment of zero: readers fall back to
         // deriving the clamp themselves rather than treating an unplanned region as undefended, which
         // would hand an attacker free ground.
-        public long? AssignedDefensiveBattleValue { get; set; }
+        public long? AssignedDefensiveStrategicValue { get; set; }
 
         // The battle value this faction is holding out as a standing screen over this region: troops
         // sweeping their own ground rather than standing on a position. Patrol is to Recon what Defend
@@ -153,10 +153,10 @@ namespace OnlyWar.Domain.Planets
         // Materialised at two points, both of which already bound what they raise: DetectedMissionStep
         // generates interceptors to the requirement it computes, and PrepareAssaultMissionStep.
         // AssembleDefendingForce raises the screen into the defence if it saw the attack coming.
-        public long PatrolScreenBattleValue
+        public long PatrolScreenStrategicValue
         {
-            get => System.Math.Min(_patrolScreenBattleValue, OrganizedMilitaryStrength);
-            set => _patrolScreenBattleValue = value < 0 ? 0 : value;
+            get => System.Math.Min(_patrolScreenStrategicValue, OrganizedMilitaryStrength);
+            set => _patrolScreenStrategicValue = value < 0 ? 0 : value;
         }
 
         /// <summary>
@@ -247,17 +247,17 @@ namespace OnlyWar.Domain.Planets
         // this faction's army: Population for a population-is-military horde (Tyranids, cults),
         // Garrison for a faction with a separate civilian base (the Imperium, Tau) — PRD §4.24.
         // Amounts are battle value: forces are raised, lost, and returned in the same currency.
-        public void AddMilitaryStrength(long battleValue)
+        public void AddMilitaryStrength(long strategicValue)
         {
-            if (battleValue <= 0) return;
+            if (strategicValue <= 0) return;
             EnsureOrganizedMilitaryStrength();
             if (PlanetFaction.Faction.GrowthType == GrowthType.Unrest)
             {
-                Population += battleValue;
-                ArmedCivilians += battleValue;
+                Population += strategicValue;
+                ArmedCivilians += strategicValue;
             }
-            else if (PlanetFaction.Faction.HasBehavior(FactionBehavior.PopulationIsMilitary)) Population += battleValue;
-            else Garrison += battleValue;
+            else if (PlanetFaction.Faction.HasBehavior(FactionBehavior.PopulationIsMilitary)) Population += strategicValue;
+            else Garrison += strategicValue;
 
             // The military-pool property setters add newly raised strength to the organized pool.
         }
@@ -305,11 +305,11 @@ namespace OnlyWar.Domain.Planets
             AntiAir *= 0.5;
         }
 
-        public void RemoveMilitaryStrength(long battleValue)
+        public void RemoveMilitaryStrength(long strategicValue)
         {
-            if (battleValue <= 0) return;
+            if (strategicValue <= 0) return;
             EnsureOrganizedMilitaryStrength();
-            long lost = System.Math.Min(MilitaryStrength, battleValue);
+            long lost = System.Math.Min(MilitaryStrength, strategicValue);
             long organizedAfter = System.Math.Max(0L, OrganizedMilitaryStrength - lost);
             RemoveRawMilitaryStrength(lost);
             _organizedMilitaryStrength = System.Math.Min(MilitaryStrength, organizedAfter);
@@ -317,11 +317,11 @@ namespace OnlyWar.Domain.Planets
 
         // Normal military casualties come from the force that actually deployed. They reduce both
         // total strength and organized strength, leaving the disorganized reserve untouched.
-        public long RemoveOrganizedMilitaryStrength(long battleValue)
+        public long RemoveOrganizedMilitaryStrength(long strategicValue)
         {
-            if (battleValue <= 0) return 0;
+            if (strategicValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long lost = System.Math.Min(OrganizedMilitaryStrength, battleValue);
+            long lost = System.Math.Min(OrganizedMilitaryStrength, strategicValue);
             if (lost <= 0) return 0;
             long organizedAfter = OrganizedMilitaryStrength - lost;
             RemoveRawMilitaryStrength(lost);
@@ -330,11 +330,11 @@ namespace OnlyWar.Domain.Planets
         }
 
         // Used when an undefended assault overruns troops that still exist but cannot form a defence.
-        public long RemoveDisorganizedMilitaryStrength(long battleValue)
+        public long RemoveDisorganizedMilitaryStrength(long strategicValue)
         {
-            if (battleValue <= 0) return 0;
+            if (strategicValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long lost = System.Math.Min(DisorganizedMilitaryStrength, battleValue);
+            long lost = System.Math.Min(DisorganizedMilitaryStrength, strategicValue);
             if (lost <= 0) return 0;
             long organizedBefore = OrganizedMilitaryStrength;
             RemoveRawMilitaryStrength(lost);
@@ -342,29 +342,29 @@ namespace OnlyWar.Domain.Planets
             return lost;
         }
 
-        public long ReorganizeMilitaryStrength(long battleValue)
+        public long ReorganizeMilitaryStrength(long strategicValue)
         {
-            if (battleValue <= 0) return 0;
+            if (strategicValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long moved = System.Math.Min(DisorganizedMilitaryStrength, battleValue);
+            long moved = System.Math.Min(DisorganizedMilitaryStrength, strategicValue);
             _organizedMilitaryStrength += moved;
             return moved;
         }
 
-        public long DisorganizeMilitaryStrength(long battleValue)
+        public long DisorganizeMilitaryStrength(long strategicValue)
         {
-            if (battleValue <= 0) return 0;
+            if (strategicValue <= 0) return 0;
             EnsureOrganizedMilitaryStrength();
-            long moved = System.Math.Min(OrganizedMilitaryStrength, battleValue);
+            long moved = System.Math.Min(OrganizedMilitaryStrength, strategicValue);
             _organizedMilitaryStrength -= moved;
             return moved;
         }
 
         // Save loading sets the concrete pool after loading the legacy percentage. Kept public so
         // the data layer does not need reflection or a persistence-only constructor.
-        public void SetOrganizedMilitaryStrength(long battleValue)
+        public void SetOrganizedMilitaryStrength(long strategicValue)
         {
-            _organizedMilitaryStrength = System.Math.Clamp(battleValue, 0L, MilitaryStrength);
+            _organizedMilitaryStrength = System.Math.Clamp(strategicValue, 0L, MilitaryStrength);
             _legacyOrganization = Organization;
         }
 
@@ -397,13 +397,13 @@ namespace OnlyWar.Domain.Planets
             }
         }
 
-        private void RemoveRawMilitaryStrength(long battleValue)
+        private void RemoveRawMilitaryStrength(long strategicValue)
         {
-            if (battleValue <= 0) return;
+            if (strategicValue <= 0) return;
             if (PlanetFaction.Faction.GrowthType == GrowthType.Unrest)
             {
                 long available = Garrison + ArmedCivilians;
-                long lost = System.Math.Min(available, battleValue);
+                long lost = System.Math.Min(available, strategicValue);
                 if (lost <= 0) return;
                 long garrisonLost = available <= 0
                     ? 0
@@ -422,14 +422,14 @@ namespace OnlyWar.Domain.Planets
             {
                 // A horde's numbers are its army: losses come straight out of population (the setter
                 // trims any vestigial garrison that would now exceed it).
-                Population = Population > battleValue ? Population - battleValue : 0;
+                Population = Population > strategicValue ? Population - strategicValue : 0;
             }
             else
             {
                 // A civilian-base faction fights with its garrison, but a fallen defender is also a
                 // lost member of the population the garrison is drawn from, so the same casualty count
                 // leaves both pools (the civilian remainder, Population - Garrison, is unchanged).
-                long lost = Garrison < battleValue ? Garrison : battleValue;
+                long lost = Garrison < strategicValue ? Garrison : strategicValue;
                 Garrison -= lost;
                 Population -= lost;
             }

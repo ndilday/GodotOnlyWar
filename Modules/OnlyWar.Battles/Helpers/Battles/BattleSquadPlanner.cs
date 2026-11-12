@@ -141,7 +141,7 @@ namespace OnlyWar.Battles
                 actions,
                 _services.Log);
             _removalRates = new PairRemovalRateTable(_services, _ranged);
-            _melee = new MeleeStrikeEstimator(_services, _ranged);
+            _melee = new MeleeStrikeEstimator(_services);
             _exchange = new EngagementExchangeModel(
                 _services, _ranged, _melee, _removalRates);
             _potential = new EngagementPotential(
@@ -286,7 +286,7 @@ namespace OnlyWar.Battles
         /// Layer 2: scores whole-squad semantic movement options without mutating movement state,
         /// aim, reservations or action collections. Current-turn fire may use the exact memoized
         /// per-soldier target evaluators; the future is valued by <see cref="EngagementPotential"/>
-        /// (immediate + Φ(s′) − Φ(s) − contact commitment) from the squad-pair removal-rate table,
+        /// (immediate + Φ(s′) − Φ(s)) from the squad-pair removal-rate table,
         /// not by re-running per-soldier targeting at projected positions.
         /// </summary>
         internal SquadEngagementDecision ChooseEngagementOption(

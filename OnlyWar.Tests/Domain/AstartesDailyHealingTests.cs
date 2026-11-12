@@ -175,7 +175,7 @@ public class AstartesDailyHealingTests
         HumanBodyTemplate.Instance,
         TestModelFactory.DefaultUnarmedWeapon);
 
-    private static readonly SoldierTemplate _astartesTemplate = new(
+    private static readonly SoldierTemplate _astartesTemplate = new TestSoldierTemplate(
         900,
         _astartesSpecies,
         "Test Astartes",
@@ -184,7 +184,7 @@ public class AstartesDailyHealingTests
         false,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: 2);
+        strategicValue: 2);
 
     private static Soldier CreateAstartes() =>
         TestModelFactory.CreateSoldier(_astartesTemplate, "Brother Grazed");

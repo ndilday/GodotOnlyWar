@@ -41,8 +41,8 @@ namespace OnlyWar.Operations.StrategicCombat
             RegionFaction target = mission.RegionFaction;
             Faction attacker = mission.Attacker;
             List<RegionFaction> defenders = GetDefendingFactions(target, attacker);
-            long committed = Math.Max(0, mission.CommittedBattleValue);
-            long defenderBattleValue = CalculateEngagedDefenderBattleValue(mission, target, defenders);
+            long committed = Math.Max(0, mission.CommittedStrategicValue);
+            long defenderStrategicValue = CalculateEngagedDefenderStrategicValue(mission, target, defenders);
 
             // Surprise from the attacker/defender awareness differential (StrategicCombatRules): a
             // faction attacking a region it understands better than the defender sees its own ground
@@ -55,7 +55,7 @@ namespace OnlyWar.Operations.StrategicCombat
             double surprise = StrategicCombatRules.AmbushSurpriseMultiplier(attackerIntel, defenderIntel);
 
             double attackerEffective = CalculateAttackerEffectiveStrength(mission) * surprise;
-            double defenderEffective = CalculateDefenderEffectiveStrength(target, defenderBattleValue);
+            double defenderEffective = CalculateDefenderEffectiveStrength(target, defenderStrategicValue);
 
             double attackerRoll = attackerEffective * Math.Exp(_rng.NextRandomZValue() * StrategicCombatRules.CombatSigma);
             double defenderRoll = defenderEffective * Math.Exp(_rng.NextRandomZValue() * StrategicCombatRules.CombatSigma);
@@ -98,15 +98,15 @@ namespace OnlyWar.Operations.StrategicCombat
             // DefenderProtection's 0.86x - and it was the binding constraint: Monody Prime Gamma held
             // 3,592 dug-in Imperials against 47,883 Orks and could not be broken, which is the shape
             // of the problem this rule exists to remove.
-            double entrenchedDefence = defenderBattleValue
+            double entrenchedDefence = defenderStrategicValue
                 * StrategicCombatRules.EntrenchmentMultiplier(
                     RegionDefenses.GetShared(target, DefenseType.Entrenchment));
-            bool overrun = defenderBattleValue > 0
+            bool overrun = defenderStrategicValue > 0
                 && committed >= entrenchedDefence * StrategicCombatRules.OverrunForceRatio;
 
             long defenderLosses = overrun
                 ? mutableDefenderStrength
-                : ClampLoss((long)Math.Round(defenderBattleValue * defenderLossRate),
+                : ClampLoss((long)Math.Round(defenderStrategicValue * defenderLossRate),
                     mutableDefenderStrength, attackerEffective);
 
             // A defence that no longer exists cannot hold the ground. Leaving the roll to decide would
@@ -138,7 +138,7 @@ namespace OnlyWar.Operations.StrategicCombat
 
             // Reactive awareness: a defender that survives the assault learns which regions the enemy
             // staged from, so a previously-blind neighbour can be garrisoned next turn even without a
-            // deliberate recon (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue).
+            // deliberate recon (FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue).
             if (!controlChanged && mission.Contributions != null)
             {
                 foreach (StrategicCombatContribution contribution in mission.Contributions)
@@ -162,13 +162,13 @@ namespace OnlyWar.Operations.StrategicCombat
                 }
             }
 
-            RecordBattleContact(mission, target, defenders, defenderBattleValue, committed);
+            RecordBattleContact(mission, target, defenders, defenderStrategicValue, committed);
 
             return new StrategicCombatResult(
                 target,
                 attacker,
                 committed,
-                defenderBattleValue,
+                defenderStrategicValue,
                 attackerEffective,
                 defenderEffective,
                 attackerLosses,
@@ -183,8 +183,8 @@ namespace OnlyWar.Operations.StrategicCombat
             StrategicCombatMission mission,
             RegionFaction target,
             IReadOnlyCollection<RegionFaction> defenders,
-            long defenderBattleValue,
-            long committedBattleValue)
+            long defenderStrategicValue,
+            long committedStrategicValue)
         {
             if (_recordTargetObservation == null
                 || target?.Region?.Planet == null
@@ -202,7 +202,7 @@ namespace OnlyWar.Operations.StrategicCombat
                 mission.Attacker,
                 attackerObserver,
                 null,
-                committedBattleValue > 0 ? committedBattleValue : null));
+                committedStrategicValue > 0 ? committedStrategicValue : null));
 
             foreach (RegionFaction defender in defenders
                 .Where(defender => defender?.PlanetFaction?.Faction != null)
@@ -214,7 +214,7 @@ namespace OnlyWar.Operations.StrategicCombat
                     faction,
                     defender.PlanetFaction,
                     Math.Max(0L, defender.Population),
-                    Math.Max(0L, CalculateDefenderBattleValue(defender, _strategicInvasionForces))));
+                    Math.Max(0L, CalculateDefenderStrategicValue(defender, _strategicInvasionForces))));
             }
 
             foreach ((Faction Faction, PlanetFaction Presence, long? Population, long? Military) observer in participants)
@@ -279,63 +279,63 @@ namespace OnlyWar.Operations.StrategicCombat
         /// the NPC planner and mission steps, each of which knows which campaign's forces apply.
         /// Passing none prices only the region's own organized strength.
         /// </summary>
-        public static long CalculateDefenderBattleValue(
+        public static long CalculateDefenderStrategicValue(
             RegionFaction defender,
             IReadOnlyList<StrategicInvasionForce> strategicInvasionForces = null)
         {
             if (defender == null) return 0;
-            long landedNpcBattleValue = defender.LandedSquads
+            long landedNpcStrategicValue = defender.LandedSquads
                 .Where(squad => squad?.Faction?.IsPlayerFaction == false)
                 .SelectMany(squad => squad.Members)
-                .Sum(soldier => (long)soldier.Template.BattleValue);
+                .Sum(soldier => (long)soldier.StrategicValue);
 
             // GetDeployedStrength, not raw MilitaryStrength: organized BV is the concrete share of a
             // faction's strength that can actually be fielded, and every other consumer of "how strong
             // is this defender" now works in those units - the planner's spare-troops arithmetic
             // (FactionStrategyController.GeneratePlanetOrders), the defensive reserve
-            // (CalculateRequiredDefensiveBattleValue), and the tactical defence that materialises it
+            // (CalculateRequiredDefensiveStrategicValue), and the tactical defence that materialises it
             // (PrepareAssaultMissionStep.AssembleDefendingForce). Reading the raw pool here meant a
             // disorganized region was priced as fully mobilized for strategic combat while being priced
             // correctly everywhere else.
-            long persistentCommandBattleValue = strategicInvasionForces
+            long persistentCommandStrategicValue = strategicInvasionForces
                 ?.Where(force => force.IsActive
                     && force.Faction == defender.PlanetFaction.Faction
                     && force.CurrentRegion == defender.Region)
                 .SelectMany(force => force.CommandSquad?.Members ?? [])
-                .Sum(member => (long)(member.Template?.BattleValue ?? 0))
+                .Sum(member => (long)member.StrategicValue)
                 ?? 0L;
-            return defender.GetDeployedStrength() + landedNpcBattleValue + persistentCommandBattleValue;
+            return defender.GetDeployedStrength() + landedNpcStrategicValue + persistentCommandStrategicValue;
         }
 
-        public static long CalculateDefenderBattleValueAgainst(
+        public static long CalculateDefenderStrategicValueAgainst(
             RegionFaction target,
             Faction attacker,
             IReadOnlyList<StrategicInvasionForce> strategicInvasionForces = null)
         {
             return GetDefendingFactions(target, attacker)
-                .Sum(defender => CalculateDefenderBattleValue(defender, strategicInvasionForces));
+                .Sum(defender => CalculateDefenderStrategicValue(defender, strategicInvasionForces));
         }
 
-        private long CalculateEngagedDefenderBattleValue(
+        private long CalculateEngagedDefenderStrategicValue(
             StrategicCombatMission mission,
             RegionFaction target,
             IReadOnlyCollection<RegionFaction> defenders)
         {
-            long fullDefenderBattleValue = defenders
-                .Sum(defender => CalculateDefenderBattleValue(defender, _strategicInvasionForces));
-            if (mission.MissionType != MissionType.LightningRaid || fullDefenderBattleValue <= 0)
+            long fullDefenderStrategicValue = defenders
+                .Sum(defender => CalculateDefenderStrategicValue(defender, _strategicInvasionForces));
+            if (mission.MissionType != MissionType.LightningRaid || fullDefenderStrategicValue <= 0)
             {
-                return fullDefenderBattleValue;
+                return fullDefenderStrategicValue;
             }
 
             double attackerIntel = target.Region.GetFactionRegionAwareness(mission.Attacker);
             double defenderIntel = target.GetOwnRegionAwareness();
             double intelEdge = Math.Clamp(attackerIntel - defenderIntel, -2.0, 4.0);
             double exposedShare = Math.Clamp(0.40 + intelEdge * 0.08, 0.25, 0.75);
-            long exposedDefenders = (long)Math.Round(fullDefenderBattleValue * exposedShare);
-            long manageableDefenders = (long)Math.Round(mission.CommittedBattleValue * 1.25);
+            long exposedDefenders = (long)Math.Round(fullDefenderStrategicValue * exposedShare);
+            long manageableDefenders = (long)Math.Round(mission.CommittedStrategicValue * 1.25);
 
-            return Math.Max(1, Math.Min(fullDefenderBattleValue, Math.Min(exposedDefenders, manageableDefenders)));
+            return Math.Max(1, Math.Min(fullDefenderStrategicValue, Math.Min(exposedDefenders, manageableDefenders)));
         }
 
         private static List<RegionFaction> GetDefendingFactions(RegionFaction target, Faction attacker)
@@ -376,14 +376,14 @@ namespace OnlyWar.Operations.StrategicCombat
         public static double CalculateAttackerEffectiveStrength(StrategicCombatMission mission)
         {
             if (mission == null) return 0;
-            return mission.CommittedBattleValue
+            return mission.CommittedStrategicValue
                 * StrategicCombatRules.AggressionStrengthMultiplier(mission.Aggression);
         }
 
-        public static double CalculateDefenderEffectiveStrength(RegionFaction defender, long defenderBattleValue)
+        public static double CalculateDefenderEffectiveStrength(RegionFaction defender, long defenderStrategicValue)
         {
-            if (defender == null || defenderBattleValue <= 0) return 0;
-            return defenderBattleValue
+            if (defender == null || defenderStrategicValue <= 0) return 0;
+            return defenderStrategicValue
                 // The defender fights from the whole position its side holds here, not just the
                 // stretch of trench its own faction dug (RegionDefenses).
                 * StrategicCombatRules.EntrenchmentMultiplier(
@@ -408,15 +408,15 @@ namespace OnlyWar.Operations.StrategicCombat
             }
 
             List<StrategicCombatContribution> orderedContributions = contributions
-                .Where(c => c.BattleValue > 0)
-                .OrderByDescending(c => c.BattleValue)
+                .Where(c => c.StrategicValue > 0)
+                .OrderByDescending(c => c.StrategicValue)
                 .ToList();
             if (orderedContributions.Count == 0) return;
 
             long returned = 0;
             foreach (StrategicCombatContribution contribution in orderedContributions)
             {
-                long amount = (long)Math.Floor(survivors * (contribution.BattleValue / (double)committed));
+                long amount = (long)Math.Floor(survivors * (contribution.StrategicValue / (double)committed));
                 contribution.StagingFaction?.AddMilitaryStrength(amount);
                 returned += amount;
             }

@@ -19,7 +19,7 @@ namespace OnlyWar.Tests.Missions;
 
 // DetectedMissionStep sizes an interception as
 //
-//     intruderBattleValue * (InterceptionBaseMultiple + |stealthMargin| * InterceptionMultiplePerSigma)
+//     intruderStrategicValue * (InterceptionBaseMultiple + |stealthMargin| * InterceptionMultiplePerSigma)
 //
 // and fulfils it from the region's Patrol/Recon squads largest-first, stopping as soon as the
 // requirement is met. The per-sigma term is the half of that formula that says "the worse you were
@@ -29,11 +29,11 @@ namespace OnlyWar.Tests.Missions;
 // any number at all and nothing would have noticed.
 //
 // These fixtures give the region several interchangeable squads, so the requirement is the only
-// thing deciding how many of them scramble. Every test soldier carries battleValue 2, so a two-man
+// thing deciding how many of them scramble. Every test soldier carries strategicValue 2, so a two-man
 // squad is 4 battle value and the arithmetic stays legible in the assertions.
 public class InterceptionSizingTests
 {
-    private const int SquadBattleValue = 4;
+    private const int SquadStrategicValue = 4;
 
     // The load-bearing behaviour: a marginal detection pulls one squad off the screen and leaves the
     // rest sweeping; a thoroughly blown one pulls most of the region's screen onto the intruder. Both
@@ -57,7 +57,7 @@ public class InterceptionSizingTests
             CreateExecution(context), stealthMargin, resumeStep: null);
 
         Assert.Equal(expectedSquads, context.OpposingSquads.Count);
-        Assert.Equal(expectedSquads * SquadBattleValue, CommittedBattleValue(context));
+        Assert.Equal(expectedSquads * SquadStrategicValue, CommittedStrategicValue(context));
     }
 
     // The same claim stated without the constant baked in, so that retuning
@@ -73,9 +73,9 @@ public class InterceptionSizingTests
         new DetectedMissionStep().ExecuteMissionStep(CreateExecution(blown), -4.0f, resumeStep: null);
 
         Assert.True(
-            CommittedBattleValue(blown) > CommittedBattleValue(clean),
-            $"a blown detection committed {CommittedBattleValue(blown)} BV, no more than the "
-            + $"{CommittedBattleValue(clean)} BV a clean one committed");
+            CommittedStrategicValue(blown) > CommittedStrategicValue(clean),
+            $"a blown detection committed {CommittedStrategicValue(blown)} BV, no more than the "
+            + $"{CommittedStrategicValue(clean)} BV a clean one committed");
     }
 
     // The multiple is what the screen WANTS, not a gate on engaging. A lone squad at bare parity with
@@ -121,7 +121,7 @@ public class InterceptionSizingTests
     public void Interception_RaisesTheAbstractScreen_AndOnlyAsMuchOfItAsIsNeeded()
     {
         // 50,000 points of screen, against a 4-battle-value intruder seen at -1 sigma: required is 6.
-        MissionContext context = CreateDetectionScenario(screenSquads: 0, screenBattleValue: 50_000);
+        MissionContext context = CreateDetectionScenario(screenSquads: 0, screenStrategicValue: 50_000);
 
         new DetectedMissionStep().ExecuteMissionStep(
             CreateExecution(context), -1.0f, resumeStep: null);
@@ -130,7 +130,7 @@ public class InterceptionSizingTests
         // The screen could have paid for 12,500 four-point squads. What matters is that the number
         // raised is set by the intrusion and not by the screen's size.
         Assert.InRange(context.OpposingSquads.Count, 1, 4);
-        Assert.InRange(CommittedBattleValue(context), 4, 20);
+        Assert.InRange(CommittedStrategicValue(context), 4, 20);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public class InterceptionSizingTests
     {
         // Below parity with the intruder the screen stays out of it, exactly as a thin screen of real
         // squads does. The abstract screen must not be able to conjure its way up to parity.
-        MissionContext context = CreateDetectionScenario(screenSquads: 0, screenBattleValue: 2);
+        MissionContext context = CreateDetectionScenario(screenSquads: 0, screenStrategicValue: 2);
 
         new DetectedMissionStep().ExecuteMissionStep(
             CreateExecution(context), -1.0f, resumeStep: null);
@@ -151,16 +151,16 @@ public class InterceptionSizingTests
 
     // --- fixtures ---
 
-    private static int CommittedBattleValue(MissionContext context) =>
+    private static int CommittedStrategicValue(MissionContext context) =>
         context.OpposingSquads
             .SelectMany(squad => squad.AbleMembers)
-            .Sum(soldier => soldier.Template.BattleValue);
+            .Sum(soldier => soldier.StrategicValue);
 
     // A two-man intruder (4 battle value) caught in a region held by one enemy faction, with
     // `screenSquads` interchangeable two-man patrols out looking. Spotter is left unset so the step
     // falls back to the mission's own target RegionFaction, which is where the screen lives.
     private static MissionContext CreateDetectionScenario(
-        int screenSquads, long screenBattleValue = 0)
+        int screenSquads, long screenStrategicValue = 0)
     {
         Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Target Region", new RegionCoordinate(0, 0), 0);
@@ -169,7 +169,7 @@ public class InterceptionSizingTests
         // The abstract screen is raised through ForceGenerator, so a faction that is to post one
         // needs a Scout-flagged formation to post it in. A faction with none fields no screen at all,
         // which is why the landed-squad scenarios above can leave the template map empty.
-        Faction defenderFaction = screenBattleValue > 0
+        Faction defenderFaction = screenStrategicValue > 0
             ? CreateFaction(20, "Swarm", CreateScoutTemplate())
             : CreateFaction(20, "Swarm");
         PlanetFaction planetFaction = new(defenderFaction) { IsPublic = true };
@@ -178,14 +178,14 @@ public class InterceptionSizingTests
             // Garrison is a subset of Population and the screen is a subset of the organized pool,
             // so the population has to be able to hold the screen or the clamps quietly shrink it.
             // System.Math, not the OnlyWar.Tests.Math namespace this assembly also has.
-            Population = System.Math.Max(10_000, screenBattleValue * 2),
+            Population = System.Math.Max(10_000, screenStrategicValue * 2),
             IsPublic = true
         };
         // PopulationIsMilitary is off for this faction, so the screen is clamped against Garrison.
-        if (screenBattleValue > 0)
+        if (screenStrategicValue > 0)
         {
-            defender.Garrison = screenBattleValue;
-            defender.PatrolScreenBattleValue = screenBattleValue;
+            defender.Garrison = screenStrategicValue;
+            defender.PatrolScreenStrategicValue = screenStrategicValue;
         }
         region.RegionFactionMap[defenderFaction.Id] = defender;
 
@@ -238,7 +238,7 @@ public class InterceptionSizingTests
     // arithmetic in the assertions stays the same on both paths.
     private static SquadTemplate CreateScoutTemplate()
     {
-        SoldierTemplate trooper = new(
+        SoldierTemplate trooper = new TestSoldierTemplate(
             40, TestModelFactory.HumanSpecies, "Screen Trooper",
             1, 1, false, 0, [], null, 2);
         return new SquadTemplate(
@@ -247,7 +247,7 @@ public class InterceptionSizingTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(trooper, 2, 2, rollsStrength: false)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(trooper, 2, 2, rollsStrength: false)],
             SquadTypes.Scout);
     }
 

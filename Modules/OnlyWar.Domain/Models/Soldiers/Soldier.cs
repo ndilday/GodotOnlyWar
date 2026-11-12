@@ -135,6 +135,8 @@ namespace OnlyWar.Domain.Soldiers
 
         public Squad AssignedSquad { get; set; }
 
+        public int StrategicValue => AssignedSquad?.SquadTemplate?.StrategicValuePerSoldierOf(Template) ?? 0;
+
         /// <summary>
         /// Can this soldier still bring a weapon to bear? Hands and vital (consciousness)
         /// locations only -- motive locations are deliberately excluded; see

@@ -201,11 +201,11 @@ namespace OnlyWar.Domain
             if (faction == null) return null;
 
             SquadTemplate commandTemplate = faction.SquadTemplates?.Values
-                .Where(candidate => candidate.BattleValue > 0
+                .Where(candidate => candidate.StrategicValue > 0
                     && candidate.SquadType.HasFlag(SquadTypes.HQ))
                 .OrderByDescending(candidate => candidate.Elements
                     .Count(element => element.SoldierTemplate?.IsSquadLeader == true))
-                .ThenByDescending(candidate => candidate.BattleValue)
+                .ThenByDescending(candidate => candidate.StrategicValue)
                 .ThenBy(candidate => candidate.Id)
                 .FirstOrDefault();
             if (commandTemplate == null) return null;

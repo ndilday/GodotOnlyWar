@@ -29,7 +29,7 @@ public class ShowOfForceRequestTests
 
         request.ProcessTurn(new Date(1, 1, 2), fixture.Rules);
 
-        Assert.True(request.ProgressBattleValueTime > 0);
+        Assert.True(request.ProgressStrategicValueTime > 0);
         Assert.Equal(RequestStatus.InProgress, request.Status);
     }
 
@@ -44,7 +44,7 @@ public class ShowOfForceRequestTests
 
         request.ProcessTurn(new Date(1, 1, 2), fixture.Rules);
 
-        Assert.Equal(0, request.ProgressBattleValueTime);
+        Assert.Equal(0, request.ProgressStrategicValueTime);
         Assert.Equal(RequestStatus.Open, request.Status);
     }
 
@@ -60,7 +60,7 @@ public class ShowOfForceRequestTests
 
         request.ProcessTurn(new Date(1, 1, 2), fixture.Rules);
 
-        Assert.Equal(0, request.ProgressBattleValueTime);
+        Assert.Equal(0, request.ProgressStrategicValueTime);
     }
 
     [Fact]
@@ -88,14 +88,14 @@ public class ShowOfForceRequestTests
     private static PresenceRequest CreateEffortRequest(
         SectorSimulationFixture fixture, Character governor, int serviceWeeks = 4)
     {
-        // Weekly contribution is capped at ReferenceBattleValuePerPackage *
+        // Weekly contribution is capped at ReferenceStrategicValuePerPackage *
         // MaximumEffectivePackageCount, so with both at 1 a week of presence is worth exactly one
         // squad-week regardless of how strong the squad actually is. That keeps these assertions
         // about the qualifying rule rather than about battle-value arithmetic.
         ForceCommitmentPackage commitment = new(
             "show-of-force-test", "Astartes presence", "squad",
             packageCount: 1, serviceWeeks: serviceWeeks, completionDeadlineWeeks: 8,
-            referenceBattleValuePerPackage: 1);
+            referenceStrategicValuePerPackage: 1);
         PresenceRequest request = new(
             1,
             fixture.Planet,

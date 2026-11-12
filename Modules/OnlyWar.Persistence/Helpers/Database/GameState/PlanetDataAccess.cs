@@ -114,8 +114,8 @@ namespace OnlyWar.Persistence.Database.GameState
             {
                 command.CommandText = "SELECT * FROM Mission";
                 var reader = command.ExecuteReader();
-                int targetBattleValueOrdinal =
-                    GetOrdinalOrDefault(reader, "TargetBattleValue");
+                int targetStrategicValueOrdinal =
+                    GetOrdinalOrDefault(reader, "TargetStrategicValue");
                 int maxId = 0;
 
                 while (reader.Read())
@@ -131,10 +131,10 @@ namespace OnlyWar.Persistence.Database.GameState
                         defenseType = (DefenseType)reader.GetInt32(5);
                     }
                     bool isRegionMission = reader.GetBoolean(6);
-                    long? targetBattleValue =
-                        targetBattleValueOrdinal >= 0
-                        && reader[targetBattleValueOrdinal].GetType() != typeof(DBNull)
-                            ? Convert.ToInt64(reader[targetBattleValueOrdinal])
+                    long? targetStrategicValue =
+                        targetStrategicValueOrdinal >= 0
+                        && reader[targetStrategicValueOrdinal].GetType() != typeof(DBNull)
+                            ? Convert.ToInt64(reader[targetStrategicValueOrdinal])
                             : null;
 
                     Region region = regionMap[regionId];
@@ -163,7 +163,7 @@ namespace OnlyWar.Persistence.Database.GameState
                             missionType,
                             regionFaction,
                             missionSize,
-                            targetBattleValue);
+                            targetStrategicValue);
                     }
                     else if (defenseType == null)
                     {
@@ -173,7 +173,7 @@ namespace OnlyWar.Persistence.Database.GameState
                             region,
                             factionMap[factionId],
                             missionSize,
-                            targetBattleValue);
+                            targetStrategicValue);
                     }
                     else if (missionType == MissionType.Construction)
                     {
@@ -267,9 +267,9 @@ namespace OnlyWar.Persistence.Database.GameState
                     int organizedStrengthOrdinal =
                         GetOrdinalOrDefault(reader, "OrganizedMilitaryStrength");
                     int assignedDefensiveOrdinal =
-                        GetOrdinalOrDefault(reader, "AssignedDefensiveBattleValue");
+                        GetOrdinalOrDefault(reader, "AssignedDefensiveStrategicValue");
                     int patrolScreenOrdinal =
-                        GetOrdinalOrDefault(reader, "PatrolScreenBattleValue");
+                        GetOrdinalOrDefault(reader, "PatrolScreenStrategicValue");
                     int strategicForceOrdinal = GetOrdinalOrDefault(reader, "StrategicInvasionForceId");
                     if (strategicForceOrdinal < 0)
                     {
@@ -333,14 +333,14 @@ namespace OnlyWar.Persistence.Database.GameState
                     // region as having committed nothing to its own defence.
                     if (assignedDefensiveOrdinal >= 0 && !reader.IsDBNull(assignedDefensiveOrdinal))
                     {
-                        regionFaction.AssignedDefensiveBattleValue =
+                        regionFaction.AssignedDefensiveStrategicValue =
                             reader.GetInt64(assignedDefensiveOrdinal);
                     }
                     // Absent for a save predating the column, which reads as no screen. The next
                     // planning pass posts one, so nothing needs deriving here.
                     if (patrolScreenOrdinal >= 0 && !reader.IsDBNull(patrolScreenOrdinal))
                     {
-                        regionFaction.PatrolScreenBattleValue =
+                        regionFaction.PatrolScreenStrategicValue =
                             reader.GetInt64(patrolScreenOrdinal);
                     }
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
@@ -649,7 +649,7 @@ namespace OnlyWar.Persistence.Database.GameState
             bool hasStrategicForceColumns = HasColumn(transaction.Connection, "RegionFaction", "StrategicInvasionForceId")
                 && HasColumn(transaction.Connection, "RegionFaction", "DormantConsolidation");
             bool hasPatrolScreenColumn = HasColumn(
-                transaction.Connection, "RegionFaction", "PatrolScreenBattleValue");
+                transaction.Connection, "RegionFaction", "PatrolScreenStrategicValue");
 
             // Built rather than written out per combination. Two optional column groups is where the
             // hardcoded-string-per-variant approach stops paying: a third would need eight.
@@ -658,7 +658,7 @@ namespace OnlyWar.Persistence.Database.GameState
                 "RegionId", "FactionId", "IsPublic", "Population", "Garrison", "Organization",
                 "Entrenchment", "ListeningPost", "AntiAir", "GrowthMultiplier", "Contentment",
                 "ArmedCivilians", "HasEmergenceAdvantage", "OrganizedMilitaryStrength",
-                "AssignedDefensiveBattleValue"
+                "AssignedDefensiveStrategicValue"
             ];
             if (hasStrategicForceColumns)
             {
@@ -667,7 +667,7 @@ namespace OnlyWar.Persistence.Database.GameState
             }
             if (hasPatrolScreenColumn)
             {
-                columns.Add("PatrolScreenBattleValue");
+                columns.Add("PatrolScreenStrategicValue");
             }
             string insertSql = $"INSERT INTO RegionFaction ({string.Join(", ", columns)}) VALUES "
                 + $"({string.Join(", ", columns.Select(column => "@" + char.ToLowerInvariant(column[0]) + column[1..]))});";
@@ -696,8 +696,8 @@ namespace OnlyWar.Persistence.Database.GameState
                         // Written as NULL when the region has never been planned for, so a reload can
                         // still tell "no assignment yet" from "assigned nothing" (see
                         // PrepareAssaultMissionStep.ResolveDefensiveReserve).
-                        command.AddParam("@assignedDefensiveBattleValue",
-                            regionFaction.AssignedDefensiveBattleValue);
+                        command.AddParam("@assignedDefensiveStrategicValue",
+                            regionFaction.AssignedDefensiveStrategicValue);
                         if (hasStrategicForceColumns)
                         {
                             // Named for its column now that the parameter list is derived from the
@@ -707,7 +707,7 @@ namespace OnlyWar.Persistence.Database.GameState
                         }
                         if (hasPatrolScreenColumn)
                         {
-                            command.AddParam("@patrolScreenBattleValue", regionFaction.PatrolScreenBattleValue);
+                            command.AddParam("@patrolScreenStrategicValue", regionFaction.PatrolScreenStrategicValue);
                         }
                         command.ExecuteNonQuery();
                     }
@@ -836,8 +836,8 @@ namespace OnlyWar.Persistence.Database.GameState
             {
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Mission
-                    (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId, IsRegionMission, TargetBattleValue) VALUES
-                    (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType, @isRegionMission, @targetBattleValue);";
+                    (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId, IsRegionMission, TargetStrategicValue) VALUES
+                    (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType, @isRegionMission, @targetStrategicValue);";
                 command.AddParam("@id", mission.Id);
                 command.AddParam("@missionType", (int)mission.MissionType);
                 if (mission.Region == null || mission.TargetFaction == null)
@@ -850,9 +850,9 @@ namespace OnlyWar.Persistence.Database.GameState
                 command.AddParam("@defenseType", defenseType);
                 command.AddParam("@isRegionMission", isRegionMission ? 1 : 0);
                 command.AddParam(
-                    "@targetBattleValue",
-                    mission.TargetBattleValue.HasValue
-                        ? mission.TargetBattleValue.Value
+                    "@targetStrategicValue",
+                    mission.TargetStrategicValue.HasValue
+                        ? mission.TargetStrategicValue.Value
                         : null);
                 command.ExecuteNonQuery();
             }

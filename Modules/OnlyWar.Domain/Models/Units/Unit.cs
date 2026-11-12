@@ -31,17 +31,6 @@ namespace OnlyWar.Domain.Units
             }
         }
 
-        public int BattleValue
-        {
-            get
-            {
-                return _squads
-                    .Where(squad => squad.IsPresentOperationalForce)
-                    .Sum(squad => squad.SquadTemplate.BattleValue)
-                    + ChildUnits.Sum(u => u.BattleValue);
-            }
-        }
-
         public Unit(int id, string name, UnitTemplate template, List<Squad> squads)
         {
             Id = id;

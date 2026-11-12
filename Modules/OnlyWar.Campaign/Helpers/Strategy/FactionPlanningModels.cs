@@ -15,7 +15,7 @@ internal class RegionForceState
     public RegionFaction RegionFaction { get; }
 
     // A reserve is a battle-value allocation budget, not a headcount or a live military pool.
-    public long RequiredDefensiveBattleValue { get; }
+    public long RequiredDefensiveStrategicValue { get; }
 
     /// <summary>
     /// What the region ended up committing to holding. This is now an OUTPUT of the allocation
@@ -24,7 +24,7 @@ internal class RegionForceState
     /// tactical assault path materialises the defence days after planning and reading an unbounded
     /// want there let a region field several times its entire organized strength.
     /// </summary>
-    public long AssignedDefensiveBattleValue { get; set; }
+    public long AssignedDefensiveStrategicValue { get; set; }
 
     /// <summary>
     /// Battle value this region has left to allocate. Under the old priority ladder this was the
@@ -77,14 +77,14 @@ internal class RegionForceState
 
     public RegionForceState(
         RegionFaction factionInfo,
-        long requiredDefensiveBattleValue,
-        long assignedDefensiveBattleValue,
+        long requiredDefensiveStrategicValue,
+        long assignedDefensiveStrategicValue,
         long spareTroops,
         long defensiveShortfall)
     {
         RegionFaction = factionInfo;
-        RequiredDefensiveBattleValue = requiredDefensiveBattleValue;
-        AssignedDefensiveBattleValue = assignedDefensiveBattleValue;
+        RequiredDefensiveStrategicValue = requiredDefensiveStrategicValue;
+        AssignedDefensiveStrategicValue = assignedDefensiveStrategicValue;
         SpareTroops = spareTroops;
         DefensiveShortfall = defensiveShortfall;
 
@@ -119,6 +119,6 @@ internal class PotentialOffensive
     /// </remarks>
     public double Reward { get; set; }
 
-    public long DefenderBattleValue { get; set; }
-    public long EstimatedDefenderBattleValue { get; set; }
+    public long DefenderStrategicValue { get; set; }
+    public long EstimatedDefenderStrategicValue { get; set; }
 }

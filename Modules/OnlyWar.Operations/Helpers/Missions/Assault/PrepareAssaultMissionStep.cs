@@ -26,7 +26,7 @@ namespace OnlyWar.Operations.Missions.Assault
         // tactical order reaches this step after the defender mobilized, cap the generated force to the
         // same limits used when deciding tactical-vs-strategic combat. This is what keeps a hive's
         // enormous reserve from producing an untenable tactical battle.
-        private const long MaxTacticalDefenderBattleValue = StrategicCombatRules.MassCombatBattleValueFloor - 1;
+        private const long MaxTacticalDefenderStrategicValue = StrategicCombatRules.MassCombatStrategicValueFloor - 1;
 
         // Base difficulty of the defenders' preparation check. Mirrors the attacker's own 10.0f so
         // neither side is structurally favoured: an evenly-matched pair of commanders produces a net
@@ -84,7 +84,7 @@ namespace OnlyWar.Operations.Missions.Assault
                 GameLog.Debug(() =>
                     $"Assault broken off {MissionTurnProcessor.DescribeRegionFaction(context.Order.Mission.RegionFaction)}: "
                     + $"aggression={context.Order.LevelOfAggression}, day={context.DaysElapsed}, "
-                    + $"bv={context.CurrentMissionBattleValue}/{context.StartingMissionBattleValue}");
+                    + $"bv={context.CurrentMissionStrategicValue}/{context.StartingMissionStrategicValue}");
                 return MissionStepResult.Complete;
             }
 
@@ -107,10 +107,10 @@ namespace OnlyWar.Operations.Missions.Assault
                 execution.Random,
                 execution.EntityIds,
                 tactics,
-                context.DefenderBattleValueDestroyed,
+                context.DefenderStrategicValueDestroyed,
                 // How much force is arriving, which is what decides whether a patrol could plausibly
                 // have missed it.
-                context.CurrentMissionBattleValue, execution.Campaign,
+                context.CurrentMissionStrategicValue, execution.Campaign,
                 execution.EngagementElements);
 
             if (context.OpposingSquads.Count == 0)
@@ -124,21 +124,21 @@ namespace OnlyWar.Operations.Missions.Assault
                 // prepared ground protects you even when you do not sortie.
                 double entrenchment = RegionDefenses.GetShared(target, DefenseType.Entrenchment);
                 double remainingCapacity = SaturatingScale(
-                    context.CurrentMissionBattleValue,
+                    context.CurrentMissionStrategicValue,
                     StrategicCombatRules.UndefendedAssaultDestructionMultiplier
                         / (1.0 + entrenchment / 5.0));
 
                 long remainingDisorganized = Math.Max(
                     0L,
                     target.DisorganizedMilitaryStrength
-                    - context.DisorganizedDefenderBattleValueDestroyed);
+                    - context.DisorganizedDefenderStrategicValueDestroyed);
                 long disorganizedDestroyed = (long)Math.Min(remainingDisorganized, remainingCapacity);
                 context.RecordDisorganizedDefenderLosses(disorganizedDestroyed);
                 remainingCapacity -= disorganizedDestroyed;
 
                 long remainingOrganized = Math.Max(
                     0L,
-                    target.OrganizedMilitaryStrength - context.DefenderBattleValueDestroyed);
+                    target.OrganizedMilitaryStrength - context.DefenderStrategicValueDestroyed);
                 long organizedDestroyed = (long)Math.Min(
                     remainingOrganized,
                     remainingCapacity * StrategicCombatRules.OrganizedResistanceFactor);
@@ -153,7 +153,7 @@ namespace OnlyWar.Operations.Missions.Assault
                 long civiliansKilled = (long)Math.Min(
                     Math.Min(
                         remainingCivilians,
-                        Math.Max(0.0, remainingCapacity) * StrategicCombatRules.CiviliansPerBattleValue),
+                        Math.Max(0.0, remainingCapacity) * StrategicCombatRules.CiviliansPerStrategicValue),
                     remainingCivilians * StrategicCombatRules.MaximumDailyCivilianLossFraction);
                 context.RecordCivilianLosses(civiliansKilled);
 
@@ -183,10 +183,10 @@ namespace OnlyWar.Operations.Missions.Assault
                 new MeetingEngagementMissionStep(), margin, new PrepareAssaultMissionStep());
         }
 
-        private static long SaturatingScale(long battleValue, double multiplier)
+        private static long SaturatingScale(long strategicValue, double multiplier)
         {
-            if (battleValue <= 0 || multiplier <= 0) return 0;
-            double scaled = battleValue * multiplier;
+            if (strategicValue <= 0 || multiplier <= 0) return 0;
+            double scaled = strategicValue * multiplier;
             return scaled >= long.MaxValue ? long.MaxValue : Math.Max(1L, (long)scaled);
         }
 
@@ -196,8 +196,8 @@ namespace OnlyWar.Operations.Missions.Assault
             IRNG random,
             IEntityIdAllocator entityIds = null,
             BaseSkill defenderTactics = null,
-            long defenderBattleValueAlreadyDestroyed = 0,
-            long attackerBattleValue = 0,
+            long defenderStrategicValueAlreadyDestroyed = 0,
+            long attackerStrategicValue = 0,
             MissionCampaignInputs campaign = null,
             IEngagementElementFactory engagementElements = null)
         {
@@ -241,7 +241,7 @@ namespace OnlyWar.Operations.Missions.Assault
             landedDefenders = landedDefenders
                 .Where(bs => (bs.CampaignCharacter?.CurrentOrder ?? bs.CampaignSquad?.CurrentOrders)
                         ?.Mission?.MissionType != MissionType.Patrol
-                    || PatrolDetectedAttack(bs, attackerBattleValue, defenderTactics, random))
+                    || PatrolDetectedAttack(bs, attackerStrategicValue, defenderTactics, random))
                 .ToList();
             defendingForce.AddRange(landedDefenders);
 
@@ -255,7 +255,7 @@ namespace OnlyWar.Operations.Missions.Assault
                 random);
 
             // 2. Materialise each allied defender's RESERVE - the battle value its controller held back
-            // to defend this ground (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue).
+            // to defend this ground (FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue).
             //
             // This used to read raw RegionFaction.Garrison, which was wrong for almost every defender in
             // the game. Garrison is Imperial-specific: MilitaryStrength resolves to Population for a
@@ -268,12 +268,12 @@ namespace OnlyWar.Operations.Missions.Assault
             // than inventing a new defence.
             //
             // The reserve read here is the ASSIGNMENT the region's controller made during planning
-            // (RegionFaction.AssignedDefensiveBattleValue), not the requirement it computed. This step
-            // used to call CalculateRequiredDefensiveBattleValue itself, which returns an unbounded
+            // (RegionFaction.AssignedDefensiveStrategicValue), not the requirement it computed. This step
+            // used to call CalculateRequiredDefensiveStrategicValue itself, which returns an unbounded
             // want derived from adjacent enemy strength and says nothing about whether the troops to
             // meet it exist. Materialising soldiers to fill that want meant a region holding ~200 BV of
             // organized strength fielded a 1499 BV defence - roughly three times its entire army,
-            // generated out of nothing, and bounded only by MaxTacticalDefenderBattleValue and the
+            // generated out of nothing, and bounded only by MaxTacticalDefenderStrategicValue and the
             // actor cap rather than by anything the defender actually had.
             //
             // The reserve and the standing screen are intended to be disjoint: both are drawn from
@@ -299,7 +299,7 @@ namespace OnlyWar.Operations.Missions.Assault
             // single-faction case.
             // The STANDING SCREEN is drawn down by the same deduction and in the same proportion. It
             // is a battle value the controller designated rather than a force it built
-            // (RegionFaction.PatrolScreenBattleValue), so it has exactly the property the paragraph
+            // (RegionFaction.PatrolScreenStrategicValue), so it has exactly the property the paragraph
             // above describes: nothing about it is reduced until the turn ends, and raising it whole
             // each morning would let a screen fight a multi-day assault indefinitely. The landed
             // patrols in step 1a do not need this - they are persistent objects whose dead stay dead
@@ -309,9 +309,9 @@ namespace OnlyWar.Operations.Missions.Assault
                 ResolveDefensiveReserve);
             Dictionary<RegionFaction, long> screens = alliedDefenders.ToDictionary(
                 rf => rf,
-                rf => rf.PatrolScreenBattleValue);
+                rf => rf.PatrolScreenStrategicValue);
             long totalReserve = reserves.Values.Sum() + screens.Values.Sum();
-            long remainingToDeduct = Math.Max(0L, defenderBattleValueAlreadyDestroyed);
+            long remainingToDeduct = Math.Max(0L, defenderStrategicValueAlreadyDestroyed);
             foreach (RegionFaction alliedDefender in alliedDefenders)
             {
                 // The screen is raised first and independently of the reserve: it answers the same
@@ -328,7 +328,7 @@ namespace OnlyWar.Operations.Missions.Assault
                     var screenRequest = new ForceGenerationRequest
                     {
                         Faction = alliedDefender.PlanetFaction.Faction,
-                        TargetBattleValue = Math.Min(survivingScreen, MaxTacticalDefenderBattleValue),
+                        TargetStrategicValue = Math.Min(survivingScreen, MaxTacticalDefenderStrategicValue),
                         Profile = ForceCompositionProfile.ScoutPatrol
                     };
                     List<Squad> screenSquads = CapTacticalForce(
@@ -353,7 +353,7 @@ namespace OnlyWar.Operations.Missions.Assault
                         .Select(s => elementFactory.CreateSquad(false, s))
                         .Where(s => s?.AbleMembers.Count > 0)
                         .Where(s => PatrolDetectedAttack(
-                            s, attackerBattleValue, defenderTactics, random)));
+                            s, attackerStrategicValue, defenderTactics, random)));
                 }
 
                 long reserve = reserves[alliedDefender];
@@ -371,14 +371,14 @@ namespace OnlyWar.Operations.Missions.Assault
                 float multiplier = (float)Math.Pow(2, 1 - (2 * cdf));
                 long effectiveReserve = (long)(survivingReserve * multiplier);
                 // The reserve already lives in strategic battle-value points; the old x10 conversion
-                // massively over-mobilised defenders after SoldierTemplate.BattleValue was
+                // massively over-mobilised defenders after SoldierTemplate.StrategicValue was
                 // recalculated onto real per-template values.
-                long targetBattleValue = effectiveReserve <= 0
+                long targetStrategicValue = effectiveReserve <= 0
                     ? 0
                     : Math.Min(
                         Math.Min(
                             Math.Max(effectiveReserve, alliedDefender.PlanetFaction.Faction.MinimumForceRequest),
-                            MaxTacticalDefenderBattleValue),
+                            MaxTacticalDefenderStrategicValue),
                         // Never mobilise more than actually survives: MinimumForceRequest would otherwise
                         // resurrect a defence ground down below one squad's worth, so the last fragment
                         // of it could never be finished off.
@@ -387,7 +387,7 @@ namespace OnlyWar.Operations.Missions.Assault
                 var request = new ForceGenerationRequest
                 {
                     Faction = alliedDefender.PlanetFaction.Faction,
-                    TargetBattleValue = targetBattleValue,
+                    TargetStrategicValue = targetStrategicValue,
                     Profile = ForceCompositionProfile.Garrison
                 };
                 var garrisonSquads = CapTacticalForce(
@@ -415,14 +415,14 @@ namespace OnlyWar.Operations.Missions.Assault
         /// </remarks>
         private static long ResolveDefensiveReserve(RegionFaction defender)
         {
-            if (defender.AssignedDefensiveBattleValue.HasValue)
+            if (defender.AssignedDefensiveStrategicValue.HasValue)
             {
-                return Math.Max(0L, defender.AssignedDefensiveBattleValue.Value);
+                return Math.Max(0L, defender.AssignedDefensiveStrategicValue.Value);
             }
 
             return Math.Min(
                 defender.GetDeployedStrength(),
-                FactionThreatAssessment.CalculateRequiredDefensiveBattleValue(defender));
+                FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue(defender));
         }
 
         /// <summary>
@@ -444,7 +444,7 @@ namespace OnlyWar.Operations.Missions.Assault
         /// </remarks>
         internal static bool PatrolDetectedAttack(
             OperationalMissionElement patrol,
-            long attackerBattleValue,
+            long attackerStrategicValue,
             BaseSkill defenderTactics,
             IRNG random)
         {
@@ -456,7 +456,7 @@ namespace OnlyWar.Operations.Missions.Assault
             RegionFaction patrolled = ResolvePatrolledFaction(patrol);
             float committed = patrolled?.CommittedAttention ?? 0f;
             float difficulty = PatrolDetectionBaseDifficulty
-                - MissionStealthDifficulty.Magnitude(attackerBattleValue)
+                - MissionStealthDifficulty.Magnitude(attackerStrategicValue)
                 + committed * PatrolDetectionAttentionPenalty
                 // A bold patrol ranges wider and is likelier to be astride the approach: aggression's
                 // EFFECT axis, matching PatrolSweepMissionStep.
@@ -469,7 +469,7 @@ namespace OnlyWar.Operations.Missions.Assault
             bool detected = margin > 0f;
                 GameLog.Debug(() =>
                     $"Patrol detection {patrol.Name}: difficulty={difficulty:F2} "
-                + $"(attackerBV={attackerBattleValue}, committedAttention={committed:F2}), "
+                + $"(attackerBV={attackerStrategicValue}, committedAttention={committed:F2}), "
                 + $"margin={margin:F2} -> {(detected ? "IN POSITION" : "looking the wrong way")}");
             return detected;
         }

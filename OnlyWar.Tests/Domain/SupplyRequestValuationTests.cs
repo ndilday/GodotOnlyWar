@@ -14,7 +14,7 @@ public class SupplyRequestValuationTests
     {
         SupplyEconomyRules rules = SupplyEconomyRules.CreateDefault();
 
-        Assert.Equal(0.25m, rules.RequestValuation.RequisitionPerBattleValueTime);
+        Assert.Equal(0.25m, rules.RequestValuation.RequisitionPerStrategicValueTime);
         Assert.Equal(25, rules.RequestValuation.MinimumRequestValue);
         Assert.Equal(1000, rules.RequestValuation.MaximumRequestValue);
         Assert.Equal(4.0m, rules.RequestValuation.MaximumCombinedPremium);
@@ -56,14 +56,14 @@ public class SupplyRequestValuationTests
     [Fact]
     public void Calculate_DerivesEffortFromReadablePackage()
     {
-        ForceCommitmentPackage package = CreatePackage(referenceBattleValue: 250, packageCount: 1,
+        ForceCommitmentPackage package = CreatePackage(referenceStrategicValue: 250, packageCount: 1,
             serviceWeeks: 4, deadlineWeeks: 4);
 
         RequestValuationResult result = RequestValueCalculator.Calculate(
             package, CreateRules(requisitionPerBvt: 0.1m), null, hazardMultiplier: 1m);
 
-        Assert.Equal(1_000, result.EffortBattleValueTime);
-        Assert.Equal(250, result.RequiredBattleValuePerWeek);
+        Assert.Equal(1_000, result.EffortStrategicValueTime);
+        Assert.Equal(250, result.RequiredStrategicValuePerWeek);
         Assert.Equal(100, result.RequisitionValue);
         Assert.Equal("Scout squad", package.DisplayUnitName);
     }
@@ -76,12 +76,12 @@ public class SupplyRequestValuationTests
             new ThroughputPremiumBand(100, 1m),
             new ThroughputPremiumBand(250, 1.1m),
             new ThroughputPremiumBand(500, 1.25m));
-        ForceCommitmentPackage package = CreatePackage(referenceBattleValue: 250, packageCount: 2,
+        ForceCommitmentPackage package = CreatePackage(referenceStrategicValue: 250, packageCount: 2,
             serviceWeeks: 2, deadlineWeeks: 2);
 
         RequestValuationResult result = RequestValueCalculator.Calculate(package, rules, null, 1m);
 
-        Assert.Equal(500, result.RequiredBattleValuePerWeek);
+        Assert.Equal(500, result.RequiredStrategicValuePerWeek);
         Assert.Equal(1.25m, result.ThroughputMultiplier);
         Assert.Equal(125, result.RequisitionValue);
     }
@@ -125,10 +125,10 @@ public class SupplyRequestValuationTests
     public void Calculate_RoundsHalfAwayFromZeroAndClampsResult()
     {
         RequestValuationResult rounded = RequestValueCalculator.Calculate(
-            CreatePackage(referenceBattleValue: 5, serviceWeeks: 1),
+            CreatePackage(referenceStrategicValue: 5, serviceWeeks: 1),
             CreateRules(0.1m), null, 1m);
         RequestValuationResult clamped = RequestValueCalculator.Calculate(
-            CreatePackage(referenceBattleValue: 1_000, serviceWeeks: 1),
+            CreatePackage(referenceStrategicValue: 1_000, serviceWeeks: 1),
             new RequestValuationRules(1m,
                 new[] { new ThroughputPremiumBand(long.MaxValue, 1m) }, 10, 200),
             null, 1m);
@@ -189,7 +189,7 @@ public class SupplyRequestValuationTests
     }
 
     private static ForceCommitmentPackage CreatePackage(
-        long referenceBattleValue = 250,
+        long referenceStrategicValue = 250,
         int packageCount = 1,
         int serviceWeeks = 4,
         int deadlineWeeks = 4,
@@ -202,7 +202,7 @@ public class SupplyRequestValuationTests
             packageCount,
             serviceWeeks,
             deadlineWeeks,
-            referenceBattleValue,
+            referenceStrategicValue,
             tags);
     }
 

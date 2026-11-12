@@ -79,20 +79,32 @@ namespace OnlyWar.Domain.Squads
         // strength are priced at their average, since that is what generation actually fields over
         // many squads; for a fixed element the average IS the maximum, so every template authored
         // before variable strength existed prices exactly as it always did.
-        public int BattleValue => IsPresentOperationalForce
+        public int StrategicValue => IsPresentOperationalForce
             ? (int)System.Math.Round(
-                Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.ExpectedNumber) ?? 0f,
+                Elements?.Sum(e => e.StrategicValuePerSoldier * e.ExpectedNumber) ?? 0f,
                 MidpointRounding.AwayFromZero)
             : 0;
         // The battle value of the SMALLEST squad this template can field: every element at its
         // MinimumNumber. This is the price force generation actually has to meet, because
         // SquadFactory.GenerateSquadWithinBudget fills each element to its minimum first and gives
-        // up only when that will not fit. It diverges from BattleValue, which prices the expected
+        // up only when that will not fit. It diverges from StrategicValue, which prices the expected
         // (for a fixed element, the maximum) squad, as soon as an element allows a range — a
         // ten-to-twenty-man infantry squad is priced at twenty but can be fielded at ten.
-        public int MinimumBattleValue => IsPresentOperationalForce
-            ? Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MinimumNumber) ?? 0
+        public int MinimumStrategicValue => IsPresentOperationalForce
+            ? Elements?.Sum(e => e.StrategicValuePerSoldier * e.MinimumNumber) ?? 0
             : 0;
+        // The battle value of one soldier of this template in this squad: the StrategicValuePerSoldier of the
+        // element he fills, 0 if no element holds his template. A squad template holds each
+        // soldier template in at most one element (RulesDatabaseValidator).
+        public int StrategicValuePerSoldierOf(SoldierTemplate soldierTemplate)
+        {
+            if (soldierTemplate == null || Elements == null) return 0;
+            foreach (SquadTemplateElement element in Elements)
+            {
+                if (element.SoldierTemplate == soldierTemplate) return element.StrategicValuePerSoldier;
+            }
+            return 0;
+        }
         // Derived, not stored (OnlyWar_TDD.md §6.6): true iff any element's
         // species carries SpeciesAbilities.Synapse. Adding a new synapse creature to the DB
         // works automatically.

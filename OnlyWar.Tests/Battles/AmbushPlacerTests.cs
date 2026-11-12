@@ -151,6 +151,56 @@ public class AmbushPlacerTests
         Assert.True(westOfKill >= northOfKill, "the long leg should hold at least as many squads as the short leg");
     }
 
+    private static BattleSquad CreateHqSquad(string name, int size, bool isPlayer)
+    {
+        SquadTemplate template = new(
+            _nextId,
+            $"{name} Template",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, (byte)size)],
+            SquadTypes.HQ);
+        Squad squad = new(-_nextId, name, null, template);
+        for (int i = 0; i < size; i++)
+        {
+            Soldier soldier = TestModelFactory.CreateSoldier(
+                template: TestModelFactory.MarineTemplate, name: $"{name}-{i}");
+            soldier.Id = _nextId++;
+            squad.AddSquadMember(soldier);
+        }
+        return new BattleSquad(isPlayer, squad);
+    }
+
+    /// <summary>
+    /// A column of a few soldiers gives a kill zone only a few yards long, too short to hold
+    /// several HQ squads at the even spread along it. They used to share cells, and the grid threw
+    /// during a campaign's ambush (seed 7, 2026-11-05). One line squad puts every HQ behind the long
+    /// leg; four line squads and eight HQs also put some behind the short leg.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 3)]
+    [InlineData(4, 8)]
+    public void PlaceSquads_SeveralHqsBehindAShortKillZone_DoNotOverlap(int lineSquads, int hqSquads)
+    {
+        BattleGridManager grid = new();
+        List<BattleSquad> ambushed = [CreateSquad("Column", 3, true)];
+        List<BattleSquad> ambushing = [];
+        for (int i = 0; i < lineSquads; i++)
+        {
+            ambushing.Add(CreateSquad($"Line{i}", 10, false));
+        }
+        for (int i = 0; i < hqSquads; i++)
+        {
+            ambushing.Add(CreateHqSquad($"Hq{i}", 20, false));
+        }
+
+        AmbushPlacer placer = new(grid, 70);
+        Dictionary<BattleSquad, ValueTuple<int, int>> map = placer.PlaceSquads(ambushed, ambushing);
+
+        Assert.Equal(ambushed.Count + ambushing.Count, map.Count);
+    }
+
     [Fact]
     public void PlaceSquads_SingleAmbusher_IsLinear()
     {

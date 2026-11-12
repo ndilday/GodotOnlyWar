@@ -22,7 +22,7 @@ namespace OnlyWar.Runtime.Factories
     public struct ForceGenerationRequest
     {
         public Faction Faction;
-        public long TargetBattleValue;
+        public long TargetStrategicValue;
         public ForceCompositionProfile Profile;
         public int Tier; // Optional, for things like Assassination target level
     }
@@ -33,7 +33,7 @@ namespace OnlyWar.Runtime.Factories
         // stay local while Runtime and Battles remain separate assemblies; the values are part of
         // the force-generation contract and are intentionally unchanged by this move.
         private const float RearGuardEgoThreshold = 12f;
-        private const float SynapseRatioBattleValue = 150f;
+        private const float SynapseRatioStrategicValue = 150f;
 
         private static readonly string[] SquadDesignators =
         [
@@ -141,7 +141,7 @@ namespace OnlyWar.Runtime.Factories
         {
             var generatedSquads = new List<Squad>();
             var usableTemplates = AvailableSquadTemplates(request)
-                                             .Where(st => st.BattleValue > 0)
+                                             .Where(st => st.StrategicValue > 0)
                                              .OrderBy(st => st.Id)
                                              .ToList();
             var availableTemplates = usableTemplates
@@ -158,13 +158,13 @@ namespace OnlyWar.Runtime.Factories
             // generation is exactly the loop that existed before this pass.
             List<SquadTemplate> synapseTemplates = usableTemplates
                 .Where(st => st.ProvidesSynapse)
-                .OrderBy(st => st.BattleValue)
+                .OrderBy(st => st.StrategicValue)
                 .ToList();
             bool factionHasSynapse = synapseTemplates.Count > 0;
             float coverageNeedingBvPurchased = 0f;
             int synapseSquadsPurchased = 0;
 
-            long remainingValue = request.TargetBattleValue;
+            long remainingValue = request.TargetStrategicValue;
             Squad hqSquad = GenerateGenericHqSquad(
                 hqTemplates,
                 availableTemplates,
@@ -174,7 +174,7 @@ namespace OnlyWar.Runtime.Factories
             if (hqSquad != null)
             {
                 generatedSquads.Add(hqSquad);
-                long hqValue = SquadBattleValue(hqSquad);
+                long hqValue = SquadStrategicValue(hqSquad);
                 remainingValue -= hqValue;
                 if (factionHasSynapse)
                 {
@@ -198,7 +198,7 @@ namespace OnlyWar.Runtime.Factories
                     && SynapseSquadsOwed(coverageNeedingBvPurchased, synapseSquadsPurchased) > 0)
                 {
                     List<SquadTemplate> affordableSynapse = synapseTemplates
-                        .Where(t => t.BattleValue <= remainingValue)
+                        .Where(t => t.StrategicValue <= remainingValue)
                         .ToList();
                     if (affordableSynapse.Any())
                     {
@@ -210,7 +210,7 @@ namespace OnlyWar.Runtime.Factories
                 if (chosenTemplate == null)
                 {
                     List<SquadTemplate> affordableTemplates = availableTemplates
-                        .Where(t => t.BattleValue <= remainingValue)
+                        .Where(t => t.StrategicValue <= remainingValue)
                         .ToList();
                     if (!affordableTemplates.Any())
                     {
@@ -222,7 +222,7 @@ namespace OnlyWar.Runtime.Factories
                         if (partialSquad != null)
                         {
                             generatedSquads.Add(partialSquad);
-                            long partialValue = SquadBattleValue(partialSquad);
+                            long partialValue = SquadStrategicValue(partialSquad);
                             remainingValue -= partialValue;
                             if (factionHasSynapse)
                             {
@@ -235,7 +235,7 @@ namespace OnlyWar.Runtime.Factories
                     }
 
                     List<SquadTemplate> viableTemplates = affordableTemplates
-                        .Where(t => LeavesUsableRemainder(availableTemplates, remainingValue - t.BattleValue))
+                        .Where(t => LeavesUsableRemainder(availableTemplates, remainingValue - t.StrategicValue))
                         .ToList();
                     if (viableTemplates.Any())
                     {
@@ -268,7 +268,7 @@ namespace OnlyWar.Runtime.Factories
                 // which keeps the loop terminating: every squad costs at least its minimum strength.
                 // Floor of 1: a template whose only rolled element came up empty would otherwise
                 // cost nothing and spin the loop forever.
-                long generatedValue = Math.Max(1, SquadBattleValue(generatedSquad));
+                long generatedValue = Math.Max(1, SquadStrategicValue(generatedSquad));
                 remainingValue -= generatedValue;
                 if (factionHasSynapse)
                 {
@@ -298,7 +298,7 @@ namespace OnlyWar.Runtime.Factories
             // (e.g. an NPC committing its whole organized force) yields a huge squad/soldier count —
             // the input that makes the tactical resolver explode. Log the result so it is visible.
             GameLog.Debug(() =>
-                $"GenerateGenericForce {request.Faction?.Name} {request.Profile}: budget={request.TargetBattleValue}, "
+                $"GenerateGenericForce {request.Faction?.Name} {request.Profile}: budget={request.TargetStrategicValue}, "
                 + $"squads={generatedSquads.Count}, soldiers={generatedSquads.Sum(s => s.Members.Count)}");
 
             return generatedSquads;
@@ -325,11 +325,11 @@ namespace OnlyWar.Runtime.Factories
             }
         }
 
-        // One synapse-providing squad owed per SynapseRatioBattleValue of
+        // One synapse-providing squad owed per SynapseRatioStrategicValue of
         // coverage-needing BV purchased so far, net of synapse squads already bought.
         private static int SynapseSquadsOwed(float coverageNeedingBvPurchased, int synapseSquadsPurchased)
         {
-            int owed = (int)(coverageNeedingBvPurchased / SynapseRatioBattleValue) - synapseSquadsPurchased;
+            int owed = (int)(coverageNeedingBvPurchased / SynapseRatioStrategicValue) - synapseSquadsPurchased;
             return owed > 0 ? owed : 0;
         }
 
@@ -341,8 +341,8 @@ namespace OnlyWar.Runtime.Factories
             IEntityIdAllocator entityIds)
         {
             List<SquadTemplate> viableHqTemplates = hqTemplates
-                .Where(hq => hq.BattleValue <= budget)
-                .Where(hq => CanAffordFullSquadCount(availableNonHqTemplates, budget - hq.BattleValue, 3))
+                .Where(hq => hq.StrategicValue <= budget)
+                .Where(hq => CanAffordFullSquadCount(availableNonHqTemplates, budget - hq.StrategicValue, 3))
                 .ToList();
 
             if (!viableHqTemplates.Any()) return null;
@@ -357,8 +357,8 @@ namespace OnlyWar.Runtime.Factories
             long budget,
             int squadCount)
         {
-            int cheapestBattleValue = availableTemplates.Min(t => t.BattleValue);
-            return budget >= (long)cheapestBattleValue * squadCount;
+            int cheapestStrategicValue = availableTemplates.Min(t => t.StrategicValue);
+            return budget >= (long)cheapestStrategicValue * squadCount;
         }
 
         private static Squad GeneratePartialRemainderSquad(
@@ -371,10 +371,10 @@ namespace OnlyWar.Runtime.Factories
                 .Select(t => new
                 {
                     Template = t,
-                    BattleValue = SquadFactory.CalculateSquadBattleValueWithinBudget(t, remainingValue)
+                    StrategicValue = SquadFactory.CalculateSquadStrategicValueWithinBudget(t, remainingValue)
                 })
-                .Where(t => t.BattleValue > 0)
-                .OrderByDescending(t => t.BattleValue)
+                .Where(t => t.StrategicValue > 0)
+                .OrderByDescending(t => t.StrategicValue)
                 .ThenBy(t => t.Template.Id)
                 .Select(t => t.Template)
                 .FirstOrDefault();
@@ -394,12 +394,12 @@ namespace OnlyWar.Runtime.Factories
         private static bool LeavesUsableRemainder(IEnumerable<SquadTemplate> availableTemplates, long remainingValue)
         {
             if (remainingValue == 0) return true;
-            return availableTemplates.Any(t => t.BattleValue <= remainingValue)
-                || availableTemplates.Any(t => SquadFactory.CalculateSquadBattleValueWithinBudget(t, remainingValue) > 0);
+            return availableTemplates.Any(t => t.StrategicValue <= remainingValue)
+                || availableTemplates.Any(t => SquadFactory.CalculateSquadStrategicValueWithinBudget(t, remainingValue) > 0);
         }
 
-        private static long SquadBattleValue(Squad squad) =>
-            squad.Members.Sum(member => (long)member.Template.BattleValue);
+        private static long SquadStrategicValue(Squad squad) =>
+            squad.Members.Sum(member => (long)member.StrategicValue);
 
         private static List<Squad> GenerateHqEncounter(
             ForceGenerationRequest request,
@@ -409,7 +409,7 @@ namespace OnlyWar.Runtime.Factories
             var opposingForces = new List<Squad>();
             var sortedHqSquads = AvailableSquadTemplates(request)
                                 .Where(st => (st.SquadType & SquadTypes.HQ) == SquadTypes.HQ)
-                                .OrderBy(st => st.BattleValue)
+                                .OrderBy(st => st.StrategicValue)
                                 .ToList();
 
             if (!sortedHqSquads.Any()) return opposingForces;
@@ -419,8 +419,8 @@ namespace OnlyWar.Runtime.Factories
             Squad hqSquad = SquadFactory.GenerateSquad(targetSquadTemplate, random, entityIds);
             opposingForces.Add(hqSquad);
 
-            // Use the BattleValue to determine if a bodyguard should be added
-            if (request.TargetBattleValue <= 0 && targetSquadTemplate.BodyguardSquadTemplate != null)
+            // Use the StrategicValue to determine if a bodyguard should be added
+            if (request.TargetStrategicValue <= 0 && targetSquadTemplate.BodyguardSquadTemplate != null)
             {
                 Squad bodyguardSquad = SquadFactory.GenerateSquad(
                     targetSquadTemplate.BodyguardSquadTemplate,
@@ -459,7 +459,7 @@ namespace OnlyWar.Runtime.Factories
             // Tier, when supplied, caps how many squads this force fields - a recon probe asks for
             // one. A patrol screen supplies no Tier and is bounded by its battle-value budget alone.
             //
-            // This used to loop on Tier ALONE and ignore TargetBattleValue entirely, which had two
+            // This used to loop on Tier ALONE and ignore TargetStrategicValue entirely, which had two
             // consequences. A patrol screen passes no Tier, so the loop ran zero times and every
             // patrol order in the game was silently dropped - nothing has ever screened its own
             // ground, and DetectedMissionStep intercepts with patrol and recon squads, so nothing
@@ -481,25 +481,25 @@ namespace OnlyWar.Runtime.Factories
             int maximumSquads = request.Tier > 0
                 ? Math.Min(request.Tier, AbsoluteSquadCeiling)
                 : AbsoluteSquadCeiling;
-            long remainingValue = request.TargetBattleValue;
+            long remainingValue = request.TargetStrategicValue;
 
             while (opposingForces.Count < maximumSquads)
             {
                 List<SquadTemplate> affordable = scoutTemplates
-                    .Where(t => t.BattleValue > 0 && t.BattleValue <= remainingValue)
+                    .Where(t => t.StrategicValue > 0 && t.StrategicValue <= remainingValue)
                     .ToList();
                 if (affordable.Count == 0) break;
 
                 SquadTemplate template = affordable[random.GetIntBelowMax(0, affordable.Count)];
                 Squad squad = SquadFactory.GenerateSquad(template, random, entityIds);
                 opposingForces.Add(squad);
-                remainingValue -= Math.Max(1, SquadBattleValue(squad));
+                remainingValue -= Math.Max(1, SquadStrategicValue(squad));
             }
 
             if (opposingForces.Count >= AbsoluteSquadCeiling && remainingValue > 0)
             {
                 GameLog.Warn(() =>
-                    $"GenerateScoutPatrol {request.Faction?.Name}: budget={request.TargetBattleValue} "
+                    $"GenerateScoutPatrol {request.Faction?.Name}: budget={request.TargetStrategicValue} "
                     + $"hit the {AbsoluteSquadCeiling}-squad ceiling with {remainingValue} unspent. "
                     + "A caller is sizing a scout force from an unbounded pool; the force was "
                     + "truncated rather than materialised in full.");
@@ -513,7 +513,7 @@ namespace OnlyWar.Runtime.Factories
             if (opposingForces.Count == 0)
             {
                 Squad understrength = GeneratePartialRemainderSquad(
-                    scoutTemplates, request.TargetBattleValue, random, entityIds);
+                    scoutTemplates, request.TargetStrategicValue, random, entityIds);
                 if (understrength != null) opposingForces.Add(understrength);
             }
             return opposingForces;

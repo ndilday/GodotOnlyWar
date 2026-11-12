@@ -18,11 +18,12 @@ namespace OnlyWar.Battles;
 /// square-law geometric mean sqrt(Offense x Durability) — a unit that kills twice as fast,
 /// or lives twice as long, is worth sqrt(2) line troopers — scaled by a small command
 /// multiplier and anchored so the light-infantry reference profile scores
-/// <see cref="AnchorBattleValue"/>. That anchor sets the scale of the values written to the
-/// rules database (a PDF trooper is 5 there); runtime code reads the database, not this number.
+/// <see cref="AnchorBattleValue"/>, the same scale as the rules database (a PDF trooper is 5
+/// there); runtime code reads the database, not this number.
 ///
-/// This is intentionally an offline/data-calibration primitive; the resulting value is
-/// persisted on SoldierTemplate and consumed by force generation.
+/// This is an offline primitive only. The stored SquadTemplateElement.BvPerSoldier is measured from
+/// battles by the gauntlet in Tools/OnlyWar.Diagnostics (Design/Reference/BattleLogic.md §4.1),
+/// and nothing writes this calculator's output to the database.
 /// </summary>
 public static class BattleValueCalculator
 {
@@ -45,8 +46,8 @@ public static class BattleValueCalculator
     /// Burrowers pay no closing tax at all: BurrowPlacer erupts them adjacent to an
     /// enemy squad at battle start and they attack the turn they surface.
     ///
-    /// <para>D and N are placeholders until measured from play and scenario traces; change them here
-    /// and regenerate the stored template values.</para>
+    /// <para>D and N are placeholders. They affect only this offline calculator, not the stored
+    /// template values.</para>
     /// </summary>
     public const float MeleeReferenceApproachDistance = 30.0f;
     public const float MeleeReferenceEngagementTurns = 6.0f;

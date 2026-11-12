@@ -434,7 +434,7 @@ public sealed class ChapterMusterViewModelBuilderTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            elements.Select(element => new SquadTemplateElement(
+            elements.Select(element => OnlyWar.Tests.Fixtures.TestModelFactory.Element(
                 element.Template, element.Min, element.Max)).ToList(),
             squadTypes);
     }

@@ -71,8 +71,8 @@ public class SquadRowViewModelTests
             new List<SquadWeaponOption>(),
             TestModelFactory.TestArmor,
             [
-                new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
-                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 0, 1),
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)
             ],
             SquadTypes.None);
 
@@ -113,8 +113,8 @@ public class SquadRowViewModelTests
             new List<SquadWeaponOption>(),
             TestModelFactory.TestArmor,
             [
-                new SquadTemplateElement(TestModelFactory.CaptainTemplate, 0, 1),
-                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.CaptainTemplate, 0, 1),
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 10)
             ],
             SquadTypes.HQ | SquadTypes.Administrative,
             FormationMobilityPolicy.MembersOnly);

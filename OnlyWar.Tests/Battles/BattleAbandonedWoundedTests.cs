@@ -39,7 +39,7 @@ public class BattleAbandonedWoundedTests
 
     private static long TermagauntBroodBudget(Faction tyranids) =>
         TermagauntBroodSize * (long)tyranids.SquadTemplates[TermagauntSquadTemplateId]
-            .Elements.First().SoldierTemplate.BattleValue;
+            .Elements.First().StrategicValuePerSoldier;
     private const int PdfInfantrySquadTemplateId = 34;
     // Engagement scoring and movement changes shift this seeded battle's winner (most recently
     // Phase 3 of Design/Reference/BattleLogic.md, which removed the arrival-time

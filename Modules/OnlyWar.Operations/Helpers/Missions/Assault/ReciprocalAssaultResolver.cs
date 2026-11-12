@@ -40,11 +40,11 @@ namespace OnlyWar.Operations.Missions.Assault
             first.AddLog(log);
             second.AddLog(log);
 
-            long firstBefore = AbleBattleValue(firstForce);
-            long secondBefore = AbleBattleValue(secondForce);
+            long firstBefore = AbleStrategicValue(firstForce);
+            long secondBefore = AbleStrategicValue(secondForce);
 
-            ushort range = MissionOpeningRange.Interpolate(
-                firstForce, secondForce, execution.Engagements, 0f, execution.Random);
+            ushort range = MissionOpeningRange.ReciprocalAssault(
+                firstForce, secondForce, execution.Engagements);
             EngagementResult engagement = execution.Engagements.Resolve(
                     new EngagementInput(
                         first.MissionParticipants,
@@ -65,11 +65,11 @@ namespace OnlyWar.Operations.Missions.Assault
             second.AddBattleReport(engagement);
 
             // These losses belong to already-committed assault formations, not either region's
-            // defensive military pool. Do not feed them into DefenderBattleValueDestroyed: NPC
+            // defensive military pool. Do not feed them into DefenderStrategicValueDestroyed: NPC
             // planners already removed committed strength from its source, and player casualties
             // are retained directly on their soldiers.
-            long firstLost = Math.Max(0L, firstBefore - AbleBattleValue(firstForce));
-            long secondLost = Math.Max(0L, secondBefore - AbleBattleValue(secondForce));
+            long firstLost = Math.Max(0L, firstBefore - AbleStrategicValue(firstForce));
+            long secondLost = Math.Max(0L, secondBefore - AbleStrategicValue(secondForce));
             first.AddLog($"Day {day}: Meeting engagement losses: {firstName} {firstLost} BV; {secondName} {secondLost} BV.");
             second.AddLog($"Day {day}: Meeting engagement losses: {secondName} {secondLost} BV; {firstName} {firstLost} BV.");
 
@@ -109,9 +109,9 @@ namespace OnlyWar.Operations.Missions.Assault
             IEnumerable<OperationalMissionElement> squads) =>
             squads.Where(squad => squad.AbleMembers.Count > 0).ToList();
 
-        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
+        private static long AbleStrategicValue(IEnumerable<OperationalMissionElement> squads) =>
             squads.SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
+                .Sum(soldier => (long)soldier.StrategicValue);
 
     }
 }

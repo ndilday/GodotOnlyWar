@@ -23,8 +23,8 @@ namespace OnlyWar.Persistence.Database.GameState
             command.CommandText = @"SELECT Id, CharacterId, PlanetId, ThreatFactionId,
                 RequestDate, ResolutionDate, Deadline, Status, CommitmentKey,
                 CommitmentDisplayName, CommitmentDisplayUnit, PackageCount, ServiceWeeks,
-                DeadlineWeeks, ReferenceBattleValue, MaximumEffectivePackageCount,
-                QualificationTags, ProgressBattleValueTime, OfferedRequisition,
+                DeadlineWeeks, ReferenceStrategicValue, MaximumEffectivePackageCount,
+                QualificationTags, ProgressStrategicValueTime, OfferedRequisition,
                 OfferedScheduleKind, OfferedCadenceWeeks, OfferedDeliveryDelayWeeks,
                 Severity, Hazard, HasPlayerResponded FROM Request";
             using IDataReader reader = command.ExecuteReader();
@@ -83,16 +83,16 @@ namespace OnlyWar.Persistence.Database.GameState
                 (Id, CharacterId, PlanetId, ThreatFactionId, RequestDate, ResolutionDate,
                  Deadline, Status, CommitmentKey, CommitmentDisplayName,
                  CommitmentDisplayUnit, PackageCount, ServiceWeeks, DeadlineWeeks,
-                 ReferenceBattleValue, MaximumEffectivePackageCount, QualificationTags,
-                 ProgressBattleValueTime, OfferedRequisition, OfferedScheduleKind,
+                 ReferenceStrategicValue, MaximumEffectivePackageCount, QualificationTags,
+                 ProgressStrategicValueTime, OfferedRequisition, OfferedScheduleKind,
                  OfferedCadenceWeeks, OfferedDeliveryDelayWeeks, Severity, Hazard,
                  HasPlayerResponded) VALUES
                 (@id, @characterId, @planetId, @threatFactionId, @requestDate,
                  @resolutionDate, @deadline, @status, @commitmentKey,
                  @commitmentDisplayName, @commitmentDisplayUnit, @packageCount,
-                 @serviceWeeks, @deadlineWeeks, @referenceBattleValue,
+                 @serviceWeeks, @deadlineWeeks, @referenceStrategicValue,
                  @maximumEffectivePackageCount, @qualificationTags,
-                 @progressBattleValueTime, @offeredRequisition, @offeredScheduleKind,
+                 @progressStrategicValueTime, @offeredRequisition, @offeredScheduleKind,
                  @offeredCadenceWeeks, @offeredDeliveryDelayWeeks, @severity, @hazard,
                  @hasPlayerResponded);";
             command.AddParam("@id", request.Id);
@@ -109,10 +109,10 @@ namespace OnlyWar.Persistence.Database.GameState
             command.AddParam("@packageCount", request.Commitment.PackageCount);
             command.AddParam("@serviceWeeks", request.Commitment.ServiceWeeks);
             command.AddParam("@deadlineWeeks", request.Commitment.CompletionDeadlineWeeks);
-            command.AddParam("@referenceBattleValue", request.Commitment.ReferenceBattleValuePerPackage);
+            command.AddParam("@referenceStrategicValue", request.Commitment.ReferenceStrategicValuePerPackage);
             command.AddParam("@maximumEffectivePackageCount", request.Commitment.MaximumEffectivePackageCount);
             command.AddParam("@qualificationTags", string.Join('|', request.Commitment.QualificationTags));
-            command.AddParam("@progressBattleValueTime", request.ProgressBattleValueTime);
+            command.AddParam("@progressStrategicValueTime", request.ProgressStrategicValueTime);
             command.AddParam("@offeredRequisition", request.OfferedRequisition);
             command.AddParam("@offeredScheduleKind", (int)request.OfferedScheduleKind);
             command.AddParam("@offeredCadenceWeeks", request.OfferedCadenceWeeks);

@@ -82,7 +82,7 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void CapabilityProfile_PreservesAuthoredZeroMeleeFraction()
+    public void CapabilityProfile_PreservesAZeroMeleeShare()
     {
         BattleSquad squad = Squad("Pure Ranged", 81_015, 15, 0f);
         EquipRifle(squad.Soldiers[0], 91_015, range: 1_200, damage: 30);
@@ -748,8 +748,18 @@ public class SquadEngagementPlanningTests
                     [shortRanged],
                     [longRanged]);
 
-            EngagementOptionEvaluation hold = decision.Candidates.Single(
+            EngagementOptionEvaluation hold = decision.Candidates.SingleOrDefault(
                 candidate => candidate.Kind == EngagementOptionKind.Hold);
+            if (hold == null)
+            {
+                // Since 2026-11-09 a squad whose Close wins while standing loses is offered only
+                // the move of its winning Close (SquadEngagementPolicy.ApplyPlanCommitment), so
+                // Hold is not on the list: the strongest form of closing over holding.
+                Assert.True(
+                    IsClosing(decision.Chosen.Kind),
+                    $"at {distance} yards Hold was masked but the squad chose {decision.Chosen.Kind}");
+                continue;
+            }
             BattleSquadCapabilityProfile profile = paired.Profiles[shortRanged.Id];
             float pool = profile.TotalAbleBattleValue;
             float turnsToLive = pool / System.Math.Max(0.0001f, hold.IncomingNow);
@@ -782,7 +792,7 @@ public class SquadEngagementPlanningTests
                                 + $"incoming={candidate.IncomingNow:F3}")));
             Assert.True(
                 decision.Chosen.Score - hold.Score
-                    > shortRanged.Soldiers.Sum(soldier => soldier.Soldier.Template.BattleValue)
+                    > shortRanged.Soldiers.Sum(soldier => soldier.Soldier.StrategicValue)
                         * 0.02f,
                 $"closing at {distance} yards remained inside the indifference band; "
                     + $"chosen={decision.Chosen.Kind}, "
@@ -806,13 +816,11 @@ public class SquadEngagementPlanningTests
         float original = EngagementPotential.ScoreTransition(
             immediateExchange: 4.5f,
             root,
-            projected,
-            contactCommitment: 0.75f);
+            projected);
         float shifted = EngagementPotential.ScoreTransition(
             immediateExchange: 4.5f,
             root with { NetRateValue = root.NetRateValue + potentialConstant },
-            projected with { NetRateValue = projected.NetRateValue + potentialConstant },
-            contactCommitment: 0.75f);
+            projected with { NetRateValue = projected.NetRateValue + potentialConstant });
 
         Assert.Equal(original, shifted, 5);
     }
@@ -836,8 +844,7 @@ public class SquadEngagementPlanningTests
             discountedTurnScores += discount * EngagementPotential.ScoreTransition(
                 immediate[turn],
                 potentials[turn],
-                potentials[turn + 1],
-                contactCommitment: 0);
+                potentials[turn + 1]);
             discount *= gamma;
         }
 
@@ -1268,38 +1275,48 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void MeleeChargePayoff_IsFullOnlyForContactAlreadyHeldAtTurnStart()
+    public void MeleeNow_IsCreditedOnlyForContactAlreadyHeldAtTurnStart()
     {
         // Attacks resolve from turn-start geometry, so ARRIVING in contact buys no blow this turn:
-        // the strike lands at the top of the next turn (TDD §6.6). The
-        // payoff is therefore discounted by the whole turns-to-contact, and only a soldier already
-        // in contact when the turn opens is undiscounted. MoveSpeed is 8 in this fixture, so the
-        // three separations are 0, 1 and 2 turns from contact.
+        // the strike lands at the top of the next turn (TDD §6.6). Only a squad already in contact
+        // when the turn opens has melee in its immediate trade; a charge from further out is paid
+        // for by the potential's contact rates after arrival. MoveSpeed is 8 in this fixture, so
+        // the three separations are 0, 1 and 2 turns from contact.
         //
-        // REPLACED MeleeChargePayoff_IsFullWhenContactOccursThisTurn, which asserted the opposite
-        // and was the load-bearing statement of the old fused move-and-strike charge.
+        // REPLACED MeleeChargePayoff_IsFullOnlyForContactAlreadyHeldAtTurnStart (2026-10-19), which
+        // credited a charge from range with its melee divided by (1 + turns to contact) -- the
+        // potential's melee after arrival, counted a second time.
         float atContact = ReferenceChargeMeleeValue(separation: 1);
         float oneTurnAway = ReferenceChargeMeleeValue(separation: 5);
         float twoTurnsAway = ReferenceChargeMeleeValue(separation: 13);
 
-        Assert.True(atContact > 0, $"expected charge value at contact, got {atContact:0.#####}");
-        Assert.Equal(atContact * 0.5f, oneTurnAway, 4);
-        Assert.Equal(atContact / 3f, twoTurnsAway, 4);
+        Assert.True(atContact > 0, $"expected melee now in contact, got {atContact:0.#####}");
+        Assert.Equal(0, oneTurnAway, 5);
+        Assert.Equal(0, twoTurnsAway, 5);
     }
 
     [Fact]
-    public void SameTurnCharge_DoesNotDoubleCountCurrentIncomingFireAsCommitment()
+    public void Charge_IsScoredOnlyByTheImmediateTradeAndThePotentialDifference()
     {
-        (float oneTurnIncoming, float oneTurnCommitment) = ReferenceChargeTerms(separation: 5);
-        (float twoTurnIncoming, float twoTurnCommitment) = ReferenceChargeTerms(separation: 13);
+        // A charge through incoming fire has no charge-only term (2026-10-19). The run-in cost it
+        // used to carry summed every enemy shooter's fire against every charger as if each shot at
+        // him alone; the crossing is the potential's Close continuation, with the fire shared.
+        EngagementOptionEvaluation charge = ReferenceCharge(separation: 13);
 
-        Assert.True(oneTurnIncoming > 0,
-            $"expected current-turn incoming fire for one-turn charge, got {oneTurnIncoming:0.#####}");
-        Assert.Equal(0, oneTurnCommitment, 5);
-        Assert.True(twoTurnIncoming > 0,
-            $"expected current-turn incoming fire for two-turn charge, got {twoTurnIncoming:0.#####}");
-        Assert.True(twoTurnCommitment > 0,
-            $"expected future closing exposure for two-turn charge, got {twoTurnCommitment:0.#####}");
+        Assert.True(charge.IncomingNow > 0,
+            $"expected incoming fire on the charge, got {charge.IncomingNow:0.#####}");
+        float decomposed = charge.ImmediateEnemyRemoval
+            - charge.ImmediateFriendlyFire
+            - charge.IncomingNow
+            + charge.MeleeValue
+            + charge.FutureExchange.Sum()
+            + charge.ArrivalTimeValue
+            + charge.ReadinessValue
+            + charge.RoleTerm
+            + charge.FireWindowValue
+            + charge.MoralePotentialValue
+            + charge.CommandPotentialValue;
+        Assert.Equal(decomposed, charge.Score, 3);
     }
 
     [Fact]
@@ -1369,19 +1386,21 @@ public class SquadEngagementPlanningTests
     }
 
     /// <summary>
-    /// A contact seeker facing a shooter prefers the charge to holding at every range.
+    /// A contact seeker that out-fights a shooter in melee closes on it at every range.
     ///
     /// <para>Until 2026-10-06 this asserted that the charge's advantage over Hold grows as the
     /// range shrinks (ContactSeekingSquad_ChargeAdvantageIsMonotoneInRange). Since the exchange
     /// potential became the better of a Stay and a Close continuation, the state a Hold leaves
-    /// already includes "charge next turn", so charging now is worth only the turn it saves. At 7
-    /// yards that turn is cheap (one more turn of fire before contact), so the advantage falls
-    /// there (0.42, 1.44, 0.18 at 120, 40 and 7 yards) without the charge ever losing.</para>
+    /// already includes "charge next turn", so charging now is worth only the turn it saves.
+    /// Until 2026-10-20 the charge still won on score, because the score credited a charge from
+    /// range with part of its melee (ContactSeekingSquad_PrefersTheChargeToHoldingAtEveryRange).
+    /// With that double count gone, Hold won at 40 and 7 yards (-0.03 and -0.73) and the squad
+    /// would have stood and shot for good. The commitment mask now takes Hold and StepBack away
+    /// when the forecast says closing fights better, so this checks the choice.</para>
     /// </summary>
     [Fact]
-    public void ContactSeekingSquad_PrefersTheChargeToHoldingAtEveryRange()
+    public void ContactSeekingSquad_ClosesOnAShooterItOutfightsAtEveryRange()
     {
-        List<float> advantages = [];
         foreach (int distance in new[] { 120, 40, 7 })
         {
             BattleSquad hybrid = Squad("Hybrid Chargers", 81_150 + distance, 10, 0.9f);
@@ -1402,45 +1421,74 @@ public class SquadEngagementPlanningTests
                     paired.Frames,
                     [hybrid],
                     [enemy]);
-            EngagementOptionEvaluation hold = decision.Candidates.Single(
-                candidate => candidate.Kind == EngagementOptionKind.Hold);
-            EngagementOptionEvaluation charge = decision.Candidates.Single(
-                candidate => candidate.Kind == EngagementOptionKind.CloseToContact);
-            advantages.Add(charge.Score - hold.Score);
-        }
 
-        Assert.All(
-            advantages,
-            advantage => Assert.True(
-                advantage > 0,
-                $"holding beat the charge at 120, 40 or 7 yards: {string.Join(", ", advantages)}"));
+            Assert.True(
+                decision.Chosen.RootCloseAdvantage > 0 && decision.Chosen.RootCloseRemovesMore,
+                $"distance={distance}: expected the forecast to say closing fights better, got "
+                    + $"advantage={decision.Chosen.RootCloseAdvantage:F3} "
+                    + $"removesMore={decision.Chosen.RootCloseRemovesMore}");
+            Assert.DoesNotContain(
+                decision.Chosen.Kind,
+                new[] { EngagementOptionKind.Hold, EngagementOptionKind.StepBack });
+        }
     }
 
     [Fact]
-    public void ContactSeekingSquad_MeleeTermIsNonZeroBeyondOneMove()
+    public void ContactSeeker_WhoseCloseRemovesNothing_IsNotCommitted()
     {
-        BattleSquad hybrid = Squad("Long Charge", 81_160, 10, 0.9f);
-        BattleSquad enemy = Squad("Ranged Enemy", 82_160, 10, 0.05f);
-        EquipMelee(hybrid.Soldiers[0], 91_160);
-        EquipRifle(hybrid.Soldiers[0], 92_160, 2_000, 10);
-        EquipRifle(enemy.Soldiers[0], 93_160, 2_000, 10);
-        BattleGridManager grid = new();
-        Place(grid, hybrid, true, 0, 0);
-        Place(grid, enemy, false, 40, 0);
-        BattleEngagementFrameBuilder.PairedFrame paired =
-            BattleEngagementFrameBuilder.Build([hybrid], [enemy]);
-        SquadEngagementDecision decision = Planner(grid, hybrid, enemy)
-            .ChooseEngagementOption(
-                hybrid,
-                paired.Frames[hybrid.Id],
-                paired.Profiles,
-                paired.Frames,
-                [hybrid],
-                [enemy]);
+        // The other half of the commitment rule: a CloseAdvantage that comes only from losing the
+        // squad later must not force a run. The candidates carry the root terms of 60 Kommandos at
+        // 200 yards against 60 PDF (2026-10-20): advantage 3.76, and a Close that removed nothing.
+        EngagementOptionEvaluation hold = new(
+            EngagementOptionKind.Hold, SquadMovementTier.Stationary, null, 0, 0, 0, 0, 0, 0, 0,
+            [], 0, 0, 0.18f, RootCloseAdvantage: 3.76f, RootCloseRemovesMore: false);
+        EngagementOptionEvaluation charge = hold with
+        {
+            Kind = EngagementOptionKind.CloseToContact,
+            Tier = SquadMovementTier.Run,
+            Score = -0.96f
+        };
 
-        EngagementOptionEvaluation charge = decision.Candidates.Single(
-            candidate => candidate.Kind == EngagementOptionKind.CloseToContact);
-        Assert.True(charge.MeleeValue > 0, $"long charge melee term was {charge.MeleeValue}");
+        List<EngagementOptionEvaluation> unchanged = SquadEngagementPolicy.ApplyClosingCommitment(
+            isContactSeeking: true, EngagementSquadRole.Normal, [hold, charge]);
+        Assert.Contains(unchanged, candidate => candidate.Kind == EngagementOptionKind.Hold);
+
+        // The same squad, had its Close removed more of the enemy than Stay, would be committed.
+        List<EngagementOptionEvaluation> committed = SquadEngagementPolicy.ApplyClosingCommitment(
+            isContactSeeking: true,
+            EngagementSquadRole.Normal,
+            [hold with { RootCloseRemovesMore = true }, charge with { RootCloseRemovesMore = true }]);
+        Assert.DoesNotContain(committed, candidate => candidate.Kind == EngagementOptionKind.Hold);
+        Assert.Contains(committed, candidate => candidate.Kind == EngagementOptionKind.CloseToContact);
+    }
+
+    [Fact]
+    public void SquadInAStandOff_WhoseCloseRemovesMore_IsNotOfferedHoldOrStepBack()
+    {
+        EngagementOptionEvaluation hold = new(
+            EngagementOptionKind.Hold, SquadMovementTier.Stationary, null, 0, 0, 0, 0, 0, 0, 0,
+            [], 0, 0, 0f, RootCloseRemovesMore: true, RootStayIsInert: true);
+        EngagementOptionEvaluation back = hold with { Kind = EngagementOptionKind.StepBack };
+        EngagementOptionEvaluation run = hold with
+        {
+            Kind = EngagementOptionKind.RunToward,
+            Tier = SquadMovementTier.Run,
+            Score = -0.5f
+        };
+
+        List<EngagementOptionEvaluation> committed = SquadEngagementPolicy.ApplyStandoffCommitment(
+            EngagementSquadRole.Normal, [hold, back, run]);
+        Assert.Equal([EngagementOptionKind.RunToward], committed.Select(candidate => candidate.Kind));
+
+        // Under fire or firing, a Close that removes nothing, or another role: unchanged.
+        Assert.Equal(3, SquadEngagementPolicy.ApplyStandoffCommitment(
+            EngagementSquadRole.Normal,
+            [hold with { RootStayIsInert = false }, back, run]).Count);
+        Assert.Equal(3, SquadEngagementPolicy.ApplyStandoffCommitment(
+            EngagementSquadRole.Normal,
+            [hold with { RootCloseRemovesMore = false }, back, run]).Count);
+        Assert.Equal(3, SquadEngagementPolicy.ApplyStandoffCommitment(
+            EngagementSquadRole.Cover, [hold, back, run]).Count);
     }
 
     [Fact]
@@ -1968,8 +2016,7 @@ public class SquadEngagementPlanningTests
                         + $"arrival={candidate.ArrivalTimeValue:F3} "
                         + $"readiness={candidate.ReadinessValue:F3} "
                         + $"outgoing={candidate.ImmediateEnemyRemoval:F3} "
-                        + $"future={candidate.FutureExchange.Sum():F3} "
-                        + $"commitment={candidate.ContactCommitmentCost:F3}"))}");
+                        + $"future={candidate.FutureExchange.Sum():F3}"))}");
         Assert.All(
             decision.Candidates,
             candidate => Assert.True(
@@ -2073,7 +2120,7 @@ public class SquadEngagementPlanningTests
             .MeleeValue;
     }
 
-    private static (float Incoming, float Commitment) ReferenceChargeTerms(int separation)
+    private static EngagementOptionEvaluation ReferenceCharge(int separation)
     {
         BattleSquad chargers = Squad("Incoming Chargers", 81_132, 20, 0.9f);
         BattleSquad enemy = Squad("Ranged Charge Target", 81_133, 20, 0.05f);
@@ -2094,9 +2141,8 @@ public class SquadEngagementPlanningTests
         SquadEngagementDecision decision = planner.ChooseEngagementOption(
             chargers, paired.Frames[chargers.Id], paired.Profiles, paired.Frames,
             [chargers], [enemy]);
-        EngagementOptionEvaluation charge = decision.Candidates
+        return decision.Candidates
             .Single(candidate => candidate.Kind == EngagementOptionKind.CloseToContact);
-        return (charge.IncomingNow, charge.ContactCommitmentCost);
     }
 
     private static BattleSquad ReferenceBolterSquad(out RangedWeapon rifle)
@@ -2127,12 +2173,12 @@ public class SquadEngagementPlanningTests
 
     private static BattleSquad Squad(
         string name,
-        IReadOnlyCollection<(int Id, int BattleValue)> members,
+        IReadOnlyCollection<(int Id, int StrategicValue)> members,
         float meleeFraction)
     {
         List<Soldier> soldiers = members.Select(member =>
         {
-            SoldierTemplate template = new(
+            SoldierTemplate template = new TestSoldierTemplate(
                 100_000 + member.Id,
                 TestModelFactory.HumanSpecies,
                 $"{name} Template",
@@ -2141,13 +2187,19 @@ public class SquadEngagementPlanningTests
                 false,
                 0,
                 [],
-                battleValue: member.BattleValue,
-                meleeFraction: meleeFraction);
+                strategicValue: member.StrategicValue);
             Soldier soldier = TestModelFactory.CreateSoldier(template, name);
             soldier.Id = member.Id;
             return soldier;
         }).ToList();
-        return new BattleSquad(false, TestModelFactory.CreateSquad(name, soldiers.ToArray()));
+        BattleSquad squad = new(false, TestModelFactory.CreateSquad(name, soldiers.ToArray()));
+        // The fixture's doctrine premise, as the tactical value table would measure it
+        // (TacticalValueTable.MeleeShares).
+        foreach (BattleSoldier member in squad.Soldiers)
+        {
+            member.TacticalMeleeShare = meleeFraction;
+        }
+        return squad;
     }
 
     private static RangedWeapon EquipRifle(

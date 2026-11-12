@@ -137,7 +137,7 @@ public sealed class BurstSizeSelectionTests
         int hordeSize = 0)
     {
         const int idBase = 98_600;
-        SoldierTemplate shooterTemplate = new(
+        SoldierTemplate shooterTemplate = new TestSoldierTemplate(
             idBase + 1,
             TestModelFactory.HumanSpecies,
             "Burst Shooter",
@@ -146,8 +146,8 @@ public sealed class BurstSizeSelectionTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 20);
-        SoldierTemplate targetTemplate = new(
+            strategicValue: 20);
+        SoldierTemplate targetTemplate = new TestSoldierTemplate(
             idBase + 2,
             TestModelFactory.HumanSpecies,
             "Burst Target",
@@ -156,7 +156,7 @@ public sealed class BurstSizeSelectionTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 20);
+            strategicValue: 20);
         Soldier shooterModel = TestModelFactory.CreateSoldier(
             shooterTemplate,
             "Burst Shooter",

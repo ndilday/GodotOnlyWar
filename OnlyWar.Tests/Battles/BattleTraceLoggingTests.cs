@@ -164,12 +164,12 @@ public class BattleTraceLoggingTests
 
     private static BattleSquad CreateSquad(
         string name,
-        params (int SoldierId, int BattleValue)[] members)
+        params (int SoldierId, int StrategicValue)[] members)
     {
         List<Soldier> soldiers = members
             .Select(member =>
             {
-                SoldierTemplate template = new(
+                SoldierTemplate template = new TestSoldierTemplate(
                     31_000 + member.SoldierId,
                     TestModelFactory.HumanSpecies,
                     $"{name} {member.SoldierId} Template",
@@ -178,7 +178,7 @@ public class BattleTraceLoggingTests
                     false,
                     0,
                     Array.Empty<ValueTuple<BaseSkill, float>>(),
-                    battleValue: member.BattleValue);
+                    strategicValue: member.StrategicValue);
                 Soldier soldier = TestModelFactory.CreateSoldier(
                     template,
                     $"{name} {member.SoldierId}");

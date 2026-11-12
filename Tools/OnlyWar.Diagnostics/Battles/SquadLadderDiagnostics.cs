@@ -40,7 +40,7 @@ namespace OnlyWar.Diagnostics.Battles;
 ///   LADDER_AGGR     Aggression for both sides (default Aggressive).
 ///   LADDER_TAG      name for this run's output files, so several processes can split the pairs.
 ///   LADDER_OUT      output folder (default %TEMP%\GodotOnlyWar\ladder).
-///   DUEL_WORKERS    battles of one probe run at once (default 8). Probes still run one after
+///   DUEL_WORKERS    battles of one probe run at once (default half the logical processors). Probes still run one after
 ///                   another, because each one decides where the next goes.
 ///
 /// throughput-TAG.txt reports the battles and turns per minute so far, counting fresh battles only.

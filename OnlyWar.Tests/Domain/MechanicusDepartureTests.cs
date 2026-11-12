@@ -17,7 +17,7 @@ namespace OnlyWar.Tests.Domain;
 
 /// <summary>
 /// Mars pipeline (TDD §6.14): the departure operation and who may
-/// be sent. Templates come from the real rules data, so the Techmarine requirement (Tech > 60)
+/// be sent. Templates come from the real rules data, so the Techmarine requirement (Tech > 61.5)
 /// and the Scout exclusion are tested against what the game actually uses.
 /// </summary>
 public class MechanicusDepartureTests
@@ -90,10 +90,10 @@ public class MechanicusDepartureTests
     }
 
     [Fact]
-    public void Evaluate_RequiresTechAboveSixty()
+    public void Evaluate_RequiresTechAboveSixtyOnePointFive()
     {
-        PlayerSoldier atBar = Brother(Doctrine.TacticalMarine, tech: 60f);
-        PlayerSoldier aboveBar = Brother(Doctrine.TacticalMarine, tech: 60.5f);
+        PlayerSoldier atBar = Brother(Doctrine.TacticalMarine, tech: 61.5f);
+        PlayerSoldier aboveBar = Brother(Doctrine.TacticalMarine, tech: 62f);
         LineSquad(atBar, aboveBar);
 
         Assert.Equal(MechanicusDepartureReasonCode.BelowTechmarineRequirement,

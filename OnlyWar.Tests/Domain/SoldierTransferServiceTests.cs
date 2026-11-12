@@ -1049,7 +1049,7 @@ public class SoldierTransferServiceTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            elements.Select(element => new SquadTemplateElement(element.Template, element.Min, element.Max)).ToList(),
+            elements.Select(element => OnlyWar.Tests.Fixtures.TestModelFactory.Element(element.Template, element.Min, element.Max)).ToList(),
             squadTypes);
     }
 }

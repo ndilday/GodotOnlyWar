@@ -25,7 +25,7 @@ namespace OnlyWar.Campaign.Operations {
         public RequestFulfillmentKind FulfillmentKind { get; }
         public RequestStatus Status { get; private set; }
         public ForceCommitmentPackage Commitment { get; }
-        public long ProgressBattleValueTime { get; private set; }
+        public long ProgressStrategicValueTime { get; private set; }
         public int OfferedRequisition { get; }
         public PledgeScheduleKind OfferedScheduleKind { get; }
         public int OfferedCadenceWeeks { get; }
@@ -77,7 +77,7 @@ namespace OnlyWar.Campaign.Operations {
             int offeredDeliveryDelayWeeks = 4,
             RequestSeverity severity = RequestSeverity.Concerned,
             RequestHazard hazard = RequestHazard.Routine,
-            long progressBattleValueTime = 0,
+            long progressStrategicValueTime = 0,
             bool hasPlayerResponded = false,
             RequestStatus status = RequestStatus.Open,
             Date resolvedDate = null)
@@ -91,7 +91,7 @@ namespace OnlyWar.Campaign.Operations {
             Deadline = Copy(deadline ?? throw new ArgumentNullException(nameof(deadline)));
             Commitment = commitment ?? throw new ArgumentNullException(nameof(commitment));
             if (offeredRequisition <= 0) throw new ArgumentOutOfRangeException(nameof(offeredRequisition));
-            if (progressBattleValueTime < 0) throw new ArgumentOutOfRangeException(nameof(progressBattleValueTime));
+            if (progressStrategicValueTime < 0) throw new ArgumentOutOfRangeException(nameof(progressStrategicValueTime));
             OfferedRequisition = offeredRequisition;
             if (offeredDeliveryDelayWeeks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(offeredDeliveryDelayWeeks));
@@ -104,7 +104,7 @@ namespace OnlyWar.Campaign.Operations {
             OfferedDeliveryDelayWeeks = offeredDeliveryDelayWeeks;
             Severity = severity;
             Hazard = hazard;
-            ProgressBattleValueTime = progressBattleValueTime;
+            ProgressStrategicValueTime = progressStrategicValueTime;
             HasPlayerResponded = hasPlayerResponded;
             FulfillmentKind = threatFaction == null
                 ? RequestFulfillmentKind.ForceCommitment
@@ -141,7 +141,7 @@ namespace OnlyWar.Campaign.Operations {
                 return;
             }
 
-            long weeklyStrength = CalculateQualifyingPresenceBattleValue(
+            long weeklyStrength = CalculateQualifyingPresenceStrategicValue(
                 rules,
                 requireShowOfForce: FulfillmentKind == RequestFulfillmentKind.ForceCommitment);
             if (weeklyStrength > 0)
@@ -171,13 +171,13 @@ namespace OnlyWar.Campaign.Operations {
                 if (weeklyStrength > 0)
                 {
                     Status = RequestStatus.InProgress;
-                    long weeklyCap = Commitment.ReferenceBattleValuePerPackage
+                    long weeklyCap = Commitment.ReferenceStrategicValuePerPackage
                         * Commitment.MaximumEffectivePackageCount;
-                    ProgressBattleValueTime += Math.Min(weeklyStrength, weeklyCap);
-                    long required = Commitment.ReferenceBattleValuePerPackage
+                    ProgressStrategicValueTime += Math.Min(weeklyStrength, weeklyCap);
+                    long required = Commitment.ReferenceStrategicValuePerPackage
                         * Commitment.PackageCount
                         * Commitment.ServiceWeeks;
-                    if (ProgressBattleValueTime >= required)
+                    if (ProgressStrategicValueTime >= required)
                     {
                         Fulfill(currentDate);
                         return;
@@ -212,7 +212,7 @@ namespace OnlyWar.Campaign.Operations {
         /// request. An outcome-based commitment still counts any landed squad planet-wide, since
         /// what it measures is whether the Chapter turned up at all.
         /// </summary>
-        private long CalculateQualifyingPresenceBattleValue(
+        private long CalculateQualifyingPresenceStrategicValue(
             GameRulesData rules,
             bool requireShowOfForce)
         {
@@ -230,7 +230,7 @@ namespace OnlyWar.Campaign.Operations {
                     || squad.CurrentOrders?.Mission.MissionType == MissionType.ShowOfForce)
                 .Where(squad => SquadMatchesQualifications(
                     squad, rules.ChapterDoctrine?.Techmarine))
-                .Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
+                .Sum(squad => squad.Members.Sum(member => (long)member.StrategicValue));
         }
 
         private bool SquadMatchesQualifications(
@@ -256,7 +256,7 @@ namespace OnlyWar.Campaign.Operations {
         }
 
         private bool IsPlayerPresent(GameRulesData rules) =>
-            CalculateQualifyingPresenceBattleValue(rules, requireShowOfForce: false) > 0;
+            CalculateQualifyingPresenceStrategicValue(rules, requireShowOfForce: false) > 0;
 
         private static Date Copy(Date date) => new(date.Millenium, date.Year, date.Week);
 

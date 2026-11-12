@@ -53,7 +53,7 @@ namespace OnlyWar.Operations.Missions
             context.AddLog(log);
             // Measured before and after so a multi-day assault faces a garrison depleted by the fighting
             // it has already done, rather than a fresh full-strength one every morning.
-            long opposingBattleValueBefore = AbleBattleValue(opposingSquads);
+            long opposingStrategicValueBefore = AbleStrategicValue(opposingSquads);
             EngagementResult engagement = execution.Engagements.Resolve(
                     new EngagementInput(
                         context.MissionParticipants,
@@ -69,7 +69,7 @@ namespace OnlyWar.Operations.Missions
             context.RecordBattleOutcome(engagement);
             context.AddBattleReport(engagement);
             context.RecordDefenderLosses(
-                opposingBattleValueBefore - AbleBattleValue(opposingSquads));
+                opposingStrategicValueBefore - AbleStrategicValue(opposingSquads));
             // A force left combat-ineffective by the engagement ends its mission here rather than
             // recursing into steps that assume a manned squad (placement/checks index into
             // able members and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
@@ -95,9 +95,9 @@ namespace OnlyWar.Operations.Missions
             return MissionStepResult.Continue(resumeStep, marginOfSuccess, resumeStep);
         }
 
-        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
+        private static long AbleStrategicValue(IEnumerable<OperationalMissionElement> squads) =>
             squads
                 .SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
+                .Sum(soldier => (long)soldier.StrategicValue);
     }
 }

@@ -73,10 +73,21 @@ namespace OnlyWar.Domain.Formatting
             return result;
         }
 
+        // Built once. The static Regex.Replace/Match overloads look each pattern up in the
+        // process-wide regex cache on every call, and that lookup alone was 2.25% of all CPU in a
+        // profile of the Governance test (2026-11-12): a squad is named again every time a unit
+        // adds it.
+        private static readonly Regex SquadSuffix =
+            new(@"\s+Squad$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex CompanySuffix =
+            new(@"\s+Company$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex CompanyNumber =
+            new(@"\b(\d+)(?:st|nd|rd|th)?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static string NormalizeRoleName(string templateName)
         {
             string name = string.IsNullOrWhiteSpace(templateName) ? "Line" : templateName.Trim();
-            return Regex.Replace(name, @"\s+Squad$", string.Empty, RegexOptions.IgnoreCase);
+            return SquadSuffix.Replace(name, string.Empty);
         }
 
         private static string FormatCompanySuffix(Unit company)
@@ -84,7 +95,7 @@ namespace OnlyWar.Domain.Formatting
             string name = company?.Name ?? "Company";
             return TryGetCompanyNumber(name, out int number)
                 ? $"{number} Co."
-                : Regex.Replace(name, @"\s+Company$", string.Empty, RegexOptions.IgnoreCase) + " Co.";
+                : CompanySuffix.Replace(name, string.Empty) + " Co.";
         }
 
         internal static bool TryGetCompanyNumber(string name, out int companyNumber)
@@ -92,7 +103,7 @@ namespace OnlyWar.Domain.Formatting
             companyNumber = 0;
             if (string.IsNullOrWhiteSpace(name)) return false;
 
-            Match digit = Regex.Match(name, @"\b(\d+)(?:st|nd|rd|th)?\b", RegexOptions.IgnoreCase);
+            Match digit = CompanyNumber.Match(name);
             if (digit.Success && int.TryParse(digit.Groups[1].Value, out companyNumber))
             {
                 return true;

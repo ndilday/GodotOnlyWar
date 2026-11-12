@@ -44,7 +44,7 @@ internal sealed class FactionReconPatrolPlanner
     /// that allocated soldiers. Defend, Withdraw and Move settle in battle-value arithmetic on
     /// RegionFaction; Patrol called ForceGenerator for every point the auction awarded it, and the
     /// award is a share of MilitaryStrength — a population headcount for the Imperium, in the billions
-    /// on a hive world. See RegionFaction.PatrolScreenBattleValue for what that cost.
+    /// on a hive world. See RegionFaction.PatrolScreenStrategicValue for what that cost.
     ///
     /// Patrol is now to Recon what Defend is to Assault: the intelligence role belongs to Recon, which
     /// fields real squads against a real target, and the screen is the abstract standing counterpart.
@@ -64,10 +64,10 @@ internal sealed class FactionReconPatrolPlanner
         // smallest squad posts no screen, exactly as when this generated one.
         if (budget < faction.MinimumForceRequest) return;
 
-        regionFaction.PatrolScreenBattleValue = budget;
+        regionFaction.PatrolScreenStrategicValue = budget;
         GameLog.Debug(() =>
             $"AI patrol {faction.Name}/{planet.Name}/{regionFaction.Region.Name}: "
-            + $"screenBV={regionFaction.PatrolScreenBattleValue} (awarded={budget}, "
+            + $"screenBV={regionFaction.PatrolScreenStrategicValue} (awarded={budget}, "
             + $"organized={regionFaction.OrganizedMilitaryStrength})");
     }
 
@@ -88,7 +88,7 @@ internal sealed class FactionReconPatrolPlanner
             {
                 if (region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction regionFaction))
                 {
-                    regionFaction.PatrolScreenBattleValue = 0;
+                    regionFaction.PatrolScreenStrategicValue = 0;
                 }
             }
         }
@@ -114,12 +114,12 @@ internal sealed class FactionReconPatrolPlanner
         // margins of every participating squad are POOLED as a signed sum, they cancelled out the
         // competent squads in the same tasking; a faction's awareness could never leave zero however
         // long it scouted.
-        long cheapestScoutBattleValue = CheapestScoutSquadBattleValue(faction);
-        if (cheapestScoutBattleValue <= 0 || budget <= 0)
+        long cheapestScoutStrategicValue = CheapestScoutSquadStrategicValue(faction);
+        if (cheapestScoutStrategicValue <= 0 || budget <= 0)
         {
             GameLog.Debug(() =>
                 $"AI recon {faction.Name}: target={DescribeOffensive(target)}, "
-                + $"budget={budget}, cheapestScout={cheapestScoutBattleValue}; "
+                + $"budget={budget}, cheapestScout={cheapestScoutStrategicValue}; "
                 + "no order created");
             return false;
         }
@@ -142,9 +142,9 @@ internal sealed class FactionReconPatrolPlanner
             // The leaderless-squad hazard the old cap guarded against is handled by the PROFILE: the
             // original failure came from requesting an AssaultForce, which let the generator spend the
             // budget on formations with no squad leader at all. ScoutPatrol builds scout formations,
-            // and CheapestScoutSquadBattleValue below refuses the tasking outright for a faction that
+            // and CheapestScoutSquadStrategicValue below refuses the tasking outright for a faction that
             // has none.
-            TargetBattleValue = budget,
+            TargetStrategicValue = budget,
             Profile = ForceCompositionProfile.ScoutPatrol
         };
         List<Squad> scouts = ForceGenerator.GenerateForce(request, random, _identity);
@@ -152,7 +152,7 @@ internal sealed class FactionReconPatrolPlanner
         {
             GameLog.Debug(() =>
                 $"AI recon {faction.Name}: target={DescribeOffensive(target)}, "
-                + $"cheapestScout={cheapestScoutBattleValue}, generated=0; no order created");
+                + $"cheapestScout={cheapestScoutStrategicValue}, generated=0; no order created");
             return false;
         }
 
@@ -177,8 +177,8 @@ internal sealed class FactionReconPatrolPlanner
         allOrders.Add(order);
         GameLog.Debug(() =>
             $"AI recon {faction.Name}: target={DescribeOffensive(target)}, staging={stagingRegion.Name}, "
-            + $"cheapestScout={cheapestScoutBattleValue}, generatedSquads={scouts.Count}, "
-            + $"generatedSoldiers={scouts.Sum(s => s.Members.Count)}, generatedBV={SquadBattleValue(scouts)}, "
+            + $"cheapestScout={cheapestScoutStrategicValue}, generatedSquads={scouts.Count}, "
+            + $"generatedSoldiers={scouts.Sum(s => s.Members.Count)}, generatedBV={SquadStrategicValue(scouts)}, "
             + $"observer={DescribeObserver(scouts)}");
         return true;
     }
@@ -192,12 +192,12 @@ internal sealed class FactionReconPatrolPlanner
     /// ANY kind, which for the mob roster is a 30-point Nobz remnant, while its only scout formation
     /// costs a good deal more.
     /// </remarks>
-    internal static long CheapestScoutSquadBattleValue(Faction faction) =>
+    internal static long CheapestScoutSquadStrategicValue(Faction faction) =>
         faction?.SquadTemplates?.Values
             .Where(st => st.IsPresentOperationalForce
                 && (st.SquadType & SquadTypes.Scout) != 0
-                && st.BattleValue > 0)
-            .Select(st => (long)st.BattleValue)
+                && st.StrategicValue > 0)
+            .Select(st => (long)st.StrategicValue)
             .DefaultIfEmpty(0L)
             .Min() ?? 0L;
 
@@ -260,15 +260,15 @@ internal sealed class FactionReconPatrolPlanner
         return works >= WorthScreeningWorksLevel;
     }
 
-    private static long SquadBattleValue(IEnumerable<Squad> squads) =>
-        squads.Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
+    private static long SquadStrategicValue(IEnumerable<Squad> squads) =>
+        squads.Sum(squad => squad.Members.Sum(member => (long)member.StrategicValue));
 
     private static string DescribeOffensive(PotentialOffensive offensive)
     {
         if (offensive == null) return "none";
         return $"{offensive.TargetRegion.Planet.Name}/{offensive.TargetRegion.Name}/"
             + $"{offensive.TargetFaction.PlanetFaction.Faction.Name} "
-            + $"defenderBV={offensive.DefenderBattleValue}, "
-            + $"estimatedDefenderBV={offensive.EstimatedDefenderBattleValue}";
+            + $"defenderBV={offensive.DefenderStrategicValue}, "
+            + $"estimatedDefenderBV={offensive.EstimatedDefenderStrategicValue}";
     }
 }

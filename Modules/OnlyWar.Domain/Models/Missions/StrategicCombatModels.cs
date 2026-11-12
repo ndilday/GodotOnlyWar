@@ -17,19 +17,19 @@ namespace OnlyWar.Domain.Missions
     public class StrategicCombatContribution
     {
         public RegionFaction StagingFaction { get; }
-        public long BattleValue { get; }
+        public long StrategicValue { get; }
 
-        public StrategicCombatContribution(RegionFaction stagingFaction, long battleValue)
+        public StrategicCombatContribution(RegionFaction stagingFaction, long strategicValue)
         {
             StagingFaction = stagingFaction;
-            BattleValue = battleValue < 0 ? 0 : battleValue;
+            StrategicValue = strategicValue < 0 ? 0 : strategicValue;
         }
     }
 
     public class StrategicCombatMission : Mission
     {
         public Faction Attacker { get; }
-        public long CommittedBattleValue { get; }
+        public long CommittedStrategicValue { get; }
         public IReadOnlyList<StrategicCombatContribution> Contributions { get; }
         public Aggression Aggression { get; }
         public bool InvadesOnVictory { get; }
@@ -38,7 +38,7 @@ namespace OnlyWar.Domain.Missions
             int id,
             RegionFaction target,
             Faction attacker,
-            long committedBattleValue,
+            long committedStrategicValue,
             IEnumerable<StrategicCombatContribution> contributions,
             Aggression aggression,
             bool invadesOnVictory,
@@ -46,9 +46,9 @@ namespace OnlyWar.Domain.Missions
             : base(id, missionType, target, 0)
         {
             Attacker = attacker;
-            CommittedBattleValue = committedBattleValue < 0 ? 0 : committedBattleValue;
+            CommittedStrategicValue = committedStrategicValue < 0 ? 0 : committedStrategicValue;
             Contributions = (contributions ?? Enumerable.Empty<StrategicCombatContribution>())
-                .Where(c => c != null && c.BattleValue > 0)
+                .Where(c => c != null && c.StrategicValue > 0)
                 .ToList()
                 .AsReadOnly();
             Aggression = aggression;
@@ -58,7 +58,7 @@ namespace OnlyWar.Domain.Missions
         public StrategicCombatMission(
             RegionFaction target,
             Faction attacker,
-            long committedBattleValue,
+            long committedStrategicValue,
             IEnumerable<StrategicCombatContribution> contributions,
             Aggression aggression,
             bool invadesOnVictory,
@@ -67,7 +67,7 @@ namespace OnlyWar.Domain.Missions
                 Guid.NewGuid().GetHashCode(),
                 target,
                 attacker,
-                committedBattleValue,
+                committedStrategicValue,
                 contributions,
                 aggression,
                 invadesOnVictory,
@@ -80,8 +80,8 @@ namespace OnlyWar.Domain.Missions
     {
         public RegionFaction Target { get; }
         public Faction Attacker { get; }
-        public long CommittedBattleValue { get; }
-        public long DefenderBattleValue { get; }
+        public long CommittedStrategicValue { get; }
+        public long DefenderStrategicValue { get; }
         public double AttackerEffectiveStrength { get; }
         public double DefenderEffectiveStrength { get; }
         public long AttackerLosses { get; }
@@ -95,8 +95,8 @@ namespace OnlyWar.Domain.Missions
         public StrategicCombatResult(
             RegionFaction target,
             Faction attacker,
-            long committedBattleValue,
-            long defenderBattleValue,
+            long committedStrategicValue,
+            long defenderStrategicValue,
             double attackerEffectiveStrength,
             double defenderEffectiveStrength,
             long attackerLosses,
@@ -108,8 +108,8 @@ namespace OnlyWar.Domain.Missions
         {
             Target = target;
             Attacker = attacker;
-            CommittedBattleValue = committedBattleValue;
-            DefenderBattleValue = defenderBattleValue;
+            CommittedStrategicValue = committedStrategicValue;
+            DefenderStrategicValue = defenderStrategicValue;
             AttackerEffectiveStrength = attackerEffectiveStrength;
             DefenderEffectiveStrength = defenderEffectiveStrength;
             AttackerLosses = attackerLosses;

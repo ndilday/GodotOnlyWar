@@ -132,7 +132,10 @@ public class MarsFoundingTests
     }
 
     // Measured 2026-09-29 over these 40 seeds with the worthiness test: min 5, max 25, mean 13.2.
-    // The band holds that spread with a little room; it guards the pipeline, not the tuning.
+    // The skill-bonus curve change of 2026-10-13 raised every rating, and the bar moved from 60 to
+    // 61.5 to bring the cohort back (2026-10-27): min 3, max 25, mean 14.1. No bar keeps both ends
+    // in the band with room to spare (61 gives max 31, 62 gives min 2; seeds 2 and 17 are the
+    // outliers). The band guards the pipeline, not the tuning.
     [Trait("Category", "Slow")]
     [Fact]
     public void Founding_CohortCountStaysInItsBandAcrossSeeds()
@@ -164,7 +167,7 @@ public class MarsFoundingTests
         bool assault = melee > 90 && ranged > 95 && ranged < 105;
         bool devastator = melee > 80 && melee < 90 && ranged > 95;
         bool veteran = tactical && (melee > 115 || ranged > 120);
-        return Rating(RatingConsumerRole.TechnicalCapability) > 60
+        return Rating(RatingConsumerRole.TechnicalCapability) > 61.5f
             && (tactical || assault || devastator || veteran);
     }
 

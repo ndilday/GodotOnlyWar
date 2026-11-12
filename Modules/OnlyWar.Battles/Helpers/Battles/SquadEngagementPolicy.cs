@@ -103,8 +103,6 @@ namespace OnlyWar.Battles
                 frame,
                 primary,
                 profile);
-            // One rate per decision, so every option and both potentials convert alike.
-            float enemyValueRate = EngagementCurrency.EnemyValueRate;
             List<EngagementOptionEvaluation> evaluations = legal
                 .Select(kind => EvaluateEngagementOption(
                     squad,
@@ -114,11 +112,19 @@ namespace OnlyWar.Battles
                     profiles,
                     allFrames,
                     primary,
-                    enemies,
-                    enemyValueRate))
+                    enemies))
                 .OrderByDescending(candidate => candidate.Score)
                 .ThenBy(candidate => candidate.Kind)
                 .ToList();
+            evaluations = ApplyClosingCommitment(profile.IsContactSeeking, frame.Role, evaluations);
+            if (EngagementPotential.StandoffClose)
+            {
+                evaluations = ApplyStandoffCommitment(frame.Role, evaluations);
+            }
+            if (EngagementPotential.FollowClosePlan)
+            {
+                evaluations = ApplyPlanCommitment(frame.Role, evaluations);
+            }
             float bestScore = evaluations.Select(candidate => candidate.Score)
                 .DefaultIfEmpty(0)
                 .Max();
@@ -154,9 +160,9 @@ namespace OnlyWar.Battles
             // 0.109 of each other, and the baseline posture stepped him back from a RunToward that
             // scored best. At the cap the floor is unchanged.
             //
-            // The floor is in the squad's own currency, like every score (EngagementCurrency): a
-            // fixed number of battle value would be "about nothing" for a marine squad and a real
-            // decision for a PDF one. It is quoted per average soldier of this squad.
+            // The floor is quoted per average soldier of this squad, in tactical value like every
+            // score: a fixed number would be "about nothing" for an elite squad and a real
+            // decision for a cheap one.
             //
             // The floor is for a squad with "no shot and nowhere useful to be". When closing beats
             // standing from where the squad is (2026-10-06), it has somewhere useful to be, and the
@@ -170,7 +176,7 @@ namespace OnlyWar.Battles
             float indifferenceFloor = somewhereUsefulToBe
                 ? 0f
                 : EngagementIndifferenceFloor
-                * EngagementCurrency.ScoreUnit(squad, enemies)
+                * ScoreUnit(squad, enemies)
                 * Math.Clamp(
                     ExpectedExchangeTurnsFor(squad.Id)
                         / EngagementHorizonModel.MaximumExchangeTurns,
@@ -198,7 +204,6 @@ namespace OnlyWar.Battles
                     0,
                     0,
                     [],
-                    0,
                     0,
                     0,
                     0);
@@ -510,6 +515,110 @@ namespace OnlyWar.Battles
                 ? EngagementOptionKind.RunToward
                 : EngagementOptionKind.JogToward;
 
+        /// <summary>
+        /// COMMITMENT (2026-10-20). A contact seeker whose own forecast says closing fights better
+        /// than standing -- the Close continuation beats Stay AND removes more enemy battle value --
+        /// is not offered Hold or StepBack.
+        ///
+        /// <para>Φ is the better of Stay and Close, so the state a Hold leaves already contains
+        /// "close next turn", and a charge is worth only the turn it saves: about the incoming
+        /// fire it crosses. Any squad whose standing exchange is positive this turn therefore holds,
+        /// and the next turn looks the same, so it never claims the melee its forecast says it
+        /// would win. The charge-only score terms removed on 2026-10-19 hid this: the melee they
+        /// credited a charge from range pulled squads in. With them gone, a hybrid contact seeker
+        /// with a rifle held at 40 and at 7 yards against a shooter
+        /// (SquadEngagementPlanningTests.ContactSeekingSquad_PrefersTheChargeToHoldingAtEveryRange).
+        /// A one-turn planner cannot commit by itself, so the commitment is doctrine, in the mask,
+        /// where a large future cannot outvote it.</para>
+        ///
+        /// <para>The forecast decides when. CloseAdvantage alone is not enough: the forecast
+        /// discounts later turns, so a run that only delays a rout scores above a firefight that
+        /// loses the squad sooner. 60 Kommandos at 200 yards against 60 PDF had a CloseAdvantage of
+        /// 3 to 6 with a Close that removed nothing; committing them would have run them into a
+        /// rout. Removing more of the enemy is what makes closing a better fight.</para>
+        ///
+        /// <para>Only the ordinary engagement (no role) is masked, and only when an advancing
+        /// option remains; roles (Cover, Standoff, pursuit and the rest) keep their own masks.</para>
+        /// </summary>
+        internal static List<EngagementOptionEvaluation> ApplyClosingCommitment(
+            bool isContactSeeking,
+            EngagementSquadRole role,
+            List<EngagementOptionEvaluation> evaluations)
+        {
+            if (!isContactSeeking
+                || role != EngagementSquadRole.Normal
+                || evaluations.Count == 0)
+            {
+                return evaluations;
+            }
+            EngagementOptionEvaluation root = evaluations[0];
+            if (root.RootCloseAdvantage <= 0 || !root.RootCloseRemovesMore)
+            {
+                return evaluations;
+            }
+            List<EngagementOptionEvaluation> committed = evaluations
+                .Where(candidate => candidate.Kind is not (EngagementOptionKind.Hold
+                    or EngagementOptionKind.StepBack))
+                .ToList();
+            return committed.Count > 0 ? committed : evaluations;
+        }
+
+        /// <summary>
+        /// STAND-OFF (experiment, 2026-11-06). A squad that neither hurts nor is hurt from where it
+        /// stands, and whose Close would remove more of the enemy, is not offered Hold or StepBack.
+        /// Stay is worth 0 there and any walk toward the enemy prices a little below 0, so both sides
+        /// otherwise hold until the inert rule ends the battle: 4 Tactical squads and 9 Tyranid
+        /// Warriors at 740 yards once the marines' heavy weapons run dry. Same reach as
+        /// <see cref="ApplyClosingCommitment"/>: the ordinary engagement only, and only when an
+        /// advancing option remains.
+        /// </summary>
+        internal static List<EngagementOptionEvaluation> ApplyStandoffCommitment(
+            EngagementSquadRole role,
+            List<EngagementOptionEvaluation> evaluations)
+        {
+            if (role != EngagementSquadRole.Normal || evaluations.Count == 0)
+            {
+                return evaluations;
+            }
+            EngagementOptionEvaluation root = evaluations[0];
+            if (!root.RootStayIsInert || !root.RootCloseRemovesMore)
+            {
+                return evaluations;
+            }
+            List<EngagementOptionEvaluation> committed = evaluations
+                .Where(candidate => candidate.Kind is not (EngagementOptionKind.Hold
+                    or EngagementOptionKind.StepBack))
+                .ToList();
+            return committed.Count > 0 ? committed : evaluations;
+        }
+
+        /// <summary>
+        /// FOLLOW THE PLAN (experiment, 2026-11-09, <see cref="EngagementPotential.FollowClosePlan"/>).
+        /// When the root Close beats Stay and removes more of the enemy, only the option that moves
+        /// as the winning Close continuation moves is offered (RunToward for the run and its halfway
+        /// stops, JogToward or StepForward for the approaches that fire). The same test as
+        /// <see cref="ApplyClosingCommitment"/>, for the same reason: a Close that only delays a loss
+        /// does not commit. The ordinary engagement only; all options stay when none matches.
+        /// </summary>
+        internal static List<EngagementOptionEvaluation> ApplyPlanCommitment(
+            EngagementSquadRole role,
+            List<EngagementOptionEvaluation> evaluations)
+        {
+            if (role != EngagementSquadRole.Normal || evaluations.Count == 0)
+            {
+                return evaluations;
+            }
+            EngagementOptionEvaluation root = evaluations[0];
+            if (root.RootCloseAdvantage <= 0 || !root.RootCloseRemovesMore || root.RootCloseMove is not EngagementOptionKind move)
+            {
+                return evaluations;
+            }
+            List<EngagementOptionEvaluation> committed = evaluations
+                .Where(candidate => candidate.Kind == move)
+                .ToList();
+            return committed.Count > 0 ? committed : evaluations;
+        }
+
         private List<EngagementOptionKind> GetLegalOptionKinds(
             BattleSquad squad,
             SquadEngagementFrame frame,
@@ -660,6 +769,30 @@ namespace OnlyWar.Battles
             return result.Distinct().ToList();
         }
 
+        /// <summary>
+        /// One average soldier of the planning squad, the unit decision thresholds are quoted in.
+        /// When the squad has no value, the enemy's average soldier.
+        /// </summary>
+        internal static float ScoreUnit(BattleSquad squad, IEnumerable<BattleSquad> enemies)
+        {
+            float own = MeanSoldierValue([squad]);
+            return own > 0 ? own : MeanSoldierValue(enemies);
+        }
+
+        private static float MeanSoldierValue(IEnumerable<BattleSquad> squads)
+        {
+            float total = 0;
+            int count = 0;
+            foreach (BattleSoldier soldier in (squads ?? [])
+                .Where(squad => squad != null)
+                .SelectMany(squad => squad.AbleSoldiers))
+            {
+                total += SquadPlanningServices.BattleValueOf(soldier);
+                count++;
+            }
+            return count > 0 ? total / count : 0;
+        }
+
         private EngagementOptionEvaluation EvaluateEngagementOption(
             BattleSquad squad,
             EngagementOptionKind kind,
@@ -668,8 +801,7 @@ namespace OnlyWar.Battles
             IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
             IReadOnlyDictionary<int, SquadEngagementFrame> allFrames,
             BattleSquad primary,
-            IReadOnlyCollection<BattleSquad> enemies,
-            float enemyValueRate)
+            IReadOnlyCollection<BattleSquad> enemies)
         {
             SquadMovementTier tier = GetOptionTier(kind, squad, primary, frame);
             ValueTuple<float, float>? intended = GetIntendedDestination(
@@ -688,22 +820,18 @@ namespace OnlyWar.Battles
             (float enemyRemoval, float friendlyFire, float readiness,
                 IReadOnlyList<PlannedSoldierAction> rootActions) =
                 EvaluateImmediateActionValue(squad, tier, direction);
-            // Every term below is in this squad's own currency (EngagementCurrency). Removal and
-            // melee are priced in the battle value of the enemy soldiers they take out, so they
-            // convert; friendly fire, incoming fire and the contact commitment are ours already.
-            enemyRemoval *= enemyValueRate;
+            // Every term below is in tactical value, both sides priced by one rule.
             float incoming = EvaluateIncomingNow(
                 squad,
                 feasibleSpeed,
                 profiles,
                 allFrames,
                 enemies);
-            (float meleeNow, float contactCommitment) = EvaluateContactTerms(
+            float meleeNow = EvaluateContactMeleeNow(
                 squad,
                 kind,
                 primary,
                 profile);
-            meleeNow *= enemyValueRate;
             IReadOnlyCollection<BattleSquad> friendlySquads = GetFriendlySquads(squad);
             EngagementPotential.Breakdown rootPotential = _potential.Evaluate(
                 new EngagementPotential.State(
@@ -717,8 +845,7 @@ namespace OnlyWar.Battles
                     0,
                     primary,
                     null,
-                    friendlySquads,
-                    EnemyValueRate: enemyValueRate));
+                    friendlySquads));
             EngagementPotential.Breakdown projectedPotential = _potential.Evaluate(
                 new EngagementPotential.State(
                     squad,
@@ -732,8 +859,7 @@ namespace OnlyWar.Battles
                     primary,
                     rootActions,
                     friendlySquads,
-                    ProjectPrimaryCentroid(squad, primary, frame),
-                    enemyValueRate));
+                    ProjectPrimaryCentroid(squad, primary, frame)));
             float discountedNetRate =
                 EngagementPotential.EngagementPotentialDiscount
                 * projectedPotential.NetRateValue;
@@ -757,8 +883,7 @@ namespace OnlyWar.Battles
             float score = EngagementPotential.ScoreTransition(
                 enemyRemoval - friendlyFire - incoming + meleeNow,
                 rootPotential,
-                projectedPotential,
-                contactCommitment);
+                projectedPotential);
             return new EngagementOptionEvaluation(
                 kind,
                 tier,
@@ -773,12 +898,15 @@ namespace OnlyWar.Battles
                 future,
                 arrivalTimeValue,
                 roleTerm,
-                contactCommitment,
                 score,
                 rootActions,
                 moraleTerm,
                 commandTerm,
-                rootPotential.CloseAdvantage);
+                rootPotential.CloseAdvantage,
+                rootPotential.CloseRemovesMore,
+                rootPotential.StayIsInert,
+                rootPotential.NoWayToWin,
+                rootPotential.CloseMove);
         }
 
         private static SquadMovementTier GetOptionTier(
@@ -1056,12 +1184,12 @@ namespace OnlyWar.Battles
             IReadOnlyCollection<BattleSquad> enemies) =>
             _exchange.EvaluateIncomingNow(squad, feasibleSpeed, profiles, frames, enemies);
 
-        private (float MeleeValue, float Commitment) EvaluateContactTerms(
+        private float EvaluateContactMeleeNow(
             BattleSquad squad,
             EngagementOptionKind kind,
             BattleSquad primary,
             BattleSquadCapabilityProfile profile) =>
-            _exchange.EvaluateContactTerms(squad, kind, primary, profile);
+            _exchange.EvaluateContactMeleeNow(squad, kind, primary, profile);
 
         private bool HasPursuitAimCommitment(
             BattleSquad squad,
@@ -1133,7 +1261,6 @@ namespace OnlyWar.Battles
                     BattleDecisionTrace.Field("role_term", candidate.RoleTerm),
                     BattleDecisionTrace.Field("morale_potential", candidate.MoralePotentialValue),
                     BattleDecisionTrace.Field("command_potential", candidate.CommandPotentialValue),
-                    BattleDecisionTrace.Field("commitment", candidate.ContactCommitmentCost),
                     BattleDecisionTrace.Field("score", candidate.Score),
                     BattleDecisionTrace.Field("chosen", candidate.Kind == decision.Chosen.Kind),
                     BattleDecisionTrace.Field("margin", decision.Chosen.Score - runnerUp),

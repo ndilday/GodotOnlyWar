@@ -100,7 +100,7 @@ public class GrenadePlannerTests
         // priced in the same undiscounted currency, a BV-20 thrower's 0.59 self-cost no longer
         // exceeds the 0.71 it removes; the crossover sits higher. BV 40 restores a genuine
         // "worth more than the throw buys" thrower.
-        BattleSquad valuableShooters = CreateSquad("Valuable Grenadier", 740, battleValue: 40);
+        BattleSquad valuableShooters = CreateSquad("Valuable Grenadier", 740, strategicValue: 40);
         ArmWithRifleAndBeltGrenade(valuableShooters.Soldiers[0]);
         BattleSquad firstEnemies = CreateSquad("Close Enemy", 750);
         BattleGridManager firstGrid = new();
@@ -109,7 +109,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner firstPlanner = CreatePlanner(
             firstGrid, [], [], [], valuableShooters, firstEnemies);
 
-        BattleSquad expendableShooters = CreateSquad("Expendable Grenadier", 741, battleValue: 2);
+        BattleSquad expendableShooters = CreateSquad("Expendable Grenadier", 741, strategicValue: 2);
         ArmWithRifleAndBeltGrenade(expendableShooters.Soldiers[0]);
         BattleSquad secondEnemies = CreateSquad("Close Enemy", 751);
         BattleGridManager secondGrid = new();
@@ -128,7 +128,7 @@ public class GrenadePlannerTests
         BattleSquad shooters = CreateSquad("Grenadier", 760);
         BattleSoldier shooter = shooters.Soldiers[0];
         ArmWithRifleAndBeltGrenade(shooter);
-        BattleSquad allies = CreateSquad("Valuable Ally", 761, battleValue: 100);
+        BattleSquad allies = CreateSquad("Valuable Ally", 761, strategicValue: 100);
         BattleSquad enemies = CreateSquad("Enemy", 770);
 
         BattleGridManager grid = new();
@@ -367,19 +367,19 @@ public class GrenadePlannerTests
     private static BattleSquad CreateSquad(
         string name,
         int soldierId,
-        int battleValue = 2)
+        int strategicValue = 2)
     {
-        return CreateSquad(name, (soldierId, battleValue));
+        return CreateSquad(name, (soldierId, strategicValue));
     }
 
     private static BattleSquad CreateSquad(
         string name,
-        params (int SoldierId, int BattleValue)[] members)
+        params (int SoldierId, int StrategicValue)[] members)
     {
         List<Soldier> soldiers = members
             .Select(member =>
             {
-                SoldierTemplate template = new(
+                SoldierTemplate template = new TestSoldierTemplate(
                     30_000 + member.SoldierId,
                     TestModelFactory.HumanSpecies,
                     $"{name} {member.SoldierId} Template",
@@ -388,7 +388,7 @@ public class GrenadePlannerTests
                     false,
                     0,
                     Array.Empty<ValueTuple<BaseSkill, float>>(),
-                    battleValue: member.BattleValue);
+                    strategicValue: member.StrategicValue);
                 Soldier soldier = TestModelFactory.CreateSoldier(
                     template,
                     $"{name} {member.SoldierId}");

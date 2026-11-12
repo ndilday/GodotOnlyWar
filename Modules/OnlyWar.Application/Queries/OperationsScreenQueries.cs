@@ -779,7 +779,7 @@ internal sealed class OperationsScreenProjector
             : SpecialMissionPresentation.FormatRecommendedForce(
                 mission.SpecialMission,
                 CurrentWeek,
-                _read.ReferenceSquadBattleValue);
+                _read.ReferenceSquadStrategicValue);
 
     private static OrderEditorView BuildEditor(
         Order order, IReadOnlyList<SpecialistOption> specialists)
@@ -892,7 +892,7 @@ internal sealed class OperationsScreenProjector
                     new("Deadline", FormatDate(request.Deadline)),
                     new("Progress", request.FulfillmentKind == RequestFulfillmentKind.ThreatSuppressed
                         ? "Suppress threat"
-                        : $"{request.ProgressBattleValueTime:0.#} BV-weeks"),
+                        : $"{request.ProgressStrategicValueTime:0.#} BV-weeks"),
                     new("Reward", request.OfferedScheduleKind == PledgeScheduleKind.Standing
                         ? $"{request.OfferedRequisition:N0} Req / {request.OfferedCadenceWeeks} wks"
                         : $"{request.OfferedRequisition:N0} Req")

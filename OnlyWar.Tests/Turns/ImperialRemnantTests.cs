@@ -466,6 +466,21 @@ public class ImperialRemnantTests
         Assert.True(governing.Garrison > 0, "a governing PDF drafts from its growth");
     }
 
+    [Fact]
+    public void HiddenCult_InARegionWithNoImperialPresence_ConvertsNobodyAndDoesNotThrow()
+    {
+        // A region can lose its Imperial entry altogether; this threw during generation on seed 7
+        // (2026-11-05).
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Conversion, population: 50);
+        region.RegionFactionMap.Remove(fixture.DefaultRegionFaction(0).PlanetFaction.Faction.Id);
+
+        CreateDemographicsProcessor(fixture).ProcessRegionFaction(cult, pdfRatio: 0.0f);
+
+        Assert.Equal(50, cult.Population);
+    }
+
     private static long TotalPopulation(SectorSimulationFixture fixture)
     {
         long total = 0;

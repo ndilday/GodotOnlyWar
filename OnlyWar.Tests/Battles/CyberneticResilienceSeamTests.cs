@@ -25,7 +25,7 @@ public class CyberneticResilienceSeamTests
 
     private static BattleSoldier Target(string name, int soldierId)
     {
-        SoldierTemplate template = new(
+        SoldierTemplate template = new TestSoldierTemplate(
             31_000 + soldierId,
             // Species median equal to the soldier's own, so the perceived constitution the
             // estimate reads and the real one resolution reads are the same number.
@@ -36,7 +36,7 @@ public class CyberneticResilienceSeamTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: 10);
+            strategicValue: 10);
         Soldier soldier = TestModelFactory.CreateSoldier(template, name);
         soldier.Id = soldierId;
         soldier.Constitution = Constitution;

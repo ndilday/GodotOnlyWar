@@ -30,6 +30,7 @@
     </PackageReference>
     <Compile Include="../OnlyWar.Tests/Fixtures/TestSkills.cs" Link="Fixtures/TestSkills.cs" />
     <Compile Include="../OnlyWar.Tests/Fixtures/TestModelFactory.cs" Link="Fixtures/TestModelFactory.cs" />
+    <Compile Include="../OnlyWar.Tests/Fixtures/TestSoldierTemplate.cs" Link="Fixtures/TestSoldierTemplate.cs" />
     <Compile Include="../OnlyWar.Tests/SharedStateCollection.cs" Link="SharedStateCollection.cs" />
     <Compile Include="../OnlyWar.Tests/Generation/NameGeneratorTests.cs" Link="NameGeneratorTests.cs" />
   </ItemGroup>

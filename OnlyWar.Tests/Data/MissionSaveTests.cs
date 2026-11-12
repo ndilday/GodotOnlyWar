@@ -108,7 +108,7 @@ public class MissionSaveTests
     }
 
     [Fact]
-    public void SavePlanet_AmbushMission_RoundTripsTargetBattleValue()
+    public void SavePlanet_AmbushMission_RoundTripsTargetStrategicValue()
     {
         Faction faction = CreateFaction();
         Planet planet = CreatePlanet(faction);
@@ -118,7 +118,7 @@ public class MissionSaveTests
             MissionType.Ambush,
             targetFaction,
             missionSize: 2,
-            targetBattleValue: 270);
+            targetStrategicValue: 270);
         planet.Regions[0].SpecialMissions.Add(original);
 
         using SqliteConnection connection = CreateSaveDatabase();
@@ -134,13 +134,13 @@ public class MissionSaveTests
                 [faction.Id] = faction
             })[original.Id];
 
-        Assert.Equal(270, loaded.TargetBattleValue);
+        Assert.Equal(270, loaded.TargetStrategicValue);
         Assert.Contains(loaded, planet.Regions[0].SpecialMissions);
     }
 
     // Saves older than version 23 are rejected, so the loader no longer invents a target for an
     // ambush stored without one. Execution rolls it against the enemy's deployed strength instead
-    // (AmbushMissionSizing.ResolveTargetBattleValue).
+    // (AmbushMissionSizing.ResolveTargetStrategicValue).
     [Fact]
     public void LoadAmbushMissionWithoutTarget_LoadsWithoutOne()
     {
@@ -167,7 +167,7 @@ public class MissionSaveTests
                 [faction.Id] = faction
             })[original.Id];
 
-        Assert.Null(loaded.TargetBattleValue);
+        Assert.Null(loaded.TargetStrategicValue);
     }
 
     private static void SavePlanet(SqliteConnection connection, Planet planet)
@@ -208,7 +208,7 @@ public class MissionSaveTests
                 ListeningPost INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0,
                 Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0,
                 HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT,
-                AssignedDefensiveBattleValue BIGINT);
+                AssignedDefensiveStrategicValue BIGINT);
             CREATE TABLE PlanetFactionRegionAwareness (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 Awareness REAL NOT NULL);
             CREATE TABLE PlanetFactionTargetIntel (PlanetId INTEGER NOT NULL, ObserverFactionId INTEGER NOT NULL,
@@ -216,7 +216,7 @@ public class MissionSaveTests
                 EstimatedPopulation BIGINT, EstimatedMilitaryStrength BIGINT, LastEvidenceWeek INTEGER NOT NULL);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL,
-                TargetBattleValue BIGINT);";
+                TargetStrategicValue BIGINT);";
         command.ExecuteNonQuery();
         return connection;
     }

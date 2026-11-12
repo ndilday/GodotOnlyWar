@@ -20,7 +20,7 @@ namespace OnlyWar.Campaign.Strategy.Allocation;
 ///
 /// 2. TASKS BID IN BATCHES. Greedy on single increments is correct only for concave curves, and both
 ///    the defence and assault curves have thresholds - a task whose first increment is worthless would
-///    never start. Each pairing offers the batch that maximises total/battleValue.
+///    never start. Each pairing offers the batch that maximises total/strategicValue.
 ///
 /// 3. RE-SCORING IS LAZY. Shared saturation means one award changes every task answering the same
 ///    threat, so a full re-score per award is order 10^4-10^5 scoring calls per faction, per planet,
@@ -98,7 +98,7 @@ internal sealed class ForceAllocationAuction
                     / (1.0 + flexibility);
                 Pairing pairing = new(task, source, hops, discount);
                 Bid bid = BestBid(pairing);
-                if (bid.BattleValue > 0L) queue.Enqueue(pairing, PriorityOf(task, bid));
+                if (bid.StrategicValue > 0L) queue.Enqueue(pairing, PriorityOf(task, bid));
             }
         }
 
@@ -107,14 +107,14 @@ internal sealed class ForceAllocationAuction
             Pairing pairing = queue.Dequeue();
             (ForceTask task, RegionForceState source, int hops, _) = pairing;
             Bid bid = BestBid(pairing);
-            if (bid.BattleValue <= 0L) continue;
+            if (bid.StrategicValue <= 0L) continue;
 
             // Once the best bid on the planet is down in the reserve sink's epsilon tail, every
             // remaining pairing scores within rounding of every other. Auctioning that plateau is both
             // pointless and slow: the lazy queue spends its time popping, re-scoring and pushing back
             // bids that are all equally worthless, which is where full sector generation lost most of
             // its time. Stop, and hand each region's leftover straight to its own garrison.
-            if (bid.ScorePerBattleValue <= EpsilonScoreFloor) break;
+            if (bid.ScorePerStrategicValue <= EpsilonScoreFloor) break;
 
             // Lazy re-scoring: if this pairing is no longer the best, put it back at its real score and
             // let whatever now leads be examined instead.
@@ -125,20 +125,20 @@ internal sealed class ForceAllocationAuction
                 continue;
             }
 
-            task.Award(bid.BattleValue, fromOutside: hops > 0);
-            _threats.Answer(task.SharedThreats, bid.BattleValue);
-            source.SpareTroops = Math.Max(0L, source.SpareTroops - bid.BattleValue);
-            awards.Add(new ForceTaskAward(task, source, bid.BattleValue, hops));
+            task.Award(bid.StrategicValue, fromOutside: hops > 0);
+            _threats.Answer(task.SharedThreats, bid.StrategicValue);
+            source.SpareTroops = Math.Max(0L, source.SpareTroops - bid.StrategicValue);
+            awards.Add(new ForceTaskAward(task, source, bid.StrategicValue, hops));
 
             GameLog.Trace(() =>
                 $"AI allocate {faction.Name}/{planet.Name}: {task.Kind} {task.DescribeTarget()} "
-                + $"<- {source.RegionFaction.Region.Name} bv={bid.BattleValue} hops={hops}, "
-                + $"perBv={bid.ScorePerBattleValue:E2}, assigned={task.Assigned}/{task.Saturation}");
+                + $"<- {source.RegionFaction.Region.Name} bv={bid.StrategicValue} hops={hops}, "
+                + $"perBv={bid.ScorePerStrategicValue:E2}, assigned={task.Assigned}/{task.Saturation}");
 
             if (source.SpareTroops > 0L && task.AcceptsMore)
             {
                 Bid next = BestBid(pairing);
-                if (next.BattleValue > 0L)
+                if (next.StrategicValue > 0L)
                 {
                     queue.Enqueue(pairing, PriorityOf(task, next));
                 }
@@ -162,8 +162,8 @@ internal sealed class ForceAllocationAuction
             long returned = 0L;
             foreach (ForceTaskAward award in awards.Where(a => ReferenceEquals(a.Task, task)))
             {
-                award.Source.SpareTroops += award.BattleValue;
-                returned += award.BattleValue;
+                award.Source.SpareTroops += award.StrategicValue;
+                returned += award.StrategicValue;
             }
             awards.RemoveAll(award => ReferenceEquals(award.Task, task));
             task.Refund();
@@ -198,7 +198,7 @@ internal sealed class ForceAllocationAuction
     /// several orders of magnitude above it.
     /// </summary>
     private const double EpsilonScoreFloor =
-        ForceAllocationConstants.DefenceEpsilonTailPerBattleValue * 10.0;
+        ForceAllocationConstants.DefenceEpsilonTailPerStrategicValue * 10.0;
 
     /// <summary>
     /// Queue priority: best value per battle value first, ties broken by the task's own preference.
@@ -211,7 +211,7 @@ internal sealed class ForceAllocationAuction
     /// accident, so the tie-break genuinely decides which of two equally cheap sweeps goes first.
     /// </remarks>
     private static (double, double) PriorityOf(ForceTask task, Bid bid) =>
-        (-bid.ScorePerBattleValue, -task.TieBreakValue);
+        (-bid.ScorePerStrategicValue, -task.TieBreakValue);
 
     /// <summary>
     /// Whether this kind of work is charged for the other enemies its source region could have
@@ -237,7 +237,7 @@ internal sealed class ForceAllocationAuction
     private readonly record struct Pairing(
         ForceTask Task, RegionForceState Source, int Hops, double Discount);
 
-    private readonly record struct Bid(long BattleValue, double ScorePerBattleValue);
+    private readonly record struct Bid(long StrategicValue, double ScorePerStrategicValue);
 
     /// <summary>
     /// Enemy-held regions this source could have acted against instead of this one. A region bordering
@@ -302,15 +302,15 @@ internal sealed class ForceAllocationAuction
             // without a smaller share ever looking like the better buy.
             double value = task.BidValue(candidate) * discount;
             if (value <= 0.0) continue;
-            double perBattleValue = value / candidate;
+            double perStrategicValue = value / candidate;
             // Ties go to the LARGER amount, and CandidateAmounts is ascending. Below a task's viable
             // award every amount scores the same per point, so preferring the smaller one would have a
             // region creep toward the floor a quantum per auction round - many more iterations for the
             // same plan, and a real risk of hitting MaxAuctionIterations on a busy planet.
-            if (perBattleValue >= best.ScorePerBattleValue && best.BattleValue > 0L
-                || perBattleValue > best.ScorePerBattleValue)
+            if (perStrategicValue >= best.ScorePerStrategicValue && best.StrategicValue > 0L
+                || perStrategicValue > best.ScorePerStrategicValue)
             {
-                best = new Bid(candidate, perBattleValue);
+                best = new Bid(candidate, perStrategicValue);
             }
         }
         return best;

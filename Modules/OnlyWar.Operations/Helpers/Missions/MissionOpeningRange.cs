@@ -68,5 +68,49 @@ namespace OnlyWar.Operations.Missions
                     squad.ToEngagementParticipant(), missionParticipants, opposingParticipants));
             return (ushort)(opposingRange + (missionRange - opposingRange) * rangeModifier);
         }
+
+        /// <summary>
+        /// The opening of a reciprocal assault: two forces meeting in the field, neither on its own
+        /// terms. It opens at the LONGER of the two sides' preferences (rule B,
+        /// Design/Active/OpeningRangeRefactor.md section 3, product owner 2026-10-22): forces meeting
+        /// on open ground see each other from far off, the side that wants range opens fire as soon as
+        /// it is worth firing, and the side that wants contact cannot make the fight start closer
+        /// without the surprise that an ambush's margin represents. A side's preference is the
+        /// average over its squads that have one; a squad with no preference (no ranged weapon)
+        /// does not pull it. With no preference on either side the forces meet in contact.
+        /// </summary>
+        /// <remarks>
+        /// Until 2026-10-24 an assault opened at the midpoint (Interpolate with margin 0), which gave
+        /// a melee horde half of a gunline's chosen distance, and averaged a contact seeker's
+        /// degenerate 0 into its side.
+        /// </remarks>
+        public static ushort ReciprocalAssault(
+            IReadOnlyList<OperationalMissionElement> firstForce,
+            IReadOnlyList<OperationalMissionElement> secondForce,
+            IEngagementResolver resolver)
+        {
+            if (resolver == null) throw new System.ArgumentNullException(nameof(resolver));
+            IReadOnlyList<EngagementParticipant> first = firstForce
+                .Select(squad => squad.ToEngagementParticipant())
+                .ToArray();
+            IReadOnlyList<EngagementParticipant> second = secondForce
+                .Select(squad => squad.ToEngagementParticipant())
+                .ToArray();
+            double? SidePreference(
+                IReadOnlyList<EngagementParticipant> side,
+                IReadOnlyList<EngagementParticipant> enemy)
+            {
+                List<int> preferences = side
+                    .Select(squad => resolver.GetPreferredOpeningRangeOrNone(squad, enemy, side))
+                    .Where(preference => preference.HasValue)
+                    .Select(preference => preference.Value)
+                    .ToList();
+                return preferences.Count > 0 ? preferences.Average() : null;
+            }
+            double range = System.Math.Max(
+                SidePreference(first, second) ?? 0,
+                SidePreference(second, first) ?? 0);
+            return (ushort)System.Math.Clamp(range, 0, ushort.MaxValue);
+        }
     }
 }

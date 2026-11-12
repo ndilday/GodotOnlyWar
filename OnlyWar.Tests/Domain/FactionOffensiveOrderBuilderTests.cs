@@ -30,7 +30,7 @@ public sealed class FactionOffensiveOrderBuilderTests
             attacker,
             offensive,
             [(source, 50L)],
-            totalBattleValue: 50,
+            totalStrategicValue: 50,
             MissionType.Advance,
             Aggression.Normal,
             orders,
@@ -55,7 +55,7 @@ public sealed class FactionOffensiveOrderBuilderTests
             attacker,
             offensive,
             [(source, 50L)],
-            totalBattleValue: 50,
+            totalStrategicValue: 50,
             MissionType.Advance,
             Aggression.Normal,
             orders,
@@ -66,7 +66,7 @@ public sealed class FactionOffensiveOrderBuilderTests
         Assert.Equal(MissionType.Advance, order.Mission.MissionType);
         Assert.Same(attacker, order.OwnerFaction);
         Assert.Same(source.Region, partialSquad.CurrentRegion);
-        Assert.Equal(2, partialSquad.Members.Sum(member => member.Template.BattleValue));
+        Assert.Equal(2, partialSquad.Members.Sum(member => member.StrategicValue));
         Assert.Equal(98, source.MilitaryStrength);
     }
 
@@ -84,7 +84,7 @@ public sealed class FactionOffensiveOrderBuilderTests
             attacker,
             offensive,
             [(source, 4L)],
-            totalBattleValue: 4,
+            totalStrategicValue: 4,
             MissionType.Advance,
             Aggression.Normal,
             orders,
@@ -110,7 +110,7 @@ public sealed class FactionOffensiveOrderBuilderTests
             attacker,
             offensive,
             [(source, 4L)],
-            totalBattleValue: 4,
+            totalStrategicValue: 4,
             MissionType.Advance,
             Aggression.Normal,
             orders,
@@ -175,8 +175,8 @@ public sealed class FactionOffensiveOrderBuilderTests
                 TargetRegion = targetRegion,
                 TargetFaction = target,
                 AttackingRegions = [sourceRegion],
-                DefenderBattleValue = 10,
-                EstimatedDefenderBattleValue = 10,
+                DefenderStrategicValue = 10,
+                EstimatedDefenderStrategicValue = 10,
                 Reward = 100
             });
     }

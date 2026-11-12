@@ -23,6 +23,12 @@ namespace OnlyWar.Domain.Soldiers
         float MoveSpeed { get; }
         Body Body { get; }
         Squad AssignedSquad { get; set; }
+        /// <summary>
+        /// His weight in force generation and in casualty and survivor accounting: the
+        /// <see cref="SquadTemplateElement.StrategicValuePerSoldier"/> of the element his template fills in
+        /// his squad's template, 0 when he is in no squad or no element holds his template.
+        /// </summary>
+        int StrategicValue { get; }
         /// <summary>Hands and vital locations only -- excludes motive capability.</summary>
         bool CanFight { get; }
         /// <summary>Motive locations only: <see cref="MotiveSpeedMultiplier"/> is above zero.</summary>

@@ -28,7 +28,7 @@ internal sealed class FactionOffensiveEvaluator
     // scouted. A PDF actually fields about 3%, so this errs against the attacker by design.
     internal const double PessimisticMobilizationFraction = 0.05;
     internal const double RaidCommitFraction = 0.35;
-    internal const long MinimumRaidBattleValue = 100;
+    internal const long MinimumRaidStrategicValue = 100;
 
     private readonly FactionBehaviorRulesProfile _behaviorRules;
     // The persistent invasion forces of the campaign being planned for. Supplied explicitly so the
@@ -109,7 +109,7 @@ internal sealed class FactionOffensiveEvaluator
     {
         // Risk scales with the estimated defender strength and how dug-in it is: a fortified
         // objective is disproportionately costly to take.
-        double risk = offensive.EstimatedDefenderBattleValue
+        double risk = offensive.EstimatedDefenderStrategicValue
                       * (1.0 + RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment)
                           * EntrenchmentRiskFactor);
         return offensive.Reward / Math.Max(risk, 1.0);
@@ -160,7 +160,7 @@ internal sealed class FactionOffensiveEvaluator
     /// genuinely expects to face, so a doctrine multiplier applied to it means what it says.
     ///
     /// This is applied ONLY here, on the attacker's side. The defensive reserve reads the raw belief
-    /// (FactionThreatAssessment.CalculateRequiredDefensiveBattleValue), and inflating that would
+    /// (FactionThreatAssessment.CalculateRequiredDefensiveStrategicValue), and inflating that would
     /// make every region garrison against phantoms on all its borders and leave nothing spare for
     /// anything - the paralysis this whole area was fixed to escape, arrived at from the far side.
     /// </remarks>
@@ -220,8 +220,8 @@ internal sealed class FactionOffensiveEvaluator
     {
         double expectedDamage = Math.Min(
             attackingForce * RaidCommitFraction,
-            Math.Max(1, offensive.EstimatedDefenderBattleValue) * 0.5);
-        double risk = Math.Max(1.0, offensive.EstimatedDefenderBattleValue
+            Math.Max(1, offensive.EstimatedDefenderStrategicValue) * 0.5);
+        double risk = Math.Max(1.0, offensive.EstimatedDefenderStrategicValue
             * (1.0 + RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment)
                 * EntrenchmentRiskFactor));
         return (offensive.Reward * 0.25 + expectedDamage) / risk;
@@ -240,15 +240,15 @@ internal sealed class FactionOffensiveEvaluator
         // the old ladder that test removed a region as an attacker AND as a staging region the moment
         // its defensive reserve ate its strength, which is a large part of why forces froze. Whether
         // an offensive is affordable is now the auction's question, not the evaluator's.
-        long defenderBattleValue = StrategicCombatResolver.CalculateDefenderBattleValueAgainst(
+        long defenderStrategicValue = StrategicCombatResolver.CalculateDefenderStrategicValueAgainst(
             targetFaction, attackingFaction, _strategicInvasionForces);
         PlanetFaction observer = targetFaction.Region.Planet.PlanetFactionMap
             .GetValueOrDefault(attackingFaction.Id);
         FactionIntelBelief belief = observer?.GetTargetBelief(
             targetFaction.Region,
             targetFaction.PlanetFaction.Faction);
-        long estimatedDefenderBattleValue = belief?.EstimatedMilitaryStrength
-            ?? defenderBattleValue;
+        long estimatedDefenderStrategicValue = belief?.EstimatedMilitaryStrength
+            ?? defenderStrategicValue;
         // The believed headcount is what the pessimistic prior is anchored on: a population is
         // visible from outside in a way a garrison is not.
         long estimatedPopulation = belief?.EstimatedPopulation ?? targetFaction.Population;
@@ -280,9 +280,9 @@ internal sealed class FactionOffensiveEvaluator
             // Grist Nine, 2026-09-16: the Imperials withdrew from Grist Nine Nu leaving 18 battle value,
             // while the Orks sharing the region still believed 505 from weeks earlier. They sized the
             // assault off that and committed 753 to kill 18.
-            estimatedDefenderBattleValue =
-                FactionIntelligenceRules.CoarsenEstimate(defenderBattleValue, observedAwareness)
-                ?? defenderBattleValue;
+            estimatedDefenderStrategicValue =
+                FactionIntelligenceRules.CoarsenEstimate(defenderStrategicValue, observedAwareness)
+                ?? defenderStrategicValue;
             estimatedPopulation =
                 FactionIntelligenceRules.CoarsenEstimate(targetFaction.Population, observedAwareness)
                 ?? targetFaction.Population;
@@ -294,9 +294,9 @@ internal sealed class FactionOffensiveEvaluator
             TargetFaction = targetFaction,
             AttackingRegions = attackingRegions,
             Reward = CalculateOffensiveReward(targetFaction, attackingFaction),
-            DefenderBattleValue = defenderBattleValue,
-            EstimatedDefenderBattleValue = CautiousDefenderEstimate(
-                estimatedDefenderBattleValue,
+            DefenderStrategicValue = defenderStrategicValue,
+            EstimatedDefenderStrategicValue = CautiousDefenderEstimate(
+                estimatedDefenderStrategicValue,
                 estimatedPopulation,
                 targetFaction.PlanetFaction.Faction,
                 intel)
@@ -308,7 +308,7 @@ internal sealed class FactionOffensiveEvaluator
         if (offensive == null) return "none";
         return $"{offensive.TargetRegion.Planet.Name}/{offensive.TargetRegion.Name}/"
             + $"{offensive.TargetFaction.PlanetFaction.Faction.Name} "
-            + $"defenderBV={offensive.DefenderBattleValue}, "
-            + $"estimatedDefenderBV={offensive.EstimatedDefenderBattleValue}";
+            + $"defenderBV={offensive.DefenderStrategicValue}, "
+            + $"estimatedDefenderBV={offensive.EstimatedDefenderStrategicValue}";
     }
 }

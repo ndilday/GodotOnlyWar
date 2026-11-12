@@ -52,6 +52,33 @@ public class BattleForceEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_LosingForceWithNoWayToWinWithdraws_EvenWhenAggressive()
+    {
+        BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(
+            Aggression.Aggressive,
+            friendly: Metrics(90) with { NoSquadHasWayToWin = true },
+            enemy: Metrics(100)));
+
+        Assert.True(result.ShouldWithdraw);
+        Assert.Equal(VoluntaryWithdrawalReason.NoWayToWin, result.Reason);
+    }
+
+    [Theory]
+    [InlineData(100, 100)]
+    [InlineData(78, 18)]
+    public void Evaluate_ForceWithNoWayToWinStays_WhenItIsNotTheSideLosing(
+        int friendlyRemainingPercent,
+        int enemyRemainingPercent)
+    {
+        BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(
+            Aggression.Aggressive,
+            friendly: Metrics(friendlyRemainingPercent) with { NoSquadHasWayToWin = true },
+            enemy: Metrics(enemyRemainingPercent)));
+
+        Assert.False(result.ShouldWithdraw);
+    }
+
+    [Fact]
     public void Evaluate_EligibleForceStaysWhenNoContinuationPressureExists()
     {
         BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(

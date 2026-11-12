@@ -93,7 +93,7 @@ namespace OnlyWar.Operations.Missions.Ambush
                     opposingSquads.First().Faction?.Name ?? "an unidentified force";
                 string log = $"Day {context.DaysElapsed}: Force ambushed {oppForSize} {opposingFaction}\n";
                 context.AddLog(log);
-                long opposingBattleValueBefore = AbleBattleValue(opposingSquads);
+                long opposingStrategicValueBefore = AbleStrategicValue(opposingSquads);
                 EngagementResult engagement = execution.Engagements.Resolve(
                     new EngagementInput(
                         context.MissionParticipants,
@@ -107,7 +107,7 @@ namespace OnlyWar.Operations.Missions.Ambush
                 context.RecordBattleOutcome(engagement);
                 context.AddBattleReport(engagement);
                 context.RecordDefenderLosses(
-                    opposingBattleValueBefore - AbleBattleValue(opposingSquads));
+                    opposingStrategicValueBefore - AbleStrategicValue(opposingSquads));
                 if (!context.MissionSquads.Any(squad => squad.AbleMembers.Count > 0))
                 {
                     context.ForceWithdrewUnderFire = true;
@@ -136,9 +136,9 @@ namespace OnlyWar.Operations.Missions.Ambush
                 new MeetingEngagementMissionStep(), margin, _continuation ?? new ExfiltrateMissionStep());
         }
 
-        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads) =>
+        private static long AbleStrategicValue(IEnumerable<OperationalMissionElement> squads) =>
             squads
                 .SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
+                .Sum(soldier => (long)soldier.StrategicValue);
     }
 }

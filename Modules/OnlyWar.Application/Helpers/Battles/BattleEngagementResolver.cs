@@ -98,6 +98,24 @@ public sealed class BattleEngagementResolver : IEngagementResolver, IEngagementE
             MaterializeAll(friendlyElements));
     }
 
+    public int? GetPreferredOpeningRangeOrNone(
+        EngagementParticipant element,
+        IReadOnlyList<EngagementParticipant> opposingElements,
+        IReadOnlyList<EngagementParticipant> friendlyElements = null)
+    {
+        if (element == null) throw new ArgumentNullException(nameof(element));
+        List<BattleSquad> opposing = MaterializeAll(opposingElements);
+        if (opposing.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "An opening-range query requires at least one opposing element.");
+        }
+
+        return Materialize(element).GetPreferredOpeningRangeOrNone(
+            opposing,
+            MaterializeAll(friendlyElements));
+    }
+
     private List<BattleSquad> MaterializeAll(IReadOnlyList<EngagementParticipant> elements) =>
         (elements ?? Array.Empty<EngagementParticipant>())
             .Where(element => element != null)

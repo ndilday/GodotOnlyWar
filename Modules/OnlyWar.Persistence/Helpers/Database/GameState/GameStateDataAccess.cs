@@ -622,7 +622,7 @@ namespace OnlyWar.Persistence.Database.GameState
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = $@"SELECT Id, FactionId, CommandSquadId, CurrentRegionId,
                                            OriginPlanetId, DestinationPlanetId,
-                                           TravelWeeksRemaining, TransitBattleValue,
+                                           TravelWeeksRemaining, TransitStrategicValue,
                                            IsActive
                                     FROM {table}";
             using IDataReader reader = command.ExecuteReader();
@@ -637,7 +637,7 @@ namespace OnlyWar.Persistence.Database.GameState
                     OriginPlanetId = reader.IsDBNull(4) ? null : reader.GetInt32(4),
                     DestinationPlanetId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
                     TravelWeeksRemaining = reader.GetInt32(6),
-                    TransitBattleValue = reader.GetInt64(7),
+                    TransitStrategicValue = reader.GetInt64(7),
                     IsActive = reader.GetBoolean(8)
                 });
             }
@@ -682,10 +682,10 @@ namespace OnlyWar.Persistence.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO StrategicInvasionForce
                     (Id, FactionId, CommandSquadId, CurrentRegionId, OriginPlanetId,
-                     DestinationPlanetId, TravelWeeksRemaining, TransitBattleValue,
+                     DestinationPlanetId, TravelWeeksRemaining, TransitStrategicValue,
                      IsActive)
                     VALUES (@id, @factionId, @commandSquadId, @currentRegionId, @originPlanetId,
-                            @destinationPlanetId, @travelWeeksRemaining, @transitBattleValue,
+                            @destinationPlanetId, @travelWeeksRemaining, @transitStrategicValue,
                             @isActive);";
                 command.AddParam("@id", force.Id);
                 command.AddParam("@factionId", force.Faction.Id);
@@ -694,7 +694,7 @@ namespace OnlyWar.Persistence.Database.GameState
                 command.AddParam("@originPlanetId", force.OriginPlanet?.Id);
                 command.AddParam("@destinationPlanetId", force.DestinationPlanet?.Id);
                 command.AddParam("@travelWeeksRemaining", force.TravelWeeksRemaining);
-                command.AddParam("@transitBattleValue", force.TransitBattleValue);
+                command.AddParam("@transitStrategicValue", force.TransitStrategicValue);
                 command.AddParam("@isActive", force.IsActive ? 1 : 0);
                 command.ExecuteNonQuery();
             }

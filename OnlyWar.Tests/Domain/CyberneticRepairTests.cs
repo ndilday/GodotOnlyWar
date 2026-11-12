@@ -28,15 +28,15 @@ public class CyberneticRepairTests
     private const int LeftArmId = 4;
     private const int TorsoId = 3;
 
-    private static readonly SoldierTemplate TechmarineTemplate = new(
+    private static readonly SoldierTemplate TechmarineTemplate = new TestSoldierTemplate(
         931, TestModelFactory.HumanSpecies, "Techmarine",
         rank: 4, subrank: 1, isSquadLeader: false, specialistType: 0,
-        Array.Empty<ValueTuple<BaseSkill, float>>(), battleValue: 2);
+        Array.Empty<ValueTuple<BaseSkill, float>>(), strategicValue: 2);
 
-    private static readonly SoldierTemplate BrotherTemplate = new(
+    private static readonly SoldierTemplate BrotherTemplate = new TestSoldierTemplate(
         932, TestModelFactory.HumanSpecies, "Battle-Brother",
         rank: 1, subrank: 1, isSquadLeader: false, specialistType: 0,
-        Array.Empty<ValueTuple<BaseSkill, float>>(), battleValue: 2);
+        Array.Empty<ValueTuple<BaseSkill, float>>(), strategicValue: 2);
 
     private static readonly BaseSkill Cybernetics = new(
         934, SkillCategory.Tech, "Engineering (Cybernetics)",

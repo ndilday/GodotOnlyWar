@@ -28,7 +28,8 @@ public class ScenarioTraceDiagnostics
     private const int IdleTurns = 15;
 
     private static readonly string OutDir =
-        Path.Combine(Path.GetTempPath(), "GodotOnlyWar", "scenario-trace");
+        Environment.GetEnvironmentVariable("SCENARIO_TRACE_OUT")
+        ?? Path.Combine(Path.GetTempPath(), "GodotOnlyWar", "scenario-trace");
 
     private readonly Date _date = new(39, 500, 1);
 
@@ -145,6 +146,11 @@ public class ScenarioTraceDiagnostics
     private void RunOneSeed(int seed, StringBuilder csv)
     {
         GameRulesData data = OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(OnlyWar.Tests.Fixtures.RulesDatabaseFixture.DatabasePath);
+        // SCENARIO_TRACE_SMALL=1 uses the small sector of the save round-trip tests.
+        if (Environment.GetEnvironmentVariable("SCENARIO_TRACE_SMALL") != null)
+        {
+            data.OverrideSectorGeometryForTesting(new Coordinate(20, 20), 0.02f);
+        }
 
         // Capture the generation-time trace (the pre/post-landing SimulatePlanetForward sims emit
         // Info/Debug), so we can read how long the swarm fed and how the cult war went.
@@ -176,7 +182,8 @@ public class ScenarioTraceDiagnostics
         Sector sector;
         try
         {
-            sector = TestGeneration.GenerateSector(seed, data, _date, $"Seed {seed} Chapter");
+            sector = TestGeneration.GenerateSector(seed, data, _date,
+                Environment.GetEnvironmentVariable("SCENARIO_TRACE_CHAPTER") ?? $"Seed {seed} Chapter");
         }
         finally
         {
@@ -201,7 +208,11 @@ public class ScenarioTraceDiagnostics
             TestPersonnelComposition.CreateCampaign(new StaticRNG());
         TurnController controller = composition.CreateTurnController(
             new GameSession(data, sector, _date, new StaticRNG()));
-        for (int turn = 1; turn <= IdleTurns; turn++)
+        // SCENARIO_TRACE_TURNS=0 stops after generation: the trace then shows only its battles.
+        int idleTurns = int.TryParse(Environment.GetEnvironmentVariable("SCENARIO_TRACE_TURNS"), out int turns)
+            ? turns
+            : IdleTurns;
+        for (int turn = 1; turn <= idleTurns; turn++)
         {
             TurnResolutionResult result = controller.ProcessTurn(sector);
             Snapshot(data, sector, promised, seed, turn, postLandingWeeks,

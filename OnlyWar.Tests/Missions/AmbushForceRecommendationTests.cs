@@ -53,16 +53,16 @@ public class AmbushForceRecommendationTests
         SquadTemplate tactical = rules.ChapterDoctrine.TacticalSquad;
 
         long expected = tactical.Elements.Sum(
-            element => (long)element.MaximumNumber * element.SoldierTemplate.BattleValue);
+            element => (long)element.MaximumNumber * element.StrategicValuePerSoldier);
 
         Assert.True(expected > 0);
-        Assert.Equal(expected, AmbushMissionSizing.FullStrengthBattleValue(tactical));
+        Assert.Equal(expected, AmbushMissionSizing.FullStrengthStrategicValue(tactical));
 
         // ...and a target is measured against exactly that.
         Assert.Equal(
             3,
             AmbushMissionSizing.RecommendSquads(
-                expected * 2 + 1, AmbushMissionSizing.FullStrengthBattleValue(tactical)));
+                expected * 2 + 1, AmbushMissionSizing.FullStrengthStrategicValue(tactical)));
     }
 
     // --- the wording: how precise the line may be depends on the intel level alone ---

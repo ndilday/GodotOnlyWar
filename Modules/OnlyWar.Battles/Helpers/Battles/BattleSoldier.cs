@@ -35,11 +35,30 @@ namespace OnlyWar.Battles
 
         public ISoldier Soldier { get; private set; }
         /// <summary>
-        /// True when this wrapper was equipped from the itemized equipment catalog. Legacy
-        /// weapon-set fixtures retain intrinsic tactical value until their allocation path is
-        /// migrated, which keeps old mod/test fixtures deterministic during the transition.
+        /// True when this wrapper was equipped from the itemized equipment catalog. No value reads
+        /// it since the tactical value replaced the equipment additions (2026-11-01).
         /// </summary>
         public bool UsesItemizedEquipment { get; internal set; }
+
+        /// <summary>
+        /// This turn's tactical value (<see cref="TacticalValueTable"/>,
+        /// Design/Active/StrategicAndTacticalValue.md), written by the planning coordinator before
+        /// each planning pass and by the opening forecast before the first. Null until then.
+        /// </summary>
+        public float? TacticalValue { get; internal set; }
+
+        /// <summary>
+        /// This turn's melee share against the enemy on the field: melee take-outs at contact over
+        /// those plus ranged take-outs across his reach (<see cref="TacticalValueTable"/>). Null until
+        /// a table has seen the soldier.
+        /// </summary>
+        public float? TacticalMeleeShare { get; internal set; }
+
+        /// <summary>
+        /// What the battle planner prices this soldier at: the tactical value. A soldier no table
+        /// has seen (a planner built directly by a unit test) falls back to the strategic value.
+        /// </summary>
+        public float PlanningValue => TacticalValue ?? Soldier?.StrategicValue ?? 0;
 
         public ValueTuple<int, int>? TopLeft { get; set; }
         public ushort Orientation { get; set; }
@@ -214,19 +233,6 @@ namespace OnlyWar.Battles
         }
         public bool CanUseTwoHandedWeapon => FunctioningHands >= 2;
 
-        /// <summary>
-        /// Tactical value of the currently resolved equipment. This is intentionally derived from
-        /// live carried templates, not stored back onto SoldierTemplate.BattleValue, so strategic
-        /// force-generation accounting remains intrinsic.
-        /// </summary>
-        public int EffectiveBattleValue => UsesItemizedEquipment
-            ? EffectiveBattleValueCalculator.CalculateRuntime(
-                Soldier,
-                Armor,
-                RangedWeapons,
-                MeleeWeapons)
-            : Soldier?.Template?.BattleValue ?? 0;
-
         public int HandsFree
         {
             get
@@ -291,6 +297,8 @@ namespace OnlyWar.Battles
             Orientation = soldier.Orientation;
             Armor = soldier.Armor == null ? null : new Armor(soldier.Armor.Template);
             UsesItemizedEquipment = soldier.UsesItemizedEquipment;
+            TacticalValue = soldier.TacticalValue;
+            TacticalMeleeShare = soldier.TacticalMeleeShare;
             IsInMelee = soldier.IsInMelee;
             ReloadingPhase = soldier.ReloadingPhase;
             Stance = soldier.Stance;

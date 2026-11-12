@@ -484,7 +484,7 @@ public class EndTurnPreflightTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 10)],
             SquadTypes.None);
         // Two templates that actually call for a leader, so the leaderless-squad warning has
         // something to fire on; squadTemplate above deliberately defines no leader slot.
@@ -548,8 +548,8 @@ public class EndTurnPreflightTests
             [],
             TestModelFactory.TestArmor,
             [
-                new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
-                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 9)
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 0, 1),
+                OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 9)
             ],
             squadTypes);
     }

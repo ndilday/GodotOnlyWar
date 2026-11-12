@@ -680,10 +680,10 @@ public class PlanetaryOperationsServiceTests
         GameRulesData rules = fixture.Rules
             ?? OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(
                 RulesDatabaseFixture.DatabasePath);
-        long reference = rules.ChapterDoctrine.TacticalSquad.BattleValue;
-        long targetBattleValue = reference * 3 + 1;
+        long reference = rules.ChapterDoctrine.TacticalSquad.StrategicValue;
+        long targetStrategicValue = reference * 3 + 1;
         Mission special = new(
-            MissionType.Ambush, target, missionSize: 1, targetBattleValue);
+            MissionType.Ambush, target, missionSize: 1, targetStrategicValue);
         region.SpecialMissions.Add(special);
 
         Assert.Equal(

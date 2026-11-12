@@ -285,7 +285,7 @@ public class ProbitFitTests
     public void BattleRow_RoundTripsThroughTheTsvLine()
     {
         BattleRow row = new("k|1", "pdf", "hyb", "34,n=4", "26,n=4", 2, 3, 10, 15, 7,
-            0.5, 0.25, 0.125, 31, "Rout", "AB12", "CD34", 200, "Aggressive");
+            0.5, 0.25, 0.125, 31, "Rout", "AB12", "CD34", 200, "Aggressive", BattleRow.Attacker, 200);
 
         Assert.True(BattleRow.TryParse(row.ToLine(), out BattleRow parsed));
         Assert.Equal(row, parsed);
@@ -296,14 +296,31 @@ public class ProbitFitTests
         Assert.True(BattleRow.TryParse(defending.ToLine(), out BattleRow parsedDefending));
         Assert.Equal(defending, parsedDefending);
         Assert.False(parsedDefending.AAttacks);
-        Assert.EndsWith("\tDefender", defending.ToLine());
+        Assert.EndsWith("\tDefender\t200", defending.ToLine());
+
+        // An assault battle stores range 0 and the range it actually opened at.
+        BattleRow assault = row with { Range = SquadDuelDiagnostics.AssaultRange, OpeningRange = 143 };
+        Assert.True(BattleRow.TryParse(assault.ToLine(), out BattleRow parsedAssault));
+        Assert.Equal(assault, parsedAssault);
+    }
+
+    [Fact]
+    public void BattleRow_WithoutTheOpeningRangeColumn_OpenedAtItsConfiguredRange()
+    {
+        BattleRow row = new("k|1", "pdf", "hyb", "34,n=4", "26,n=4", 2, 3, 10, 15, 7,
+            0.5, 0.25, 0.125, 31, "Rout", "AB12", "CD34", 200, "Aggressive", BattleRow.Defender, 200);
+        string withRole = string.Join('\t', row.ToLine().Split('\t').Take(BattleRow.RoleColumnCount));
+
+        Assert.True(BattleRow.TryParse(withRole, out BattleRow parsed));
+        Assert.Equal(row, parsed);
+        Assert.False(parsed.AAttacks);
     }
 
     [Fact]
     public void BattleRow_WithoutTheRoleColumn_ParsesAsAAttacking()
     {
         BattleRow row = new("k|1", "pdf", "hyb", "34,n=4", "26,n=4", 2, 3, 10, 15, 7,
-            0.5, 0.25, 0.125, 31, "Rout", "AB12", "CD34", 200, "Aggressive");
+            0.5, 0.25, 0.125, 31, "Rout", "AB12", "CD34", 200, "Aggressive", BattleRow.Attacker, 200);
         string legacy = string.Join('\t', row.ToLine().Split('\t').Take(BattleRow.LegacyColumnCount));
 
         Assert.True(BattleRow.TryParse(legacy, out BattleRow parsed));

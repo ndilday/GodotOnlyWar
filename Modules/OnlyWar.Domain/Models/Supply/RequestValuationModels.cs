@@ -4,13 +4,13 @@ using System.Linq;
 
 namespace OnlyWar.Domain.Supply;
 
-public sealed record ThroughputPremiumBand(long MaximumBattleValuePerWeek, decimal Multiplier);
+public sealed record ThroughputPremiumBand(long MaximumStrategicValuePerWeek, decimal Multiplier);
 
 public sealed record QualificationPremium(string GroupKey, string RequirementKey, decimal Multiplier);
 
 public sealed record RequestValuationResult(
-    long EffortBattleValueTime,
-    long RequiredBattleValuePerWeek,
+    long EffortStrategicValueTime,
+    long RequiredStrategicValuePerWeek,
     decimal ThroughputMultiplier,
     decimal QualificationMultiplier,
     decimal HazardMultiplier,
@@ -20,21 +20,21 @@ public sealed class RequestValuationRules
 {
     private readonly ThroughputPremiumBand[] _throughputBands;
 
-    public decimal RequisitionPerBattleValueTime { get; }
+    public decimal RequisitionPerStrategicValueTime { get; }
     public IReadOnlyList<ThroughputPremiumBand> ThroughputBands => _throughputBands;
     public int MinimumRequestValue { get; }
     public int MaximumRequestValue { get; }
     public decimal MaximumCombinedPremium { get; }
 
     public RequestValuationRules(
-        decimal requisitionPerBattleValueTime,
+        decimal requisitionPerStrategicValueTime,
         IEnumerable<ThroughputPremiumBand> throughputBands,
         int minimumRequestValue,
         int maximumRequestValue,
         decimal maximumCombinedPremium = 10m)
     {
-        if (requisitionPerBattleValueTime < 0)
-            throw new ArgumentOutOfRangeException(nameof(requisitionPerBattleValueTime));
+        if (requisitionPerStrategicValueTime < 0)
+            throw new ArgumentOutOfRangeException(nameof(requisitionPerStrategicValueTime));
         if (minimumRequestValue < 0)
             throw new ArgumentOutOfRangeException(nameof(minimumRequestValue));
         if (maximumRequestValue < minimumRequestValue)
@@ -42,14 +42,14 @@ public sealed class RequestValuationRules
         if (maximumCombinedPremium <= 0)
             throw new ArgumentOutOfRangeException(nameof(maximumCombinedPremium));
 
-        _throughputBands = throughputBands?.OrderBy(band => band.MaximumBattleValuePerWeek).ToArray()
+        _throughputBands = throughputBands?.OrderBy(band => band.MaximumStrategicValuePerWeek).ToArray()
             ?? throw new ArgumentNullException(nameof(throughputBands));
         if (_throughputBands.Length == 0)
             throw new ArgumentException("At least one throughput premium band is required.", nameof(throughputBands));
-        if (_throughputBands.Any(band => band.MaximumBattleValuePerWeek <= 0 || band.Multiplier <= 0))
+        if (_throughputBands.Any(band => band.MaximumStrategicValuePerWeek <= 0 || band.Multiplier <= 0))
             throw new ArgumentException("Throughput bands must have positive bounds and multipliers.", nameof(throughputBands));
 
-        RequisitionPerBattleValueTime = requisitionPerBattleValueTime;
+        RequisitionPerStrategicValueTime = requisitionPerStrategicValueTime;
         MinimumRequestValue = minimumRequestValue;
         MaximumRequestValue = maximumRequestValue;
         MaximumCombinedPremium = maximumCombinedPremium;

@@ -249,6 +249,38 @@ namespace OnlyWar.Battles
             int minShots,
             int maxShots)
         {
+            var key = (
+                shooter.Soldier.Id,
+                target.Soldier.Id,
+                weapon.Template.Id,
+                BitConverter.SingleToInt32Bits(range),
+                BitConverter.SingleToInt32Bits(hitContext.MoveAndAimModifier),
+                BitConverter.SingleToInt32Bits(hitContext.RangeModifier),
+                firingIntoMelee,
+                minShots,
+                maxShots);
+            if (_context.BurstScores.TryGetValue(key, out float[] cached))
+            {
+                return cached;
+            }
+            float[] scores = ComputeBurstScores(
+                shooter, target, weapon, range, hitContext, firingIntoMelee,
+                removalFractionPerHit, minShots, maxShots);
+            _context.BurstScores[key] = scores;
+            return scores;
+        }
+
+        private float[] ComputeBurstScores(
+            BattleSoldier shooter,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            in RangedHitEstimateContext hitContext,
+            bool firingIntoMelee,
+            float removalFractionPerHit,
+            int minShots,
+            int maxShots)
+        {
             float targetValue = RangedTargetingServices.BattleValueOf(target);
             float friendlyLossOnStray = firingIntoMelee
                 ? CalculateExpectedFriendlyLossOnStray(shooter, target, weapon, range)
@@ -537,6 +569,11 @@ namespace OnlyWar.Battles
                 _targetEvasion = target.Soldier.Template.Species.RangedEvasion;
             }
 
+            /// <summary>The to-hit terms other than the shooter, target and burst, for memo keys.</summary>
+            public float MoveAndAimModifier => _moveAndAimModifier;
+
+            public float RangeModifier => _rangeModifier;
+
             public float CalculatePreRollHitTotal(int numberOfShots)
             {
                 // Preserve the original left-to-right floating-point expression exactly. These
@@ -601,8 +638,16 @@ namespace OnlyWar.Battles
             return RemovalMath.CombineRemovalFraction(takeOut, progress);
         }
 
-        // Both terms come from one hit-location walk so raw kill probability and graded progress
-        // remain aligned.
+        /// <summary>
+        /// Whether <see cref="CalculateRangedHitRemoval"/> reads the shared 50-yard tables
+        /// (<see cref="RemovalFractionTable.ForTarget"/>; true since 2026-11-11) or walks the
+        /// target's hit locations at the exact range, as before. Process-wide so the diagnostics can
+        /// compare (DUEL_SHOT_REMOVAL_TABLES=0).
+        /// </summary>
+        internal static bool UseRemovalTables = true;
+
+        // Both terms come from one hit-location walk (or one table's nodes) so raw kill
+        // probability and graded progress remain aligned.
         internal static (float TakeOut, float WoundProgress) CalculateRangedHitRemoval(
             BattleSoldier target,
             RangedWeapon weapon,
@@ -613,6 +658,10 @@ namespace OnlyWar.Battles
             if (damageCoefficient <= 0)
             {
                 return (0f, 0f);
+            }
+            if (UseRemovalTables && target != null && weapon.Template.WoundMultiplier > 0)
+            {
+                return RemovalFractionTable.ForTarget(target, armor, weapon.Template).TermsAt(range);
             }
             return RemovalMath.CalculateRemovalTermsOnHit(
                 target,

@@ -43,13 +43,13 @@ namespace OnlyWar.Runtime.Factories
 
         public static Squad GenerateSquadWithinBudget(
             SquadTemplate squadTemplate,
-            long maximumBattleValue,
+            long maximumStrategicValue,
             IRNG random,
             string name = "")
         {
             return GenerateSquadWithinBudget(
                 squadTemplate,
-                maximumBattleValue,
+                maximumStrategicValue,
                 random,
                 null,
                 name);
@@ -57,7 +57,7 @@ namespace OnlyWar.Runtime.Factories
 
         public static Squad GenerateSquadWithinBudget(
             SquadTemplate squadTemplate,
-            long maximumBattleValue,
+            long maximumStrategicValue,
             IRNG random,
             IEntityIdAllocator entityIds,
             string name = "")
@@ -65,55 +65,55 @@ namespace OnlyWar.Runtime.Factories
             entityIds ??= new RuntimeTacticalEntityIdAllocator();
             Dictionary<SquadTemplateElement, int> counts = CalculateSquadCountsWithinBudget(
                 squadTemplate,
-                maximumBattleValue,
-                out long battleValue);
-            if (counts == null || battleValue <= 0) return null;
+                maximumStrategicValue,
+                out long strategicValue);
+            if (counts == null || strategicValue <= 0) return null;
 
             return GenerateSquad(squadTemplate, counts, random, entityIds, name);
         }
 
-        public static long CalculateSquadBattleValueWithinBudget(SquadTemplate squadTemplate, long maximumBattleValue)
+        public static long CalculateSquadStrategicValueWithinBudget(SquadTemplate squadTemplate, long maximumStrategicValue)
         {
-            CalculateSquadCountsWithinBudget(squadTemplate, maximumBattleValue, out long battleValue);
-            return battleValue;
+            CalculateSquadCountsWithinBudget(squadTemplate, maximumStrategicValue, out long strategicValue);
+            return strategicValue;
         }
 
         private static Dictionary<SquadTemplateElement, int> CalculateSquadCountsWithinBudget(
             SquadTemplate squadTemplate,
-            long maximumBattleValue,
-            out long battleValue)
+            long maximumStrategicValue,
+            out long strategicValue)
         {
-            battleValue = 0;
-            if (squadTemplate == null || maximumBattleValue <= 0) return null;
+            strategicValue = 0;
+            if (squadTemplate == null || maximumStrategicValue <= 0) return null;
 
             Dictionary<SquadTemplateElement, int> counts = [];
             foreach (SquadTemplateElement element in squadTemplate.Elements)
             {
-                long requiredBattleValue = (long)element.MinimumNumber * element.SoldierTemplate.BattleValue;
-                if (battleValue + requiredBattleValue > maximumBattleValue) return null;
+                long requiredStrategicValue = (long)element.MinimumNumber * element.StrategicValuePerSoldier;
+                if (strategicValue + requiredStrategicValue > maximumStrategicValue) return null;
 
                 counts[element] = element.MinimumNumber;
-                battleValue += requiredBattleValue;
+                strategicValue += requiredStrategicValue;
             }
 
             bool addedSoldier;
             do
             {
                 addedSoldier = false;
-                foreach (SquadTemplateElement element in squadTemplate.Elements.OrderBy(e => e.SoldierTemplate.BattleValue))
+                foreach (SquadTemplateElement element in squadTemplate.Elements.OrderBy(e => e.StrategicValuePerSoldier))
                 {
                     if (counts[element] >= element.MaximumNumber) continue;
-                    int soldierBattleValue = element.SoldierTemplate.BattleValue;
-                    if (soldierBattleValue <= 0 || battleValue + soldierBattleValue > maximumBattleValue) continue;
+                    int soldierStrategicValue = element.StrategicValuePerSoldier;
+                    if (soldierStrategicValue <= 0 || strategicValue + soldierStrategicValue > maximumStrategicValue) continue;
 
                     counts[element]++;
-                    battleValue += soldierBattleValue;
+                    strategicValue += soldierStrategicValue;
                     addedSoldier = true;
                 }
             }
             while (addedSoldier);
 
-            if (counts.Values.Sum() == 0 || battleValue <= 0) return null;
+            if (counts.Values.Sum() == 0 || strategicValue <= 0) return null;
             return counts;
         }
 

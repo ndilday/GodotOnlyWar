@@ -105,8 +105,8 @@ internal sealed class OperationsReadContext
     /// The unit the "Recommended force" line counts in: the chapter's standard tactical squad
     /// template at full strength, read from the rules data.
     /// </summary>
-    internal long ReferenceSquadBattleValue =>
-        AmbushMissionSizing.FullStrengthBattleValue(_rules.ChapterDoctrine?.TacticalSquad);
+    internal long ReferenceSquadStrategicValue =>
+        AmbushMissionSizing.FullStrengthStrategicValue(_rules.ChapterDoctrine?.TacticalSquad);
 
     internal Order FindEquivalentOrder(
         Region region,

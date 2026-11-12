@@ -6,11 +6,13 @@ using OnlyWar.Domain.Squads;
 
 namespace OnlyWar.Tests.Fixtures;
 
-// Every SoldierTemplate here should pass a non-zero battleValue. BattleValue defaults to 0. Force
+// Every TestSoldierTemplate here should pass a non-zero strategicValue. StrategicValue defaults to 0.
+// In the game a soldier's value is his squad element's StrategicValuePerSoldier; CreateSquad gives each
+// fixture squad an element per member template carrying the TestSoldierTemplate's value. Force
 // shares (BattleRoundMetrics) weight each squad by its share of its own side's starting
-// BattleValue; a side whose total is 0 falls back to headcount weights, so it no longer
+// StrategicValue; a side whose total is 0 falls back to headcount weights, so it no longer
 // degenerates, but other BV consumers (target choice, doctrine) still read a valueless side as
-// worthless. A test that WANTS a valueless side should declare its own battleValue: 0
+// worthless. A test that WANTS a valueless side should declare its own strategicValue: 0
 // template locally, the way BattleTurnResolverWithdrawalTests does, so the intent is explicit.
 internal static class TestModelFactory
 {
@@ -77,7 +79,7 @@ internal static class TestModelFactory
         HumanBodyTemplate.Instance,
         DefaultUnarmedWeapon);
 
-    public static SoldierTemplate MarineTemplate { get; } = new(
+    public static TestSoldierTemplate MarineTemplate { get; } = new TestSoldierTemplate(
         1,
         HumanSpecies,
         "Test Marine",
@@ -86,7 +88,7 @@ internal static class TestModelFactory
         false,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: 2);
+        strategicValue: 2);
 
     // A 1x1 species that tunnels — used to exercise burrow-arrival placement.
     public static Species BurrowerSpecies { get; } = new(
@@ -102,7 +104,7 @@ internal static class TestModelFactory
         HumanBodyTemplate.Instance,
         DefaultUnarmedWeapon);
 
-    public static SoldierTemplate BurrowerTemplate { get; } = new(
+    public static TestSoldierTemplate BurrowerTemplate { get; } = new TestSoldierTemplate(
         3,
         BurrowerSpecies,
         "Test Burrower",
@@ -111,7 +113,7 @@ internal static class TestModelFactory
         false,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: 2);
+        strategicValue: 2);
 
     // A synapse-providing species (OnlyWar_TDD.md §6.6) — used to exercise
     // squad-to-squad synapse coverage. Radius is well inside the small integer distances
@@ -131,7 +133,7 @@ internal static class TestModelFactory
         DefaultUnarmedWeapon,
         synapseRadius: 10f);
 
-    public static SoldierTemplate SynapseProviderTemplate { get; } = new(
+    public static TestSoldierTemplate SynapseProviderTemplate { get; } = new TestSoldierTemplate(
         4,
         SynapseProviderSpecies,
         "Test Synapse Provider",
@@ -140,9 +142,9 @@ internal static class TestModelFactory
         false,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: 2);
+        strategicValue: 2);
 
-    public static SoldierTemplate SergeantTemplate { get; } = new(
+    public static TestSoldierTemplate SergeantTemplate { get; } = new TestSoldierTemplate(
         2,
         HumanSpecies,
         "Test Sergeant",
@@ -151,13 +153,13 @@ internal static class TestModelFactory
         true,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: 2);
+        strategicValue: 2);
 
     // Two more squad-leader templates so command-seniority ordering can be exercised on both of
     // its keys: the veteran sergeant outranks the sergeant on subrank alone (same Rank), and the
     // captain outranks both on rank. Mirrors the shape of the real chapter, where Rank 5 holds
     // Sergeant/Scout Sergeant/Veteran Sergeant and Rank 6 holds Captain.
-    public static SoldierTemplate VeteranSergeantTemplate { get; } = new(
+    public static TestSoldierTemplate VeteranSergeantTemplate { get; } = new TestSoldierTemplate(
         5,
         HumanSpecies,
         "Test Veteran Sergeant",
@@ -166,9 +168,9 @@ internal static class TestModelFactory
         true,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: 2);
+        strategicValue: 2);
 
-    public static SoldierTemplate CaptainTemplate { get; } = new(
+    public static TestSoldierTemplate CaptainTemplate { get; } = new TestSoldierTemplate(
         6,
         HumanSpecies,
         "Test Captain",
@@ -177,7 +179,7 @@ internal static class TestModelFactory
         true,
         0,
         Array.Empty<ValueTuple<BaseSkill, float>>(),
-        battleValue: 2);
+        strategicValue: 2);
 
     public static ArmorTemplate TestArmor { get; } = new(1, "Test Armor", 5, 0);
 
@@ -270,8 +272,79 @@ internal static class TestModelFactory
         DefaultWeapons,
         [],
         TestArmor,
-        [new SquadTemplateElement(SergeantTemplate, 0, 1), new SquadTemplateElement(MarineTemplate, 0, 4)],
+        [
+            new SquadTemplateElement(SergeantTemplate, 0, 1, bvPerSoldier: SergeantTemplate.StrategicValue),
+            new SquadTemplateElement(MarineTemplate, 0, 4, bvPerSoldier: MarineTemplate.StrategicValue)
+        ],
         SquadTypes.None);
+
+    /// <summary>
+    /// A squad element whose StrategicValuePerSoldier is its <see cref="TestSoldierTemplate"/>'s value (0 for
+    /// a plain SoldierTemplate), so a test that says "a soldier worth N" gets N from the element,
+    /// where the game reads it.
+    /// </summary>
+    public static SquadTemplateElement Element(
+        SoldierTemplate soldierTemplate,
+        byte minNumber,
+        byte maxNumber,
+        int id = 0,
+        WeaponSet defaultWeapons = null,
+        System.Collections.Generic.IReadOnlyList<SquadTemplateElementQuota> quotas = null,
+        bool rollsStrength = false,
+        PersonalEquipmentRole personalEquipmentRole = null,
+        ArmorTemplate defaultArmor = null) => new(
+            soldierTemplate,
+            minNumber,
+            maxNumber,
+            id,
+            defaultWeapons,
+            quotas,
+            rollsStrength,
+            personalEquipmentRole,
+            defaultArmor,
+            (soldierTemplate as TestSoldierTemplate)?.StrategicValue ?? 0);
+
+    /// <summary>
+    /// The fixture squad template when it already holds every member's template, so tests that
+    /// compare against <see cref="SquadTemplate"/> keep working; otherwise a private copy with
+    /// one more element per uncovered template, carrying its <see cref="TestSoldierTemplate"/>
+    /// value (0 for a plain SoldierTemplate), so each soldier reads his value from his element.
+    /// </summary>
+    public static SquadTemplate SquadTemplateFor(System.Collections.Generic.IEnumerable<ISoldier> members)
+    {
+        var uncovered = new System.Collections.Generic.List<SoldierTemplate>();
+        var counts = new System.Collections.Generic.Dictionary<SoldierTemplate, int>();
+        foreach (ISoldier member in members)
+        {
+            SoldierTemplate template = member?.Template;
+            if (template == null) continue;
+            counts[template] = counts.TryGetValue(template, out int count) ? count + 1 : 1;
+            if (!uncovered.Contains(template)
+                && !System.Linq.Enumerable.Any(SquadTemplate.Elements, e => e.SoldierTemplate == template))
+            {
+                uncovered.Add(template);
+            }
+        }
+        if (uncovered.Count == 0) return SquadTemplate;
+
+        var elements = new System.Collections.Generic.List<SquadTemplateElement>(SquadTemplate.Elements);
+        foreach (SoldierTemplate template in uncovered)
+        {
+            elements.Add(new SquadTemplateElement(
+                template,
+                0,
+                (byte)System.Math.Min(byte.MaxValue, counts[template]),
+                bvPerSoldier: (template as TestSoldierTemplate)?.StrategicValue ?? 0));
+        }
+        return new SquadTemplate(
+            SquadTemplate.Id,
+            SquadTemplate.Name,
+            DefaultWeapons,
+            [],
+            TestArmor,
+            elements,
+            SquadTypes.None);
+    }
 
     // Test soldiers used to leave Id at its default 0, because nothing in the fixtures cared. That stops
     // being harmless the moment two fixture-built squads meet on a battle grid: BattleGridManager keys
@@ -324,7 +397,7 @@ internal static class TestModelFactory
         int squadId = soldiers.Length > 0 && soldiers[0].Id != 0
             ? -System.Math.Abs(soldiers[0].Id == int.MinValue ? int.MaxValue : soldiers[0].Id)
             : StableSquadId(name);
-        Squad squad = new(squadId, name, null, SquadTemplate);
+        Squad squad = new(squadId, name, null, SquadTemplateFor(soldiers));
         foreach (Soldier soldier in soldiers)
         {
             squad.AddSquadMember(soldier);

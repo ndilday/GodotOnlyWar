@@ -48,7 +48,7 @@ namespace OnlyWar.Domain
         RequestFulfillmentKind FulfillmentKind { get; }
         RequestStatus Status { get; }
         ForceCommitmentPackage Commitment { get; }
-        long ProgressBattleValueTime { get; }
+        long ProgressStrategicValueTime { get; }
         int OfferedRequisition { get; }
         PledgeScheduleKind OfferedScheduleKind { get; }
         int OfferedCadenceWeeks { get; }

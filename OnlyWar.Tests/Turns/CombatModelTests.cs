@@ -15,11 +15,11 @@ namespace OnlyWar.Tests.Turns;
 public class CombatModelTests
 {
     [Fact]
-    public void SquadBattleValue_IsDerivedFromMemberBattleValues()
+    public void SquadStrategicValue_IsDerivedFromMemberStrategicValues()
     {
         // The test squad is one Sergeant (BV 2) plus up to four Marines (BV 2 each) = 10, computed
         // from the roster rather than stored, so it can never drift from its members (PRD §4.24).
-        Assert.Equal(10, TestModelFactory.SquadTemplate.BattleValue);
+        Assert.Equal(10, TestModelFactory.SquadTemplate.StrategicValue);
     }
 
     [Fact]

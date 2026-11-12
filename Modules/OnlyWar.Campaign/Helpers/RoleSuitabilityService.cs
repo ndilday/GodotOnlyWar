@@ -66,7 +66,7 @@ namespace OnlyWar.Campaign
                     && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,
                 // Mars-bound founders (TDD §6.14): the Techmarine bar, plus
                 // the worthiness test, so each one would also make a full line Battle Brother.
-                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 60
+                FoundingRole.Techmarine => Rating(ratings, e, RatingConsumerRole.TechnicalCapability) > 61.5f
                     && IsLineCandidate(e, ratings),
                 FoundingRole.MasterOfTheApothecarion => Rating(ratings, e, RatingConsumerRole.MedicalCapacity) > 115
                     && Rating(ratings, e, RatingConsumerRole.CommandLeadership) > 60,

@@ -102,6 +102,14 @@ namespace OnlyWar.Domain.Squads
         public bool RollsStrength { get; }
 
         /// <summary>
+        /// Battle value of one soldier in this slot: his weight in force generation and in
+        /// casualty and survivor accounting. It is measured from the squad as fielded, kit and
+        /// armour included, so it belongs to the slot, not to the SoldierTemplate, which can stand
+        /// in squads of very different worth (BattleLogic §4).
+        /// </summary>
+        public int StrategicValuePerSoldier { get; }
+
+        /// <summary>
         /// Average strength of this slot, used to price the template for force generation. Equals
         /// <see cref="MaximumNumber"/> unless the slot rolls, so pricing is unchanged for every
         /// element authored before rolled strength existed.
@@ -118,9 +126,11 @@ namespace OnlyWar.Domain.Squads
             IReadOnlyList<SquadTemplateElementQuota> quotas = null,
             bool rollsStrength = false,
             PersonalEquipmentRole personalEquipmentRole = null,
-            ArmorTemplate defaultArmor = null)
+            ArmorTemplate defaultArmor = null,
+            int bvPerSoldier = 0)
         {
             Id = id;
+            StrategicValuePerSoldier = bvPerSoldier;
             SoldierTemplate = soldierTemplate;
             MinimumNumber = minNumber;
             MaximumNumber = maxNumber;

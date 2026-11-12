@@ -141,8 +141,19 @@ Three terms shape which shot a soldier takes, and when (`RangedTargetSelector`, 
   value divided by the turns it takes, with the target's range projected forward along its direction
   of travel (`EvaluateFireTiming`, `ProjectedRangeChangePerTurn`). Aiming at a closing target can
   pay; aiming at a quarry running away usually does not, because the range grows while the aim
-  matures. A retained aim is kept while the target can reach the shooter, while the kill chance is at
-  least `LikelyTakeOutProbability`, or while the rate rule still says to shoot.
+  matures. A retained aim is fired when the target can reach the shooter, when the kill chance is at
+  least `LikelyTakeOutProbability`, or when the rate rule says to shoot. **Known gap** (2026-10-23):
+  for a held aim this compares the shot now (one turn) with each further aim per remaining turn,
+  which counts the turns already spent as free, so soldiers fire after one to three aim turns
+  (PDF shots average an aim bonus of 0.2–0.7) while the rate table prices the full-aim cycle. A
+  cycle-consistent rule was tried and reverted: each shot got better, but against fast melee the
+  squad moved often enough (running clears aims) that longer aims lost more than they gained. See
+  Design/Active/OpeningRangeRefactor.md. Instead, **the removal-rate table prices the fire the
+  soldiers really deliver** (2026-10-23): `PairRemovalTerm.SustainedRateAt` replays this rule over
+  one cycle (`RangedTargetSelector.PlannerCycle`) and credits the shot it really fires over the
+  cycle's turns, a planned aim's readiness uses the same cycle, and
+  `SquadPairRemovalRate.SustainedRateAtRange` discounts a cycle whose target soldier squadmates also
+  hold by the chance they drop him first (focus-fire waste).
 - **Ammunition.** Both sides of that comparison charge the shot for its rounds: net value = score −
   scarcity × (best score per round on offer) × rounds. One round price per decision, and every
   plan's burst is chosen at it. Scarcity comes from the work in front of the shooter
@@ -224,8 +235,14 @@ returned wounded outcomes.
 ## 4. Battle Value and capability profiles
 
 Battle Value is the shared currency for force sizing, ranged/melee comparison, movement choices,
-screening, continuation, and strategic strength. The persisted `SoldierTemplate.BattleValue` is a
-template guideline, not a live skill-tracking rating, and it is an integer. The rules database is the
+screening, continuation, and strategic strength. The persisted value is
+`SquadTemplateElement.StrategicValuePerSoldier` (moved off `SoldierTemplate` on 2026-10-27; named
+`BvPerSoldier` until 2026-11-02): a template
+guideline, not a live skill-tracking rating, and an integer. It lives on the element because it is
+measured from a squad as fielded (kit and armour included), and one soldier template can stand in
+squads of very different worth (an Ork Nob is 10 in Nobz and 131 in Meganobz). A soldier reads it
+as `ISoldier.StrategicValue`, 0 when no element of his squad's template holds his template. See
+`Active/GauntletV2.md`. The rules database is the
 source of truth for the values; they are deliberately not copied here.
 
 ### 4.1 Calibration from fights (October 2026)
@@ -293,13 +310,15 @@ share) is open work in `OnlyWar_PRD.md` §5.8.
 
 ### 4.3 Runtime capability
 
-A soldier's `MeleeFraction` is stored beside BV and feeds doctrine/capability profiles, while current
-loadout, ammunition, functioning hands, wounds, and movement capacity determine the runtime profile.
+A soldier's melee share is measured each turn against his real targets
+(`TacticalValueTable.MeleeShares`: melee take-out rate over melee plus the mean ranged rate across
+his reach, gated so a soldier with a gun and no melee weapon has none) and feeds the capability
+profile. The authored `MeleeFraction` was removed on 2026-11-01. Current loadout, ammunition,
+functioning hands, wounds, and movement capacity determine the runtime profile.
 
 `BattleSquadCapabilityProfile` summarizes the able roster, usable weapons and ammo, functioning
 grips, range/removal curves, movement, footprint/contact capacity, and melee/ranged mode. A lost
-heavy weapon or disabled hand changes the profile immediately; authored `MeleeFraction` does not
-override current capability.
+heavy weapon or disabled hand changes the profile immediately.
 
 ## 5. Squad engagement planning
 
@@ -317,6 +336,25 @@ ground beyond contact, and one with no ranged weapon that must close is offered 
 a walk or a jog (2026-10-09: 30 Hormagaunts walked under PDF fire for 19 turns on scraps of the
 potential, then routed; a slow walk under fire is worse than committing or holding back); a ranged squad outside its own useful band cannot pretend that a close charge
 is its normal opening; and a pursuit standoff cannot run without a meaningful speed advantage.
+
+**Commitment (2026-10-20).** In an ordinary engagement (no role), a contact seeker whose own
+forecast says closing fights better than standing is not offered `Hold` or `StepBack`
+(`SquadEngagementPolicy.ApplyClosingCommitment`). "Fights better" needs both: the Close
+continuation beats Stay (`CloseAdvantage > 0`), and it removes more enemy Battle Value than Stay
+(`CloseRemovesMore`). The mask is applied after scoring, because it reads the root potential, and
+only when an advancing option remains.
+
+Why a mask: Φ is the better of Stay and Close, so the state a Hold leaves already contains "close
+next turn", and a charge is worth only the turn it saves, which is about the incoming fire it
+crosses. A squad whose standing exchange is positive this turn therefore holds, the next turn looks
+the same, and it never claims the melee its forecast says it would win. A one-turn planner cannot
+commit by itself. Until 2026-10-19 the charge-only score terms (§5.2) hid this, and a hybrid
+contact seeker with a rifle then held at 40 and at 7 yards against a shooter.
+
+Why the second condition: the forecast discounts later turns, so a run that only delays a rout can
+beat a firefight that loses the squad sooner. 60 Kommandos at 200 yards against 60 PDF had a
+CloseAdvantage of 3 to 6 from a Close that removed nothing (they break about 30 turns into the
+run). Committing them would have sent them into that rout.
 
 The baseline answers "am I roughly in the fight" from reach, not from the sharply derived
 effective engagement range — feeding the derivation into the fallback would make the fallback carry
@@ -347,10 +385,19 @@ The current transition shape is:
 ```text
 score(s -> s') = ImmediateExchange(s -> s')
                  + Phi(s') - Phi(s)
-                 - contact commitment
 
 ImmediateExchange = enemy removal - friendly fire - incoming fire + melee now
 ```
+
+`melee now` is non-zero only for a squad already in contact at turn start: attacks resolve from
+turn-start geometry, so a charge that arrives this turn strikes next turn. **A charge has no term
+of its own (2026-10-19).** Until then the score also subtracted a contact commitment (a run-in
+cost plus a cost for the guns given up in contact) and credited a charge from range with its melee
+divided by (1 + turns to contact). Each of those is what Φ's Close continuation prices already,
+so a charge was counted twice. The run-in cost was also not shared: for every charger it summed
+the fire of every enemy shooter in reach as if each shot at him alone. At 200 yards, 60 Kommandos
+against 60 PDF priced a charge about 20 BV below holding. They stood in a pistol-against-autogun
+firefight and lost 86% of their models to the PDF's 17%.
 
 **One currency: Battle Value parity (2026-10-12, product owner).** Every removal estimate is
 priced in the Battle Value of the soldiers it removes, so what we take is in enemy BV and what we
@@ -599,20 +646,35 @@ fire and melee threat; opening range asks where the force is still effective bef
 exists.
 
 Opening range is asked once per squad against the whole opposing force
-(`BattleEngagementFrameBuilder.CalculatePreferredOpeningRange`, averaged per side by
-`MissionOpeningRange`). Since 2026-09-22 each squad plans only its **share** of its own force's
-battle value (`ForceShare`): its kill target is that share of `ApproachRemovalShare` times the
-enemy's battle value, and the enemy's fire against it is scaled by the same share. Before, every
-squad planned the whole kill under the whole enemy's fire.
+(`BattleEngagementFrameBuilder.CalculatePreferredOpeningRange`). **Since 2026-10-24 the answer is
+the opening forecast** (`OpeningExchangeForecast`, Design/Active/OpeningRangeRefactor.md): the
+coupled exchange forecast behind Φ, built without a grid for a battle that opens at a candidate
+range, one lane per enemy squad. Each side follows its doctrine (a contact seeker closes and fires
+nothing on the way; a shooter stands); each squad fights its `ForceShare` of each enemy and takes
+that share of the enemy's fire; fire is priced as the shot planner fires it (each round charged at
+its scarcity price, and the planner's own held-aim cycle, `CurveFireModel.PlannerPriced`); rounds
+are counted; melee uses the contact frontage; breaks are priced by level. The preferred opening is
+the argmax of the forecast's net value (enemy value removed less own value lost, breaks included)
+over log-spaced candidates up to weapon reach, taking the shortest candidate within 1% of the
+squad's battle value of the best **on both the expected and the unlucky path** (fire scaled by
+e^∓0.5): a flat plateau's shortest point is its edge, where a little bad luck turns "they die before
+they arrive" into contact. There is **no turn discount**: the question is who comes out ahead, and a
+battle's result does not depend on its length. A squad with no ranged weapon has **no preference**
+(`CalculatePreferredOpeningRangeOrNone` returns null).
 
-`ApproachRemovalShare` is the loss at which the enemy is expected to **break**. The squad cannot
-read the enemy's orders, so it assumes Attritional, the most stubborn aggression that still
-withdraws: 1 − `AttritionalEligibilityThreshold` = 75% (Aggressive never withdraws voluntarily). The
-approach is then accepted only if that break lands inside the squad's useful band less the
-10-turn retreat headroom (the same quantity as the floor); if no opening range does, the
-unconstrained best stands. Without that condition, extra range looked free once the kill share was
-met, and Grist Nine Epsilon's tactical squads opened at ~1050, near weapon reach; the orks broke at
-~500 and the marines, one cell a turn faster, never brought them back into range.
+Calibrated against the measured approach curves (16 battles per opening, 12-600 yards): the
+forecast's best opening is within one ladder step of the measured best for every panel side but the
+Carnifex, whose curve is flat (PDF v Hormagaunts 314 against 450, PDF v Kommandos 41-51 against 50,
+Tactical v PDF 333 against 450, Tactical v Hormagaunts 350 against 450). The shortest-sufficient
+sweep it replaced, with its break limit, retreat reserve and three-turn minimum, put the PDF 26-28
+yards from Hormagaunts and Tactical 761 yards from PDF.
+
+**Missions.** `MissionOpeningRange.Interpolate` slides between the two sides' average preferences by
+the mission's controlling check. A **reciprocal assault** (two forces meeting, neither on its own
+terms) opens at the **longer** of the two sides' preferences (`MissionOpeningRange.ReciprocalAssault`,
+rule B, product owner 2026-10-22): the side that wants range opens fire as soon as it is worth
+firing, and the side that wants contact cannot make the fight start closer without the surprise an
+ambush's margin represents. A squad with no preference does not pull its side's average.
 
 This section used to end by claiming that "pursuit uses useful reach rather than the normal standoff
 band because a quarry's return fire is not the pursuit objective". **That is true of the force-level
@@ -1000,10 +1062,6 @@ contact through their executed pair-local evidence.
 The following clocks also look like interception when reading score traces, but belong to their
 own value models and are not replacements for either estimate:
 
-- `MeleeStrikeEstimator.EstimateChargeNet` uses one soldier's distance to a sampled enemy,
-  subtracts the one-cell contact allowance, and divides by that attacker's base move. It supplies
-  a charge payoff discount and `reachesContactThisTurn`; it does not model a withdrawing quarry or
-  an assigned squad pair.
 - `EngagementPotential.EvaluateProjectedMeleeOpportunity` estimates the incoming contact threat
   from the opposing squad's centroid-range and `opposing.MoveSpeed`. It is an expected incoming
   value over the exchange horizon, not a promise that the threat will reach a particular soldier.
@@ -1211,6 +1269,15 @@ LostSharePreviousTwoRounds  = Σ w · l / s
 
 Rescaling every Battle Value, or one side's relative to the other's, changes none of these
 (`ForceShareScaleFreeTests`).
+
+**Stalemate rules (2026-11-06).** Two rules end a battle where the two sides would otherwise wait.
+A squad whose Stay exchanges nothing and whose Close removes more is not offered Hold or StepBack
+(`SquadEngagementPolicy.ApplyStandoffCommitment`). A side withdraws, whatever its aggression, when
+every squad under orders has seen no way to win for 100 turns in a row and the side has lost a larger
+share than the enemy (`VoluntaryWithdrawalReason.NoWayToWin`). A squad has no way to win when Stay
+removes less than a tenth of what it loses and Close is a net loss
+(`EngagementPotential.HasNoWayToWin`). The forecast does not know ammunition, so a squad can leave a
+long-reach enemy before that enemy runs dry.
 
 Force continuation (`BattleForceEvaluator`) treats the aggression casualty threshold as eligibility,
 not an automatic order: eligible when the friendly `RemainingShare` is below the threshold (Avoid

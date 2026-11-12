@@ -59,9 +59,9 @@ namespace OnlyWar.Battles
         /// already been projected into this state; it is not an engagement option and carries no
         /// policy decision by itself.
         ///
-        /// <para><see cref="EnemyValueRate"/> converts enemy battle value into the squad's own
-        /// (<see cref="EngagementCurrency"/>). Every component of <see cref="Breakdown"/> is in the
-        /// squad's own currency; the default of 1 leaves both currencies equal.</para>
+        /// <para>Every component of <see cref="Breakdown"/> is in tactical value, which prices both
+        /// sides by one rule from one state, so there is no exchange rate between them
+        /// (Design/Active/StrategicAndTacticalValue.md).</para>
         /// </summary>
         internal sealed record State(
             BattleSquad Squad,
@@ -75,8 +75,7 @@ namespace OnlyWar.Battles
             BattleSquad Primary = null,
             IReadOnlyList<PlannedSoldierAction> Actions = null,
             IReadOnlyCollection<BattleSquad> FriendlySquads = null,
-            ValueTuple<float, float>? PrimaryCentroid = null,
-            float EnemyValueRate = 1f);
+            ValueTuple<float, float>? PrimaryCentroid = null);
 
         /// <summary>
         /// The auditable decomposition of Φ. Net-rate value is the coupled exchange forecast
@@ -97,6 +96,11 @@ namespace OnlyWar.Battles
         /// state (0 when it does not). It is not part of <see cref="Total"/>: it tells the option
         /// selector that there is somewhere more useful to be, so a small but steady gain from
         /// moving there is a decision and not noise.</para>
+        /// <para><see cref="CloseRemovesMore"/> is whether the Close continuation removes more
+        /// enemy battle value than Stay. A positive CloseAdvantage alone can come from losing the
+        /// same squad later: the forecast discounts later turns, so a run that only delays a rout
+        /// scores above a firefight that loses the squad sooner (60 Kommandos running at 60 PDF,
+        /// 2026-10-20: Close removed nothing). The commitment mask reads both.</para>
         internal readonly record struct Breakdown(
             float NetRateValue,
             float ReadinessValue,
@@ -104,7 +108,11 @@ namespace OnlyWar.Battles
             float FireWindowValue,
             float MoraleValue,
             float CommandValue,
-            float CloseAdvantage = 0)
+            float CloseAdvantage = 0,
+            bool CloseRemovesMore = false,
+            bool StayIsInert = false,
+            bool NoWayToWin = false,
+            EngagementOptionKind? CloseMove = null)
         {
             internal float ScreenValue => RoleValue + FireWindowValue;
 
@@ -125,28 +133,31 @@ namespace OnlyWar.Battles
         internal Breakdown Evaluate(State state)
         {
             ArgumentNullException.ThrowIfNull(state);
-            (float exchange, float closeAdvantage) = EvaluateExchangePotential(state);
+            (float exchange, float closeAdvantage, bool closeRemovesMore, bool stayIsInert, bool noWayToWin,
+                EngagementOptionKind? closeMove) = EvaluateExchangePotential(state);
             return new Breakdown(
                 exchange,
                 EvaluateReadiness(state),
                 EvaluateScreenRole(state)
                     + EvaluatePursuitContactProgress(state),
-                // Shots at the quarry: enemy battle value, converted like the outgoing exchange.
-                EnemyRate(state) * EvaluateFireWindow(state),
+                // Shots at the quarry, in the quarry's value.
+                EvaluateFireWindow(state),
                 EvaluateMorale(state),
                 EvaluateCommandAura(state),
-                closeAdvantage);
+                closeAdvantage,
+                closeRemovesMore,
+                stayIsInert,
+                noWayToWin,
+                closeMove);
         }
 
         internal static float ScoreTransition(
             float immediateExchange,
             Breakdown root,
-            Breakdown projected,
-            float contactCommitment) =>
+            Breakdown projected) =>
             immediateExchange
             + EngagementPotentialDiscount * projected.Total
-            - root.Total
-            - contactCommitment;
+            - root.Total;
 
         // Φ is already a value function over the expected exchange horizon. The transition is a
         // potential difference, not a one-ply rollout, so applying the old 0.65 rollout discount
@@ -174,12 +185,18 @@ namespace OnlyWar.Battles
         /// <see cref="ExchangeLane"/>): an enemy contact seeker charging through our fire band, a
         /// pursuit quarry opening the range while we stand.</para>
         /// </summary>
-        private (float Value, float CloseAdvantage) EvaluateExchangePotential(State state)
+        private (float Value, float CloseAdvantage, bool CloseRemovesMore, bool StayIsInert, bool NoWayToWin,
+            EngagementOptionKind? CloseMove) EvaluateExchangePotential(
+            State state)
         {
             float expectedExchangeTurns = _context?.ExpectedExchangeTurnsFor(state.Squad.Id)
                 ?? EngagementHorizonModel.MaximumExchangeTurns;
             List<ExchangeLane> stay = [];
             List<ExchangeLane> close = [];
+            // The same Close at a jog and at a walk, firing on the way (see ApproachFiring); a lane
+            // that cannot approach that way is the run lane again.
+            List<ExchangeLane> jogClose = [];
+            List<ExchangeLane> walkClose = [];
             bool anyApproach = false;
             // The squad fights its share of each enemy, not all of it (2026-10-11). Each lane's
             // enemy pool is the enemy's battle value times this squad's share of its own force
@@ -192,6 +209,14 @@ namespace OnlyWar.Battles
             // stood and lost a 400-turn firefight. Removal is capped at the same share: the squad's
             // proportional part of the kill. A squad that fights alone has a share of 1.
             float forceShare = BattleEngagementFrameBuilder.ForceShare(state.Squad, state.FriendlySquads);
+            // Melee on this squad from each enemy that can reach it, before the frontage is shared
+            // out among them (see below the loop), and each lane's enemy.
+            Dictionary<int, MeleeStrikeEstimator.ContactStrikes> incomingStrikes = [];
+            Dictionary<int, MeleeStrikeEstimator.ContactStrikes> outgoingStrikes = [];
+            List<int> stayEnemies = [];
+            List<int> closeEnemies = [];
+            // The close lanes whose stop may be moved out to a halfway stop (see below the loop).
+            List<bool> halfwayLanes = [];
             foreach (BattleSquad enemy in (state.Enemies ?? []).OrderBy(candidate => candidate.Id))
             {
                 if (!state.Profiles.TryGetValue(enemy.Id, out BattleSquadCapabilityProfile opposing)
@@ -267,12 +292,20 @@ namespace OnlyWar.Battles
                 bool contactReachable = enemyApproach > 0
                     || inContact
                     || (state.Profile.IsContactSeeking && destinationRange <= ContactRange);
-                float contactIncoming = contactReachable
-                    ? _exchange.EvaluateContactRemovalRate(enemy, state.Squad)
-                    : 0f;
-                float contactOutgoing = contactReachable
-                    ? _exchange.EvaluateContactRemovalRate(state.Squad, enemy)
-                    : 0f;
+                // The enemy fights this squad with its share of itself, as the lane's pool assumes.
+                // Both are set again below the loop, once the frontage is shared out; these only
+                // say whether there is any melee in the lane.
+                float contactIncoming = 0f;
+                float contactOutgoing = 0f;
+                if (contactReachable)
+                {
+                    MeleeStrikeEstimator.ContactStrikes incomingMelee = _exchange.ContactStrikes(enemy, state.Squad);
+                    MeleeStrikeEstimator.ContactStrikes outgoingMelee = _exchange.ContactStrikes(state.Squad, enemy);
+                    incomingStrikes[enemy.Id] = incomingMelee;
+                    outgoingStrikes[enemy.Id] = outgoingMelee;
+                    contactIncoming = incomingMelee.RemovalRate(forceShare);
+                    contactOutgoing = outgoingMelee.RemovalRate(defenderShare: forceShare);
+                }
                 bool contactPossible = contactIncoming > 0 || contactOutgoing > 0;
                 // How far a quarry can open the range while it matters: the discount has spent
                 // most of a turn's weight after about sixty turns.
@@ -291,10 +324,16 @@ namespace OnlyWar.Battles
 
                 RangeRates standing = RangeRates.Sample(
                     samples,
-                    sample => _exchange.EvaluateSustainedOutgoingRate(
+                    sample => _exchange.EvaluateSustainedOutgoing(
                         state.Squad, enemy, opposing, state.Frames, sample),
-                    sample => _exchange.EvaluateSustainedIncomingRate(
+                    sample => _exchange.EvaluateSustainedIncoming(
                         state.Squad, enemy, state.Profile, state.Frames, sample));
+                // The enemy's rounds for this lane: its carried rounds times the share of its fire
+                // that falls on this squad, the allocation its incoming rate already carries.
+                float enemyRounds = AmmunitionInPotential
+                    ? EngagementExchangeModel.RoundsCarried(enemy)
+                        * (opposingFrame?.PairWeights.GetValueOrDefault(state.Squad.Id) ?? 0f)
+                    : float.PositiveInfinity;
                 ExchangeLane standHere = new(
                     opposing.TotalAbleBattleValue * forceShare,
                     BreakProfileOf(enemy, state.Enemies),
@@ -309,71 +348,454 @@ namespace OnlyWar.Battles
                     contactPossible,
                     ContactRange,
                     contactOutgoing,
-                    contactIncoming);
+                    contactIncoming,
+                    enemyRounds);
                 if (standing.IsZero && !contactPossible && !moves)
                 {
                     continue;
                 }
                 stay.Add(standHere);
+                stayEnemies.Add(enemy.Id);
+                closeEnemies.Add(enemy.Id);
 
                 if (!moves)
                 {
                     close.Add(standHere);
+                    jogClose.Add(standHere);
+                    walkClose.Add(standHere);
+                    halfwayLanes.Add(false);
                     continue;
                 }
                 anyApproach = true;
-                close.Add(standHere with
+                bool ordinaryApproach = !state.Profile.IsContactSeeking
+                    && !(state.Frame != null && IsPursuitRole(state.Frame.Role))
+                    && !firePreservingPursuit;
+                halfwayLanes.Add(ordinaryApproach);
+                ExchangeLane run = standHere with
                 {
                     Moves = true,
                     StopRange = destinationRange,
                     Moving = RangeRates.Sample(
                         samples,
-                        // Only a fire-preserving pursuer shoots on the move; anyone else closing
-                        // fires nothing until it stands.
+                        // Only a fire-preserving pursuer shoots on the run; anyone else running in
+                        // fires nothing until it stands (the jog and walk approaches below fire).
                         sample => firePreservingPursuit
-                            ? _exchange.EvaluateOutgoingExchangeRate(
-                                state.Squad, enemy, state.Profile, opposing, state.Frames, sample)
-                            : 0f,
+                            ? (_exchange.EvaluateOutgoingExchangeRate(
+                                state.Squad, enemy, state.Profile, opposing, state.Frames, sample), 0f)
+                            : (0f, 0f),
                         // A moving target is harder to hit: the engine adds its speed to the range
                         // in the hit modifier (BattleModifiersUtil.CalculateRangeModifier).
-                        sample => _exchange.EvaluateIncomingExchangeRate(
+                        sample => _exchange.EvaluateIncoming(
                             state.Squad,
                             enemy,
                             state.Profile,
                             state.Frames,
                             sample,
                             targetSpeed: ownMove)),
-                });
+                };
+                close.Add(run);
+                // Fire on the approach (2026-11-08, Design/Active/StrategicAndTacticalValue.md): a
+                // squad that does not seek contact can also advance at a jog or a walk and shoot
+                // as it goes, un-aimed and with the tier's bulk penalty, at the tier's speed. Until
+                // then Close only ran in without firing, so Brood Brothers whose lasguns reach
+                // 1,000 yards forecast a 450-yard walk under Deathspitter fire with no shot back
+                // (lose 68%, break 92%) and stood 750 yards from Warriors they beat from 300.
+                if (FireOnApproach && ordinaryApproach)
+                {
+                    jogClose.Add(ApproachFiring(
+                        run, state, enemy, opposing, samples, standingClosing,
+                        ownMove * SoldierMovementPlanner.JogSpeedMultiplier,
+                        EngagementExchangeModel.PostureBulkMultiplier(EngagementOptionKind.JogToward)));
+                    walkClose.Add(ApproachFiring(
+                        run, state, enemy, opposing, samples, standingClosing,
+                        ownMove * SoldierMovementPlanner.WalkSpeedMultiplier,
+                        EngagementExchangeModel.PostureBulkMultiplier(EngagementOptionKind.StepForward)));
+                }
+                else
+                {
+                    jogClose.Add(run);
+                    walkClose.Add(run);
+                }
             }
 
             if (stay.Count == 0)
             {
-                return (0, 0);
+                return (0, 0, false, false, false, null);
             }
+
+            // Frontage (Design/Active/ContactRateCalibration.md). Only so many attackers fit round
+            // this squad, however many enemy squads can reach it, so the enemies in reach share its
+            // frontage by their numbers; and this squad's own soldiers are split over the enemies it
+            // can reach by theirs, fighting its force share of each. Until 2026-10-23 each lane
+            // priced the whole melee of both squads as if they fought alone: a PDF squad expected
+            // three Hormagaunt broods to strike it at once (90% of it gone in the first turn of
+            // contact, against 23% in battle), and a Genestealer brood struck both PDF squads in full.
+            float attackersInReach = incomingStrikes.Values.Sum(strikes => (float)strikes.Attackers);
+            float defendersInReach = outgoingStrikes.Values.Sum(strikes => (float)strikes.Defenders);
+            // A soldier met by strikers of two broods is taken out once: each lane is credited its
+            // share of the loss all of them together inflict.
+            float FrontageShare(MeleeStrikeEstimator.ContactStrikes strikes) => strikes.Attackers / attackersInReach;
+            float incomingTakeOuts = attackersInReach > 0
+                ? incomingStrikes.Values.Sum(strikes => strikes.EngagedTakeOuts(forceShare, FrontageShare(strikes)))
+                : 0f;
+            void ShareFrontage(List<ExchangeLane> lanes, List<int> enemies)
+            {
+                for (int index = 0; index < lanes.Count; index++)
+                {
+                    int enemyId = enemies[index];
+                    if (!incomingStrikes.TryGetValue(enemyId, out MeleeStrikeEstimator.ContactStrikes incomingMelee))
+                    {
+                        continue;
+                    }
+                    MeleeStrikeEstimator.ContactStrikes outgoingMelee = outgoingStrikes[enemyId];
+                    lanes[index] = lanes[index] with
+                    {
+                        ContactIncoming = attackersInReach > 0
+                            ? incomingMelee.RemovalRate(
+                                forceShare,
+                                FrontageShare(incomingMelee),
+                                otherTakeOuts: incomingTakeOuts
+                                    - incomingMelee.EngagedTakeOuts(forceShare, FrontageShare(incomingMelee)))
+                            : 0f,
+                        ContactOutgoing = defendersInReach > 0
+                            ? outgoingMelee.RemovalRate(
+                                outgoingMelee.Defenders / defendersInReach, defenderShare: forceShare)
+                            : 0f,
+                    };
+                }
+            }
+            ShareFrontage(stay, stayEnemies);
+            ShareFrontage(close, closeEnemies);
+            ShareFrontage(jogClose, closeEnemies);
+            ShareFrontage(walkClose, closeEnemies);
 
             float ownPool = Math.Max(0, state.Profile.TotalAbleBattleValue);
+            // This squad's rounds, shared by all its lanes (2026-11-08): a squad whose rounds will
+            // not last the horizon no longer forecasts fire it cannot pay for, standing or closing.
+            // Pooled across the squad's weapons, as the opening forecast pools them.
+            float ownRounds = AmmunitionInPotential
+                ? EngagementExchangeModel.RoundsCarried(state.Squad)
+                : float.PositiveInfinity;
             SquadBreakProfile ownBreak = BreakProfileOf(state.Squad, state.FriendlySquads);
-            // Removal is in the enemy's battle value and losses in ours. Convert before netting,
-            // never after: a net of two currencies is a number the ratio between the factions'
-            // values decides.
-            float rate = EnemyRate(state);
-            float Value(IReadOnlyList<ExchangeLane> lanes)
-            {
-                EngagementExchangeForecast.Result result = EngagementExchangeForecast.Run(
-                    ownPool, ownBreak, lanes, expectedExchangeTurns);
-                return rate * result.EnemyValueRemoved - result.OwnValueLost;
-            }
+            // The horizon is how long the exchange at a geometry lasts. Close changes the geometry
+            // first, so it gets the horizon at its destination after the turns it takes to get
+            // there (2026-10-23): with the travel inside the horizon, a charge from 23 yards spent
+            // its whole four-turn horizon running under fire and its melee was never priced.
+            float CloseHorizon(IReadOnlyList<ExchangeLane> lanes) => !CloseHorizonAddsTravel ? expectedExchangeTurns : Math.Min(
+                EngagementHorizonModel.MaximumExchangeTurns,
+                expectedExchangeTurns + lanes
+                    .Where(lane => lane.Moves && lane.MovingClosing > 0)
+                    .Select(lane => Math.Max(0f, lane.StartRange - lane.StopRange) / lane.MovingClosing)
+                    .DefaultIfEmpty(0f)
+                    .Max());
+            float closeHorizon = CloseHorizon(close);
+            EngagementExchangeForecast.Result Forecast(IReadOnlyList<ExchangeLane> lanes, float horizon) =>
+                EngagementExchangeForecast.RunExpected(
+                    ownPool,
+                    ownBreak,
+                    lanes,
+                    horizon,
+                    turnDiscount: TurnDiscount,
+                    ownRounds: ownRounds,
+                    levelBreaks: UseLevelBreaks,
+                    luckSpread: LuckSpread);
+            float Value(EngagementExchangeForecast.Result result) =>
+                result.EnemyValueRemoved - result.OwnValueLost;
 
-            float stayValue = Value(stay);
+            EngagementExchangeForecast.Result stayResult = Forecast(stay, expectedExchangeTurns);
+            float stayValue = Value(stayResult);
             if (!anyApproach)
             {
-                TraceForecast(state, "stay", stay, ownPool, ownBreak, expectedExchangeTurns, rate);
-                return (stayValue, 0);
+                TraceForecast(state, "stay", stay, ownPool, ownBreak, expectedExchangeTurns);
+                ReportRootForecast(state, stay, null, stayValue, float.NaN, ownPool, ownBreak, expectedExchangeTurns, closeHorizon,
+                    RootSustainedCycles(state.Squad));
+                return (stayValue, 0, false, IsInert(stayResult, ownPool), HasNoWayToWin(stayResult, stayValue, ownPool), null);
             }
-            float closeValue = Value(close);
-            TraceForecast(state, "stay", stay, ownPool, ownBreak, expectedExchangeTurns, rate);
-            TraceForecast(state, "close", close, ownPool, ownBreak, expectedExchangeTurns, rate);
-            return (Math.Max(stayValue, closeValue), Math.Max(0, closeValue - stayValue));
+            EngagementExchangeForecast.Result closeResult = Forecast(close, closeHorizon);
+            float closeValue = Value(closeResult);
+            TraceForecast(state, "candidate-run", close, ownPool, ownBreak, closeHorizon);
+            // Halfway stops (2026-10-26, Design/Active/GauntletV2.md). A squad that does not seek
+            // contact wants its effective engagement range, often a few yards, where standing fire
+            // is best by a hair; the Close continuation walked it all the way there without firing.
+            // From 446 yards a PDF squad against Tyranid Warriors forecast arriving broken after 90
+            // turns under fire (-13 against -0.4 for standing), though standing at 160 yards wins
+            // nearly as much as point blank, so twenty PDF squads stood out of reach for 600 turns.
+            // Close may also stop at half or a quarter of the gap and stand there; the potential is
+            // the best of them, and the next turn's state asks again from nearer in.
+            // Each stop is cut from the run lanes, not from the best Close so far: until 2026-11-08 a
+            // half stop that beat the run became the lane the quarter stop was cut from, the quarter
+            // (nearer) stop was then inside it, and the loop ended. From 732 yards Brood Brothers
+            // against Warriors tried 366 yards, where lasguns do nothing, and never 183, where they win.
+            List<ExchangeLane> runLanes = close;
+            for (int halving = 1; halving <= CloseHalfwayStops; halving++)
+            {
+                float fraction = MathF.Pow(0.5f, halving);
+                List<ExchangeLane> halfway = new(runLanes.Count);
+                bool changed = false;
+                for (int index = 0; index < runLanes.Count; index++)
+                {
+                    ExchangeLane lane = runLanes[index];
+                    float stop = lane.StartRange * fraction;
+                    if (!halfwayLanes[index] || stop <= lane.StopRange + 0.01f)
+                    {
+                        halfway.Add(lane);
+                        continue;
+                    }
+                    changed = true;
+                    halfway.Add(lane with { StopRange = stop });
+                }
+                if (!changed)
+                {
+                    break;
+                }
+                float halfwayHorizon = CloseHorizon(halfway);
+                EngagementExchangeForecast.Result halfwayResult = Forecast(halfway, halfwayHorizon);
+                float halfwayValue = Value(halfwayResult);
+                TraceForecast(state, "candidate-halfway", halfway, ownPool, ownBreak, halfwayHorizon);
+                if (halfwayValue > closeValue)
+                {
+                    close = halfway;
+                    closeHorizon = halfwayHorizon;
+                    closeResult = halfwayResult;
+                    closeValue = halfwayValue;
+                }
+            }
+            // The approaches that fire on the way, each over its own horizon (its travel takes
+            // longer); Close is the best of the ways in.
+            // The run and its halfway stops are run at full speed; the approaches at their tier.
+            EngagementOptionKind closeMove = EngagementOptionKind.RunToward;
+            foreach ((List<ExchangeLane> approach, EngagementOptionKind move) in new[]
+                {
+                    (jogClose, EngagementOptionKind.JogToward),
+                    (walkClose, EngagementOptionKind.StepForward),
+                })
+            {
+                if (!FireOnApproach || approach.SequenceEqual(close))
+                {
+                    continue;
+                }
+                float approachHorizon = CloseHorizon(approach);
+                EngagementExchangeForecast.Result approachResult = Forecast(approach, approachHorizon);
+                float approachValue = Value(approachResult);
+                TraceForecast(state, "candidate-approach", approach, ownPool, ownBreak, approachHorizon);
+                if (approachValue > closeValue)
+                {
+                    close = approach;
+                    closeHorizon = approachHorizon;
+                    closeResult = approachResult;
+                    closeValue = approachValue;
+                    closeMove = move;
+                }
+            }
+            TraceForecast(state, "stay", stay, ownPool, ownBreak, expectedExchangeTurns);
+            TraceForecast(state, "close", close, ownPool, ownBreak, closeHorizon);
+            ReportRootForecast(state, stay, close, stayValue, closeValue, ownPool, ownBreak, expectedExchangeTurns, closeHorizon,
+                RootSustainedCycles(state.Squad));
+            return (
+                Math.Max(stayValue, closeValue),
+                Math.Max(0, closeValue - stayValue),
+                closeResult.EnemyValueRemoved > stayResult.EnemyValueRemoved,
+                IsInert(stayResult, ownPool),
+                HasNoWayToWin(stayResult, closeValue, ownPool),
+                FollowPlanOnlyWhenStayLoses && stayValue >= 0 ? null : closeMove);
+        }
+
+        /// <summary>
+        /// A Close lane that advances at <paramref name="speed"/> and fires on the way: every soldier
+        /// shoots un-aimed each turn with the movement tier's bulk penalty
+        /// (<paramref name="shooterBulkMultiplier"/>), and the enemy shoots at a target moving at
+        /// that speed. The rest of the lane (where it stops, contact, the enemy) is the run lane's.
+        /// </summary>
+        private ExchangeLane ApproachFiring(
+            ExchangeLane run,
+            State state,
+            BattleSquad enemy,
+            BattleSquadCapabilityProfile opposing,
+            IReadOnlyList<float> samples,
+            float standingClosing,
+            float speed,
+            float shooterBulkMultiplier) =>
+            run with
+            {
+                MovingClosing = Math.Max(0f, speed) + standingClosing,
+                Moving = RangeRates.Sample(
+                    samples,
+                    sample => _exchange.EvaluateMovingOutgoing(
+                        state.Squad, enemy, opposing, sample, shooterBulkMultiplier),
+                    sample => _exchange.EvaluateIncoming(
+                        state.Squad, enemy, state.Profile, state.Frames, sample, targetSpeed: speed)),
+            };
+
+        /// <summary>
+        /// Close may advance at a jog or a walk and fire on the way, as well as run in without
+        /// firing (2026-11-08). A static field so the diagnostics can compare:
+        /// DUEL_FIRE_ON_APPROACH=0 is the Close of before.
+        /// </summary>
+        internal static bool FireOnApproach = true;
+
+        /// <summary>
+        /// The forecast counts both sides' rounds (2026-11-08): fire stops when the rounds run out.
+        /// A static field so the diagnostics can compare: DUEL_POTENTIAL_AMMO=0 is the forecast of
+        /// before, with rounds free.
+        /// </summary>
+        internal static bool AmmunitionInPotential = true;
+
+        /// <summary>Below this share of the squad's own pool, a forecast's exchange counts as nothing.</summary>
+        private const float NegligibleExchangeShare = 0.001f;
+
+        /// <summary>
+        /// How little Stay may remove, per value it loses, and still count as doing nothing. A squad
+        /// that trades badly but really hurts the enemy is fighting, not waiting to die.
+        /// </summary>
+        private const float NoWinRemovalPerLoss = 0.1f;
+
+        /// <summary>Standing here, neither side hurts the other over the whole horizon.</summary>
+        private static bool IsInert(EngagementExchangeForecast.Result stay, float ownPool) =>
+            stay.EnemyValueRemoved + stay.OwnValueLost < NegligibleExchangeShare * ownPool;
+
+        /// <summary>
+        /// Standing here the squad is hurt and does next to nothing in return, and closing is a net
+        /// loss as well: it has no continuation that wins (see <see cref="NoWayToWinWithdrawal"/>).
+        /// </summary>
+        private static bool HasNoWayToWin(
+            EngagementExchangeForecast.Result stay,
+            float closeValue,
+            float ownPool) =>
+            closeValue < 0
+            && stay.OwnValueLost >= NegligibleExchangeShare * ownPool
+            && stay.EnemyValueRemoved < NoWinRemovalPerLoss * stay.OwnValueLost;
+
+        /// <summary>
+        /// A squad whose Stay exchange is nothing, and whose Close removes more, is not offered Hold
+        /// or StepBack (<see cref="SquadEngagementPolicy.ApplyStandoffCommitment"/>; adopted 2026-11-06,
+        /// Design/Active/StrategicAndTacticalValue.md, stalemate evidence). A static field so the
+        /// diagnostics can compare: DUEL_STANDOFF_CLOSE=0 turns it off.
+        /// </summary>
+        internal static bool StandoffClose = true;
+
+        /// <summary>
+        /// FOLLOW THE PLAN (adopted 2026-11-09, with <see cref="FollowPlanOnlyWhenStayLoses"/>). When the root Close beats Stay and removes
+        /// more, the squad is offered only the option that moves as the winning Close moves
+        /// (<see cref="SquadEngagementPolicy.ApplyPlanCommitment"/>). Φ changes very little per yard
+        /// where nobody can hurt anybody, so a step costs about what a run costs, and the walk wins on
+        /// its immediate fire: 4 Brood Brothers that forecast a win from a run to 183 yards walked
+        /// at a yard a turn through 250 turns of Deathspitter fire instead. A static field so the
+        /// diagnostics can compare (DUEL_FOLLOW_PLAN=0 turns it off). Needed since the rounds fix
+        /// (EngagementExchangeForecast.RoundsLeaveWithSoldiers): without it 10 Mobs that forecast a
+        /// narrow win from closing on a Tactical squad stood and lost 0/88; with it they won 8/8.
+        /// </summary>
+        internal static bool FollowClosePlan = true;
+
+        /// <summary>
+        /// The narrowed follow-the-plan rule (2026-11-09): the plan is followed only when standing
+        /// is itself a loss (Stay's value below 0). Without it, PDF facing charging Hormagaunts
+        /// followed a Close toward the charge and went from 62/38 to 12/88. A Close that wins
+        /// narrowly over a Stay that also wins is left to the ordinary choice. The breakdown's
+        /// CloseMove is null when the rule does not apply, so nothing else reads it.
+        /// Switch: DUEL_FOLLOW_ANY_STAY=1 restores the unnarrowed rule.
+        /// </summary>
+        internal static bool FollowPlanOnlyWhenStayLoses = true;
+
+        /// <summary>
+        /// A side withdraws, whatever its aggression, when each of its squads has seen no way to win
+        /// for <see cref="NoWayToWinPatienceTurns"/> turns running and it has lost the larger share
+        /// (adopted 2026-11-06). A static field so the diagnostics can compare:
+        /// DUEL_NO_WIN_WITHDRAW=0 turns it off.
+        /// </summary>
+        internal static bool NoWayToWinWithdrawal = true;
+
+        /// <summary>
+        /// Patience 30 and 100 decide the same share of the stalled duels; at 100 the losing side's
+        /// loss is nearer the rules-off result. A static field so the diagnostics can compare
+        /// (DUEL_NO_WIN_PATIENCE).
+        /// </summary>
+        internal static int NoWayToWinPatienceTurns = 100;
+
+        /// <summary>
+        /// One squad's root forecast, for the forecast-against-battle diagnostic: the turn-by-turn
+        /// trace of the continuation that sets Φ (Stay or Close, whichever is worth more), its
+        /// value, and the squad's own pool.
+        /// </summary>
+        internal readonly record struct RootForecast(
+            int SquadId,
+            bool Close,
+            float Value,
+            float OwnPool,
+            IReadOnlyList<EngagementExchangeForecast.TurnTrace> Turns,
+            float StayValue = float.NaN,
+            float CloseValue = float.NaN,
+            IReadOnlyList<EngagementExchangeForecast.TurnTrace> CloseTurns = null,
+            SustainedCycles Cycles = default);
+
+        /// <summary>
+        /// The standing fire the squad's removal-rate terms credit, at each term's own range: the
+        /// shooters with a term, the volleys a turn their cycles fire (the sum of 1 / cycle turns),
+        /// and the gross removal a turn (the sum of gross / cycle turns, before focus-fire waste).
+        /// </summary>
+        internal readonly record struct SustainedCycles(int Shooters, float VolleysPerTurn, float RatePerTurn);
+
+        private SustainedCycles RootSustainedCycles(BattleSquad squad)
+        {
+            if (RootForecastSink == null)
+            {
+                return default;
+            }
+            int shooters = 0;
+            float volleys = 0f;
+            float rate = 0f;
+            foreach (SquadPairRemovalRate pair in _exchange.PairRemovalRates(squad).Values)
+            {
+                foreach (PairRemovalTerm term in pair.Terms)
+                {
+                    (float gross, float turns) = term.SustainedCycleAt(term.ReferenceRange);
+                    shooters += term.Count;
+                    if (gross > 0f)
+                    {
+                        volleys += term.Count / turns;
+                        rate += term.Count * gross / turns;
+                    }
+                }
+            }
+            return new SustainedCycles(shooters, volleys, rate);
+        }
+
+        /// <summary>
+        /// Diagnostics only (ForecastAgainstBattleDiagnostics): when set, every root state's
+        /// forecast is reported here, on the planning thread. Null in the game.
+        /// </summary>
+        [ThreadStatic]
+        internal static Action<RootForecast> RootForecastSink;
+
+        private static void ReportRootForecast(
+            State state,
+            IReadOnlyList<ExchangeLane> stay,
+            IReadOnlyList<ExchangeLane> close,
+            float stayValue,
+            float closeValue,
+            float ownPool,
+            SquadBreakProfile ownBreak,
+            float horizon,
+            float closeHorizon,
+            SustainedCycles cycles)
+        {
+            Action<RootForecast> sink = RootForecastSink;
+            if (sink == null || state.Actions != null)
+            {
+                return;
+            }
+            bool useClose = close != null && closeValue > stayValue;
+            List<EngagementExchangeForecast.TurnTrace> turns = [];
+            EngagementExchangeForecast.Run(
+                ownPool, ownBreak, useClose ? close : stay, useClose ? closeHorizon : horizon, trace: turns.Add);
+            List<EngagementExchangeForecast.TurnTrace> closeTurns = null;
+            if (close != null)
+            {
+                closeTurns = [];
+                EngagementExchangeForecast.Run(ownPool, ownBreak, close, closeHorizon, trace: closeTurns.Add);
+            }
+            sink(new RootForecast(
+                state.Squad.Id, useClose, useClose ? closeValue : stayValue, ownPool, turns,
+                stayValue, closeValue, closeTurns, cycles));
         }
 
         /// <summary>
@@ -384,6 +806,46 @@ namespace OnlyWar.Battles
         [ThreadStatic]
         internal static Action<string> ForecastTraceSink;
 
+        /// <summary>
+        /// Experiment switch (diagnostics only, 2026-10-23): price breaks in the potential's
+        /// forecasts by level (<c>EngagementExchangeForecast.Run</c>'s <c>levelBreaks</c>) instead of the
+        /// per-turn hazard, to test whether the jumps of the potential across a few yards of
+        /// separation come from the break cliff. Process-wide; false in the game.
+        /// </summary>
+        internal static bool UseLevelBreaks;
+
+        /// <summary>
+        /// Whether the Close continuation's horizon adds the turns it spends getting to its
+        /// destination (true since 2026-10-23, Design/Active/MobBreakCalibration.md). Process-wide;
+        /// a static field so the diagnostics can compare (DUEL_CLOSE_TRAVEL=0).
+        /// </summary>
+        internal static bool CloseHorizonAddsTravel = true;
+
+        /// <summary>
+        /// How many halfway stops the Close continuation of a squad that does not seek contact also
+        /// tries: 1 adds half the gap, 2 also a quarter (2026-10-26). Process-wide; a static field
+        /// so the diagnostics can compare (DUEL_CLOSE_STOPS=2 tries them). 0, off, until the study in
+        /// Design/Active/GauntletV2.md settles: under the 0.97 discount they changed no decision.
+        /// </summary>
+        internal static int CloseHalfwayStops = 0;
+
+        /// <summary>
+        /// The per-turn discount of the potential's forecasts. The forecast's own default, 0.97,
+        /// until 2026-10-26; a static field so the diagnostics can compare (DUEL_PHI_DISCOUNT). The
+        /// opening forecast dropped the same discount in phase 3 of the opening-range refactor: it
+        /// weighs a walk's losses now against fire that comes a quarter as heavy 45 turns later.
+        /// </summary>
+        internal static float TurnDiscount = EngagementExchangeForecast.TurnDiscount;
+
+        /// <summary>
+        /// The luck spread of the potential's forecasts (<c>EngagementExchangeForecast.RunExpected</c>).
+        /// 0, off, since 2026-10-23: the luck average barely smoothed the potential, whose jumps come
+        /// mostly from the rate table's whole-soldier fire allocation
+        /// (Design/Active/BreakCliffSmoothing.md, section 7). The opening forecast keeps it. A static
+        /// field so the diagnostics can sweep it (PHI_LUCK).
+        /// </summary>
+        internal static float LuckSpread;
+
         [ThreadStatic]
         internal static int ForecastTraceSquadId;
 
@@ -393,8 +855,7 @@ namespace OnlyWar.Battles
             IReadOnlyList<ExchangeLane> lanes,
             float ownPool,
             SquadBreakProfile ownBreak,
-            float horizon,
-            float rate)
+            float horizon)
         {
             Action<string> sink = ForecastTraceSink;
             if (sink == null || state.Squad.Id != ForecastTraceSquadId || state.Actions != null)
@@ -410,7 +871,7 @@ namespace OnlyWar.Battles
                     + $"contactOut={lane.ContactOutgoing:F2} contactIn={lane.ContactIncoming:F2}"));
             }
             EngagementExchangeForecast.Result result = EngagementExchangeForecast.Run(
-                ownPool, ownBreak, lanes, horizon,
+                ownPool, ownBreak, lanes, horizon, TurnDiscount,
                 trace: turn =>
                 {
                     if (turn.Turn < 60 || turn.Turn % 10 == 0)
@@ -424,9 +885,8 @@ namespace OnlyWar.Battles
                     }
                 });
             sink(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"  {name} TOTAL: removed={result.EnemyValueRemoved:F2} (x rate {rate:F3} = "
-                + $"{rate * result.EnemyValueRemoved:F2}) lost={result.OwnValueLost:F2} "
-                + $"value={rate * result.EnemyValueRemoved - result.OwnValueLost:F2} "
+                $"  {name} TOTAL: removed={result.EnemyValueRemoved:F2} lost={result.OwnValueLost:F2} "
+                + $"value={result.EnemyValueRemoved - result.OwnValueLost:F2} "
                 + $"ownPool={ownPool:F1} horizon={horizon:F1}"));
         }
 
@@ -557,13 +1017,9 @@ namespace OnlyWar.Battles
             }
             return _context.SquadBreakProfiles.GetOrAdd(
                 squad.Id,
-                _ => EngagementExchangeForecast.ProfileOf(squad, friendlySquads, _grid));
+                _ => EngagementExchangeForecast.ProfileOf(
+                    squad, friendlySquads, _grid, _context.FactionBehaviorRules));
         }
-
-        private static float EnemyRate(State state) =>
-            float.IsFinite(state.EnemyValueRate) && state.EnemyValueRate > 0
-                ? state.EnemyValueRate
-                : 1f;
 
         // Two lessons the lane's range path carries (EvaluateExchangePotential): time to arrive is
         // measured against the NET closing rate. A chase closes at the difference of the speeds;
@@ -586,16 +1042,11 @@ namespace OnlyWar.Battles
         {
             if (state.Actions != null)
             {
-                // Two currencies again. An Aim's readiness is the prepared SHOT, priced in the
-                // target's battle value (RangedTargetSelector.EvaluateFireTiming); Ready and Reload
-                // are a fraction of the soldier's OWN value (SoldierActionPlanner), because they
-                // prepare no particular shot.
-                float rate = EnemyRate(state);
-                float readiness = state.Actions.Sum(action => action == null
-                    ? 0f
-                    : action.Kind == PlannedSoldierActionKind.Aim
-                        ? rate * action.ReadinessValue
-                        : action.ReadinessValue);
+                // An Aim's readiness is the prepared SHOT, priced in the target's value
+                // (RangedTargetSelector.EvaluateFireTiming); Ready and Reload are a fraction of the
+                // soldier's OWN value (SoldierActionPlanner), because they prepare no particular
+                // shot. Both are tactical value.
+                float readiness = state.Actions.Sum(action => action?.ReadinessValue ?? 0f);
                 bool pursuitPreparation = state.Frame != null
                     && IsFirePreservingPursuitRole(state.Frame.Role)
                     && state.Actions.Any(IsFirePreparation);
@@ -612,8 +1063,8 @@ namespace OnlyWar.Battles
             // in a live aim here instead, so abandoning that aim is a real potential loss rather
             // than something the legality mask must forbid. The projected Aim action uses the
             // same removal-conditioned calculation below, which makes the value telescope.
-            // A stored aim is a prepared shot, so enemy battle value like the projected Aim above.
-            return EnemyRate(state) * state.Squad.AbleSoldiers.Sum(shooter =>
+            // A stored aim is a prepared shot, priced like the projected Aim above.
+            return state.Squad.AbleSoldiers.Sum(shooter =>
                 EvaluateStoredAimReadiness(state, shooter));
         }
 
@@ -786,15 +1237,12 @@ namespace OnlyWar.Battles
                 BattleEngagementFrameBuilder.Centroid(threat));
             float turnsUntilThreatReachesInterceptPoint = interceptDistance
                 / Math.Max(0.1f, threatProfile.MoveSpeed);
-            // The threat's melee value is enemy battle value; the screen and the protected squad
-            // are ours. Convert once, so both the holding ratio and the min below compare like
-            // with like.
-            float threatMelee = EnemyRate(state) * threatProfile.UsableMeleeBattleValue;
+            float threatMelee = threatProfile.UsableMeleeBattleValue;
             float holding = Math.Min(
                 1f,
                 (state.Profile.UsableMeleeBattleValue
                     + state.Profile.TotalAbleBattleValue * 0.25f)
-                    / Math.Max(EnemyRate(state), threatMelee));
+                    / Math.Max(1f, threatMelee));
             float capacity = Math.Min(
                 1f,
                 state.Profile.ContactCapacity

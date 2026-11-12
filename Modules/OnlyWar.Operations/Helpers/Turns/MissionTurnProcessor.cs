@@ -128,7 +128,7 @@ namespace OnlyWar.Operations.Turns
                 GameLog.Debug(() =>
                     $"Strategic combat {result.Attacker?.Name} -> {DescribeRegionFaction(result.Target)}: "
                     + $"outcome={result.Outcome}, won={result.AttackerWon}, controlChanged={result.ControlChanged}, "
-                    + $"committed={result.CommittedBattleValue}, defenderBV={result.DefenderBattleValue}, "
+                    + $"committed={result.CommittedStrategicValue}, defenderBV={result.DefenderStrategicValue}, "
                     + $"effective={result.AttackerEffectiveStrength:F0}/{result.DefenderEffectiveStrength:F0}, "
                     + $"losses={result.AttackerLosses}/{result.DefenderLosses}, survivors={result.AttackerSurvivors}, "
                     + $"contributions={DescribeStrategicContributions(mission.Contributions)}");
@@ -305,7 +305,7 @@ namespace OnlyWar.Operations.Turns
                     $"Combat mission start {order.OwnerFaction?.Name ?? "Unknown faction"} "
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"squads={order.AssignedSquads.Count}, soldiers={order.AssignedSquads.Sum(s => s.Members.Count)}, "
-                    + $"battleValue={SquadBattleValue(order.AssignedSquads)}");
+                    + $"strategicValue={SquadStrategicValue(order.AssignedSquads)}");
                 IEnumerable<List<OperationalMissionElement>> missionElements =
                     BuildMissionElements(order.Mission.MissionType, involvedElements);
 
@@ -761,14 +761,14 @@ namespace OnlyWar.Operations.Turns
                 {
                     ConsumptionTurnProcessor.ResolveFeeding(
                         mission.RegionFaction,
-                        mission.CommittedBattleValue);
+                        mission.CommittedStrategicValue);
                 }
             }
             if (orders.Count > 0)
             {
                 GameLog.Debug(() =>
                     $"Feeding resolved: orders={orders.Count}, "
-                    + $"committedBV={orders.Sum(o => ((FeedMission)o.Mission).CommittedBattleValue)}");
+                    + $"committedBV={orders.Sum(o => ((FeedMission)o.Mission).CommittedStrategicValue)}");
             }
         }
 
@@ -894,8 +894,8 @@ namespace OnlyWar.Operations.Turns
             IEnumerable<StrategicCombatContribution> contributions)
         {
             List<string> parts = contributions
-                .Where(c => c.BattleValue > 0)
-                .Select(c => $"{c.StagingFaction?.Region.Name ?? "unknown"}:{c.BattleValue}")
+                .Where(c => c.StrategicValue > 0)
+                .Select(c => $"{c.StagingFaction?.Region.Name ?? "unknown"}:{c.StrategicValue}")
                 .ToList();
             return parts.Count == 0 ? "none" : string.Join(",", parts);
         }
@@ -907,11 +907,11 @@ namespace OnlyWar.Operations.Turns
                 + $"{regionFaction.PlanetFaction.Faction.Name}";
         }
 
-        private static long SquadBattleValue(IEnumerable<Squad> squads)
+        private static long SquadStrategicValue(IEnumerable<Squad> squads)
         {
             return squads
                 .SelectMany(squad => squad.Members)
-                .Sum(member => (long)member.Template.BattleValue);
+                .Sum(member => (long)member.StrategicValue);
         }
     }
 }

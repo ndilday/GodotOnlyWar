@@ -26,40 +26,40 @@ namespace OnlyWar.Tests.Turns;
 public class StrategicCombatResolverTests
 {
     [Fact]
-    public void CalculateDefenderBattleValue_UsesMilitaryStrengthForPopulationIsMilitaryDefenders()
+    public void CalculateDefenderStrategicValue_UsesMilitaryStrengthForPopulationIsMilitaryDefenders()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction horde = fixture.AddConsumptionFaction(1, population: 1_000, organization: 100);
         horde.Garrison = 200;
 
-        long battleValue = StrategicCombatResolver.CalculateDefenderBattleValue(horde);
+        long strategicValue = StrategicCombatResolver.CalculateDefenderStrategicValue(horde);
 
-        Assert.Equal(horde.MilitaryStrength, battleValue);
-        Assert.Equal(1_000, battleValue);
+        Assert.Equal(horde.MilitaryStrength, strategicValue);
+        Assert.Equal(1_000, strategicValue);
     }
 
     // SB-05b: the persistent invasion forces a defender can call on are an explicit input. The
     // resolver, the NPC planner and the mission steps each supply the campaign they are resolving
     // for, so nothing here consults an installed session.
     [Fact]
-    public void CalculateDefenderBattleValue_CountsOnlyTheSuppliedInvasionForces()
+    public void CalculateDefenderStrategicValue_CountsOnlyTheSuppliedInvasionForces()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction defender = fixture.DefaultRegionFaction(1);
         defender.Garrison = 0;
         Squad commandSquad = TestModelFactory.CreateSquad(
             "Warlord's Retinue", TestModelFactory.CreateSoldier());
-        long commandBattleValue = commandSquad.Members
-            .Sum(member => (long)member.Template.BattleValue);
-        Assert.True(commandBattleValue > 0);
+        long commandStrategicValue = commandSquad.Members
+            .Sum(member => (long)member.StrategicValue);
+        Assert.True(commandStrategicValue > 0);
         StrategicInvasionForce invasion = new(
             1, defender.PlanetFaction.Faction, commandSquad, defender.Region, fixture.Planet);
 
-        long withoutForces = StrategicCombatResolver.CalculateDefenderBattleValue(defender);
-        long withForces = StrategicCombatResolver.CalculateDefenderBattleValue(
+        long withoutForces = StrategicCombatResolver.CalculateDefenderStrategicValue(defender);
+        long withForces = StrategicCombatResolver.CalculateDefenderStrategicValue(
             defender, [invasion]);
 
-        Assert.Equal(commandBattleValue, withForces - withoutForces);
+        Assert.Equal(commandStrategicValue, withForces - withoutForces);
     }
 
     [Fact]
@@ -200,13 +200,13 @@ public class StrategicCombatResolverTests
         long originalStaging = contributions.Sum(c => c.StagingFaction.MilitaryStrength);
         foreach (StrategicCombatContribution contribution in contributions)
         {
-            contribution.StagingFaction.RemoveMilitaryStrength(contribution.BattleValue);
+            contribution.StagingFaction.RemoveMilitaryStrength(contribution.StrategicValue);
         }
 
         StrategicCombatMission mission = new(
             target,
             stagingA.PlanetFaction.Faction,
-            committedBattleValue: 3,
+            committedStrategicValue: 3,
             contributions,
             Aggression.Normal,
             invadesOnVictory: true);

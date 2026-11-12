@@ -57,13 +57,13 @@ namespace OnlyWar.Operations.Turns
                         int targetOrganization = Math.Max(
                             0,
                             regionFaction.Organization - orgLost);
-                        long targetOrganizedBattleValue = (long)(
+                        long targetOrganizedStrategicValue = (long)(
                             regionFaction.MilitaryStrength * (targetOrganization / 100.0));
                         regionFaction.DisorganizeMilitaryStrength(
                             Math.Max(
                                 0L,
                                 regionFaction.OrganizedMilitaryStrength
-                                - targetOrganizedBattleValue));
+                                - targetOrganizedStrategicValue));
                         break;
                     case MissionType.Recon:
                         ResolveReconResult(
@@ -108,9 +108,9 @@ namespace OnlyWar.Operations.Turns
                 // silently discard every earlier day's attrition from the campaign. The battle steps
                 // accumulate measured losses into the context as they happen; fall back to the old read
                 // for any path that populated OpposingSquads without a battle step recording them.
-                long defenderCasualties = context.DefenderBattleValueDestroyed > 0
-                    ? context.DefenderBattleValueDestroyed
-                    : FallenBattleValue(context.OpposingSquads);
+                long defenderCasualties = context.DefenderStrategicValueDestroyed > 0
+                    ? context.DefenderStrategicValueDestroyed
+                    : FallenStrategicValue(context.OpposingSquads);
                 double entrenchment = RegionDefenses.GetShared(regionFaction, DefenseType.Entrenchment);
                 if (entrenchment > 0)
                 {
@@ -127,7 +127,7 @@ namespace OnlyWar.Operations.Turns
                     regionFaction.RemoveOrganizedMilitaryStrength(defenderCasualties);
                 }
                 regionFaction.RemoveDisorganizedMilitaryStrength(
-                    context.DisorganizedDefenderBattleValueDestroyed);
+                    context.DisorganizedDefenderStrategicValueDestroyed);
                 long defenderStrengthAfter = regionFaction.MilitaryStrength;
                 Faction attackingFaction = context.Order.OwnerFaction
                     ?? context.MissionSquads.FirstOrDefault()?.Faction;
@@ -403,7 +403,7 @@ namespace OnlyWar.Operations.Turns
                         null,
                         Math.Max(0L, context.MissionSquads
                             .SelectMany(squad => squad.AbleMembers)
-                            .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0))))
+                            .Sum(soldier => (long)soldier.StrategicValue)))
                 };
 
             AddTacticalParticipant(
@@ -474,18 +474,18 @@ namespace OnlyWar.Operations.Turns
             return created;
         }
 
-        private static long FallenBattleValue(IEnumerable<OperationalMissionElement> squads)
+        private static long FallenStrategicValue(IEnumerable<OperationalMissionElement> squads)
         {
             if (squads == null) return 0;
             return squads
-                .Sum(squad => squad.FallenBattleValue);
+                .Sum(squad => squad.FallenStrategicValue);
         }
 
-        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads)
+        private static long AbleStrategicValue(IEnumerable<OperationalMissionElement> squads)
         {
             if (squads == null) return 0;
             return squads
-                .Sum(squad => squad.AbleBattleValue);
+                .Sum(squad => squad.AbleStrategicValue);
         }
 
         private static void ResolveOffensiveSurvivors(MissionContext context)
@@ -500,7 +500,7 @@ namespace OnlyWar.Operations.Turns
 
             // Only the share of the force the faction actually paid for comes back (Order.SurvivorCreditFraction).
             double creditFraction = Math.Clamp(context.Order.SurvivorCreditFraction, 0.0, 1.0);
-            long survivors = (long)Math.Floor(AbleBattleValue(context.MissionSquads) * creditFraction);
+            long survivors = (long)Math.Floor(AbleStrategicValue(context.MissionSquads) * creditFraction);
             if (survivors <= 0) return;
 
             Faction attacker = first.Faction;

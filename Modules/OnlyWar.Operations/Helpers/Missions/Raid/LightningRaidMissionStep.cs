@@ -23,9 +23,9 @@ namespace OnlyWar.Operations.Missions.Raid
         {
             MissionContext context = execution.State;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            long defenderBattleValue = StrategicCombatResolver.CalculateDefenderBattleValue(
+            long defenderStrategicValue = StrategicCombatResolver.CalculateDefenderStrategicValue(
                 enemyFaction, execution.Campaign.PhysicalForces);
-            if (defenderBattleValue <= 0)
+            if (defenderStrategicValue <= 0)
             {
                 context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No military target found in {enemyFaction.Region.Name}.");
@@ -33,10 +33,10 @@ namespace OnlyWar.Operations.Missions.Raid
             }
 
             BaseSkill tactics = execution.Rules.Tactics;
-            long attackerBattleValue = Math.Max(1, AbleBattleValue(context.MissionSquads));
+            long attackerStrategicValue = Math.Max(1, AbleStrategicValue(context.MissionSquads));
             float difficulty = 10.0f
-                               + (float)Math.Log10(Math.Max(defenderBattleValue, 1))
-                               - (float)Math.Log10(attackerBattleValue);
+                               + (float)Math.Log10(Math.Max(defenderStrategicValue, 1))
+                               - (float)Math.Log10(attackerStrategicValue);
             LeaderMissionTest missionTest = new(tactics, difficulty);
 
             context.DaysElapsed++;
@@ -44,14 +44,14 @@ namespace OnlyWar.Operations.Missions.Raid
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
 
             double opportunity = Math.Clamp(0.35 + GaussianCalculator.ApproximateNormalCDF(margin) * 0.9, 0.25, 1.25);
-            long targetBattleValue = Math.Min(
-                defenderBattleValue,
-                Math.Max(1, (long)Math.Round(attackerBattleValue * opportunity)));
+            long targetStrategicValue = Math.Min(
+                defenderStrategicValue,
+                Math.Max(1, (long)Math.Round(attackerStrategicValue * opportunity)));
 
             var request = new ForceGenerationRequest
             {
                 Faction = enemyFaction.PlanetFaction.Faction,
-                TargetBattleValue = Math.Min(targetBattleValue, StrategicCombatRules.MassCombatBattleValueFloor - 1),
+                TargetStrategicValue = Math.Min(targetStrategicValue, StrategicCombatRules.MassCombatStrategicValueFloor - 1),
                 Profile = ForceCompositionProfile.Garrison
             };
             List<OperationalMissionElement> opposingSquads = ForceGenerator.GenerateForce(
@@ -72,9 +72,9 @@ namespace OnlyWar.Operations.Missions.Raid
             GameLog.Debug(() =>
                 $"Lightning raid {context.MissionSquads.FirstOrDefault()?.Faction?.Name ?? "Unknown"} -> "
                 + $"{enemyFaction.Region.Planet.Name}/{enemyFaction.Region.Name}: "
-                + $"attackerBV={attackerBattleValue}, defenderBV={defenderBattleValue}, "
-                + $"tacticsDifficulty={difficulty:F2}, margin={margin:F2}, targetBV={targetBattleValue}, "
-                + $"generatedOpposingBV={AbleBattleValue(opposingSquads)}");
+                + $"attackerBV={attackerStrategicValue}, defenderBV={defenderStrategicValue}, "
+                + $"tacticsDifficulty={difficulty:F2}, margin={margin:F2}, targetBV={targetStrategicValue}, "
+                + $"generatedOpposingBV={AbleStrategicValue(opposingSquads)}");
 
             // A raid withdraws whatever the engagement's outcome, so the withdrawal is a mandatory
             // follow-up rather than the engagement's resume target - MeetingEngagementMissionStep
@@ -88,11 +88,11 @@ namespace OnlyWar.Operations.Missions.Raid
                 then: new WithdrawIfAbleMissionStep());
         }
 
-        private static long AbleBattleValue(IEnumerable<OperationalMissionElement> squads)
+        private static long AbleStrategicValue(IEnumerable<OperationalMissionElement> squads)
         {
             return squads
                 .SelectMany(squad => squad.AbleMembers)
-                .Sum(soldier => (long)(soldier.Template?.BattleValue ?? 0));
+                .Sum(soldier => (long)soldier.StrategicValue);
         }
     }
 }

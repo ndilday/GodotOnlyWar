@@ -74,10 +74,10 @@ internal sealed class FactionDevelopmentPlanner
         // defending, and withdrew in the same week. Per point, a first level of entrenchment is a
         // genuinely excellent deal - the build economy is logarithmic, so the first level is cheap -
         // and priced alone it beat everything. It was multiplying a garrison that was not there.
-        double manned = state.RequiredDefensiveBattleValue <= 0
+        double manned = state.RequiredDefensiveStrategicValue <= 0
             ? 1.0
             : Math.Clamp(
-                rf.GetDeployedStrength() / (double)state.RequiredDefensiveBattleValue, 0.0, 1.0);
+                rf.GetDeployedStrength() / (double)state.RequiredDefensiveStrategicValue, 0.0, 1.0);
 
         foreach ((DefenseType type, double level, double benefit) in new[]
         {

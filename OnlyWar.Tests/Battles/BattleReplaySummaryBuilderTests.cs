@@ -477,7 +477,7 @@ public class BattleReplaySummaryBuilderTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+            [OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.SergeantTemplate, 0, 1), OnlyWar.Tests.Fixtures.TestModelFactory.Element(TestModelFactory.MarineTemplate, 0, 4)],
             squadType);
         squadTemplate.Faction = faction;
         int squadId = soldiers.Count > 0

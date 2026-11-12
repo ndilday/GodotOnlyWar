@@ -91,87 +91,11 @@ public class GradedRemovalCalibrationTests
                 + $"{impenetrable.Outgoing:0.#####}");
     }
 
-    /// <summary>
-    /// XIBARRUS ZETA REGRESSION (2026-08-04). Rostadi/Scharel/Rostzin ambushed a Broodlord, three
-    /// Tyrant Guard and a Melee Carnifex and the derived opening range was ONE YARD, so the marines
-    /// were in contact on turn 1 and 29 of 30 died. The cause was
-    /// <c>CalculatePreferredOpeningRange</c> delegating to the mid-fight snapshot argmax, whose
-    /// every term decreases with range once the enemy has no ranged weapons -- making contact the
-    /// argmax for any loadout. This pins the fix: against a melee-only force a bolter line opens far
-    /// enough to actually shoot it before it arrives.
-    /// </summary>
-    [Theory]
-    [InlineData((byte)5)]
-    [InlineData((byte)10)]
-    [InlineData((byte)15)]
-    [InlineData((byte)20)]
-    public void PreferredOpeningRange_AgainstClosingMeleeOnlyForce_StandsWellOffContact(byte armor)
-    {
-        BattleSquad marines = BolterSquad("Rostadi", 91_100);
-        List<BattleSquad> tyranids = XibarrusZetaTyranids(armor);
-
-        int marineRange = marines.GetPreferredOpeningRange(tyranids);
-        // The force closes at 8 yards a turn, so 24 is "at least three turns of fire before they
-        // arrive" rather than a tuned figure. Measured 2026-08-05: 67/55/47/40 yards for armour
-        // 5/10/15/20 -- five to eight turns. The defect being pinned produced 1, for every loadout.
-        _output.WriteLine($"armor {armor}: marine preferred opening range {marineRange}");
-        Assert.True(
-            marineRange >= 24,
-            $"a bolter line should open well off contact against melee-only monsters that close "
-                + $"at 8 yards a turn; got {marineRange}");
-    }
-
-    /// <summary>
-    /// The toughness question that prompted the fix: a force too tough to destroy inside the useful
-    /// band needs more turns of fire, more turns is more distance, so the opening range moves
-    /// OUTWARD -- with no constitution term anywhere in the derivation.
-    ///
-    /// <para>Only asserted where toughness is the BINDING constraint. Below that the saturation
-    /// floor decides and the answer is flat in constitution, and pinning monotonicity there would be
-    /// pinning noise.</para>
-    ///
-    /// <para>THE BINDING REGION MOVED UP on 2026-08-05, when SaturationFraction went 0.5 -> 0.1.
-    /// A wider useful band is a higher floor, so sufficiency now has to clear a lot more before it
-    /// decides anything. Measured against five Carnifexes, before and after: 94 / 242 / 687 / 996 at
-    /// constitution 400 / 800 / 1600 / 3200, against 929 / 929 / 929 / 996 now. Only the top pair
-    /// still has toughness binding, so only the top pair is still asserted -- the 400/800 and
-    /// 800/1600 cases were dropped because the property genuinely does not hold there any more, NOT
-    /// because the numbers moved. If the floor is ever lowered again, restore them.</para>
-    ///
-    /// <para>THE BINDING REGION MOVED DOWN on 2026-10-06, when removal per hit came from the
-    /// engine's wound counter instead of lambda-weighted ratio progress. Bolters now take several
-    /// times longer to put a Carnifex down, so the opening range reaches the weapon-reach cap (996)
-    /// far sooner. Measured that day at constitution 50 / 100 / 200 / 400 / 800 / 1600 / 3200:
-    /// 606 / 506 / 989 / 996 / 996 / 996 / 996. The 1600/3200 pair is now flat at the cap, so
-    /// toughness no longer binds there; 100 -> 200 is the pair where it does. (50 -> 100 falls: the
-    /// saturation floor decides there.)</para>
-    /// </summary>
-    [Theory]
-    [InlineData(100f, 200f)]
-    public void PreferredOpeningRange_RisesWithOpposingConstitution(float softer, float tougher)
-    {
-        int softRange = OpeningRangeAgainstCarnifexHerd("Softer", 92_000, softer);
-        int toughRange = OpeningRangeAgainstCarnifexHerd("Tougher", 93_000, tougher);
-
-        _output.WriteLine(
-            $"constitution {softer:0} opens at {softRange}, {tougher:0} opens at {toughRange}");
-        Assert.True(
-            toughRange > softRange,
-            $"a tougher force needs more turns of fire and so a longer opening range; got "
-                + $"{toughRange} at constitution {tougher:0} vs {softRange} at {softer:0}");
-    }
-
-    private static int OpeningRangeAgainstCarnifexHerd(
-        string name,
-        int firstId,
-        float constitution)
-    {
-        BattleSquad marines = BolterSquad(name, firstId);
-        List<BattleSquad> herd = Enumerable.Range(0, 5)
-            .Select(index => XibarrusZetaCarnifex(firstId + 500 + (index * 10), constitution))
-            .ToList();
-        return marines.GetPreferredOpeningRange(herd);
-    }
+    // The Xibarrus Zeta guard (a bolter line must not open in contact with melee-only monsters)
+    // moved to RealTemplateEngagementTests on 2026-10-24, on real templates: under the opening
+    // forecast this file's hand-built monsters die before they arrive from any opening past 9
+    // yards, so they no longer test it. The constitution-monotonicity test went with the
+    // sufficiency sweep whose property it pinned (OpeningRangeRefactor.md, phase 5).
 
     /// <summary>
     /// The counterpart the fix must NOT break: a force that shoots back sets the standoff through
@@ -193,34 +117,16 @@ public class GradedRemovalCalibrationTests
             $"return fire must bound the opening range below weapon reach; got {range}");
     }
 
-    private static List<BattleSquad> XibarrusZetaTyranids(byte armor) =>
-    [
-        Tyranid("Broodlord", 91_200, battleValue: 44, constitution: 120,
-            size: 3.06f, moveSpeed: 8.001f, dexterity: 18, armor: armor),
-        Tyranid("Tyrant Guard 1", 91_210, battleValue: 28, constitution: 120,
-            size: 2.6f, moveSpeed: 7.001f, dexterity: 12, armor: armor),
-        Tyranid("Tyrant Guard 2", 91_220, battleValue: 28, constitution: 120,
-            size: 2.6f, moveSpeed: 7.001f, dexterity: 12, armor: armor),
-        Tyranid("Tyrant Guard 3", 91_230, battleValue: 28, constitution: 120,
-            size: 2.6f, moveSpeed: 7.001f, dexterity: 12, armor: armor),
-        Tyranid("Melee Carnifex", 91_240, battleValue: 30, constitution: 224,
-            size: 8f, moveSpeed: 7.001f, dexterity: 10, armor: armor)
-    ];
-
-    private static BattleSquad XibarrusZetaCarnifex(int soldierId, float constitution) =>
-        Tyranid("Melee Carnifex", soldierId, battleValue: 30, constitution: constitution,
-            size: 8f, moveSpeed: 7.001f, dexterity: 10, armor: 20);
-
     private static ScenarioResult RunReferenceScenario(byte enemyArmor = 20)
     {
         BattleSquad first = BolterSquad("Rostadi", 82_100);
         BattleSquad second = BolterSquad("Rostzin", 82_120);
         BattleSquad third = BolterSquad("Scharel", 82_140);
         BattleSquad tyrant = Tyranid(
-            "Hive Tyrant", 82_200, battleValue: 84, constitution: 240,
+            "Hive Tyrant", 82_200, strategicValue: 84, constitution: 240,
             size: 6.8f, moveSpeed: 8.001f, dexterity: 20, armor: enemyArmor);
         BattleSquad lictor = Tyranid(
-            "Lictor", 82_210, battleValue: 37, constitution: 120,
+            "Lictor", 82_210, strategicValue: 37, constitution: 120,
             size: 3.06f, moveSpeed: 8.001f, dexterity: 18,
             // Preserve the reference Lictor's lighter armour in the ordinary sweep, but make the
             // impenetrable-target invariant genuinely impenetrable for every target in this
@@ -229,10 +135,10 @@ public class GradedRemovalCalibrationTests
                 ? enemyArmor
                 : System.Math.Min(enemyArmor, (byte)10));
         BattleSquad carnifexA = Tyranid(
-            "Melee Carnifex A", 82_220, battleValue: 30, constitution: 224,
+            "Melee Carnifex A", 82_220, strategicValue: 30, constitution: 224,
             size: 8f, moveSpeed: 7.001f, dexterity: 10, armor: enemyArmor);
         BattleSquad carnifexB = Tyranid(
-            "Melee Carnifex B", 82_230, battleValue: 30, constitution: 224,
+            "Melee Carnifex B", 82_230, strategicValue: 30, constitution: 224,
             size: 8f, moveSpeed: 7.001f, dexterity: 10, armor: enemyArmor);
 
         BattleGridManager grid = new();
@@ -280,7 +186,7 @@ public class GradedRemovalCalibrationTests
         for (int index = 0; index < 10; index++)
         {
             bool sergeant = index == 0;
-            SoldierTemplate template = new(
+            SoldierTemplate template = new TestSoldierTemplate(
                 60_000 + firstSoldierId + index,
                 TestModelFactory.HumanSpecies,
                 sergeant ? $"{name} Sergeant Template" : $"{name} Marine Template",
@@ -289,10 +195,7 @@ public class GradedRemovalCalibrationTests
                 sergeant,
                 0,
                 Array.Empty<ValueTuple<BaseSkill, float>>(),
-                battleValue: sergeant ? 11 : 9,
-                // The trace's marines are a tactical squad: nominally ranged, with a chainsword
-                // for when the charge arrives.
-                meleeFraction: 0.05f);
+                strategicValue: sergeant ? 11 : 9);
             // Space Marine species: Strength 15, Dexterity 15, Constitution 30 (attribute
             // templates 18/18/28 in the rules database); the trace reports Dexterity 15.4.
             // 2^1.4 - 2^-4 skill points reproduce the reported Gun (Bolter) skill bonus of 1.4,
@@ -325,14 +228,14 @@ public class GradedRemovalCalibrationTests
     private static BattleSquad Tyranid(
         string name,
         int soldierId,
-        int battleValue,
+        int strategicValue,
         float constitution,
         float size,
         float moveSpeed,
         float dexterity,
         byte armor)
     {
-        SoldierTemplate template = new(
+        SoldierTemplate template = new TestSoldierTemplate(
             60_000 + soldierId,
             TestModelFactory.HumanSpecies,
             $"{name} Template",
@@ -341,9 +244,7 @@ public class GradedRemovalCalibrationTests
             false,
             0,
             Array.Empty<ValueTuple<BaseSkill, float>>(),
-            battleValue: battleValue,
-            // Melee-only, exactly as in the trace -- these creatures have no ranged option at all.
-            meleeFraction: 1f);
+            strategicValue: strategicValue);
         Soldier soldier = TestModelFactory.CreateSoldier(
             template, name, dexterity: dexterity, strength: 24f);
         soldier.Id = soldierId;

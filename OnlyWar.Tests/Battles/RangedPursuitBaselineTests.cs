@@ -425,7 +425,6 @@ public sealed class RangedPursuitBaselineTests
                     candidate.FutureExchange.Sum() + candidate.ArrivalTimeValue,
                     candidate.ReadinessValue,
                     candidate.FireWindowValue,
-                    candidate.ContactCommitmentCost,
                     candidate.FeasibleSpeed))
                 .ToList());
     }
@@ -468,7 +467,6 @@ public sealed class RangedPursuitBaselineTests
             + $"net_exchange_potential={candidate.NetExchangePotential:F4} "
             + $"readiness={candidate.Readiness:F4} "
             + $"fire_window={candidate.FireWindow:F4} "
-            + $"commitment={candidate.Commitment:F4} "
             + $"feasible_speed={candidate.FeasibleSpeed:F2} "
             + $"chosen={candidate.Kind == Chosen}");
     }
@@ -486,7 +484,6 @@ public sealed class RangedPursuitBaselineTests
         float NetExchangePotential,
         float Readiness,
         float FireWindow,
-        float Commitment,
         float FeasibleSpeed);
 
     private static bool IsClosing(EngagementOptionKind kind) =>
@@ -501,7 +498,7 @@ public sealed class RangedPursuitBaselineTests
         int battleValue,
         float meleeFraction)
     {
-        SoldierTemplate template = new(
+        SoldierTemplate template = new TestSoldierTemplate(
             100_000 + soldierId,
             TestModelFactory.HumanSpecies,
             $"{name} Template",
@@ -510,11 +507,16 @@ public sealed class RangedPursuitBaselineTests
             false,
             0,
             [],
-            battleValue: battleValue,
-            meleeFraction: meleeFraction);
+            strategicValue: battleValue);
         Soldier soldier = TestModelFactory.CreateSoldier(template, name);
         soldier.Id = soldierId;
-        return new BattleSquad(false, TestModelFactory.CreateSquad(name, soldier));
+        BattleSquad squad = new(false, TestModelFactory.CreateSquad(name, soldier));
+        // The fixture's doctrine premise, as the tactical value table would measure it.
+        foreach (BattleSoldier member in squad.Soldiers)
+        {
+            member.TacticalMeleeShare = meleeFraction;
+        }
+        return squad;
     }
 
     private static RangedWeapon EquipRifle(
