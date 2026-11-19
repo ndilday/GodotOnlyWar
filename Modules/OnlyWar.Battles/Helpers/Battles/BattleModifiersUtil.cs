@@ -27,6 +27,29 @@ namespace OnlyWar.Battles
             return -CalculateRangeModifier(size, 0);
         }
 
+        /// <summary>
+        /// Share of the shooter's skill with a weapon that limits how much of the weapon's
+        /// Accuracy an aimed shot gets. See <see cref="CalculateAimAccuracy"/>.
+        /// </summary>
+        public const float AimAccuracySkillFraction = 0.5f;
+
+        /// <summary>
+        /// The weapon Accuracy an aimed shot adds: the weapon's Accuracy, but not more than
+        /// <see cref="AimAccuracySkillFraction"/> of the shooter's skill with it. A shooter needs
+        /// skill 10 to use all of an Accuracy 5 weapon and skill 18 for Accuracy 9. The limit was
+        /// the full skill until 2026-11-15, which never applied: no weapon has more Accuracy than
+        /// a trained soldier has skill.
+        ///
+        /// <para>This is the ONE definition. The engine (ShootAction), every planner prediction
+        /// (RangedTargetSelector.AimAccuracy) and BattleValueCalculator call it, so they cannot
+        /// disagree about what an aimed shot is worth. Possible later models are in
+        /// OnlyWar_TDD.md section 6.6, "Accuracy model: possible later changes".</para>
+        /// </summary>
+        public static float CalculateAimAccuracy(float weaponAccuracy, float skill)
+        {
+            return Math.Min(weaponAccuracy, Math.Max(0f, skill * AimAccuracySkillFraction));
+        }
+
         public static float CalculateRateOfFireModifier(int rateOfFire)
         {
             if (rateOfFire == 1) return 0;

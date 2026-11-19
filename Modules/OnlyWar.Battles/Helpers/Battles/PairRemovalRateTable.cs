@@ -427,7 +427,7 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// Whether interchangeable shooters share one <see cref="PairRemovalTerm"/> (true since
-        /// 2026-11-11, step 2 of Design/Active/CoarseForecastTables.md). Process-wide so the
+        /// 2026-11-11, step 2 of Design/Reference/ForecastCalibration.md section 7). Process-wide so the
         /// diagnostics can compare (DUEL_GROUP_SHOOTERS=0).
         /// </summary>
         internal static bool GroupShooters = true;

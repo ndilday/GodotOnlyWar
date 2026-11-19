@@ -43,7 +43,7 @@ namespace OnlyWar.Diagnostics.Battles;
 ///   GAUNTLET_ENTRIES  '|'-separated "key=spec", one squad each in SquadDuelDiagnostics syntax (for
 ///                     example "pdf=34|hyb=26|tac=1|ork=39"). A squad with no n= is built at its
 ///                     template maximum. Do not use x= here.
-///   GAUNTLET_PANEL    comma-separated entry keys forming the panel (Design/Active/GauntletV2.md section 1):
+///   GAUNTLET_PANEL    comma-separated entry keys forming the panel (Design/Reference/BattleValueCalibration.md section 3):
 ///                     every entry fights every panel squad of ANOTHER side, so panel squads also fight
 ///                     each other. Takes precedence over GAUNTLET_REFS.
 ///   GAUNTLET_ALLIES   faction ids that share a side, '|'-separated groups of '+'-joined ids (default
@@ -245,6 +245,15 @@ public class SquadGauntletDiagnostics
             {
                 _db = Convert.ToHexString(SHA256.HashData(stream))[..12];
             }
+            // GAUNTLET_DB_KEY (2026-11-13) keeps an earlier database's key, so its stored battles count
+            // again. Use it only when the change since then cannot alter a battle, such as a write of
+            // StrategicValuePerSoldier: in a gauntlet cell every squad on a side is the same, so the
+            // within-side weights that read that value do not change.
+            string pinnedDb = Environment.GetEnvironmentVariable("GAUNTLET_DB_KEY");
+            if (!string.IsNullOrWhiteSpace(pinnedDb))
+            {
+                _db = pinnedDb.Trim();
+            }
             // The code version covers the battle engine AND the harness's battle setup (placement,
             // squad building), which lives in this test assembly and does not change the engine dll.
             string battlesDll = typeof(BattleTurnResolver).Assembly.Location;
@@ -334,7 +343,7 @@ public class SquadGauntletDiagnostics
         /// Factions that fight on one side and never against each other: the Imperium's PDF (0) and
         /// Space Marines (1), allied in the game (Sector sets the player and default faction Allied).
         /// The Tyranids (2) and the Genestealer Cult (3) are hostile to each other in the game, so
-        /// since 2026-10-27 they are separate sides (Design/Active/GauntletV2.md section 1).
+        /// since 2026-10-27 they are separate sides (Design/Reference/BattleValueCalibration.md section 3).
         /// </summary>
         private const string DefaultAllies = "0+1";
 

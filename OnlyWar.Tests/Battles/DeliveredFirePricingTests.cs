@@ -10,7 +10,7 @@ namespace OnlyWar.Tests.Battles;
 
 /// <summary>
 /// The removal-rate table prices the fire soldiers really deliver (2026-10-23,
-/// Design/Active/OpeningRangeRefactor.md): the cycle the shot planner really fires
+/// Design/Reference/ForecastCalibration.md section 1): the cycle the shot planner really fires
 /// (RangedTargetSelector.PlannerCycle), and the aims lost when squadmates drop a shared target.
 /// Before, it priced the best cycle on offer with every aim reaching its shot, and credited about
 /// twice the fire PDF squads delivered.

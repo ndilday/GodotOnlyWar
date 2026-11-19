@@ -106,7 +106,8 @@ public class ShootActionFriendlyFireTests
             weapon,
             0);
         float skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-        float fullAimBonus = System.Math.Min(weapon.Template.Accuracy, skill) + 1;
+        float fullAimBonus =
+            BattleModifiersUtil.CalculateAimAccuracy(weapon.Template.Accuracy, skill) + 1;
 
         ShootAction stationary = new(
             1, 2, weapon.Template.Id, 5, 1,

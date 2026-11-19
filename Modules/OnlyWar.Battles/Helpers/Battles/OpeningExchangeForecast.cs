@@ -8,7 +8,7 @@ namespace OnlyWar.Battles
     /// Settings for <see cref="OpeningExchangeForecast"/>: which curve variant feeds the lanes,
     /// whether ammunition is counted, and the horizon and discount of the exchange.
     ///
-    /// <para>CALIBRATED 2026-10-24 (Design/Active/OpeningRangeRefactor.md, phase 3) against the
+    /// <para>CALIBRATED 2026-10-24 (Design/Reference/ForecastCalibration.md section 1) against the
     /// measured approach curves. <b>No discount:</b> the opening question is who comes out ahead,
     /// and a battle's result does not depend on how long it takes; with the 0.97 discount a kill 60
     /// turns away counted a sixth, and every gunline's best opening against melee stopped at about a
@@ -33,7 +33,7 @@ namespace OnlyWar.Battles
 
     /// <summary>
     /// What a battle that opens at a given range would do, for one squad against an opposing
-    /// force, asked BEFORE a grid exists (Design/Active/OpeningRangeRefactor.md, section 2.1). The
+    /// force, asked BEFORE a grid exists (Design/Reference/ForecastCalibration.md section 1). The
     /// lanes of <see cref="EngagementExchangeForecast"/> are built from the grid-free curves
     /// (<see cref="RangedEffectivenessCurve"/>, the grid-free
     /// <see cref="MeleeStrikeEstimator.EstimateContactRemovalRate(IReadOnlyCollection{BattleSoldier}, IReadOnlyCollection{BattleSoldier})"/>)
@@ -181,7 +181,7 @@ namespace OnlyWar.Battles
                 || (BattleEngagementFrameBuilder.IsContactSeekingBeforePlacement(enemy)
                     && enemy.GetSquadMove() > 0);
             // The enemies that can reach us share our frontage by their numbers, as in the
-            // engagement potential (Design/Active/ContactRateCalibration.md).
+            // engagement potential (Design/Reference/ForecastCalibration.md section 4).
             // Keyed by the squad itself: squads built outside a battle may share an id.
             Dictionary<BattleSquad, MeleeStrikeEstimator.ContactStrikes> incomingStrikes = pairs
                 .Where(pair => CanContact(pair.Enemy))

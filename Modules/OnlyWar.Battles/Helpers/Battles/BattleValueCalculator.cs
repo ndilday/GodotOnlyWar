@@ -342,7 +342,8 @@ public static class BattleValueCalculator
 
         // Weapon accuracy only applies when aiming, and an aim turn forgoes a volley:
         // take the better of firing every turn vs alternating aim+fire.
-        float aimBonus = Math.Min(weapon.Accuracy, attacker.RangedSkill) + 1.0f;
+        float aimBonus = BattleModifiersUtil.CalculateAimAccuracy(weapon.Accuracy, attacker.RangedSkill)
+            + 1.0f;
         float hitsUnaimed = ExpectedHitsInVolley(margin, rateOfFire, weapon.Recoil);
         float hitsAimed = ExpectedHitsInVolley(margin + aimBonus, rateOfFire, weapon.Recoil);
         float hitsPerTurn = Math.Max(hitsUnaimed, hitsAimed / 2.0f);

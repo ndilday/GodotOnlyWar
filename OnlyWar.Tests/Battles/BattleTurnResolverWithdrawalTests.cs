@@ -630,8 +630,8 @@ public class BattleTurnResolverWithdrawalTests
         soldier.ClearReadiedRangedWeapons();
         soldier.RangedWeapons.Add(longGun);
         soldier.ReadyWeapon(longGun);
-        // The engine caps an aimed shot's Accuracy at the shooter's skill with the weapon
-        // (ShootAction.CalculateToHitModifiers), and since 2026-10-09 the planner does too. A
+        // The engine caps an aimed shot's Accuracy at half the shooter's skill with the weapon
+        // (BattleModifiersUtil.CalculateAimAccuracy), and since 2026-10-09 the planner does too. A
         // default soldier's skill is far below 25, so the gun's Accuracy was a promise the engine
         // never kept; the bearer needs the skill to use it for the shot to be genuinely worthwhile.
         ((Soldier)soldier.Soldier).Dexterity = 30;

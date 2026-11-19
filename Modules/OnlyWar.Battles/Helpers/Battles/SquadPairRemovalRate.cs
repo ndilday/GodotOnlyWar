@@ -378,7 +378,7 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// How many interchangeable shooters this term stands for (2026-11-11, step 2 of
-        /// Design/Active/CoarseForecastTables.md). <see cref="PairRemovalRateTable"/> merges the
+        /// Design/Reference/ForecastCalibration.md section 7). <see cref="PairRemovalRateTable"/> merges the
         /// shooters of one squad that fire the same weapon, with nearly the same to-hit total and
         /// range, at targets of nearly the same profile in one enemy squad, and builds the term
         /// from the first of them in soldier-id order. Every per-shooter reading of the term
@@ -437,7 +437,7 @@ namespace OnlyWar.Battles
         internal static float CycleRangeGrid = 1f;
 
         /// <summary>
-        /// STEP 3 of Design/Active/CoarseForecastTables.md (2026-11-11): the ratio between the ranges
+        /// STEP 3 of Design/Reference/ForecastCalibration.md section 7 (2026-11-11): the ratio between the ranges
         /// of neighbouring cycle nodes. The burst-and-aim search
         /// (<see cref="ComputeSustainedCycleDetailAt"/>) runs only at nodes
         /// <c>(ReferenceRange + 1) x ratio^k - 1</c>, and the rate, the cycle's turns and its rounds

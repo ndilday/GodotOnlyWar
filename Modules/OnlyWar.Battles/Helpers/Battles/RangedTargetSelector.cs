@@ -398,13 +398,14 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// The weapon Accuracy an aimed shot adds for this shooter, as the engine applies it
-        /// (ShootAction.CalculateToHitModifiers): capped by the shooter's skill with the weapon. An
+        /// (ShootAction.CalculateToHitModifiers): capped by half the shooter's skill with the weapon
+        /// (<see cref="BattleModifiersUtil.CalculateAimAccuracy"/>). An
         /// aimed shot's whole bonus is this + the aim turns + 1. The planner added the uncapped
         /// Accuracy until 2026-10-09, which over-promised aiming to every shooter less skilled than
         /// his weapon is accurate.
         /// </summary>
         internal static float AimAccuracy(BattleSoldier shooter, RangedWeaponTemplate template) =>
-            Math.Min(
+            BattleModifiersUtil.CalculateAimAccuracy(
                 template.Accuracy,
                 shooter.Soldier.GetTotalSkillValue(template.RelatedSkill));
 
@@ -504,7 +505,7 @@ namespace OnlyWar.Battles
         /// a man against a need of about 315, paid nothing for their rounds, fired ten-round bursts
         /// and ran dry with one Warrior of nine left, which then routed them. 1 is the rule as it
         /// was. At 1.5 those Brood Brothers win 62% of the fights at 195 yards (12% at 1), and the
-        /// controls hold (Design/Active/StrategicAndTacticalValue.md). A static field so the
+        /// controls hold (Design/Reference/BattleValueCalibration.md). A static field so the
         /// diagnostics can compare (DUEL_SCARCITY_MARGIN).
         /// </summary>
         internal const float DefaultScarcityMargin = 1.5f;

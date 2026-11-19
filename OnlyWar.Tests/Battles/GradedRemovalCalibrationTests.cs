@@ -95,7 +95,7 @@ public class GradedRemovalCalibrationTests
     // moved to RealTemplateEngagementTests on 2026-10-24, on real templates: under the opening
     // forecast this file's hand-built monsters die before they arrive from any opening past 9
     // yards, so they no longer test it. The constitution-monotonicity test went with the
-    // sufficiency sweep whose property it pinned (OpeningRangeRefactor.md, phase 5).
+    // sufficiency sweep whose property it pinned (Design/Reference/ForecastCalibration.md section 1).
 
     /// <summary>
     /// The counterpart the fix must NOT break: a force that shoots back sets the standoff through

@@ -8,7 +8,9 @@ run by default are the fitter's unit tests (`ProbitFitTests`, well under a secon
 They share two files with the test suite by link rather than copy: the rules-database locator
 (`OnlyWar.Tests/Fixtures/RulesDatabaseFixture.cs`) and the `SharedState` collection
 (`OnlyWar.Tests/SharedStateCollection.cs`). Calibration method and the rules it follows:
-`Design/Reference/BattleLogic.md` §4; open calibration work: `OnlyWar_PRD.md` §5.8.
+`Design/Reference/BattleLogic.md` §4 and `Design/Reference/BattleValueCalibration.md`; open calibration
+work: `OnlyWar_PRD.md` §5.8. The accepted run is kept in `GauntletResults/v2-p10`: its
+`battles-v2-p10.tsv` is the battle cache for the next run (valid only for the engine that fought it).
 
 Run from the repository root, for example:
 
@@ -33,7 +35,16 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   2026-11-08 are on in the game and turn off in duels: `DUEL_FIRE_ON_APPROACH=0` drops the Close
   approaches that fire at a jog or a walk, `DUEL_POTENTIAL_AMMO=0` makes rounds free in the potential,
   and `DUEL_BURST_BY_RANGE=0` makes the removal-rate table keep each shot's burst and round price
-  from the range the table was built at. `DUEL_CLOSE_STOPS=2` tries the halfway stops (off in the
+  from the range the table was built at. `DUEL_CONTACT_DURABILITY=0` makes the tactical value read a
+  melee soldier's durability at the present separation, not at contact (before 2026-11-15,
+  `TacticalValueTable.MeleeDurabilityAtContact`). `DUEL_UNARMED_WITH_GUN=1` credits a soldier with
+  a gun and no melee weapon his unarmed melee in the tactical value (before 2026-11-15,
+  `TacticalValueTable.UnarmedMeleeWithGun`). `DUEL_INDIFFERENCE_CHEAPER=0` quotes the engagement
+  indifference floor per soldier of the deciding squad, not of the cheaper side (before
+  2026-11-15, `SquadEngagementPolicy.IndifferenceInCheaperSoldiers`). `OpeningRangeDiagnostics` also prints each squad's
+  effective engagement range, and takes `OPENING_SEPARATIONS` (tactical values with the sides
+  placed that far apart), `OPENING_VALUE_A`/`_B` (every soldier of a side at one tactical value) and
+  `OPENING_TACTICAL=1`. `DUEL_CLOSE_STOPS=2` tries the halfway stops (off in the
   game). For the first battle of a run, `DUEL_TRACE` writes the
   engine's planning log and `DUEL_WOUND_LOG` writes every wound side A takes (attack kind, weapon,
   damage, hit location, damage-to-Constitution ratio and wound level), a per-weapon summary, and the
@@ -54,7 +65,7 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   each one decides where the next goes; only the battles inside a probe run in parallel. The
   gauntlet below has superseded it.
 - `SquadGauntletDiagnostics` is the fixed-design calibration. **v2 (2026-10-21,
-  `Design/Active/GauntletV2.md`):** set `GAUNTLET_PANEL` instead of `GAUNTLET_REFS`, and every entry
+  `Design/Reference/BattleValueCalibration.md` §3):** set `GAUNTLET_PANEL` instead of `GAUNTLET_REFS`, and every entry
   fights every panel squad of another side (`GAUNTLET_ALLIES`, default `0+1`: PDF with Marines; since
   2026-10-27 the Tyranids and the Cult are separate sides, as they are hostile in the game); battles open where a reciprocal assault would (`GAUNTLET_RANGE` defaults to
   `assault`: the two forces' preferred opening ranges, equipment reallocation, burrowers, both sides
@@ -76,7 +87,10 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   by rules-database hash, a code hash (`OnlyWar.Battles.dll` plus `SquadDuelDiagnostics.HarnessVersion`,
   which must be bumped when the harness's placement or squad building changes), range, aggression,
   squads, seed and, when A defends, a role suffix. Every `battles-*.tsv` in the folder is read back, so
-  runs resume and a data or code change invalidates old battles. `GAUNTLET_ROLES` picks the battle
+  runs resume and a data or code change invalidates old battles. `GAUNTLET_DB_KEY` replaces the
+  database hash in the key with a given one, so battles stored under an earlier database count again;
+  use it only when the change cannot alter a battle (a `StrategicValuePerSoldier` write: every squad
+  on a side of a cell is the same, so the within-side weights stay equal). `GAUNTLET_ROLES` picks the battle
   roles: `alternate` (default), `a-attacks` or `b-attacks`; with both roles present the global fit adds
   one attacker-role coefficient, which should come out near zero. `fit-TAG.txt`, `cells-TAG.tsv` and
   `values-TAG.tsv` are the fit (per-model values with PDF = 5, the noise of a fight, per-cell
@@ -141,7 +155,7 @@ Both sides are deployed by the game's own `AnnihilationPlacer`, exactly as a mee
   opening forecast's net value (expected and unlucky) at a ladder of openings and the assault
   opening (rule B: the longer preference). Set `RUN_OPENING_RANGE=1` and `OPENING_SCENARIO`. No
   battles.
-- `ApproachCurveDiagnostics` (the opening-range refactor, `Design/Active/OpeningRangeRefactor.md`).
+- `ApproachCurveDiagnostics` (the opening-range refactor, `Design/Reference/ForecastCalibration.md` §1).
   `RUN_APPROACH_CURVES=1` fights a panel of matchups (`APPROACH_PANEL`) at a ladder of forced assault
   openings (`APPROACH_RANGES`, `APPROACH_SEEDS`) and writes casualties, holds, contact and rounds left
   at contact to `approach-curves.tsv`/`.txt` after every point (8.5 hours for the default panel; the

@@ -72,7 +72,7 @@ namespace OnlyWar.Operations.Missions
         /// <summary>
         /// The opening of a reciprocal assault: two forces meeting in the field, neither on its own
         /// terms. It opens at the LONGER of the two sides' preferences (rule B,
-        /// Design/Active/OpeningRangeRefactor.md section 3, product owner 2026-10-22): forces meeting
+        /// Design/Reference/ForecastCalibration.md section 1, product owner 2026-10-22): forces meeting
         /// on open ground see each other from far off, the side that wants range opens fire as soon as
         /// it is worth firing, and the side that wants contact cannot make the fight start closer
         /// without the surprise that an ambush's margin represents. A side's preference is the

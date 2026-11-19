@@ -1556,7 +1556,9 @@ tracked here rather than kept as an active design document.
 **Battle Value tier 2 — matchups, hard targets, kit.** Tier 1 (one measured value per template, §4.14
 *Battle Value calibration*) is done for every template; the Kommandos were measured last (gauntlet
 `kom1`, 2026-10-19: Kommando 9 → 5, Kommando Nob 14 → 8, the Nob keeping its old ratio to the
-Kommando). Method and findings: `Design/Reference/BattleLogic.md` §4. Open, in rough order:
+Kommando). Every squad is now measured by the v2 gauntlet on one scale and written to the database (run
+`v2-p10`, 2026-11-18). Method and findings: `Design/Reference/BattleLogic.md` §4 and
+`Design/Reference/BattleValueCalibration.md`. Open, in rough order:
 
 1. **Hard targets.** Weight `HardnessDiagnostics`' hits-to-disable by each attack's expected hits per
    turn, and check that one "anti-hard share" axis explains the Carnifex's ×0.3–×3 matchup spread.
@@ -1572,9 +1574,33 @@ Kommando). Method and findings: `Design/Reference/BattleLogic.md` §4. Open, in 
    0.13 for Hormagaunts against PDF; `CombatSigma` is 0.12. Decide whether the strategic resolver's
    σ grows when a side has few models, and fit `CombatSigma` and the 0.65 loss exponent from gauntlet
    data.
-4. **Kit.** Measure player loadout options as changes to a template's measured profile, replacing the
-   armor/2 and weapon terms of `EffectiveBattleValueCalculator`, which cannot see target dependence
-   (a lascannon is worth little against PDF and much against a Carnifex).
+4. **Kit.** Measure player loadout options as changes to a template's measured profile. The armor/2 and
+   weapon terms of `EffectiveBattleValueCalculator` were deleted on 2026-11-01 (they double counted a value
+   measured with the kit), and the tactical value now sees kit directly; what is open is the STRATEGIC value
+   of a player squad's rolled loadout (the gauntlet rolls options from minimum to maximum, so a Scout Squad
+   with Sniper Rifles beat Tactical). The designed answer is one gauntlet entry per weapon option, averaged
+   (`Design/Reference/BattleValueCalibration.md` §6); not built.
+7. **Leaders and HQ squads are lower limits.** A leader measured alone gets no value for his effect on nearby
+   squads (HQ squads, bosses, synapse creatures, the Hive Tyrant), and the tactical value has no leader term
+   (a leader draws no extra fire). Designed, not built: HQ and bodyguard measured by marginal effect on paired
+   seeds (`BattleValueCalibration.md` §6). Revisit the tactical leader term if the planner stops shooting
+   leaders.
+8. **Gauntlet scale level.** The level of the single scale moves 20-40% with which entries are in the fit,
+   because the PDF anchor does 5-7 times better than the scale predicts against the Cult's melee squads.
+   Consider anchoring on several gunlines. Chapter-service squads (Armory, Librarius, Apothecarion,
+   Reclusium) and the Scout HQ Squad (201 models at full size) keep their old values.
+9. **Morale at two soldiers.** A sweep of Ego-14 squads fought to annihilation (300 seeds) routed with two or
+   more left in about 9-11% of battles. Whether that meets §2 ("marines effectively never rout") is a product
+   decision, and a morale change would change the measured values.
+10. **Brood Brothers v Warriors from 750 yd stalls** (9 v 1: BB lost 0%, Warriors 4% at the turn cap), because
+    the Brood Brothers' Stay is a slow win and no stalemate rule applies.
+11. **Forecast residuals** (`Design/Reference/ForecastCalibration.md`): the grouping tolerance for shooters
+    in the removal-rate table (0.5 to-hit) is a judgment call; a broken share's rounds stay with the
+    unbroken share in the forecast, and a squad's rounds are one pool so a heavy weapon's rounds count toward
+    the lasguns' fire; the potential still has jumps of 10 BV at some separations (the 76-80 yd step of PDF v
+    Hormagaunts, from fire allocation) that were not re-measured; per-target engagement modes (the tactical
+    melee share is force-level, so a squad has one mode a turn); `BattleValueCalculator` is offline only,
+    so keep it as a test reference for the tactical value or delete it.
 5. **Start range and terrain.** All measurements use 200 yards on open ground. The gauntlet already
    takes another start range (`GAUNTLET_RANGE`); what remains is to fit the game's opening range as a
    covariate, and to rerun when terrain arrives.

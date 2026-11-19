@@ -61,7 +61,7 @@ namespace OnlyWar.Battles
         ///
         /// <para>Every component of <see cref="Breakdown"/> is in tactical value, which prices both
         /// sides by one rule from one state, so there is no exchange rate between them
-        /// (Design/Active/StrategicAndTacticalValue.md).</para>
+        /// (Design/Reference/BattleValueCalibration.md).</para>
         /// </summary>
         internal sealed record State(
             BattleSquad Squad,
@@ -394,7 +394,7 @@ namespace OnlyWar.Battles
                             targetSpeed: ownMove)),
                 };
                 close.Add(run);
-                // Fire on the approach (2026-11-08, Design/Active/StrategicAndTacticalValue.md): a
+                // Fire on the approach (2026-11-08, Design/Reference/BattleValueCalibration.md): a
                 // squad that does not seek contact can also advance at a jog or a walk and shoot
                 // as it goes, un-aimed and with the tier's bulk penalty, at the tier's speed. Until
                 // then Close only ran in without firing, so Brood Brothers whose lasguns reach
@@ -423,7 +423,7 @@ namespace OnlyWar.Battles
                 return (0, 0, false, false, false, null);
             }
 
-            // Frontage (Design/Active/ContactRateCalibration.md). Only so many attackers fit round
+            // Frontage (Design/Reference/ForecastCalibration.md section 4). Only so many attackers fit round
             // this squad, however many enemy squads can reach it, so the enemies in reach share its
             // frontage by their numbers; and this squad's own soldiers are split over the enemies it
             // can reach by theirs, fighting its force share of each. Until 2026-10-23 each lane
@@ -514,7 +514,7 @@ namespace OnlyWar.Battles
             EngagementExchangeForecast.Result closeResult = Forecast(close, closeHorizon);
             float closeValue = Value(closeResult);
             TraceForecast(state, "candidate-run", close, ownPool, ownBreak, closeHorizon);
-            // Halfway stops (2026-10-26, Design/Active/GauntletV2.md). A squad that does not seek
+            // Halfway stops (2026-10-26, Design/Reference/BattleValueCalibration.md). A squad that does not seek
             // contact wants its effective engagement range, often a few yards, where standing fire
             // is best by a hair; the Close continuation walked it all the way there without firing.
             // From 446 yards a PDF squad against Tyranid Warriors forecast arriving broken after 90
@@ -668,7 +668,7 @@ namespace OnlyWar.Battles
         /// <summary>
         /// A squad whose Stay exchange is nothing, and whose Close removes more, is not offered Hold
         /// or StepBack (<see cref="SquadEngagementPolicy.ApplyStandoffCommitment"/>; adopted 2026-11-06,
-        /// Design/Active/StrategicAndTacticalValue.md, stalemate evidence). A static field so the
+        /// Design/Reference/BattleValueCalibration.md, stalemate evidence). A static field so the
         /// diagnostics can compare: DUEL_STANDOFF_CLOSE=0 turns it off.
         /// </summary>
         internal static bool StandoffClose = true;
@@ -816,7 +816,7 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// Whether the Close continuation's horizon adds the turns it spends getting to its
-        /// destination (true since 2026-10-23, Design/Active/MobBreakCalibration.md). Process-wide;
+        /// destination (true since 2026-10-23, Design/Reference/ForecastCalibration.md section 5). Process-wide;
         /// a static field so the diagnostics can compare (DUEL_CLOSE_TRAVEL=0).
         /// </summary>
         internal static bool CloseHorizonAddsTravel = true;
@@ -825,7 +825,7 @@ namespace OnlyWar.Battles
         /// How many halfway stops the Close continuation of a squad that does not seek contact also
         /// tries: 1 adds half the gap, 2 also a quarter (2026-10-26). Process-wide; a static field
         /// so the diagnostics can compare (DUEL_CLOSE_STOPS=2 tries them). 0, off, until the study in
-        /// Design/Active/GauntletV2.md settles: under the 0.97 discount they changed no decision.
+        /// Design/Reference/BattleValueCalibration.md settles: under the 0.97 discount they changed no decision.
         /// </summary>
         internal static int CloseHalfwayStops = 0;
 
@@ -841,7 +841,7 @@ namespace OnlyWar.Battles
         /// The luck spread of the potential's forecasts (<c>EngagementExchangeForecast.RunExpected</c>).
         /// 0, off, since 2026-10-23: the luck average barely smoothed the potential, whose jumps come
         /// mostly from the rate table's whole-soldier fire allocation
-        /// (Design/Active/BreakCliffSmoothing.md, section 7). The opening forecast keeps it. A static
+        /// (Design/Reference/ForecastCalibration.md section 3). The opening forecast keeps it. A static
         /// field so the diagnostics can sweep it (PHI_LUCK).
         /// </summary>
         internal static float LuckSpread;

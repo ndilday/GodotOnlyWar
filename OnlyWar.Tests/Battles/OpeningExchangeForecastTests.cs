@@ -12,7 +12,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 1 of the opening-range refactor (Design/Active/OpeningRangeRefactor.md): the exchange
+/// Phase 1 of the opening-range refactor (Design/Reference/ForecastCalibration.md section 1): the exchange
 /// forecast's ammunition budget, and the grid-free forecast of a battle that opens at a given
 /// range. Phase 0 measured Shoota Boyz arriving at contact with 7-23% of their rounds after long
 /// approaches, and the forecast had no ammunition at all, so a longer opening could only look as
@@ -274,7 +274,7 @@ public class OpeningExchangeForecastTests
         Assert.Equal(forecast, BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(pdf, [gaunts]));
     }
 
-    // Calibrated against the measured approach curves (OpeningRangeRefactor.md, phase 3): a PDF
+    // Calibrated against the measured approach curves (Design/Reference/ForecastCalibration.md section 1): a PDF
     // line holds the field best when it opens on Hormagaunts at 300-450 yards, and the forecast
     // must not stop short in the knife-range band the old sufficiency sweep chose (26-28 yards).
     [Fact]

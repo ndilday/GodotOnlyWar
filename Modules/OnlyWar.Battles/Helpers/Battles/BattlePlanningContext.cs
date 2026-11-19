@@ -170,7 +170,7 @@ namespace OnlyWar.Battles
         // read them too. Null for a standalone planner: no mob support is priced.
         internal OnlyWar.Domain.FactionBehaviors.FactionBehaviorRulesProfile FactionBehaviorRules { get; init; }
 
-        // Every able soldier's tactical value for the turn (Design/Active/StrategicAndTacticalValue.md).
+        // Every able soldier's tactical value for the turn (Design/Reference/BattleValueCalibration.md).
         // Built once by the planning coordinator before any squad plans. Phase 1: nothing plans
         // from it yet. Empty for a standalone planner.
         internal TacticalValueTable TacticalValues { get; init; } = TacticalValueTable.Empty;

@@ -526,7 +526,7 @@ internal static class BattleEngagementFrameBuilder
     /// decreasing, so the argmax is the lower bound. No loadout changes that -- the shape is the
     /// same for bolters, plasma and heavy weapons alike.</para>
     ///
-    /// <para>THE ANSWER IS THE OPENING FORECAST'S (2026-10-24, Design/Active/OpeningRangeRefactor.md,
+    /// <para>THE ANSWER IS THE OPENING FORECAST'S (2026-10-24, Design/Reference/ForecastCalibration.md section 1,
     /// phase 5): the opening whose forecast fight this squad likes best, see
     /// <see cref="CalculateForecastOpeningRange"/>. It replaced the shortest-sufficient sweep, which
     /// summed the approach fire up to an assumed break share and floored the answer by the useful
@@ -552,7 +552,7 @@ internal static class BattleEngagementFrameBuilder
 
     /// <summary>
     /// The preferred opening range, or null when the squad has no preference: a squad with no
-    /// ranged weapon has nothing to stand off for (OpeningRangeRefactor.md section 2.3), and a
+    /// ranged weapon has nothing to stand off for (Design/Reference/ForecastCalibration.md section 1), and a
     /// reciprocal assault must not let it pull the opening (section 3, rule B).
     /// </summary>
     internal static float? CalculatePreferredOpeningRangeOrNone(
@@ -572,7 +572,7 @@ internal static class BattleEngagementFrameBuilder
     private const float ForecastOpeningIndifferenceShare = 0.01f;
 
     /// <summary>
-    /// The opening whose forecast this squad likes best (Design/Active/OpeningRangeRefactor.md,
+    /// The opening whose forecast this squad likes best (Design/Reference/ForecastCalibration.md section 1,
     /// section 2): the argmax over candidate openings of
     /// <see cref="OpeningExchangeForecast.Net"/>, taking the shortest opening within
     /// <see cref="ForecastOpeningIndifferenceShare"/> of the best, on the expected path AND on the
@@ -702,7 +702,7 @@ internal static class BattleEngagementFrameBuilder
     /// <see cref="CalculateEffectiveEngagementRange"/> can price an opposing force's melee threat
     /// before that force's own profiles have been built.
     ///
-    /// <para>FROM ARMAMENT AND TARGET (2026-11-01, Design/Active/StrategicAndTacticalValue.md
+    /// <para>FROM ARMAMENT AND TARGET (2026-11-01, Design/Reference/BattleValueCalibration.md
     /// section 3). The split is the soldier's tactical melee share: his melee take-outs at contact
     /// against the enemy on the field over those plus his ranged take-outs across his reach. It
     /// replaced <c>SoldierTemplate.MeleeFraction</c>, one authored number per template, which made

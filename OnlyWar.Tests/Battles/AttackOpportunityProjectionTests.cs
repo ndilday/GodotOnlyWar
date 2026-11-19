@@ -100,10 +100,14 @@ public sealed class AttackOpportunityProjectionTests
     [Fact]
     public void ReadyThenAimIsReportedAsAFeasiblePreparationWindow()
     {
+        // Accuracy 5 is all that skill 10 can use (an aimed shot gets no more Accuracy than half
+        // the shooter's skill, 2026-11-15). This fixture had Accuracy 6 at 55 yards; one point is
+        // a factor of 1.5 in range, so 37 yards keeps the same shot: one aim turn makes it
+        // worth firing, and no aim does not.
         ProjectionFixture fixture = CreateFixture(
-            distance: 55,
+            distance: 37,
             pursuerSpeed: 0,
-            accuracy: 6,
+            accuracy: 5,
             damage: 20,
             maximumRange: 60,
             ready: false,

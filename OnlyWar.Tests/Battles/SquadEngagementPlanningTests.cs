@@ -107,6 +107,12 @@ public class SquadEngagementPlanningTests
         BattleSquad shooters = Squad("Long Reach", 81_030, 15, 0.05f);
         BattleSquad enemy = Squad("Small Target", 81_031, 10, 0.9f);
         EquipRifle(shooters.Soldiers[0], 91_030, range: 1_000, damage: 20);
+        // The rifle's Accuracy is 6, and an aimed shot gets no more of it than half the shooter's
+        // skill (BattleModifiersUtil.CalculateAimAccuracy, 2026-11-15). Skill 12 uses all of it.
+        // At the default skill of 10 the shooter loses one point, and that is enough to move the
+        // argmax of removal - incoming from inside reach to reach itself: this fixture sits near
+        // that edge.
+        ((Soldier)shooters.Soldiers[0].Soldier).Dexterity += 2;
         // Keep the reference opponent unarmed. Phase 1 now prices an armed contact from its
         // actual take-out probability; that threat legitimately saturates this rifle's preferred
         // range at reach and would no longer exercise the inside-reach property this fixture

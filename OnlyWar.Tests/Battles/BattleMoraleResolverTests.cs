@@ -147,7 +147,7 @@ public class BattleMoraleResolverTests
         // A sweep on 2026-11-06 (200 to 300 seeds) found a squad routing with two left in about
         // 10% of battles, whether or not the stand-off rule was on, and none with three or more.
         // The bound here is the measured one; whether two is acceptable is an open morale question
-        // (Design/Active/StrategicAndTacticalValue.md, Phase 6).
+        // (Design/Reference/BattleValueCalibration.md, Phase 6).
         //
         // These squads are built from the hand-rolled player-side MarineTemplate, which has no
         // MosTraining — so nobody can shoot and the casualties all come from melee. That is

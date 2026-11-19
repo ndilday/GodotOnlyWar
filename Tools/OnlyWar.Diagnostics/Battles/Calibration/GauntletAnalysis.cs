@@ -58,7 +58,7 @@ internal sealed record BattleRow(
     /// <summary>
     /// The score of a battle: 1 when A holds the field, 0 when B does, and for a battle the turn
     /// limit stopped, A's share of the casualties by fraction of each side lost (2026-10-25,
-    /// Design/Active/GauntletV2.md). Half the assault battles of the v2 Ork run ended at the limit,
+    /// Design/Reference/BattleValueCalibration.md). Half the assault battles of the v2 Ork run ended at the limit,
     /// most with one side far ahead (Mega Nobz untouched against a Shoota mob 55% down); counted as
     /// 0.5 they told the fit nothing. The side that has lost less of itself is the one a longer
     /// battle would break last.
@@ -190,7 +190,7 @@ internal sealed class EntryValue
 
 /// <summary>
 /// One value per entry on a single scale, from every well-determined cell at once (Design/Active/
-/// GauntletV2.md section 1): ln b(A,B) = u(A) - u(B) + e(A,B), minimizing the sum of w e^2 with the
+/// Design/Reference/BattleValueCalibration.md section 3): ln b(A,B) = u(A) - u(B) + e(A,B), minimizing the sum of w e^2 with the
 /// anchor fixed at u = 0 (a per-model value of 5). b is the cell's break-even B models per A model, so
 /// a stronger A per model has the larger b.
 ///

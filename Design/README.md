@@ -85,6 +85,30 @@ Active designs:
   faction's own intelligence, with believed enemy works (PRD §5.6, Alpha 0.8.1). Created
   2026-10-17; design complete, not started.
 
+**Audited 2026-11-18, after gauntlet `v2-p10` was accepted.** Nine calibration plans were removed from
+`Active/`, none of them with open work of its own, and `GauntletResults/` went from 3.2 GB to 3.4 MB:
+
+- `StrategicAndTacticalValue.md` (888 lines) and `GauntletV2.md` (821 lines) were run logs of the value
+  split and the gauntlet. **Distilled into `Reference/BattleValueCalibration.md`**: the split and its five
+  reasons, the tactical value's formula and the three 2026-11-15 rules, the gauntlet method and its
+  pitfalls (one scale, tau weights, bounds, joint refit, cache keys), the run table, the stalemate
+  evidence, what was adopted and what was rejected. Run-by-run fit tables were not kept: the values are in the
+  rules database and each run was superseded by the next.
+- `OpeningRangeRefactor.md`, `BreakCliffSmoothing.md`, `SmoothFireAllocation.md`, `ContactRateCalibration.md`,
+  `MobBreakCalibration.md`, `HorizonSideClock.md` and `CoarseForecastTables.md` were phase-by-phase records of
+  planner calibration. **Distilled into `Reference/ForecastCalibration.md`**: the measurement behind each
+  constant, the changes that were tried and reverted (soft fire allocation, the held-aim rule, target-loss
+  timing, the side-level clock, doctrine bursts) with the reason, and the planner-speed profile shares.
+- Residual items moved to PRD §5.8 (*Battle Value tier 2*, items 4 and 7-11) before the files were deleted:
+  the leader term, HQ and marine-variant gauntlet stages, the scale-level anchor, a rout at two soldiers,
+  the Brood Brothers 9 v 1 stall, and the forecast's open residuals. `TDD §6.6` was updated for the tactical
+  value; it had still described `EffectiveBattleValueCalculator` and `EngagementCurrency`, both deleted on
+  2026-11-01.
+- Kept in `GauntletResults/`: `v2-p10/` (the accepted run, and the battle cache for the next one) and
+  `approach-phase0/approach-curves.tsv` (the default input of `ApproachCurveDiagnostics`). The directory is
+  not in git: everything else deleted that day is gone.
+- Code and test comments that cited the deleted files were repointed at the two new Reference docs.
+
 **Audited 2026-10-12.** Two plans were removed:
 
 - `RangedCombatFollowUps.md` was deleted. Nothing in it was built, but every item was blocked or

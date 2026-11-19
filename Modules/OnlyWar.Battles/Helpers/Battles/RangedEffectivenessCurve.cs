@@ -185,7 +185,7 @@ namespace OnlyWar.Battles
             internal float FlatRemovalFraction;
             /// <summary>
             /// <see cref="Locations"/> against <see cref="Template"/> on 50-yard nodes, for a weapon
-            /// whose damage falls with range (Design/Active/CoarseForecastTables.md, step 1).
+            /// whose damage falls with range (Design/Reference/ForecastCalibration.md section 7, step 1).
             /// </summary>
             internal RemovalFractionTable Removal;
             /// <summary>Rounds one burst spends: 0 for a weapon that never runs down.</summary>

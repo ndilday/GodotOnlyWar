@@ -35,7 +35,8 @@ public class FactionRosterTemplateTests
         AssertEliteMob(mobFaction, "Nobz", "Orkish Skin", "Slugga + Choppa + Frag Grenade");
         AssertEliteMob(mobFaction, "'Eavy Nobz", "'Eavy Armor", "Slugga + Choppa + Frag Grenade");
         AssertEliteMob(mobFaction, "Meganobz", "Mega Armor", "Big Shoota + Power Klaw + Frag Grenade");
-        AssertHqVariant(mobFaction, "'Eavy Warboss", "'Eavy Armor", "Slugga + Choppa");
+        // Product owner, 2026-11-15: both Warbosses carry the Big Choppa; only their armor differs.
+        AssertHqVariant(mobFaction, "'Eavy Warboss", "'Eavy Armor", "Slugga + Big Choppa");
         AssertHqVariant(mobFaction, "Megaboss", "Mega Armor", "Big Shoota + Power Klaw");
         // Flash Gitz have carried the Nob statline since 7th edition and 'eavy armour since 8th.
         AssertHeavyMob(mobFaction, "Flash Gitz", 5, 10, "Snazzgun + Frag Grenade", "Ork Nob", "'Eavy Armor");

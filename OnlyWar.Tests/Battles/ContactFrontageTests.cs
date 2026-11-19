@@ -7,7 +7,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles
 {
     /// <summary>
-    /// The contact rate's frontage rule (Design/Active/ContactRateCalibration.md):
+    /// The contact rate's frontage rule (Design/Reference/ForecastCalibration.md section 4):
     /// <see cref="MeleeStrikeEstimator.ContactStrikes.RemovalRate"/>.
     /// </summary>
     public class ContactFrontageTests

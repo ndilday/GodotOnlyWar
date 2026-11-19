@@ -29,7 +29,7 @@ namespace OnlyWar.Battles
         // this geometry/sample bound is independent of the score currency.
         private const int EngagementMeleeTargetSampleCount = 4;
         // Contact frontage, measured 2026-10-23 with ForecastAgainstBattleDiagnostics (FRONTAGE
-        // table, Design/Active/ContactRateCalibration.md): an outnumbering side strikes with about
+        // table, Design/Reference/ForecastCalibration.md section 4): an outnumbering side strikes with about
         // 1.2-1.7 soldiers per defender standing (Hormagaunts and an Ork Mob alike), and a striker
         // reaches fewer than one distinct defender a turn (0.4-0.8), however many attacks he has.
         internal const float ContactStrikersPerDefender = 1.5f;

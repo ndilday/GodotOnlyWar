@@ -42,7 +42,7 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// This turn's tactical value (<see cref="TacticalValueTable"/>,
-        /// Design/Active/StrategicAndTacticalValue.md), written by the planning coordinator before
+        /// Design/Reference/BattleValueCalibration.md), written by the planning coordinator before
         /// each planning pass and by the opening forecast before the first. Null until then.
         /// </summary>
         public float? TacticalValue { get; internal set; }

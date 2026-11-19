@@ -484,7 +484,7 @@ namespace OnlyWar.Battles
         /// <summary>
         /// The spread of the exchange's luck <see cref="RunExpected"/> averages over: the side
         /// points scale this squad's fire by <c>e^s</c> and <c>e^-s</c> (and the enemy's the other
-        /// way). Calibrated against battles (Design/Active/BreakCliffSmoothing.md); a static field
+        /// way). Calibrated against battles (Design/Reference/ForecastCalibration.md section 3); a static field
         /// rather than a constant so the diagnostics can sweep it. 0 turns the smoothing off.
         /// </summary>
         internal static float LuckSpread = 0.5f;
@@ -495,7 +495,7 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// The forecast's expected value over the exchange's luck (2026-10-23,
-        /// Design/Active/BreakCliffSmoothing.md): the luck-free forecast and, where a break or
+        /// Design/Reference/ForecastCalibration.md section 3): the luck-free forecast and, where a break or
         /// contact is in reach, the forecasts at luck <c>-s</c> and <c>+s</c>, weighted 1/6, 2/3,
         /// 1/6 (three-point Gauss-Hermite for a normal luck of spread <c>s / sqrt 3</c>).
         ///
@@ -1130,7 +1130,7 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// The share of a squad's friends routing, for the live check's routing-friends shock
-        /// (2026-10-26, Design/Active/GauntletV2.md). The forecast assumes the rest of the side fights
+        /// (2026-10-26, Design/Reference/BattleValueCalibration.md). The forecast assumes the rest of the side fights
         /// as this squad does, so the friends not routing yet break as it does: the share is the
         /// squad's own chance to have broken by now, on top of those routing at the start. Until
         /// then the forecast left the term out, and at the same inputs as the live checks it routed

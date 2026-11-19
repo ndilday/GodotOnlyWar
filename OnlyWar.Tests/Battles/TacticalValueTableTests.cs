@@ -13,7 +13,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 1 of the strategic/tactical value split (Design/Active/StrategicAndTacticalValue.md): the
+/// Phase 1 of the strategic/tactical value split (Design/Reference/BattleValueCalibration.md): the
 /// tactical value is computed from the battle state, with no database value in it.
 /// </summary>
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
@@ -45,14 +45,23 @@ public class TacticalValueTableTests(Xunit.Abstractions.ITestOutputHelper output
     [Fact]
     public void TheMarineToMobRatio_DoesNotDependOnHowManyMobsThereAre()
     {
-        Forces few = Build([TacticalSquadTemplateId], Repeat(InsurrectionistMobTemplateId, 1), 100);
-        Forces many = Build([TacticalSquadTemplateId], Repeat(InsurrectionistMobTemplateId, 6), 100);
+        // Stacked: in columns 40 yards apart the sixth Mob is 224 yards from the marines, so the
+        // ratio also measured the range (2026-11-15, 1.30 once the fists no longer flattened it).
+        Forces few = Build([TacticalSquadTemplateId], Repeat(InsurrectionistMobTemplateId, 1), 100, stacked: true);
+        Forces many = Build([TacticalSquadTemplateId], Repeat(InsurrectionistMobTemplateId, 6), 100, stacked: true);
 
         TacticalValueTable fewTable = TacticalValueTable.Build(few.First, few.Second);
         TacticalValueTable manyTable = TacticalValueTable.Build(many.First, many.Second);
 
         float fewRatio = MeanValue(fewTable, few.First) / MeanValue(fewTable, few.Second);
         float manyRatio = MeanValue(manyTable, many.First) / MeanValue(manyTable, many.Second);
+        output.WriteLine(
+            $"1 Mob: marine {MeanValue(fewTable, few.First):0.000} (a {MeanOffense(fewTable, few.First[0]):0.0000}, "
+            + $"d {MeanDurability(fewTable, few.First[0]):0.00}), Mob {MeanValue(fewTable, few.Second):0.000} "
+            + $"(a {MeanOffense(fewTable, few.Second[0]):0.0000}, d {MeanDurability(fewTable, few.Second[0]):0.00}); "
+            + $"6 Mobs: marine {MeanValue(manyTable, many.First):0.000} (a {MeanOffense(manyTable, many.First[0]):0.0000}, "
+            + $"d {MeanDurability(manyTable, many.First[0]):0.00}), Mob {MeanValue(manyTable, many.Second):0.000} "
+            + $"(a {MeanOffense(manyTable, many.Second[0]):0.0000}, d {MeanDurability(manyTable, many.Second[0]):0.00})");
         Assert.InRange(manyRatio / fewRatio, 0.8f, 1.25f);
     }
 
@@ -95,9 +104,46 @@ public class TacticalValueTableTests(Xunit.Abstractions.ITestOutputHelper output
     }
 
     [Fact]
+    public void ASoldierValuedForHisMelee_TakesHisDurabilityAtContact()
+    {
+        // A soldier whose best rate against the enemy is his melee is valued as though he
+        // reaches it. Before 2026-11-15 his durability was still the enemy's fire at the
+        // separation, which far off is almost nothing: at 449 yards one Tyranid Warrior squad was
+        // priced at 2.5 times a Tactical squad, the Warriors never closed, and the duel ran to the
+        // turn limit. The durability now does not grow with the range. Hormagaunts, not Warriors:
+        // a Warrior carries a Deathspitter and no melee weapon, so he is credited no melee
+        // (TacticalValueTable.UnarmedMeleeWithGun) and this rule does not reach him.
+        Forces near = Build([TacticalSquadTemplateId], [HormagauntSquadTemplateId], 100);
+        Forces far = Build([TacticalSquadTemplateId], [HormagauntSquadTemplateId], 450);
+
+        float Durability(Forces forces)
+        {
+            TacticalValueTable table = TacticalValueTable.Build(forces.First, forces.Second);
+            return MeanDurability(table, forces.Second[0]);
+        }
+        float nearDurability = Durability(near);
+        float farDurability = Durability(far);
+        output.WriteLine($"Hormagaunt durability: {nearDurability:0.00} turns at 100 yd, {farDurability:0.00} at 450 yd");
+        Assert.InRange(farDurability / nearDurability, 0.95f, 1.05f);
+
+        bool saved = TacticalValueTable.MeleeDurabilityAtContact;
+        TacticalValueTable.MeleeDurabilityAtContact = false;
+        try
+        {
+            float oldFar = Durability(far);
+            output.WriteLine($"read at the separation: {oldFar:0.00} turns at 450 yd");
+            Assert.True(oldFar > farDurability * 2f, $"at the separation {oldFar:0.00}, at contact {farDurability:0.00}");
+        }
+        finally
+        {
+            TacticalValueTable.MeleeDurabilityAtContact = saved;
+        }
+    }
+
+    [Fact]
     public void SluggaBoyz_LeanToMeleeAgainstNeophytes()
     {
-        // The Neophyte-Slugga stalemate (GauntletV2.md): every Ork Boy template read
+        // The Neophyte-Slugga stalemate (Design/Reference/BattleValueCalibration.md): every Ork Boy template read
         // MeleeFraction 0.5, so Slugga Boyz never sought contact. Measured instead, Ork guns
         // remove almost nothing across their reach, so Shoota Boyz (who carry choppas too) lean
         // to melee as well: 0.98 and 0.99 on 2026-11-01.
@@ -123,7 +169,7 @@ public class TacticalValueTableTests(Xunit.Abstractions.ITestOutputHelper output
             + $"Tactical {MeanMeleeShare(table, forces.First[1]):0.00}, "
             + $"Hormagaunts {MeanMeleeShare(table, forces.Second[0]):0.00}");
         Assert.True(MeanMeleeShare(table, forces.First[0]) < BattleSquadCapabilityProfile.FireSupportMeleeFraction);
-        // Tactical marines stand against Hormagaunts (StrategicAndTacticalValue.md, phase 3 check).
+        // Tactical marines stand against Hormagaunts (Design/Reference/BattleValueCalibration.md, phase 3 check).
         Assert.True(MeanMeleeShare(table, forces.First[1]) < BattleSquadCapabilityProfile.ContactSeekingMeleeFraction);
         Assert.True(MeanMeleeShare(table, forces.Second[0]) >= BattleSquadCapabilityProfile.ContactSeekingMeleeFraction);
     }
@@ -168,6 +214,10 @@ public class TacticalValueTableTests(Xunit.Abstractions.ITestOutputHelper output
         squad.AbleSoldiers.Average(soldier =>
             table.TryGet(soldier.Soldier.Id, out SoldierTacticalValue value) ? value.Offense : 0f);
 
+    private static float MeanDurability(TacticalValueTable table, BattleSquad squad) =>
+        squad.AbleSoldiers.Average(soldier =>
+            table.TryGet(soldier.Soldier.Id, out SoldierTacticalValue value) ? value.Durability : 0f);
+
     private static float MeanMeleeShare(TacticalValueTable table, BattleSquad squad) =>
         squad.AbleSoldiers.Average(soldier =>
             table.TryGet(soldier.Soldier.Id, out SoldierTacticalValue value) ? value.MeleeShare : 0f);
@@ -179,9 +229,11 @@ public class TacticalValueTableTests(Xunit.Abstractions.ITestOutputHelper output
 
     /// <summary>
     /// Two forces facing each other across <paramref name="separation"/> yards: each squad in a
-    /// column of its own, its soldiers in a line.
+    /// column of its own, its soldiers in a line. <paramref name="stacked"/> puts every squad of
+    /// a side on the same line instead, so that each is the same distance from the enemy.
     /// </summary>
-    private static Forces Build(int[] firstTemplateIds, int[] secondTemplateIds, int separation)
+    private static Forces Build(
+        int[] firstTemplateIds, int[] secondTemplateIds, int separation, bool stacked = false)
     {
         GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
         RNG.Reset(4243);
@@ -198,7 +250,7 @@ public class TacticalValueTableTests(Xunit.Abstractions.ITestOutputHelper output
                         .Select(faction => faction.SquadTemplates[templateIds[index]])
                         .First(),
                     new StaticRNG(), ids, $"{name}{index}"));
-                int y = index * 40;
+                int y = stacked ? 0 : index * 40;
                 foreach (BattleSoldier soldier in squad.AbleSoldiers)
                 {
                     soldier.TopLeft = (x, y++);

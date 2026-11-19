@@ -221,10 +221,10 @@ namespace OnlyWar.Battles.Actions
             // if the soldier is aiming at the current target with the current weapon, add the accuracy bonus
             if (shooter.Aim?.Item1 == target.Soldier.Id && shooter.Aim?.Item2 == weapon)
             {
-                // accuracy of the weapon is limited by the soldier skill
+                // accuracy of the weapon is limited by half the soldier skill
                 // TODO: take this into account with enemies, rather than using high attribute, low skill
                 float fullAimBonus = shooter.Aim.Value.Item3
-                    + Math.Min(weapon.Template.Accuracy, soldierSkill)
+                    + BattleModifiersUtil.CalculateAimAccuracy(weapon.Template.Accuracy, soldierSkill)
                     + 1;
                 totalModifier += fullAimBonus * AimMultiplier;
             }

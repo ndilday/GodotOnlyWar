@@ -8,7 +8,7 @@ namespace OnlyWar.Battles
 {
     /// <summary>
     /// The tactical value of every able soldier on the field for one turn
-    /// (Design/Active/StrategicAndTacticalValue.md, section 2). Computed from the battle state alone:
+    /// (Design/Reference/BattleValueCalibration.md, section 2). Computed from the battle state alone:
     /// no database value goes in, so the planner can be priced in it without the gauntlet measuring
     /// its own assumptions.
     ///
@@ -142,9 +142,11 @@ namespace OnlyWar.Battles
             int evaluations = 0;
             // rates[s][g]: soldier s against the representative of enemy group g.
             float[][] firstRates = Rates(
-                first, secondGroups, ref evaluations, out float[][] firstMelee, out float[][] firstPeak);
+                first, secondGroups, ref evaluations, out float[][] firstMelee, out float[][] firstPeak,
+                out float[][] firstContact, out bool[][] firstMeleeBest);
             float[][] secondRates = Rates(
-                second, firstGroups, ref evaluations, out float[][] secondMelee, out float[][] secondPeak);
+                second, firstGroups, ref evaluations, out float[][] secondMelee, out float[][] secondPeak,
+                out float[][] secondContact, out bool[][] secondMeleeBest);
             float[] firstShares = MeleeShares(
                 first, secondGroups, firstMelee, firstPeak, GroupWeights(secondGroups, previousValues));
             float[] secondShares = MeleeShares(
@@ -153,10 +155,10 @@ namespace OnlyWar.Battles
             Dictionary<int, SoldierTacticalValue> soldiers = [];
             Dictionary<(int, int), PairTacticalValue> pairs = [];
             float[] firstU = SideU(
-                first, firstGroups, firstRates, secondGroups, second, secondRates,
+                first, firstGroups, firstRates, firstMeleeBest, secondGroups, second, secondRates, secondContact,
                 previousValues, pairs, out float[] firstOffense, out float[] firstDurability);
             float[] secondU = SideU(
-                second, secondGroups, secondRates, firstGroups, first, firstRates,
+                second, secondGroups, secondRates, secondMeleeBest, firstGroups, first, firstRates, firstContact,
                 previousValues, pairs, out float[] secondOffense, out float[] secondDurability);
 
             float firstMean = Mean(firstU);
@@ -273,9 +275,11 @@ namespace OnlyWar.Battles
             List<BattleSoldier> own,
             List<TargetGroup> ownGroups,
             float[][] ownRates,
+            bool[][] ownMeleeBest,
             List<TargetGroup> enemyGroups,
             List<BattleSoldier> enemy,
             float[][] enemyRates,
+            float[][] enemyContactRates,
             TacticalValueTable previousValues,
             Dictionary<(int, int), PairTacticalValue> pairs,
             out float[] offense,
@@ -285,6 +289,7 @@ namespace OnlyWar.Battles
             // mean value. Members with no previous value count as average.
             float[] weights = GroupWeights(enemyGroups, previousValues);
             Dictionary<int, int> ownGroupOf = GroupIndexBySoldier(ownGroups);
+            Dictionary<int, int> enemyGroupOf = GroupIndexBySoldier(enemyGroups);
 
             offense = new float[own.Count];
             durability = new float[own.Count];
@@ -311,12 +316,17 @@ namespace OnlyWar.Battles
                 offense[index] = weightTotal > 0f ? weightedRate / weightTotal : 0f;
 
                 // Durability: turns under one average enemy soldier, and under each enemy squad's
-                // average soldier.
+                // average soldier. Against an enemy he is valued as reaching (his melee is his best
+                // against that enemy), at the enemy's rate at contact (MeleeDurabilityAtContact).
                 float incoming = 0f;
                 Dictionary<int, (float Rate, int Count)> incomingBySquad = [];
                 for (int enemyIndex = 0; enemyIndex < enemy.Count; enemyIndex++)
                 {
-                    float rate = enemyRates[enemyIndex][ownGroup];
+                    bool atContact = MeleeDurabilityAtContact
+                        && ownMeleeBest[index][enemyGroupOf[enemy[enemyIndex].Soldier.Id]];
+                    float rate = atContact
+                        ? enemyContactRates[enemyIndex][ownGroup]
+                        : enemyRates[enemyIndex][ownGroup];
                     incoming += rate;
                     int squadId = enemy[enemyIndex].BattleSquad.Id;
                     (float squadRate, int count) = incomingBySquad.GetValueOrDefault(squadId);
@@ -393,22 +403,30 @@ namespace OnlyWar.Battles
             List<TargetGroup> enemyGroups,
             ref int evaluations,
             out float[][] meleeRates,
-            out float[][] peakRangedRates)
+            out float[][] peakRangedRates,
+            out float[][] contactRates,
+            out bool[][] meleeBest)
         {
             float[][] rates = new float[soldiers.Count][];
             meleeRates = new float[soldiers.Count][];
             peakRangedRates = new float[soldiers.Count][];
+            contactRates = new float[soldiers.Count][];
+            meleeBest = new bool[soldiers.Count][];
             for (int index = 0; index < soldiers.Count; index++)
             {
                 rates[index] = new float[enemyGroups.Count];
                 meleeRates[index] = new float[enemyGroups.Count];
                 peakRangedRates[index] = new float[enemyGroups.Count];
+                contactRates[index] = new float[enemyGroups.Count];
+                meleeBest[index] = new bool[enemyGroups.Count];
                 for (int group = 0; group < enemyGroups.Count; group++)
                 {
                     RateTerms terms = RatesAgainst(soldiers[index], enemyGroups[group]);
                     rates[index][group] = terms.Rate;
                     meleeRates[index][group] = terms.Melee;
                     peakRangedRates[index][group] = terms.PeakRanged;
+                    contactRates[index][group] = terms.Contact;
+                    meleeBest[index][group] = terms.MeleeBest;
                     evaluations++;
                 }
             }
@@ -428,16 +446,53 @@ namespace OnlyWar.Battles
         /// <c>Melee</c> is the latter and <c>PeakRanged</c> the ranged cycle averaged over his
         /// reach, the two the melee share compares.
         /// </summary>
-        internal readonly record struct RateTerms(float Rate, float Melee, float PeakRanged);
+        /// <remarks>
+        /// <c>Contact</c> is the better of his ranged cycle point blank and his melee: his rate
+        /// against an enemy who is valued as reaching him (<see cref="MeleeDurabilityAtContact"/>).
+        /// <c>MeleeBest</c>: his melee is at least his ranged cycle averaged over its band
+        /// (<c>PeakRanged</c>), so he is a contact fighter against this enemy at any range and is
+        /// valued as though he gets there.
+        /// </remarks>
+        internal readonly record struct RateTerms(
+            float Rate, float Melee, float PeakRanged, float Contact = 0f, bool MeleeBest = false);
 
-        internal static float RateAgainst(BattleSoldier soldier, TargetGroup group) =>
+        /// <summary>
+        /// Offense and durability at one range (2026-11-15, product owner). A soldier whose melee
+        /// against an enemy beats his gun across its band is valued as though he gets there; his durability
+        /// against that enemy is now read at contact too (the enemy's <see cref="RateTerms.Contact"/>),
+        /// not at the present separation. Before, a Warrior's offense was his melee at every range
+        /// while his durability was the marines' Boltgun fire at the separation, so at 449 yards
+        /// one Warrior squad was priced at 144-160 against a Tactical squad's 58 (93 against 88-106
+        /// at 1 yard). In that currency the Warriors' losses were dear and their kills cheap, their
+        /// effective engagement range went to their reach, and they never closed
+        /// (Design/Reference/BattleValueCalibration.md). One-sided on purpose: a first version read
+        /// both soldiers of such a pair at contact, which gave the gunner side point-blank fire and
+        /// moved a marine from at least 5 Mob models to 3.2 (the gauntlet measures about 24). A
+        /// static field so the diagnostics can compare: DUEL_CONTACT_DURABILITY=0 restores the old rule.
+        /// </summary>
+        internal static bool MeleeDurabilityAtContact = true;
+
+        /// <summary>
+        /// Whether a soldier with a gun and no melee weapon is credited his unarmed melee
+        /// (2026-11-15, product owner: no, as <see cref="MeleeShares"/> already rules). Without
+        /// this, a marine's fists beat his Boltgun at range, so he too read as a contact fighter
+        /// under <see cref="MeleeDurabilityAtContact"/> and Tactical v Warriors stayed a stand-off.
+        /// DUEL_UNARMED_WITH_GUN=1 restores the old credit.
+        /// </summary>
+        internal static bool UnarmedMeleeWithGun = false;        internal static float RateAgainst(BattleSoldier soldier, TargetGroup group) =>
             RatesAgainst(soldier, group).Rate;
 
         internal static RateTerms RatesAgainst(BattleSoldier soldier, TargetGroup group)
         {
             BattleSoldier target = group.Representative;
-            float melee = MeleeStrikeEstimator.EstimateTurnTakeOutProbability(soldier, target);
+            // A soldier with a gun and no melee weapon is credited no melee (UnarmedMeleeWithGun).
+            float melee = !UnarmedMeleeWithGun
+                    && soldier.EquippedRangedWeapons.Count > 0
+                    && soldier.MeleeWeapons.Count == 0
+                ? 0f
+                : MeleeStrikeEstimator.EstimateTurnTakeOutProbability(soldier, target);
             float ranged = 0f;
+            float pointBlank = 0f;
             float peak = 0f;
             if (soldier.EquippedRangedWeapons.Count > 0)
             {
@@ -455,6 +510,10 @@ namespace OnlyWar.Battles
                 {
                     float range = Math.Min(group.DistanceFrom(soldier), curve.Reach);
                     ranged = curve.SustainedAt(range, CurveFireModel.SustainedAimed).Removal;
+                    // Point blank, as an unplaced table reads every separation.
+                    pointBlank = range <= 0f
+                        ? ranged
+                        : curve.SustainedAt(0f, CurveFireModel.SustainedAimed).Removal;
                     // The mean over the band a standing squad can fire from: four midpoints of
                     // [0, reach]. A long, accurate gun keeps its rate across it; a pistol does not.
                     for (int sample = 0; sample < BandSamples; sample++)
@@ -468,7 +527,9 @@ namespace OnlyWar.Battles
             return new RateTerms(
                 Math.Clamp(Math.Max(melee, ranged), 0f, 1f),
                 Math.Clamp(melee, 0f, 1f),
-                Math.Clamp(peak, 0f, 1f));
+                Math.Clamp(peak, 0f, 1f),
+                Math.Clamp(Math.Max(melee, pointBlank), 0f, 1f),
+                melee > MinimumRate && melee >= ranged);
         }
 
         private static float Mean(float[] values)

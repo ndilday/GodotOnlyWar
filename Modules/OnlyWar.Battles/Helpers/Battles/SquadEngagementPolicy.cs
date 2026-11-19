@@ -776,8 +776,25 @@ namespace OnlyWar.Battles
         internal static float ScoreUnit(BattleSquad squad, IEnumerable<BattleSquad> enemies)
         {
             float own = MeanSoldierValue([squad]);
-            return own > 0 ? own : MeanSoldierValue(enemies);
+            if (!IndifferenceInCheaperSoldiers)
+            {
+                return own > 0 ? own : MeanSoldierValue(enemies);
+            }
+            float enemy = MeanSoldierValue(enemies);
+            return own > 0 && enemy > 0 ? Math.Min(own, enemy) : Math.Max(own, enemy);
         }
+
+        /// <summary>
+        /// 2026-11-15, product owner (with UnarmedMeleeWithGun): the indifference floor is quoted per soldier of the CHEAPER
+        /// side (this squad or its enemies), not per soldier of this squad. A marine squad 800
+        /// yards from PDF autoguns has a tactical value 10-100 times a trooper's, because nothing
+        /// the PDF fire there can hurt him; in its own units every PDF kill was "about nothing",
+        /// so RunToward scored best turn after turn and the squad held anyway (Tactical v 3 PDF
+        /// ended at the turn cap in 46% of battles). The scores are exchange flows that price
+        /// both sides' soldiers, so the finer of the two prices is the resolution worth acting
+        /// on. DUEL_INDIFFERENCE_CHEAPER=0 restores the own-squad unit.
+        /// </summary>
+        internal static bool IndifferenceInCheaperSoldiers = true;
 
         private static float MeanSoldierValue(IEnumerable<BattleSquad> squads)
         {

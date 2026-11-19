@@ -815,7 +815,12 @@ public class BattleSquadPlannerTests
         // fixture could not show it. A charger that wins the melee makes contact a real threat.
         BattleSquad shooters = CreateSquad("Ranged Holder", 90_101);
         BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 90_102);
+        //
+        // 2026-11-15: the shooter gets the skill (12) to use all of the test rifle's Accuracy 6,
+        // which an aimed shot now limits to half his skill. At the default skill of 10 both
+        // futures came out equal (-1.605856).
         EquipAimTestRifle(shooters.Soldiers[0], 99_260);
+        ((Soldier)shooters.Soldiers[0].Soldier).Dexterity += 2;
         meleeEnemy.Soldiers[0].ClearReadiedRangedWeapons();
         meleeEnemy.Soldiers[0].RangedWeapons.Clear();
         ((Soldier)meleeEnemy.Soldiers[0].Soldier).Strength *= 2;

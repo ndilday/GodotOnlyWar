@@ -197,7 +197,7 @@ ahead of the path breaks first-token matching.
   `--blame-hang-timeout` kills it under load; use 90m. Large battles (8-10 squads a side) cost
   1-3 s per turn and dominate the slow half; the planner's per-turn cost, not battle length, is
   what grew after 2026-11-05. **11m42s alone on 2026-11-11**, after the 50-yard removal nodes,
-  shooter grouping and shared removal tables (Design/Active/CoarseForecastTables.md steps 1-2).
+  shooter grouping and shared removal tables (Design/Reference/ForecastCalibration.md §7, steps 1-2).
   Those cut an 8 v 3 squad duel 7x, so most of what is left in this test is not the forecast's
   removal math. **12m19s alone later that day**, after the `RangeRates` binary search and the shot
   evaluator's removal tables, which made an 8 v 8 squad duel 1.76x faster per turn: no gain, so

@@ -13,6 +13,9 @@ that are useful when changing those systems without replaying the entire design 
 The following remain deliberately separate because they describe adjacent systems rather than the
 battle engine itself:
 
+- `BattleValueCalibration.md` holds the strategic/tactical value split, the gauntlet method and the
+  stalemate findings; `ForecastCalibration.md` holds the measurements behind the forecast's constants
+  (opening range, fire pricing, break model, contact rate, planner speed).
 - `CasualtyRealism.md` contains the detailed wound-band, healing, and Apothecary decision tables.
 - `SpecialistAttachment.md` contains the historical order-level personnel-attachment decisions and
   save/load rationale; current posting architecture is in `OnlyWar_TDD.md` §5.3, §5.6, and §6.10.
@@ -148,7 +151,7 @@ Three terms shape which shot a soldier takes, and when (`RangedTargetSelector`, 
   (PDF shots average an aim bonus of 0.2–0.7) while the rate table prices the full-aim cycle. A
   cycle-consistent rule was tried and reverted: each shot got better, but against fast melee the
   squad moved often enough (running clears aims) that longer aims lost more than they gained. See
-  Design/Active/OpeningRangeRefactor.md. Instead, **the removal-rate table prices the fire the
+  Design/Reference/ForecastCalibration.md §2. Instead, **the removal-rate table prices the fire the
   soldiers really deliver** (2026-10-23): `PairRemovalTerm.SustainedRateAt` replays this rule over
   one cycle (`RangedTargetSelector.PlannerCycle`) and credits the shot it really fires over the
   cycle's turns, a planned aim's readiness uses the same cycle, and
@@ -234,15 +237,18 @@ returned wounded outcomes.
 
 ## 4. Battle Value and capability profiles
 
-Battle Value is the shared currency for force sizing, ranged/melee comparison, movement choices,
-screening, continuation, and strategic strength. The persisted value is
+**There are two values (since 2026-11-01).** The *strategic value* below is stored and measured; it sizes
+forces and judges strategic balance. The *tactical value* is computed in the battle and is the planner's
+only currency; the planner reads no stored value. The split, the tactical value's formula and the
+gauntlet method are in `BattleValueCalibration.md`; the rest of this section keeps the original
+calibration findings. The persisted value is
 `SquadTemplateElement.StrategicValuePerSoldier` (moved off `SoldierTemplate` on 2026-10-27; named
 `BvPerSoldier` until 2026-11-02): a template
 guideline, not a live skill-tracking rating, and an integer. It lives on the element because it is
 measured from a squad as fielded (kit and armour included), and one soldier template can stand in
 squads of very different worth (an Ork Nob is 10 in Nobz and 131 in Meganobz). A soldier reads it
 as `ISoldier.StrategicValue`, 0 when no element of his squad's template holds his template. See
-`Active/GauntletV2.md`. The rules database is the
+`BattleValueCalibration.md`. The rules database is the
 source of truth for the values; they are deliberately not copied here.
 
 ### 4.1 Calibration from fights (October 2026)
@@ -274,9 +280,12 @@ The method, run with `Tools/OnlyWar.Diagnostics` (its README has the commands):
 5. **Leaders at squad value.** Sergeant and Scout Sergeant carry their squad's per-soldier value. When
    toughness is equal, a higher leader value made every shooter target the leader (all 30 autoguns of
    a Mob on one Sergeant). Nobs, the Runtherd and HQ squads look different and keep their own values.
-6. **The AI must not read BV across sides before calibrating.** Withdrawal and rout use headcount
-   shares (§6), and the engagement score treats an exchange at BV parity (§5.2), so a recalibration
-   does not change behaviour through a feedback loop. Targeting still weighs BV within a side.
+6. **The planner reads no stored value.** (Written 2026-10 as "the AI must not read BV across sides
+   before calibrating", which left a loop: the planner priced trades in the stored value, so a wrong
+   value changed behaviour and the behaviour confirmed the value.) Since 2026-11-01 the planner prices
+   in the tactical value (§5.2) and withdrawal and rout use headcount shares (§6), so a recalibration
+   cannot change behaviour. The stored value is read only by the strategic layer and by
+   `BattleState`/`BattleRoundMetrics` to score a battle.
 
 Each planner change that moves behaviour invalidates the fitted values; the core gauntlet is rerun
 and the faction stages follow. The values in the database are from the run after the 2026-10-11
@@ -399,24 +408,23 @@ the fire of every enemy shooter in reach as if each shot at him alone. At 200 ya
 against 60 PDF priced a charge about 20 BV below holding. They stood in a pistol-against-autogun
 firefight and lost 86% of their models to the PDF's 17%.
 
-**One currency: Battle Value parity (2026-10-12, product owner).** Every removal estimate is
-priced in the Battle Value of the soldiers it removes, so what we take is in enemy BV and what we
-lose is in ours. Since BV is calibrated across factions from fights (§4), the two are one currency:
-`EngagementCurrency.EnemyValueRate` is 1, and an exchange is worth the BV each side loses. A trade the
-calibration calls even is even to the planner.
+**One currency: the tactical value (since 2026-11-01).** Every removal estimate is priced in the
+tactical value of the soldiers it removes (`BattleSoldier.PlanningValue`, computed each turn from the
+battle state by `TacticalValueTable`: `BattleValueCalibration.md` §2), so what we take and what we lose are
+priced by the same rule from the same state, and there is no exchange rate. The planner reads NO stored
+(strategic) value. History: until 2026-10-05 values were not on one scale across factions, so from
+2026-10-05 to 2026-10-12 the planner used headcount parity (one average enemy soldier worth one of ours),
+which made every cheap, numerous force refuse fair trades (an Insurrectionist Mob valued a marine as one
+Insurrectionist, and ten Mobs stood 200 yards from one Tactical squad for 400 turns). From 2026-10-12 to
+2026-11-01 it priced in the stored value, and then fell into a circle with the calibration that measured
+that value (`BattleValueCalibration.md` §1), and added armour and weapon terms on top of a value that
+already contained them.
 
-History. From 2026-10-05 to 2026-10-12 the rate was headcount parity, own mean soldier BV over the
-enemy's, so one average enemy soldier was worth one of ours. It went in when the first calibrated
-values multiplied marine BV about tenfold while cult values hardly moved: the score added terms in
-Scout BV (outgoing, aim readiness) to terms in cult BV (incoming), and Neophyte Hybrids and a
-two-man autocannon team ran at Scouts they had been shooting. Once every faction was calibrated,
-headcount parity made every cheap, numerous force refuse fair trades: an Insurrectionist Mob valued a
-marine (100) as one Insurrectionist (5), and ten Mobs stood 200 yards from one Tactical squad for 400
-turns.
-
-Thresholds are still quoted per average soldier of the planning squad (`EngagementCurrency.ScoreUnit`):
-the indifference floor is `0.05 × own mean soldier BV × horizon fraction`, so a fixed band means the
-same thing to a marine squad and a PDF one (it is 0.1 for the 2-BV test fixtures).
+Thresholds are quoted per average soldier of the planning squad
+(`SquadEngagementPolicy.ScoreUnit`, in tactical value): the indifference floor is
+`0.05 × the cheaper side's mean soldier value × horizon fraction`
+(`SquadEngagementPolicy.IndifferenceInCheaperSoldiers`), so a fixed band means the same thing to a marine
+squad and a PDF one.
 
 Planning shares across a side: the effective engagement range, the opening range and each lane of
 the exchange forecast fight only the squad's **share** of the enemy (`BattleEngagementFrameBuilder.ForceShare`,
@@ -647,7 +655,7 @@ exists.
 
 Opening range is asked once per squad against the whole opposing force
 (`BattleEngagementFrameBuilder.CalculatePreferredOpeningRange`). **Since 2026-10-24 the answer is
-the opening forecast** (`OpeningExchangeForecast`, Design/Active/OpeningRangeRefactor.md): the
+the opening forecast** (`OpeningExchangeForecast`, Design/Reference/ForecastCalibration.md §1): the
 coupled exchange forecast behind Φ, built without a grid for a battle that opens at a candidate
 range, one lane per enemy squad. Each side follows its doctrine (a contact seeker closes and fires
 nothing on the way; a shooter stands); each squad fights its `ForceShare` of each enemy and takes
@@ -737,8 +745,9 @@ Boyz were credited 1.6 and delivered 3.9. Readiness was the net value, about hal
 standing turn was credited 6.5 where the forecast valued it at 13.4. Every step forward looked
 cheap, and the Hybrids crept toward the Orks under fire without shooting.
 
-Every planner prediction of an aimed shot uses the engine's bonus, `min(Accuracy, skill) + aim
-turns + 1` (`RangedTargetSelector.AimAccuracy`, 2026-10-09). Until then the fire timing, sticky and
+Every planner prediction of an aimed shot uses the engine's bonus, `min(Accuracy, skill / 2) + aim
+turns + 1` (`RangedTargetSelector.AimAccuracy`, 2026-10-09; the limit was the full skill until
+2026-11-15, and the one definition is now `BattleModifiersUtil.CalculateAimAccuracy`). Until then the fire timing, sticky and
 stored aims, the target scan, the pursuit and attack-opportunity projections and the effectiveness
 curve added the weapon's full Accuracy, which promised every shooter less skilled than his weapon a
 shot the engine never gave him. Two withdrawal tests had leaned on that: a "genuinely accurate"
@@ -1467,7 +1476,7 @@ These decisions replace earlier forms and should not be reintroduced during main
 | Each fire-timing plan's burst priced at its own best value per round (an un-aimed shot bought nine cheap rounds, then was charged the aimed price for them) | One round value per decision, the best over every plan and burst length; every plan's burst, the one fired included, is chosen at it (2026-10-11) |
 | The effective engagement range (where the Close continuation walks to) priced against the whole opposing force firing at this one squad, so one squad of many lost at every range and an advance was never priced | The squad's share of the enemy's ranged fire and melee threat, by battle value, the same `ForceShare` the opening range uses (2026-10-11) |
 | Each exchange-forecast lane fought against the enemy's whole battle value, worn down only by this squad's fire | The squad's share of the enemy (`ForceShare`), worn down at the pace of the whole force's fire; removal capped at the same share (2026-10-11) |
-| Headcount parity between the sides (`EngagementCurrency`: one average enemy soldier worth one of ours), from when cross-faction battle value was uncalibrated | Battle value parity: the rate is 1, an exchange is valued by the battle value each side loses (2026-10-12, product owner) |
+| Headcount parity between the sides (`EngagementCurrency`: one average enemy soldier worth one of ours), from when cross-faction battle value was uncalibrated; then the stored value as the planner's currency (2026-10-12) | The tactical value, computed in the battle (2026-11-01, product owner): the stored value belongs to the strategic layer and the gauntlet measured it from a planner that priced in it (`BattleValueCalibration.md` §1) |
 | Removal per hit estimated from each target soldier's own Constitution, so target selection found the softest marine of ten and the forecast priced the whole fight at that soldier's rate (about 357 autogun hits a kill against the engine's 629) | The species' median Constitution (`RemovalMath.PerceivedConstitution`): toughness is judged by what can be seen -- species, size, armour, weapons, visible wounds (2026-10-12, product owner); the engine still resolves wounds with the real value |
 | Ammunition scarcity from the rounds carried against a fixed six magazines (standard issue was always a third scarce, so marines aimed four turns against twenty PDF) | Scarcity from the work: the shooter's share of the enemy battle value his weapon can hurt (head count of reloadable shooters), the rounds his fastest plan would spend on it with free rounds, against the rounds he carries: `1 - carried / needed`, clamped (2026-10-11, product owner) |
 | Indifference band as a fraction of the squad's Battle Value | A fraction of the best score, with an absolute floor — stock and rate are not the same dimension |

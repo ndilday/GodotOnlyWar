@@ -121,7 +121,7 @@ public class OpeningRangeForceShareTests
     }
 
     // SquadInALargerForce_OpensInsideItsUsefulBand (Grist Nine Epsilon, 2026-09-22) was removed on
-    // 2026-10-24 with the sufficiency sweep (OpeningRangeRefactor.md, phase 5). It pinned that
+    // 2026-10-24 with the sufficiency sweep (Design/Reference/ForecastCalibration.md section 1). It pinned that
     // sweep's break limit: the opening had to sit inside the useful band so the marines could punish
     // a retreat. The opening forecast prices a break as the enemy's value leaving the fight, as the
     // gauntlet counts who holds the field, and the measured best opening for Tactical against Shoota

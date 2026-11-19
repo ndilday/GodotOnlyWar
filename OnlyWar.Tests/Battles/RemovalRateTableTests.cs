@@ -216,7 +216,7 @@ public class RemovalRateTableTests
 
     /// <summary>
     /// The term's removal fraction per hit comes from RemovalFractionTable: exact at its 50-yard
-    /// nodes and interpolated between them (Design/Active/CoarseForecastTables.md, step 1). The
+    /// nodes and interpolated between them (Design/Reference/ForecastCalibration.md section 7, step 1). The
     /// to-hit side is still exact at every range. Since 2026-11-11 the shot evaluator itself reads
     /// removal tables of its own on 10-yard nodes (RemovalFractionTable.ShotNodeSpacing), so its take-out
     /// chance is interpolated while the term's TakeOutProbabilityAt stays exact. Between nodes the

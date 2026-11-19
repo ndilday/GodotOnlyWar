@@ -226,7 +226,12 @@ public class SquadDuelDiagnostics
     /// exact range instead of reading the shared tables (RangedShotEvaluator.UseRemovalTables).
     /// DUEL_CYCLE_NODE_RATIO: the range ratio between the nodes the fire-cycle search runs at
     /// (PairRemovalTerm.CycleNodeRatio; default 0, which searches on DUEL_CYCLE_GRID; 1.25 was tried
-    /// 2026-11-11).
+    /// 2026-11-11). DUEL_CONTACT_DURABILITY=0: a soldier valued for his melee takes his durability at
+    /// the present separation, as before 2026-11-15 (TacticalValueTable.MeleeDurabilityAtContact).
+    /// DUEL_UNARMED_WITH_GUN=1: a soldier with a gun and no melee weapon is credited his unarmed
+    /// melee in his tactical value, as before 2026-11-15 (TacticalValueTable.UnarmedMeleeWithGun).
+    /// DUEL_INDIFFERENCE_CHEAPER=0: the engagement indifference floor is quoted per soldier of the
+    /// deciding squad, as before 2026-11-15 (SquadEngagementPolicy.IndifferenceInCheaperSoldiers).
     /// </summary>
     internal static void ApplyPlannerSwitches()
     {
@@ -250,7 +255,11 @@ public class SquadDuelDiagnostics
             Environment.GetEnvironmentVariable("DUEL_FOLLOW_ANY_STAY") != "1";
         OnlyWar.Battles.PairRemovalTerm.RechooseBurstByRange =
             Environment.GetEnvironmentVariable("DUEL_BURST_BY_RANGE") != "0";
-        OnlyWar.Battles.EngagementExchangeForecast.RoundsLeaveWithSoldiers =
+        OnlyWar.Battles.TacticalValueTable.MeleeDurabilityAtContact =
+            Environment.GetEnvironmentVariable("DUEL_CONTACT_DURABILITY") != "0";
+        OnlyWar.Battles.TacticalValueTable.UnarmedMeleeWithGun =
+            Environment.GetEnvironmentVariable("DUEL_UNARMED_WITH_GUN") == "1";        OnlyWar.Battles.SquadEngagementPolicy.IndifferenceInCheaperSoldiers =
+            Environment.GetEnvironmentVariable("DUEL_INDIFFERENCE_CHEAPER") != "0";        OnlyWar.Battles.EngagementExchangeForecast.RoundsLeaveWithSoldiers =
             Environment.GetEnvironmentVariable("DUEL_ROUNDS_WITH_SOLDIERS") != "0";
         string removalNodes = Environment.GetEnvironmentVariable("DUEL_REMOVAL_NODES");
         OnlyWar.Battles.RemovalFractionTable.NodeSpacing = string.IsNullOrWhiteSpace(removalNodes)
@@ -529,7 +538,7 @@ public class SquadDuelDiagnostics
     /// distance. Written "assault" in scenarios and in GAUNTLET_RANGE; stored as 0 in battle rows.
     /// A NEGATIVE range is the assault setup (reallocation, burrowers, both sides Attacker) opened
     /// at a forced distance of -range yards, written "assault:100": what the opening-range
-    /// calibration fights (Design/Active/OpeningRangeRefactor.md section 4).
+    /// calibration fights (Design/Reference/ForecastCalibration.md section 1).
     /// </summary>
     internal const int AssaultRange = 0;
 
@@ -730,7 +739,7 @@ public class SquadDuelDiagnostics
         resolver.OnBattleComplete += (_, _) => completed = true;
         // Rounds each side carries at the start (after any reallocation), at the end of the first
         // turn in which anyone struck in melee, and at the end: the evidence for the opening-range
-        // forecast's ammunition budget (Design/Active/OpeningRangeRefactor.md section 2.2).
+        // forecast's ammunition budget (Design/Reference/ForecastCalibration.md section 1).
         int roundsStartA = RoundsCarried(sideA);
         int roundsStartB = RoundsCarried(sideB);
         // Rounds at contact are counted from the battle history (start less the rounds every

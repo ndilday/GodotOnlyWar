@@ -8,7 +8,7 @@ namespace OnlyWar.Battles
     /// The removal fraction per hit (<see cref="RemovalMath.EvaluateRemovalFraction"/>: take-out
     /// chance plus graded wound fill) of one weapon against one target location vector, solved on
     /// range nodes <see cref="NodeSpacing"/> yards apart and interpolated linearly between them
-    /// (Design/Active/CoarseForecastTables.md, step 1; product owner 2026-11-10: 50-yard nodes).
+    /// (Design/Reference/ForecastCalibration.md section 7, step 1; product owner 2026-11-10: 50-yard nodes).
     ///
     /// <para>WHY. The fraction walks every hit location with up to nine normal CDFs (one take-out
     /// tail and up to eight wound-level tails), and the forecast asked for it about 166,000 times
@@ -48,7 +48,7 @@ namespace OnlyWar.Battles
 
         /// <summary>
         /// The table for this weapon against this location vector, shared by every caller that asks
-        /// for the same pair (2026-11-11, with step 2 of Design/Active/CoarseForecastTables.md).
+        /// for the same pair (2026-11-11, with step 2 of Design/Reference/ForecastCalibration.md section 7).
         ///
         /// <para>WHY. The removal-rate terms and the range curves are built again every turn and for
         /// every soldier, and each built its own table, so the same nodes were solved again and

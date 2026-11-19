@@ -9,7 +9,7 @@ namespace OnlyWar.Tests.Battles;
 /// <summary>
 /// The rounds the removal-rate table spends per turn, for the engagement potential's ammunition
 /// budget, and the two ways a Close lane can fire on the way (2026-11-08,
-/// Design/Active/StrategicAndTacticalValue.md). Before, the potential counted no rounds, and a
+/// Design/Reference/BattleValueCalibration.md). Before, the potential counted no rounds, and a
 /// squad closing on the enemy fired nothing until it stood.
 /// </summary>
 public class ForecastRoundsTests
