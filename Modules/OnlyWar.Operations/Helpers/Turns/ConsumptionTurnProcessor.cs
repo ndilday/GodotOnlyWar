@@ -21,6 +21,10 @@ namespace OnlyWar.Operations.Turns
         private const float CarryingCapacityRecoveryRate = 0.01f;
         private const double ConsumptionExpansionShare = 0.5;
 
+        // The most that believed resistance can add to a neighbour's value, reached when the
+        // resistance equals the moving force (TDD §6.2 *Swarm operations*; starting value to tune).
+        internal const double MaximumResistanceAttraction = 0.5;
+
         private static Action<Region, long, Faction> _recordScenarioBlighting;
         private static Action<RegionFaction, long, Faction> _recordScenarioCivilianKills;
 
@@ -90,7 +94,18 @@ namespace OnlyWar.Operations.Turns
             }
         }
 
-        /// <summary>Returns where a consumer would expand and how much of its budget would move.</summary>
+        /// <summary>
+        /// Returns where a consumer would expand and how much of its budget would move. The single
+        /// owner of the expansion rule: the hidden-swarm pass and the planner's expansion task both
+        /// call it, so they cannot disagree (TDD §6.2 *Swarm operations*).
+        /// </summary>
+        /// <remarks>
+        /// Depletion sets how much moves. Only a neighbour with more biomass than home can be chosen;
+        /// among those, the swarm takes the highest
+        /// <c>Biomass × <see cref="ResistanceAttraction(double)"/></c>, where the resistance ratio is the
+        /// faction's believed military strength in the neighbour over the moving force.
+        /// Biomass is read true, because synapse senses prey; resistance is read from beliefs.
+        /// </remarks>
         public static (Region Destination, long Movers) PlanExpansion(
             RegionFaction consumer,
             long availableTroops)
@@ -101,14 +116,57 @@ namespace OnlyWar.Operations.Turns
             }
 
             Region region = consumer.Region;
-            double homeBiomass = RegionBiomass(region);
-            Region richest = region.GetAdjacentRegions().OrderByDescending(RegionBiomass).FirstOrDefault();
-            if (richest == null || RegionBiomass(richest) <= homeBiomass) return (null, 0);
-
             long movers = Math.Min(
                 Math.Min(consumer.Population, availableTroops),
                 (long)(availableTroops * RegionDepletion(region) * ConsumptionExpansionShare));
-            return movers > 0 ? (richest, movers) : (null, 0);
+            if (movers <= 0) return (null, 0);
+
+            double homeBiomass = RegionBiomass(region);
+            Region best = null;
+            double bestValue = double.NegativeInfinity;
+            foreach (Region neighbour in region.GetAdjacentRegions())
+            {
+                double biomass = RegionBiomass(neighbour);
+                if (biomass <= homeBiomass) continue;
+                double resistanceRatio = BelievedResistance(consumer.PlanetFaction, neighbour)
+                    / (double)movers;
+                double value = biomass * ResistanceAttraction(resistanceRatio);
+                if (value > bestValue)
+                {
+                    best = neighbour;
+                    bestValue = value;
+                }
+            }
+            return best != null ? (best, movers) : (null, 0);
+        }
+
+        /// <summary>
+        /// A(r): how much resistance draws the swarm. It rises from 1 to 1 + k as the resistance grows
+        /// to the moving force's own strength (r = 1), then falls as 1 / r², so the swarm is drawn to
+        /// fights it can win and turns from ones it cannot. Continuous at r = 1.
+        /// </summary>
+        public static double ResistanceAttraction(double resistanceRatio)
+        {
+            if (resistanceRatio <= 0) return 1.0;
+            if (resistanceRatio <= 1.0) return 1.0 + MaximumResistanceAttraction * resistanceRatio;
+            return (1.0 + MaximumResistanceAttraction) / (resistanceRatio * resistanceRatio);
+        }
+
+        /// <summary>
+        /// The organized military strength the observer believes every non-consumption faction holds
+        /// in the region: PDF, cult, chapter and any other. With no belief, a faction counts as none.
+        /// </summary>
+        public static long BelievedResistance(PlanetFaction observer, Region region)
+        {
+            if (observer == null || region == null) return 0;
+            long resistance = 0;
+            foreach (FactionIntelBelief belief in observer.TargetIntel.Values)
+            {
+                if (belief.Region.Id != region.Id) continue;
+                if (belief.TargetFaction.GrowthType == GrowthType.Consumption) continue;
+                resistance += Math.Max(0L, belief.EstimatedMilitaryStrength ?? 0L);
+            }
+            return resistance;
         }
 
         public static void ApplyExpansion(RegionFaction source, Region destination, long amount)

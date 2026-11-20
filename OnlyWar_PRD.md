@@ -1273,7 +1273,7 @@ behavior changed.
 - The mobile combat force is the region's concrete `OrganizedMilitaryStrength` pool. The disorganized remainder still exists and can be caught in an ambush; after an assault destroys the organized defence, continuing undefended assault days destroy disorganized BV at a tunable multiple of surviving attacker BV. Reorganization explicitly transfers BV back into the organized pool (a share of the disorganized pool per effort point) rather than applying a percentage multiplier to total strength.
 - Each turn the AI allocates `organizedTroops` by priority. This is **one budget**, drawn down in order: every step spends from the same per-region residual, so a swarm committed to defending and attacking has correspondingly less left to eat with.
   1. **Fight** — commit force to any in-region military threat (a PDF garrison, or a Cult fighting the swarm); the swarm is drawn to resistance first. This also reserves the region's own defensive minimum.
-  2. **Expand** — send a share of the remainder to the neighbor with the most biomass. Resistance is not a term here: assaults on defended ground are priced against the estimated defender in the force-allocation auction. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
+  2. **Expand** — send a share of the remainder to a richer neighbor. Only a neighbor with more biomass (prey plus carrying capacity, read true: synapse senses prey) than home can be chosen. Among those, the swarm takes the highest `biomass × A(r)`, where `r` is the resistance the swarm **believes** is there (the organized military strength of every non-Tyranid faction, from its intelligence; no belief counts as none) over the moving force. `A(r) = 1 + k·r` up to `r = 1`, then `(1 + k)/r²`: the swarm is drawn to fights it can win and turns from ones it cannot (`k = 0.5`, to tune). Resistance changes only where the share goes, never how much moves. The hidden-swarm pass and the planner's expansion task use the same rule. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
   3. **Predate + Consume** — whatever survives every earlier claim strips the current region: predate while headcount remains, consume the land in parallel, shifting fully to consumption once the survivors are gone.
 - Feeding is a **planned tasking, not a background process**: it is one mission type the strategy controller allocates against that budget alongside defence, offensives, development and patrols, so the swarm can never be simultaneously counted as eating and as fighting. Predation and consumption remain a single tasking rather than two, because the returns on each diminish *within* the turn as the other's pool depletes — the allocator decides the prey/land split internally and the planner only decides how many troops to hand it. A swarm the planner cannot see (a hidden `RegionFaction`) has no budget allocated to it and falls back to feeding at full strength rather than silently starving.
 
@@ -1293,7 +1293,7 @@ behavior changed.
 - `IsPublic = false` on the Imperial remnant here means "gone to ground," and this hide/unhide is evaluated **per region** for the default faction — distinct from the existing planet-level `CheckForPlanetaryRevolt` / `CheckForRevoltSuppression`, which exclude the default faction and only surface infiltrators. (Generalizing all going-public transitions to region granularity is an open question — §6.12.)
 
 **Civilian Emigration (Stage 3)**
-- Each turn, ~5% of a hidden remnant's population flees to **adjacent regions with no public enemy**, distributed **weighted by the destination's visibly available carrying capacity** (current carrying capacity less the population of its public presences). A depopulated destination gets a new public Imperial presence that grows and drafts normally. A fully-surrounded remnant (no eligible neighbor) cannot flee and faces predation in place.
+- Each turn, ~5% of a hidden remnant's population flees to the **adjacent regions where the Imperium can hold a presence**, distributed by `weight = capacity × (1 + G/G_ref) / (1 + H/H_ref)`. *Capacity* is the destination's visibly available carrying capacity (current carrying capacity less the population of its public presences). *G* is its protection: the garrison of its public Imperial presences plus the Battle Value of the chapter squads landed there, one trooper per point. *H* is its danger: the population of its public non-Imperial presences (their forces are part of that population). Hidden presences count for neither: refugees cannot see them. A garrison of `G_ref` doubles a refuge's pull and an enemy of `H_ref` halves it (both 1,000, to tune). A besieged region is still a refuge, only a less attractive one, so a remnant flees even when every neighbor holds a public enemy. A depopulated destination gets a new public Imperial presence that grows and drafts normally.
 - Emigration is **not** clamped to destination capacity: when every neighbor is full, refugees split equally and overfill them. The crowding term (§4.15) then models the resulting deprivation die-off, and the swollen population makes that region a worse massacre if the swarm reaches it next. Because refugees prefer free capacity, a full refuge gets few of them while emptier land is available, so this happens only when every neighbor is full.
 
 **PDF as a Strategic Actor**
@@ -1511,9 +1511,9 @@ The work that remained open at the end of 0.8, together with the connective item
 - ✅ **Near death for a survived severed Vitals** — a brother who survives a severed Vitals now opens a near-death episode, so the end of his organ replacement records a near-death recovery, and his service record says the location needs an organ replacement. TDD §6.6 *Player aftermath event emission*. Godot check outstanding.
 - ✅ **Chapter Mandates** — player-chosen mandates shown in the Command Brief and a MANDATES lens of the Command screen, the legacy-point ledger with its graph and per-master table in the Chronicle, and Chapter Master tenure and succession (promotion on the Chapter screen). §4.25; TDD §6.15 (starting constants in `MandateConstants`). *(Save format 27.)* Checked in Godot 2026-11-19 (lenses, dialogs, the Promised World win and Chapter Master appointment); the Chronicle fixes of that day need a new game.
 - ⬜ **Display mode and UI/text scaling** — the §4.27 requirement.
-- ✅ **Refugees into depopulated regions.** Refugees resettle any adjacent region with no public
-  enemy, weighted by its visibly available carrying capacity, so that liberated land fills with
-  people again. §4.24; TDD §6.3 *Imperial remnants and refugees*. Godot check outstanding.
+- ✅ **Refugees into depopulated regions.** Refugees resettle the adjacent regions, weighted by
+  their visibly available carrying capacity, so that liberated land fills with people again.
+  §4.24; TDD §6.3 *Imperial remnants and refugees*. Godot check outstanding.
 - ⬜ **Special operations for every faction.** Sabotage, ambush and assassination work the same way
   for NPC factions as for the player: each faction's intelligence generates opportunities and its
   planner decides which to pursue, against NPC targets and the player's real squads. The PDF never
@@ -1521,10 +1521,12 @@ The work that remained open at the end of 0.8, together with the connective item
   assault launch threshold, sabotage damage on the day it succeeds, and no Anti-Air sabotage.
   `Design/Active/SpecialOperations.md` (design complete, not started; starting values to tune).
   *(Save format change.)*
-- ⬜ **Refugee protection and swarm expansion valuation.** Refugees weigh a destination's Imperial
-  garrison and carrying capacity against its visible enemies, and the Tyranid swarm weighs believed
-  resistance (drawn to fights it can win) as well as biomass when it expands. §4.24;
-  `Design/Active/RefugeesAndSwarmExpansion.md` (design complete, not started).
+- ✅ **Refugee protection and swarm expansion valuation.** Refugees weigh a destination's Imperial
+  garrison and chapter squads and its carrying capacity against its visible enemies, and a
+  besieged region is a refuge again. The Tyranid swarm weighs believed resistance (drawn to fights
+  it can win) as well as biomass when it expands. §4.24; TDD §6.2 *Swarm operations*, §6.3
+  *Imperial remnants and refugees*. *(No save-format change.)* Checked in Godot 2026-11-20.
+  Follow-through in §5.8.
 
 ### 5.7 Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat
 
@@ -1709,6 +1711,11 @@ support dynamic unit membership and new effect channels. Design record:
 - *Founding preview.* A new-game preview of the founding and its myth, with a reroll and perhaps player edits. Today both come from the seed with no input.
 - *Era effects.* The founding sets only the date. A campaign founded in M32 meets the same factions as one in M41; Primaris marines and other technology that should arrive by date and by event are not designed.
 - *Unnumbered foundings.* The lore lists many; they could be added as "a founding whose number the records do not preserve", which the myth can already say.
+
+**Refugee protection and swarm expansion follow-through** (§4.24; moved here from the refugees-and-swarm-expansion design when it was deleted, 2026-11-20):
+
+- *Tuning.* The refuge references (`RefugeeProtectionReference`, `RefugeeDangerReference`, both 1,000) and the swarm's maximum resistance attraction (`MaximumResistanceAttraction`, 0.5) are starting values and have not been tuned.
+- *Chapter squads in sightings.* The swarm's resistance comes from its beliefs, and a public-activity sighting measures `GetDeployedStrength()`, which leaves landed squads out. Chapter squads therefore count as resistance only after battle contact, although the design meant them to count like any other force.
 
 **Soldier Screen — awards as icons.** Replace the textual awards list on the Soldier Screen (§4.7) with an icon strip in the screen's top panel: one icon per award the marine holds, with the date the award was earned shown as hover text. The existing display rule still applies — for a multi-tier award type, only the most recent / highest tier is shown (one icon, not one per tier). Small UI/presentation item; depends on an icon set for the award types.
 

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Domain;
 using OnlyWar.Domain.Extensions;
+using OnlyWar.Domain.Intelligence;
 using OnlyWar.Campaign.Turns;
 using OnlyWar.Domain.Missions;
 using OnlyWar.Domain.Orders;
@@ -343,5 +344,142 @@ public class BiomassConsumptionTests
         ConsumptionTurnProcessor.ResolveExpansion(fixture.Planet);
 
         Assert.Equal(swarmBefore, swarm.Population);
+    }
+
+    // --- Resistance in the expansion choice (PRD §4.24 Tyranid Troop AI; TDD §6.2 *Swarm operations*) ---
+    //
+    // Region 0 borders regions 1, 2 and 4. Home is stripped bare (depletion 1), so a swarm of 100,000
+    // moves 50,000. Each default neighbour holds 20,000 prey on no land, so the tests raise the land of
+    // the neighbours they compare and leave region 4 as the poor third choice.
+
+    [Fact]
+    public void PlanExpansion_EqualBiomass_PrefersResistanceNearerTheSwarmsOwnStrength()
+    {
+        SectorSimulationFixture fixture = CreateStrippedHome(out RegionFaction swarm);
+        SetLand(fixture, 1, 1_000_000);
+        SetLand(fixture, 2, 1_000_000);
+        // Beta: 10,000 believed (r = 0.2, A = 1.1). Gamma: 30,000 PDF plus 20,000 of a second
+        // faction (r = 1.0, A = 1.5), so resistance sums across factions.
+        RegionFaction cult = fixture.AddHiddenFaction(2, GrowthType.Conversion, population: 0);
+        Believe(fixture, swarm, 1, fixture.Default, 10_000);
+        Believe(fixture, swarm, 2, fixture.Default, 30_000);
+        Believe(fixture, swarm, 2, cult.PlanetFaction.Faction, 20_000);
+
+        (Region destination, long movers) =
+            ConsumptionTurnProcessor.PlanExpansion(swarm, swarm.GetDeployedStrength());
+
+        Assert.Equal(50_000, movers);
+        Assert.Same(fixture.Planet.Regions[2], destination);
+    }
+
+    [Fact]
+    public void PlanExpansion_EqualBiomass_AvoidsResistanceAboveTwiceItsStrength()
+    {
+        SectorSimulationFixture fixture = CreateStrippedHome(out RegionFaction swarm);
+        SetLand(fixture, 1, 1_000_000);
+        SetLand(fixture, 2, 1_000_000);
+        // Beta: 150,000 believed (r = 3, A = 1.5 / 9). Gamma: 20,000 (r = 0.4, A = 1.2).
+        Believe(fixture, swarm, 1, fixture.Default, 150_000);
+        Believe(fixture, swarm, 2, fixture.Default, 20_000);
+
+        (Region destination, _) =
+            ConsumptionTurnProcessor.PlanExpansion(swarm, swarm.GetDeployedStrength());
+
+        Assert.Same(fixture.Planet.Regions[2], destination);
+    }
+
+    [Fact]
+    public void PlanExpansion_ANeighbourWithNoBeliefIsValuedByBiomassAlone()
+    {
+        SectorSimulationFixture fixture = CreateStrippedHome(out RegionFaction swarm);
+        // Beta is richer and unknown: a belief with no measured strength counts as none.
+        SetLand(fixture, 1, 1_000_000);
+        SetLand(fixture, 2, 900_000);
+        swarm.PlanetFaction.SeedTargetBelief(
+            fixture.Planet.Regions[1], fixture.Default,
+            FactionIntelligenceRules.ConfirmedThreshold, null, null, 0);
+
+        (Region destination, _) =
+            ConsumptionTurnProcessor.PlanExpansion(swarm, swarm.GetDeployedStrength());
+
+        Assert.Equal(0, ConsumptionTurnProcessor.BelievedResistance(
+            swarm.PlanetFaction, fixture.Planet.Regions[1]));
+        Assert.Same(fixture.Planet.Regions[1], destination);
+    }
+
+    [Fact]
+    public void PlanExpansion_NeverChoosesANeighbourPoorerThanHome_WhateverItsResistance()
+    {
+        SectorSimulationFixture fixture = CreateStrippedHome(out RegionFaction swarm);
+        fixture.Planet.Regions[0].CarryingCapacity = 500_000; // home biomass 500,000
+        // Beta is poorer than home but holds the ideal fight (r = 1); Gamma is richer but hopeless.
+        SetLand(fixture, 1, 400_000);
+        SetLand(fixture, 2, 600_000);
+        Believe(fixture, swarm, 1, fixture.Default, 37_500);
+        Believe(fixture, swarm, 2, fixture.Default, 1_000_000);
+
+        (Region destination, long movers) =
+            ConsumptionTurnProcessor.PlanExpansion(swarm, swarm.GetDeployedStrength());
+
+        Assert.Equal(37_500, movers); // depletion 0.75 × 100,000 × 0.5, unchanged by resistance
+        Assert.Same(fixture.Planet.Regions[2], destination);
+    }
+
+    // One expansion rule for both callers: ForceTaskBuilder.AddConsumptionTasks calls PlanExpansion with the same deployed strength the
+    // hidden pass uses, so checking the hidden pass against PlanExpansion covers both callers.
+    [Fact]
+    public void ResolveHiddenExpansion_MovesWherePlanExpansionChose()
+    {
+        SectorSimulationFixture fixture = CreateStrippedHome(out RegionFaction swarm);
+        swarm.IsPublic = false;
+        SetLand(fixture, 1, 1_000_000);
+        SetLand(fixture, 2, 1_000_000);
+        Believe(fixture, swarm, 1, fixture.Default, 10_000);
+        Believe(fixture, swarm, 2, fixture.Default, 50_000);
+        (Region planned, long movers) =
+            ConsumptionTurnProcessor.PlanExpansion(swarm, swarm.GetDeployedStrength());
+
+        ConsumptionTurnProcessor.ResolveHiddenExpansion(fixture.Planet);
+
+        Assert.Same(fixture.Planet.Regions[2], planned);
+        int swarmId = swarm.PlanetFaction.Faction.Id;
+        Assert.True(planned.RegionFactionMap.TryGetValue(swarmId, out RegionFaction arrived));
+        Assert.Equal(movers, arrived.Population);
+        Assert.False(fixture.Planet.Regions[1].RegionFactionMap.ContainsKey(swarmId));
+    }
+
+    [Theory]
+    [InlineData(0.0, 1.0)]
+    [InlineData(0.5, 1.25)]
+    [InlineData(1.0, 1.5)]
+    [InlineData(2.0, 0.375)]
+    public void ResistanceAttraction_RisesToTheSwarmsStrengthThenFalls(double ratio, double expected)
+    {
+        Assert.Equal(expected, ConsumptionTurnProcessor.ResistanceAttraction(ratio), 10);
+    }
+
+    private static SectorSimulationFixture CreateStrippedHome(out RegionFaction swarm)
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region home = fixture.Planet.Regions[0];
+        home.CarryingCapacity = 0;
+        home.MaximumCarryingCapacity = 1_000_000;
+        fixture.DefaultRegionFaction(0).Population = 0;
+        swarm = fixture.AddConsumptionFaction(0, population: 100_000, organization: 100);
+        return fixture;
+    }
+
+    private static void SetLand(SectorSimulationFixture fixture, int region, long capacity)
+    {
+        fixture.Planet.Regions[region].CarryingCapacity = capacity;
+        fixture.Planet.Regions[region].MaximumCarryingCapacity = capacity;
+    }
+
+    private static void Believe(
+        SectorSimulationFixture fixture, RegionFaction observer, int region, Faction target, long strength)
+    {
+        observer.PlanetFaction.SeedTargetBelief(
+            fixture.Planet.Regions[region], target,
+            FactionIntelligenceRules.ConfirmedThreshold, null, strength, 0);
     }
 }

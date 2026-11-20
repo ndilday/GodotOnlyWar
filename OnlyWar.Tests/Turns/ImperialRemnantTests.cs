@@ -1,3 +1,4 @@
+using System.Linq;
 using OnlyWar.Domain;
 using OnlyWar.Campaign.Simulation;
 using OnlyWar.Campaign.Turns;
@@ -194,44 +195,115 @@ public class ImperialRemnantTests
         Assert.Equal(before, TotalPopulation(fixture));
     }
 
+    // Refugee protection (TDD §6.3 *Imperial remnants and refugees*): weight =
+    // free capacity × (1 + G / 1,000) / (1 + H / 1,000). In each case below the three refuges have the
+    // same free land, so only G or H decides the split.
     [Fact]
-    public void Emigration_SkipsANeighbourWithAPublicEnemy()
+    public void Emigration_AGarrisonedRefugeDrawsMoreThanAnEqualUngarrisonedOne()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.IsPublic = false;
         remnant.Population = 100_000;
-        // Beta is besieged: still Imperial, but a public swarm holds ground there. Gamma is emptied
-        // and held by the swarm alone.
-        fixture.AddConsumptionFaction(1, population: 50_000, organization: 100);
-        fixture.Planet.Regions[2].RegionFactionMap.Remove(fixture.Default.Id);
-        fixture.AddConsumptionFaction(2, population: 50_000, organization: 100);
+        foreach (int r in new[] { 1, 2, 4 })
+        {
+            fixture.Planet.Regions[r].CarryingCapacity = 50_000; // 30,000 free each
+        }
+        // a 1,000-strong PDF doubles Beta's pull: weights 60k / 30k / 30k
+        fixture.DefaultRegionFaction(1).Garrison = 1_000;
+
+        RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+
+        Assert.Equal(22_500, fixture.DefaultRegionFaction(1).Population);
+        Assert.Equal(21_250, fixture.DefaultRegionFaction(2).Population);
+        Assert.Equal(21_250, fixture.DefaultRegionFaction(4).Population);
+    }
+
+    [Fact]
+    public void Emigration_APublicEnemyLowersARefugesPullButDoesNotExcludeIt()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 100_000;
+        // Beta is besieged by a public swarm of 1,000. Its capacity is raised by the same 1,000 so its
+        // free land equals the others', and only the danger term differs: weights 15k / 30k / 30k.
+        fixture.Planet.Regions[1].CarryingCapacity = 51_000;
+        fixture.Planet.Regions[2].CarryingCapacity = 50_000;
+        fixture.Planet.Regions[4].CarryingCapacity = 50_000;
+        fixture.AddConsumptionFaction(1, population: 1_000, organization: 100);
         long before = TotalPopulation(fixture);
 
         RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
-        Assert.Equal(20_000, fixture.DefaultRegionFaction(1).Population);
-        Assert.False(fixture.Planet.Regions[2].RegionFactionMap.ContainsKey(fixture.Default.Id));
-        Assert.Equal(25_000, fixture.DefaultRegionFaction(4).Population);
+        Assert.Equal(21_000, fixture.DefaultRegionFaction(1).Population);
+        Assert.Equal(22_000, fixture.DefaultRegionFaction(2).Population);
+        Assert.Equal(22_000, fixture.DefaultRegionFaction(4).Population);
         Assert.Equal(before, TotalPopulation(fixture));
     }
 
     [Fact]
-    public void Emigration_DoesNothingWhenSurrounded()
+    public void Emigration_AHiddenEnemyDoesNotChangeTheSplit()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.IsPublic = false;
         remnant.Population = 100_000;
-        // all three neighbours (1, 2, 4) hold a public enemy — no safe refuge to flee to
+        foreach (int r in new[] { 1, 2, 4 })
+        {
+            fixture.Planet.Regions[r].CarryingCapacity = 50_000;
+        }
+        // a hidden swarm in Beta: the refugees cannot see it
+        fixture.AddHiddenFaction(1, GrowthType.Consumption, population: 1_000);
+
+        RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+
+        foreach (int r in new[] { 1, 2, 4 })
+        {
+            Assert.InRange(fixture.DefaultRegionFaction(r).Population, 21_666, 21_668);
+        }
+    }
+
+    // A besieged region is a refuge again. Before 2026-11-20 a remnant with a public enemy in
+    // every neighbour kept all its people.
+    [Fact]
+    public void Emigration_StillFleesWhenEveryNeighbourIsBesieged()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 100_000;
         foreach (int r in new[] { 1, 2, 4 })
         {
             fixture.AddConsumptionFaction(r, population: 50_000, organization: 100);
         }
+        long before = TotalPopulation(fixture);
 
         RegionControlTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
-        Assert.Equal(100_000, remnant.Population);
+        Assert.Equal(95_000, remnant.Population);
+        Assert.Equal(before, TotalPopulation(fixture));
+    }
+
+    // Chapter squads protect a refuge at one PDF trooper per point of Battle Value.
+    [Fact]
+    public void RefugeeProtection_CountsTheGarrisonAndLandedChapterSquads()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[1];
+        fixture.DefaultRegionFaction(1).Garrison = 300;
+        RegionFaction chapter = AddPlayerRegionFaction(fixture, region);
+        Squad squad = TestModelFactory.CreateSquad(
+            "Tactical Squad",
+            TestModelFactory.CreateSoldier(name: "Brother A"),
+            TestModelFactory.CreateSoldier(name: "Brother B"));
+        chapter.LandedSquads.Add(squad);
+        long squadValue = squad.Members.Sum(member => (long)member.StrategicValue);
+
+        long protection = RegionControlTurnProcessor.RefugeeProtection(region);
+
+        Assert.True(squadValue > 0);
+        Assert.Equal(300 + squadValue, protection);
     }
 
     [Fact]

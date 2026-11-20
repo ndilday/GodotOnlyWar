@@ -19,6 +19,12 @@ namespace OnlyWar.Campaign.Turns
         private const double OccupiedDefenseDecayPerTurn = 0.25;
         private const double ImperialEmigrationRate = 0.05;
 
+        // Refugee protection (TDD §6.3 *Imperial remnants and refugees*; starting values to tune). A
+        // visible Imperial garrison of RefugeeProtectionReference doubles a refuge's pull, and a visible
+        // hostile presence of RefugeeDangerReference halves it.
+        internal const double RefugeeProtectionReference = 1_000.0;
+        internal const double RefugeeDangerReference = 1_000.0;
+
         private readonly ICollection<FortificationTransferReport> _fortificationTransfers;
 
         internal RegionControlTurnProcessor(
@@ -216,9 +222,11 @@ namespace OnlyWar.Campaign.Turns
         }
 
         /// <summary>
-        /// Moves refugees out of a hidden Imperial remnant into every adjacent region with no public
-        /// enemy (Design/Active/RefugeeResettlement.md). A refuge needs no Imperial presence: an emptied
-        /// region gets a new public default-faction presence, so liberated land fills with people again.
+        /// Moves refugees out of a hidden Imperial remnant into the adjacent regions, weighted by
+        /// <see cref="RefugeeWeight"/>: toward free land and defenders, away from visible enemies
+        /// (TDD §6.3 *Imperial remnants and refugees*). A refuge needs no Imperial presence: an
+        /// emptied region gets a new public default-faction presence, so liberated land fills with
+        /// people again.
         /// </summary>
         internal static void ProcessImperialEmigration(Region region)
         {
@@ -237,15 +245,15 @@ namespace OnlyWar.Campaign.Turns
             remnant.Population -= emigrants;
             ScenarioMetricsCollector.RecordScenarioImmigration(region, -emigrants);
 
-            long[] weights = refuges.Select(VisibleFreeCapacity).ToArray();
-            long weightTotal = weights.Sum();
+            double[] weights = refuges.Select(RefugeeWeight).ToArray();
+            double weightTotal = weights.Sum();
             long distributed = 0;
             for (int i = 0; i < refuges.Count; i++)
             {
                 long share = i == refuges.Count - 1
                     ? emigrants - distributed
                     : weightTotal > 0
-                        ? (long)(emigrants * (double)weights[i] / weightTotal)
+                        ? (long)(emigrants * weights[i] / weightTotal)
                         : emigrants / refuges.Count;
                 distributed += share;
                 if (share <= 0) continue;
@@ -254,12 +262,59 @@ namespace OnlyWar.Campaign.Turns
             }
         }
 
-        // A besieged Imperial region is no refuge, and a region the planet's default faction cannot
-        // hold a presence in has nobody to take the refugees in.
+        // A region the planet's default faction cannot hold a presence in has nobody to take the
+        // refugees in. A besieged region is still a refuge: its visible enemy lowers its weight
+        // through RefugeeDanger instead of excluding it.
         private static bool IsRefugeeDestination(Region region)
         {
-            if (HasPublicEnemy(region)) return false;
             return FindDefaultPresence(region) != null || FindDefaultPlanetFaction(region.Planet) != null;
+        }
+
+        /// <summary>
+        /// How strongly a refuge draws refugees: free land, raised by visible protection and lowered
+        /// by visible danger. <c>Capacity × (1 + G / G_ref) / (1 + H / H_ref)</c>. The product form
+        /// keeps the weight positive, so no refuge needs a special case, and keeps land the main
+        /// term. Never negative, and zero only when the refuge has no free land.
+        /// </summary>
+        internal static double RefugeeWeight(Region region)
+        {
+            double capacity = VisibleFreeCapacity(region);
+            if (capacity <= 0) return 0.0;
+            double protection = RefugeeProtection(region) / RefugeeProtectionReference;
+            double danger = RefugeeDanger(region) / RefugeeDangerReference;
+            return capacity * (1.0 + protection) / (1.0 + danger);
+        }
+
+        /// <summary>
+        /// G: the garrison of the public Imperial presences, plus the Battle Value of the chapter
+        /// squads landed in them at one trooper per point. Refugees see only public presences.
+        /// </summary>
+        internal static long RefugeeProtection(Region region)
+        {
+            long protection = 0;
+            foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+            {
+                if (!regionFaction.IsPublic) continue;
+                if (!FactionRelationshipService.IsImperial(regionFaction.PlanetFaction.Faction)) continue;
+                protection += regionFaction.Garrison;
+                protection += SquadStrategicValue(regionFaction.LandedSquads);
+            }
+            return protection;
+        }
+
+        /// <summary>
+        /// H: the population of the public non-Imperial presences. Every growth type's forces are
+        /// already part of its population (RegionFaction.MilitaryStrength is Garrison, Garrison plus
+        /// ArmedCivilians, or the whole Population, and each is clamped to Population), so the
+        /// population alone counts them once. Hidden presences are not counted: refugees cannot see
+        /// them.
+        /// </summary>
+        internal static long RefugeeDanger(Region region)
+        {
+            return region.RegionFactionMap.Values
+                .Where(rf => rf.IsPublic
+                    && !FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction))
+                .Sum(rf => rf.Population);
         }
 
         /// <summary>

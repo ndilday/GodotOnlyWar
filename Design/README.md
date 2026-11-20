@@ -86,12 +86,18 @@ myth* with the player rules in PRD §4.19, and deleted on 2026-11-20. It was nev
 sources and the rule that ordered the foundings fold into TDD §6.9 in a few sentences; the founding
 rows live in the rules database. Three out-of-scope items moved to PRD §5.8 *Founding myth
 follow-through* before deletion. Its Godot check was still outstanding when it was deleted.
+`RefugeesAndSwarmExpansion.md` (refugees weigh a refuge's protection and visible danger, a besieged
+region is a refuge again, and the Tyranid swarm weighs believed resistance as well as biomass when it
+expands) was implemented, checked in Godot, distilled into TDD §6.2 *Swarm operations* and §6.3
+*Imperial remnants and refugees* with the player rules in PRD §4.24, and deleted on 2026-11-20. It was
+never committed. Nothing in it met the `Reference/` bar: it held decisions, starting values and a test
+list, and its reasons (the product form of the refugee weight, biomass read true but resistance from
+beliefs) fold into the TDD in a sentence each. Two items moved to PRD §5.8 *Refugee protection and
+swarm expansion follow-through* before deletion: tuning the starting values, and chapter squads
+missing from public-activity sightings.
 
 Active designs:
 
-- `Active/RefugeesAndSwarmExpansion.md` — refugees weigh protection and danger, and the Tyranid
-  swarm weighs believed resistance when it expands (PRD §4.24, Alpha 0.8.1). Created 2026-11-18;
-  design complete, not started.
 - `Active/SpecialOperations.md` — sabotage, ambush and assassination for every faction, from each
   faction's own intelligence, with believed enemy works (PRD §5.6, Alpha 0.8.1). Created
   2026-10-17; design complete, not started.
