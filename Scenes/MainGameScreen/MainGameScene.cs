@@ -264,7 +264,7 @@ public partial class MainGameScene : Control
 
 		PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
 		_chapterScreen = (ChapterController)chapterScene.Instantiate();
-		_chapterScreen.Configure(_campaignApplication, _campaignApplication);
+		_chapterScreen.Configure(_campaignApplication, _campaignApplication, _campaignApplication);
 		_chapterScreen.CloseRequested += OnCloseScreen;
 		_chapterScreen.CampaignChanged += OnCampaignChanged;
 		_chapterScreen.SquadLocationRequested += OnChapterSquadLocationRequested;
@@ -292,8 +292,9 @@ public partial class MainGameScene : Control
 		PackedScene commandScene = GD.Load<PackedScene>(
 			"res://Scenes/CommandScreen/command_screen.tscn");
 		_commandScreen = commandScene.Instantiate<CommandScreenController>();
-		_commandScreen.Configure(_campaignApplication);
+		_commandScreen.Configure(_campaignApplication, _campaignApplication);
 		_commandScreen.CloseRequested += OnCloseScreen;
+		_commandScreen.CampaignChanged += OnCampaignChanged;
 		_commandScreen.NavigationRequested += OnCommandNavigationRequested;
 		_commandScreen.LastTurnReportRequested += OnCommandLastTurnReportRequested;
 		AddPrimaryScreen(_commandScreen);
@@ -398,6 +399,20 @@ public partial class MainGameScene : Control
 				{
 					_apothecariumScreen.FocusSoldier(route.FocusId.Value);
 				}
+				return;
+			case CampaignNavigationRouteKind.Mandates:
+				// The mandates are a lens of the Command screen itself.
+				_commandScreen.SelectLens(CommandLens.Mandates);
+				return;
+			case CampaignNavigationRouteKind.Chapter:
+				EnsureChapterScreen();
+				_chapterScreen.PopulateCompanyList();
+				PrepareCommandReturnSurface();
+				ShowPrimaryScreen(
+					_chapterScreen,
+					"Chapter Overview",
+					BottomMenu.Destination.Chapter);
+				_chapterScreen.OpenChapterMasterSuccession();
 				return;
 			case CampaignNavigationRouteKind.SectorMap:
 				if (_activePrimaryScreen == _commandScreen)

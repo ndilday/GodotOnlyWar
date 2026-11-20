@@ -49,7 +49,12 @@ namespace OnlyWar.Domain.Events
         HiddenCultRevealed = 2207,
         SquadLeaderUnavailable = 2208,
         // The Chapter Master's aide reports a change in the wider sector (PRD §4.19).
-        SectorDispatch = 2209
+        SectorDispatch = 2209,
+        // Chapter mandates and succession (TDD §6.15 *Events*). A sworn mandate
+        // is an Oath (104) with a MandateOathPayload.
+        MandateResolved = 2210,
+        ChapterMasterAppointed = 2211,
+        ChapterWorldRenounced = 2212
     }
 
     public enum CampaignEntityKind
@@ -417,6 +422,11 @@ namespace OnlyWar.Domain.Events
             Register<HiddenCultRevealedPayload>(CampaignEventType.HiddenCultRevealed, 1);
             Register<SquadLeaderUnavailablePayload>(CampaignEventType.SquadLeaderUnavailable, 1);
             Register<SectorDispatchPayload>(CampaignEventType.SectorDispatch, 1);
+            // A soldier's legacy Oath stays on versions 1 and 2; a Chapter mandate's is version 3.
+            Register<MandateOathPayload>(CampaignEventType.Oath, 3);
+            Register<MandateResolvedPayload>(CampaignEventType.MandateResolved, 1);
+            Register<ChapterMasterAppointedPayload>(CampaignEventType.ChapterMasterAppointed, 1);
+            Register<ChapterWorldRenouncedPayload>(CampaignEventType.ChapterWorldRenounced, 1);
             foreach (CampaignEventType type in typedVersionThreeTypes)
             {
                 RegisterTypedVersionThree(type);

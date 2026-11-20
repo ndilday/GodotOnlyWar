@@ -1,11 +1,16 @@
 using Godot;
+using OnlyWar.Application;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public partial class CommandScreenView : MainScreenView
 {
+    private const int RecentLegacyRows = 8;
+
     private Button _briefTab;
     private Button _chronicleTab;
+    private Button _mandatesTab;
     private Button _lastReportButton;
     private VBoxContainer _railStack;
     private VBoxContainer _cardStack;
@@ -23,6 +28,9 @@ public partial class CommandScreenView : MainScreenView
     public event EventHandler<CampaignNavigationTarget> NavigationRequested;
     public event EventHandler LastTurnReportRequested;
     public event EventHandler LoadOlderRequested;
+    public event EventHandler<MandateOptionView> SwearMandateRequested;
+    public event EventHandler<ActiveMandateView> AbandonMandateRequested;
+    public event EventHandler<MandateBoardView> RenounceChapterWorldRequested;
 
     public override void _Ready()
     {
@@ -35,8 +43,15 @@ public partial class CommandScreenView : MainScreenView
         if (_briefTab == null) return;
         _briefTab.ButtonPressed = lens == CommandLens.Brief;
         _chronicleTab.ButtonPressed = lens == CommandLens.Chronicle;
+        _mandatesTab.ButtonPressed = lens == CommandLens.Mandates;
         OnlyWarStyle.ApplyAccentButtonRow(_briefTab, lens == CommandLens.Brief, OnlyWarStyle.Gold);
         OnlyWarStyle.ApplyAccentButtonRow(_chronicleTab, lens == CommandLens.Chronicle, OnlyWarStyle.Gold);
+        OnlyWarStyle.ApplyAccentButtonRow(_mandatesTab, lens == CommandLens.Mandates, OnlyWarStyle.Gold);
+    }
+
+    public void SetMandatesAvailable(bool available)
+    {
+        if (_mandatesTab != null) _mandatesTab.Visible = available;
     }
 
     public void SetLastTurnReportState(bool hasReport)
@@ -118,13 +133,18 @@ public partial class CommandScreenView : MainScreenView
         IReadOnlyList<ChronicleEntryViewModel> entries,
         ChronicleFilter activeFilter,
         bool hasOlderPage,
-        bool hasAnyEntries)
+        bool hasAnyEntries,
+        MandateBoardView legacy = null)
     {
         _bodyTitle.Text = "Chapter Chronicle";
         _bodySubtitle.Text = hasAnyEntries
             ? "Frozen accounts of the events that mattered to the Chapter."
             : "A curated history begins with defining events as the campaign unfolds.";
         ClearContainer(_cardStack);
+        if (legacy?.HasCampaign == true)
+        {
+            _cardStack.AddChild(CreateLegacyPanel(legacy));
+        }
         foreach (ChronicleEntryViewModel entry in entries ?? [])
         {
             _cardStack.AddChild(CreateChronicleCard(entry));
@@ -277,8 +297,11 @@ public partial class CommandScreenView : MainScreenView
         row.AddChild(title);
         _briefTab = CreateHeaderButton("COMMAND BRIEF", () => LensSelected?.Invoke(this, CommandLens.Brief));
         _chronicleTab = CreateHeaderButton("CHAPTER CHRONICLE", () => LensSelected?.Invoke(this, CommandLens.Chronicle));
+        _mandatesTab = CreateHeaderButton("MANDATES", () => LensSelected?.Invoke(this, CommandLens.Mandates));
+        _mandatesTab.TooltipText = "The Chapter's sworn mandate, the mandates it can swear, and its past vows.";
         row.AddChild(_briefTab);
         row.AddChild(_chronicleTab);
+        row.AddChild(_mandatesTab);
         _lastReportButton = new Button
         {
             Text = "LAST TURN REPORT",
@@ -369,14 +392,7 @@ public partial class CommandScreenView : MainScreenView
                     continue;
                 }
 
-                Button relatedButton = new()
-                {
-                    Text = related.Label,
-                    CustomMinimumSize = new Vector2(0, 30),
-                    FocusMode = Control.FocusModeEnum.All,
-                    TooltipText = $"Open {related.Label}."
-                };
-                IconAtlas.Apply(relatedButton, "map_pin", 0);
+                Button relatedButton = CreateLinkButton(related.Label, $"Open {related.Label}.");
                 relatedButton.Pressed += () =>
                 {
                     FocusedStableKeyChanged?.Invoke(this, item.StableKey);
@@ -462,14 +478,7 @@ public partial class CommandScreenView : MainScreenView
                     links.AddChild(unavailable);
                     continue;
                 }
-                Button linkButton = new()
-                {
-                    Text = link.Label,
-                    CustomMinimumSize = new Vector2(0, 30),
-                    FocusMode = Control.FocusModeEnum.All,
-                    TooltipText = $"Open {link.Label}."
-                };
-                IconAtlas.Apply(linkButton, "map_pin", 0);
+                Button linkButton = CreateLinkButton(link.Label, $"Open {link.Label}.");
                 linkButton.Pressed += () =>
                 {
                     FocusedStableKeyChanged?.Invoke(this, $"chronicle_{entry.EntryId}");
@@ -481,6 +490,397 @@ public partial class CommandScreenView : MainScreenView
         }
         return panel;
     }
+
+    // ---- Mandates lens (TDD §6.15 *Application*) --------------------------------------------------
+
+    public void SetMandateRail(MandateBoardView board)
+    {
+        ClearContainer(_railStack);
+        AddRailHeading("CHAPTER LEGACY");
+        Label total = new() { Text = FormatSigned(board?.ChapterLegacy ?? 0) };
+        total.AddThemeFontSizeOverride("font_size", 28);
+        total.AddThemeFontOverride("font", GetThemeFont("display"));
+        total.AddThemeColorOverride("font_color", LegacyColor(board?.ChapterLegacy ?? 0));
+        _railStack.AddChild(total);
+        _railStack.AddChild(MutedLabel(
+            "Kept vows and duty raise the Chapter's legacy; broken vows, lost worlds and fallen "
+            + "brothers lower it. The Chronicle shows its history."));
+
+        AddRailHeading("CHAPTER WORLD");
+        _railStack.AddChild(MutedLabel(board?.ChapterWorldName ?? "The Chapter has no Chapter World."));
+        if (board?.CanRenounceChapterWorld == true)
+        {
+            Button renounce = new()
+            {
+                Text = "RENOUNCE",
+                CustomMinimumSize = new Vector2(0, 34),
+                FocusMode = Control.FocusModeEnum.All,
+                TooltipText = $"Give up {board.ChapterWorldName} as the Chapter World."
+            };
+            OnlyWarStyle.ApplyActionButton(renounce, OnlyWarStyle.Critical);
+            renounce.Pressed += () => RenounceChapterWorldRequested?.Invoke(this, board);
+            _railStack.AddChild(renounce);
+        }
+    }
+
+    public void SetMandates(MandateBoardView board)
+    {
+        _bodyTitle.Text = "Mandates";
+        _loadOlderButton.Visible = false;
+        ClearContainer(_cardStack);
+        if (board == null || !board.HasCampaign)
+        {
+            _bodySubtitle.Text = string.Empty;
+            AddEmpty("No campaign is loaded.");
+            return;
+        }
+
+        if (board.Active != null)
+        {
+            _bodySubtitle.Text = "The Chapter holds one mandate at a time. Keep it, or set it aside to choose another.";
+            _cardStack.AddChild(CreateActiveMandateCard(board.Active));
+        }
+        else
+        {
+            _bodySubtitle.Text = board.Options.Count > 0
+                ? "The Chapter has sworn no mandate. Choose the goal it will pursue next."
+                : "The Chapter has sworn no mandate, and none is eligible now.";
+            foreach (IGrouping<string, MandateOptionView> family in board.Options.GroupBy(option => option.Family))
+            {
+                _cardStack.AddChild(SectionHeading(family.Key.ToUpperInvariant()));
+                foreach (MandateOptionView option in family)
+                {
+                    _cardStack.AddChild(CreateMandateOptionCard(option));
+                }
+            }
+            if (board.Options.Count == 0)
+            {
+                AddEmpty("No mandate is eligible now. The list changes as the sector changes.");
+            }
+        }
+
+        if (board.History.Count > 0)
+        {
+            _cardStack.AddChild(SectionHeading("PAST VOWS"));
+            foreach (MandateHistoryView vow in board.History)
+            {
+                _cardStack.AddChild(CreateHistoryRow(vow));
+            }
+        }
+
+        if (board.RecentEntries.Count > 0)
+        {
+            _cardStack.AddChild(SectionHeading("RECENT LEGACY CHANGES"));
+            foreach (LegacyEntryView entry in board.RecentEntries.Take(RecentLegacyRows))
+            {
+                _cardStack.AddChild(CreateLegacyEntryRow(entry));
+            }
+        }
+    }
+
+    private Control CreateActiveMandateCard(ActiveMandateView active)
+    {
+        (PanelContainer panel, VBoxContainer stack) = CreateCard(
+            $"mandate_{active.Id}",
+            active.WeeksLeft is <= 4 ? OnlyWarEventTone.Critical : OnlyWarEventTone.Warning);
+        stack.AddChild(CardHeading(active.Family.ToUpperInvariant(), active.Title, active.DeadlineLabel));
+        stack.AddChild(BodyText(active.Progress));
+        stack.AddChild(MutedLabel(
+            $"Kept: +{active.LegacyValue} legacy. Broken or abandoned: {active.FailureCost} legacy."));
+        AddLinks(stack, active.Links, $"mandate_{active.Id}");
+        Button abandon = new()
+        {
+            Text = active.IsPromisedWorld ? "GIVE UP" : "ABANDON",
+            CustomMinimumSize = new Vector2(160, 34),
+            FocusMode = Control.FocusModeEnum.All,
+            TooltipText = active.AbandonWarning
+        };
+        OnlyWarStyle.ApplyActionButton(abandon, OnlyWarStyle.Critical);
+        abandon.Pressed += () => AbandonMandateRequested?.Invoke(this, active);
+        stack.AddChild(ActionRow(abandon));
+        return panel;
+    }
+
+    private Control CreateMandateOptionCard(MandateOptionView option)
+    {
+        (PanelContainer panel, VBoxContainer stack) = CreateCard(
+            $"option_{option.Key.Replace('/', '_')}", OnlyWarEventTone.Normal);
+        stack.AddChild(CardHeading(null, option.Title, option.DeadlineLabel));
+        stack.AddChild(BodyText(option.Goal));
+        stack.AddChild(MutedLabel(
+            $"Kept: +{option.LegacyValue} legacy. Broken or abandoned: {option.FailureCost} legacy."));
+        AddLinks(stack, option.Links, $"option_{option.Key.Replace('/', '_')}");
+        Button swear = new()
+        {
+            Text = "SWEAR",
+            CustomMinimumSize = new Vector2(160, 34),
+            FocusMode = Control.FocusModeEnum.All,
+            TooltipText = $"Swear to {option.Title.ToLowerInvariant()}."
+        };
+        IconAtlas.Apply(swear, "chapter", 160);
+        swear.Pressed += () => SwearMandateRequested?.Invoke(this, option);
+        stack.AddChild(ActionRow(swear));
+        return panel;
+    }
+
+    private Control CreateHistoryRow(MandateHistoryView vow)
+    {
+        PanelContainer panel = new() { Name = $"vow_{vow.Id}" };
+        OnlyWarStyle.ApplyListRow(panel, false);
+        MarginContainer margin = Margins(10, 6);
+        panel.AddChild(margin);
+        HBoxContainer row = new();
+        row.AddThemeConstantOverride("separation", 10);
+        margin.AddChild(row);
+        Label result = new() { Text = vow.Result.ToUpperInvariant(), CustomMinimumSize = new Vector2(96, 0) };
+        result.AddThemeColorOverride("font_color", vow.Result == "Kept" ? OnlyWarStyle.MedicalStable : OnlyWarStyle.Critical);
+        row.AddChild(result);
+        Label title = new()
+        {
+            Text = vow.Title,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        title.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
+        row.AddChild(title);
+        Label dates = MutedLabel($"{vow.SwornLabel} to {vow.ResolvedLabel}");
+        dates.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.AddChild(dates);
+        Label amount = new() { Text = FormatSigned(vow.LegacyAmount), CustomMinimumSize = new Vector2(56, 0), HorizontalAlignment = HorizontalAlignment.Right };
+        amount.AddThemeColorOverride("font_color", LegacyColor(vow.LegacyAmount));
+        row.AddChild(amount);
+        return panel;
+    }
+
+    // ---- Legacy header of the Chronicle (§6.3) --------------------------------------------------
+    // A header, not an entry: no card frame, the graph beside the per-master table, and a rule and
+    // an "ENTRIES" label between it and the Chronicle's own entries (user report, 2026-11-19).
+
+    private Control CreateLegacyPanel(MandateBoardView board)
+    {
+        VBoxContainer header = new() { Name = "legacy_header", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        header.AddThemeConstantOverride("separation", 6);
+
+        HBoxContainer titleRow = new();
+        titleRow.AddThemeConstantOverride("separation", 10);
+        Label title = new() { Text = "LEGACY" };
+        title.AddThemeFontSizeOverride("font_size", 18);
+        title.AddThemeFontOverride("font", GetThemeFont("display"));
+        title.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
+        titleRow.AddChild(title);
+        Label total = ColoredNumber(board.ChapterLegacy);
+        total.AddThemeFontSizeOverride("font_size", 18);
+        titleRow.AddChild(total);
+        header.AddChild(titleRow);
+
+        if (board.LegacySeries.Count == 0)
+        {
+            header.AddChild(MutedLabel("No legacy has been gained or lost yet."));
+        }
+        else
+        {
+            HBoxContainer body = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            body.AddThemeConstantOverride("separation", 18);
+            LegacyGraph graph = new()
+            {
+                CustomMinimumSize = new Vector2(260, 140),
+                SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            graph.SetSeries(board.LegacySeries);
+            body.AddChild(graph);
+            if (board.Masters.Count > 0)
+            {
+                body.AddChild(CreateMasterTable(board.Masters));
+            }
+            header.AddChild(body);
+        }
+
+        header.AddChild(new HSeparator());
+        header.AddChild(SectionHeading("ENTRIES"));
+        return header;
+    }
+
+    private static Control CreateMasterTable(IReadOnlyList<LegacyMasterView> masters)
+    {
+        GridContainer table = new() { Columns = 5, SizeFlagsVertical = SizeFlags.ShrinkBegin };
+        table.AddThemeConstantOverride("h_separation", 14);
+        table.AddThemeConstantOverride("v_separation", 3);
+        foreach (string column in new[] { "Chapter Master", "In office", "Gained", "Lost", "Total" })
+        {
+            table.AddChild(SectionHeading(column.ToUpperInvariant()));
+        }
+        foreach (LegacyMasterView master in masters)
+        {
+            Label name = new() { Text = master.Name };
+            name.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
+            table.AddChild(name);
+            Label tenure = MutedLabel(master.TenureLabel);
+            tenure.AutowrapMode = TextServer.AutowrapMode.Off;
+            table.AddChild(tenure);
+            table.AddChild(ColoredNumber(master.Gained));
+            table.AddChild(ColoredNumber(master.Lost));
+            table.AddChild(ColoredNumber(master.Total));
+        }
+        return table;
+    }
+
+    private Control CreateLegacyEntryRow(LegacyEntryView entry)
+    {
+        HBoxContainer row = new();
+        row.AddThemeConstantOverride("separation", 10);
+        Label amount = ColoredNumber(entry.Amount);
+        amount.CustomMinimumSize = new Vector2(48, 0);
+        row.AddChild(amount);
+        Label text = new()
+        {
+            Text = entry.Description,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        text.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
+        row.AddChild(text);
+        Label date = MutedLabel(entry.DateLabel);
+        date.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.AddChild(date);
+        return row;
+    }
+
+    // ---- Small builders -------------------------------------------------------------------------
+
+    private static (PanelContainer Panel, VBoxContainer Stack) CreateCard(string name, OnlyWarEventTone tone)
+    {
+        PanelContainer panel = new() { Name = name };
+        OnlyWarStyle.ApplyEventPanel(panel, tone);
+        MarginContainer margin = Margins(12, 9);
+        panel.AddChild(margin);
+        VBoxContainer stack = new();
+        stack.AddThemeConstantOverride("separation", 5);
+        margin.AddChild(stack);
+        return (panel, stack);
+    }
+
+    private static MarginContainer Margins(int horizontal, int vertical)
+    {
+        MarginContainer margin = new();
+        margin.AddThemeConstantOverride("margin_left", horizontal);
+        margin.AddThemeConstantOverride("margin_top", vertical);
+        margin.AddThemeConstantOverride("margin_right", horizontal);
+        margin.AddThemeConstantOverride("margin_bottom", vertical);
+        return margin;
+    }
+
+    private static HBoxContainer CardHeading(string kicker, string title, string status)
+    {
+        HBoxContainer heading = new();
+        heading.AddThemeConstantOverride("separation", 10);
+        if (!string.IsNullOrWhiteSpace(kicker))
+        {
+            Label kickerLabel = new() { Text = kicker };
+            kickerLabel.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
+            heading.AddChild(kickerLabel);
+        }
+        Label titleLabel = new()
+        {
+            Text = title,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        titleLabel.AddThemeFontSizeOverride("font_size", 16);
+        titleLabel.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
+        heading.AddChild(titleLabel);
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            Label statusLabel = new() { Text = status };
+            statusLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+            heading.AddChild(statusLabel);
+        }
+        return heading;
+    }
+
+    private static Label BodyText(string text)
+    {
+        Label label = new()
+        {
+            Text = text,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
+        return label;
+    }
+
+    private static Label MutedLabel(string text)
+    {
+        Label label = new()
+        {
+            Text = text,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        return label;
+    }
+
+    private static Label SectionHeading(string text)
+    {
+        Label label = new() { Text = text };
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        label.AddThemeFontSizeOverride("font_size", 12);
+        return label;
+    }
+
+    private static Label ColoredNumber(int value)
+    {
+        Label label = new() { Text = FormatSigned(value) };
+        label.AddThemeColorOverride("font_color", LegacyColor(value));
+        return label;
+    }
+
+    private static HBoxContainer ActionRow(Button button)
+    {
+        HBoxContainer row = new() { Alignment = BoxContainer.AlignmentMode.End };
+        row.AddChild(button);
+        return row;
+    }
+
+    private void AddLinks(VBoxContainer stack, IReadOnlyList<MandateLinkView> links, string focusKey)
+    {
+        if (links == null || links.Count == 0) return;
+        HFlowContainer flow = new();
+        flow.AddThemeConstantOverride("separation", 5);
+        foreach (MandateLinkView link in links)
+        {
+            Button button = CreateLinkButton(link.Label, $"{link.Label}.");
+            button.Pressed += () =>
+            {
+                FocusedStableKeyChanged?.Invoke(this, focusKey);
+                NavigationRequested?.Invoke(this, link.Target);
+            };
+            flow.AddChild(button);
+        }
+        stack.AddChild(flow);
+    }
+
+    // A link to a world or other record: text only, centred, with the action-button frame. An icon
+    // here pushed the text off centre (user report, 2026-11-19).
+    private static Button CreateLinkButton(string label, string tooltip)
+    {
+        Button button = new()
+        {
+            Text = label,
+            Alignment = HorizontalAlignment.Center,
+            CustomMinimumSize = new Vector2(120, 30),
+            FocusMode = Control.FocusModeEnum.All,
+            TooltipText = tooltip
+        };
+        OnlyWarStyle.ApplyActionButton(button);
+        return button;
+    }
+
+    private static string FormatSigned(int value) => value > 0 ? $"+{value}" : value.ToString();
+
+    private static Color LegacyColor(int value) => value > 0
+        ? OnlyWarStyle.MedicalStable
+        : value < 0 ? OnlyWarStyle.Critical : OnlyWarStyle.MutedText;
 
     private void AddRailHeading(string text)
     {

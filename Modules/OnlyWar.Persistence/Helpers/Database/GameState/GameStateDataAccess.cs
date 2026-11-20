@@ -73,6 +73,8 @@ namespace OnlyWar.Persistence.Database.GameState
         public IReadOnlyList<WorldControlEpisodeState> WorldControlEpisodes { get; set; }
         public IReadOnlyList<SectorDispatchPlanetState> SectorDispatchPlanets { get; set; }
         public SectorLordState SectorDispatchSectorLord { get; set; }
+        // Mandates, legacy and Chapter Master tenure (TDD §6.15).
+        public OnlyWar.Domain.Mandates.ChapterMandates Mandates { get; set; }
         public List<GhostPopulationSource> GhostPopulationSources { get; set; }
         public List<StrategicInvasionForceSaveData> StrategicInvasionForces { get; set; }
         public bool UpgradePending { get; set; }
@@ -98,6 +100,7 @@ namespace OnlyWar.Persistence.Database.GameState
         private readonly WorldControlEpisodeDataAccess _worldControlEpisodeDataAccess;
         private readonly SectorDispatchDataAccess _sectorDispatchDataAccess;
         private readonly IndividualPostingDataAccess _individualPostingDataAccess;
+        private readonly ChapterMandatesDataAccess _chapterMandatesDataAccess;
         private readonly string _schemaFilePath;
 
         public GameStateDataAccess(string schemaFilePath)
@@ -122,6 +125,7 @@ namespace OnlyWar.Persistence.Database.GameState
             _worldControlEpisodeDataAccess = new WorldControlEpisodeDataAccess();
             _sectorDispatchDataAccess = new SectorDispatchDataAccess();
             _individualPostingDataAccess = new IndividualPostingDataAccess();
+            _chapterMandatesDataAccess = new ChapterMandatesDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -263,6 +267,7 @@ namespace OnlyWar.Persistence.Database.GameState
                 WorldControlEpisodes = worldControlEpisodes,
                 SectorDispatchPlanets = sectorDispatchPlanets,
                 SectorDispatchSectorLord = sectorDispatchSectorLord,
+                Mandates = _chapterMandatesDataAccess.Get(dbCon),
                 GhostPopulationSources = ghostPopulationSources,
                 StrategicInvasionForces = strategicInvasionForces,
                 UpgradePending = false
@@ -303,7 +308,8 @@ namespace OnlyWar.Persistence.Database.GameState
                               bool mechanicusLoanActive = false,
                               CampaignLocation marsReturnDestination = null,
                               IEnumerable<CyberneticRepairJob> cyberneticRepairJobs = null,
-                              SectorDispatchTracker sectorDispatches = null)
+                              SectorDispatchTracker sectorDispatches = null,
+                              OnlyWar.Domain.Mandates.ChapterMandates mandates = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -339,7 +345,8 @@ namespace OnlyWar.Persistence.Database.GameState
                               relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes,
                               additionalOrders, ghostPopulationSources, strategicInvasionForces,
                               chapterOperationalDoctrine, mechanicusLoanActive,
-                              marsReturnDestination, cyberneticRepairJobs, sectorDispatches);
+                              marsReturnDestination, cyberneticRepairJobs, sectorDispatches,
+                              mandates);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -398,7 +405,8 @@ namespace OnlyWar.Persistence.Database.GameState
                                     bool mechanicusLoanActive,
                                     CampaignLocation marsReturnDestination,
                                     IEnumerable<CyberneticRepairJob> cyberneticRepairJobs,
-                                    SectorDispatchTracker sectorDispatches)
+                                    SectorDispatchTracker sectorDispatches,
+                                    OnlyWar.Domain.Mandates.ChapterMandates mandates)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -540,6 +548,7 @@ namespace OnlyWar.Persistence.Database.GameState
                     _chapterChronicleDataAccess.SaveLedger(transaction, chapterChronicle);
                     _worldControlEpisodeDataAccess.SaveStates(transaction, worldControlEpisodes);
                     _sectorDispatchDataAccess.Save(transaction, sectorDispatches);
+                    _chapterMandatesDataAccess.Save(transaction, mandates);
                     _lastTurnReportDataAccess.SaveSnapshot(transaction, lastTurnReportSnapshot);
                 }
                 catch (Exception)

@@ -113,6 +113,7 @@ namespace OnlyWar.Application.Storage
             ValidateSquadLineageInvariants(playerForce);
             playerForce.LastTurnReportSnapshot = gameState.LastTurnReportSnapshot;
             playerForce.RestoreWorldControlEpisodes(gameState.WorldControlEpisodes);
+            if (gameState.Mandates != null) playerForce.RestoreMandates(gameState.Mandates);
             playerForce.RestoreSectorDispatches(
                 gameState.SectorDispatchPlanets,
                 gameState.SectorDispatchSectorLord);

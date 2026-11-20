@@ -251,6 +251,18 @@ and `SCENARIO_TRACE_CHAPTER` sets the chapter name. `RUN_POCKET_DUMP=1` runs the
 `Category=Slow`. They use `TestGeneration` and `TestPersonnelComposition`, linked from
 `OnlyWar.Tests/Fixtures`.
 
+## Checking a save
+
+`SaveTurnDiagnostics` loads a save, ends one turn in memory and prints the scenario, home world,
+mandates, legacy and any enemy ground on the Promised World before and after. It copies the save to
+`%TEMP%` first and writes nothing back. Use it to check a hand-edited test save before handing it over
+(added 2026-11-19, after a test save failed in the game). It uses `SeededRNG(1)`, not the game's
+random stream, so an outcome that depends on chance can differ in the game. Read the output from a TRX:
+
+```powershell
+dotnet test Tools\OnlyWar.Diagnostics --no-build --nologo -v q --filter "FullyQualifiedName~SaveTurnDiagnostics" -e RUN_SAVE_TURN=<path to .s3db> --logger trx
+```
+
 ## Linking test fixtures
 
 Fixtures are linked from `OnlyWar.Tests` rather than copied. The modules grant this project the same

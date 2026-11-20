@@ -587,6 +587,11 @@ validates source-event references and maintains the derived open-near-death proj
 Campaign event classification owns publication decisions for Service Record, Turn Report, Command
 Brief, Battle Review, and Chapter Chronicle surfaces. Stored publication rows preserve those decisions;
 chronicle prose, narrator/version metadata, variants, and callbacks are not regenerated on load.
+A continuity callback (`ChronicleContinuitySelector`) recalls the anchor's **subject soldier's** own
+history (PRD §4.19 *Continuity and callbacks*): a candidate must share that soldier, and a shared planet
+or faction only raises its score. An anchor with no subject soldier has no callback, and a repeated
+callback line is written once. Before 2026-11-19 any shared entity was a link, so first contacts recalled
+the intel report behind them and the founding recalled the Chapter Master twice.
 
 `WorldControlEpisode` preserves contested control episodes. Stable dedupe keys prevent repeated
 events, and corrections append `ChapterChronicleAnnotation` rows without rewriting the original entry.
@@ -687,7 +692,14 @@ observations. Direct allies receive a one-pass copy of new
 awareness and observations; Neutral factions receive neither. Belief-only `PlanetFaction` entries
 are retained as intelligence footprints and are attached to the sector event spine when materialized.
 Decay is silent; meaningful threshold crossings, first contact, disproof, and relationship changes
-are recorded through the campaign-event recorder.
+are recorded through the campaign-event recorder. Intel events take the session week
+(`CampaignEventBindings`), because most observations carry evidence week 0. **First contact is the
+Chapter's own** (`CampaignEventRecorder.IsFirstContact`): only the player faction confirming a hostile,
+non-Imperial faction records it, once per target faction. The Imperial target is excluded on its own
+because a planet with no relationship ledger (sector generation) resolves every pair as hostile.
+First contacts seen in the generation warm-up wait in the recorder until the founding event is
+recorded, so the Chronicle opens with the founding and those first contacts follow it in the same week
+(2026-11-19; asserted by `NewGameSaveTests`).
 
 NPC strategy enumerates Confirmed/Located beliefs through `IntelligenceTargetService`, sizes threats
 from stored estimates, and resolves current presence only at execution. `StrategicTarget` therefore
@@ -2324,6 +2336,91 @@ organizational node.
 `GlobalData.IsMechanicusLoanActive` with at most one of `MarsReturnShipId` / `MarsReturnRegionId`
 (§4.3). The raw `GameStateDataBlob` keeps postings apart; `SavedGameLoader` reattaches them, so a
 headcount taken from the raw blob counts brothers on Mars as present with their squad.
+
+### 6.15 Chapter Mandates & Legacy
+
+PRD §4.25 holds the player rules. The design plan was implemented on 2026-11-18, distilled here and
+deleted on 2026-11-19; its open items are in PRD §5.8 *Chapter Mandates follow-through*. Every tuning
+value (each family's legacy value and deadline, the source amounts, the large-battle threshold and the
+Establish opinion change) is a named constant in `MandateConstants`, not in the rules database: move one
+to the database only if tuning needs it.
+
+**Family rules not stated in the PRD.** Secure the Chapter World is kept after 26 clean weeks in a row
+(no public hostile presence). Protect Strategic Worlds names the governance seats (sector and subsector
+capitals) that have public hostile presence, in the sector builder's ranking order, needs two of them and
+names at most three; it fails when any named world is lost. Establish fails when its world has no public
+Imperial presence, which is the Promised World lapse test. Rebuild counts a company as raised at 60%
+duty-ready strength and is kept at 90%. If a named entity no longer exists, the mandate resolves by its
+own rules: a destroyed Waaagh! fulfils Eradicate, a dissolved company fails Rebuild.
+
+**State.** `PlayerForce.Mandates` is a `ChapterMandates` aggregate (`OnlyWar.Domain.Mandates`): every
+`Mandate` ever sworn, the `LegacyLedgerEntry` ledger, the `ChapterMasterTenure` list and the companies
+that have reached the Rebuild threshold. At most one mandate is active. A mandate keeps the ids it named
+when sworn (planets, a unit, a faction, a strategic invasion force) and display-name snapshots, and it
+keeps its legacy value from that time. Legacy totals are always sums over the ledger. Each ledger entry
+has a unique source key (`mandate/{id}`, `event/{id}`, `request/{id}`), so writing one source twice adds
+nothing, and it records the Chapter Master in office when it was written (null while the office is empty).
+
+**Lifecycle.** `MandateService` swears, abandons and resolves mandates, and renounces the Chapter World.
+Every resolution writes its `MandateResolved` event and its ledger entry in the same call.
+`MandateService.BeginCampaign` runs at chapter founding (from the generation adapter): it opens the founding
+master's tenure and swears the Promised World as mandate 1 with no deadline. `MandateCatalog.ListEligible`
+lists the eligible options; `MandateEvaluator.Evaluate` judges one mandate (goal first, then the family's
+fail condition, then the deadline). It moves the Secure clean-week counter only when `advance` is set,
+so the Brief can call it without side effects. Liberation and eradication read public presence only
+(`ChapterWorldTests`, `NamedThreats`), so a hidden remnant is never disclosed.
+
+**Turn step.** `MandateTurnProcessor` runs right after `ScenarioTurnProcessor` (§6.1 step 6), in this order:
+create the Promised World mandate if a pending scenario has none; resolve the Promised World mandate from
+the scenario state (Won or Lapsed); write the week's legacy (`LegacyService.RecordWeek` scans the turn's
+events for world saved/lost with the Chapter, deaths and large battles, and every resolved request);
+bring tenure up to date (`ChapterMasterOffice.Synchronize`); mark companies that reached the Rebuild
+threshold; then judge the active mandate. An Establish mandate that is kept goes through
+`ChapterWorldGrantService`, the same grant path as a Promised World win. Large-battle legacy reads
+`BattleResolvedPayload.StartingStrategicValue` and `ChapterHeldField`, which the player battle aftermath
+supplies through the optional `IPlayerBattleScaleSink`.
+
+**Legacy attribution.** An entry is credited to the master in office when the weekly pass writes it.
+The pass writes legacy before it updates tenure, so a week's gains and losses go to the master who held
+the office at the start of that week. Mandate entries are written by the call that resolves the mandate;
+every other source is written by one scan of the week's events and resolved requests, keyed by source.
+
+**Renouncing and granting the Chapter World.** Renouncing clears `HomeWorldPlanetId` only: the
+recruitment program, the administrative stations and the world's chapter-faction population stay as they
+are. An Establish grant keeps an existing recruitment program and creates one only when none exists, so
+the fixed program id 1 is never reused. Abandoning Establish has the same opinion penalty as its failure.
+The Promised World reads its opinion amounts from its invader's scenario profile; an Establish world has
+no profile, so its amounts are `MandateConstants`.
+
+**Succession.** The office is held by the living soldier with the doctrine's Chapter Master template.
+When it is empty the Brief shows an Actionable card, and only a living Captain can be promoted
+(`ChapterMasterOffice.Promote`). Promotion changes the soldier's template only; he stays in his squad.
+
+**Events.** `Oath` (with `MandateOathPayload`, version 3), `MandateResolved`, `ChapterMasterAppointed`
+and `ChapterWorldRenounced` publish to the Turn Report and the Chronicle, in the Chapter category. The
+one exception is the Promised World oath, which publishes to the Turn Report only
+(`CampaignEventClassifier`): the founding entry already tells that charge, and in the newest-first
+Chronicle the oath sorted above the founding (user, 2026-11-19).
+
+**Rejected alternatives.** The chooser offers every eligible mandate, not a random subset or a capped
+list: a mandate is the player's choice of focus, so hiding options would make it a lottery. Mandates
+give no practical reward (Requisition, opinion), because they are an internal measure of purpose and
+governor requests already pay out; Establish is the exception because the world is the goal itself.
+Worlds saved and lost count only where the Chapter took part; a "legacy for inaction" rule was deferred
+(PRD §5.8).
+
+**Application.** `IMandateScreenApplication` (`MandateScreenContext`) returns the `MandateBoardView`
+(active mandate, options, history, legacy series, per-master totals, recent entries) and the succession
+view, and runs swear, abandon, renounce and promote under the session token. The Brief cards come from
+`CommandBriefBuilder.AddMandates`. Navigation gained the `Chapter` and `Mandates` targets and routes.
+In Godot, `CommandScreenController` takes the mandate application as a second contract and shows it as
+`CommandLens.Mandates`; the Chronicle lens heads the All and Chapter filters with the legacy panel
+(`LegacyGraph` draws the running total). `ChapterController` takes it as a third contract for the
+Chapter Master button and the Captain list. `MainGameScene` routes `Mandates` to the lens and `Chapter`
+to the Chapter screen with the Captain list open.
+
+**Persistence.** Save format 27: tables `Mandate`, `LegacyLedgerEntry`, `ChapterMasterTenure` and
+`MandateRaisedCompany` (`ChapterMandatesDataAccess`). Older saves are not loaded.
 
 ---
 

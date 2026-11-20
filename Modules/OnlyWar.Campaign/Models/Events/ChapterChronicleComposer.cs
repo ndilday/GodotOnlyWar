@@ -44,7 +44,15 @@ namespace OnlyWar.Campaign.Events {
                 CampaignEventType.HiddenCultRevealed when anchor.Payload is HiddenCultRevealedPayload cult =>
                     $"The Hidden War on {cult.PlanetName}",
                 CampaignEventType.Death => $"The Fall of {GetSubjectName(anchor)}",
+                CampaignEventType.Oath when anchor.Payload is MandateOathPayload => "A Vow Sworn",
+                CampaignEventType.MandateResolved when anchor.Payload is MandateResolvedPayload resolved =>
+                    resolved.Result == Domain.Mandates.MandateState.Fulfilled ? "A Vow Kept" : "A Vow Broken",
+                CampaignEventType.ChapterMasterAppointed when anchor.Payload is ChapterMasterAppointedPayload appointed =>
+                    $"{appointed.SoldierName} Becomes Chapter Master",
+                CampaignEventType.ChapterWorldRenounced when anchor.Payload is ChapterWorldRenouncedPayload renounced =>
+                    $"{renounced.PlanetName} Renounced",
                 CampaignEventType.BattleResolved when anchor.Payload is BattleResolvedPayload battle => battle.Title,
+                CampaignEventType.FactionFirstContact => $"First Contact with the {GetSubjectName(anchor)}",
                 _ => "Campaign Service Record"
             };
             CampaignEvent death = ordered.FirstOrDefault(item => item.Type == CampaignEventType.Death);
@@ -62,8 +70,15 @@ namespace OnlyWar.Campaign.Events {
                 earlierEvents,
                 anchor.Publication.Importance == CampaignEventImportance.Defining ? 2 : 1,
                 previouslyUsedCallbackIds);
+            HashSet<string> callbackLines = new(StringComparer.Ordinal);
+            List<CampaignEvent> usedCallbacks = [];
             foreach (CampaignEvent callback in callbacks)
-                body += " " + CampaignEventNarrator.RenderContinuityCallback(callback, anchor);
+            {
+                string line = CampaignEventNarrator.RenderContinuityCallback(callback, anchor);
+                if (!callbackLines.Add(line)) continue;
+                body += " " + line;
+                usedCallbacks.Add(callback);
+            }
             int variant = NarrativeVariantSelector.SelectVariant(
                 _identity,
                 anchor.Id,
@@ -90,7 +105,7 @@ namespace OnlyWar.Campaign.Events {
                 variant,
                 ordered.Select(item => item.Id),
                 categories,
-                callbacks.Select(item => item.Id));
+                usedCallbacks.Select(item => item.Id));
         }
 
         private static string RenderBody(CampaignEvent @event) =>
@@ -109,13 +124,24 @@ namespace OnlyWar.Campaign.Events {
         {
             if (anchor == null || maximum <= 0) return [];
             HashSet<long> excluded = (contributors ?? []).Select(item => item.Id).ToHashSet();
-            HashSet<(CampaignEntityKind Kind, int Id)> shared = anchor.Entities
-                .Select(entity => (entity.Kind, entity.EntityId)).ToHashSet();
+            // A callback recalls the subject's own recorded history (PRD §4 "Continuity and
+            // callbacks"), so it links through the anchor's subject soldier. A shared planet or
+            // faction alone linked first contacts to the intel reading that produced them, and a
+            // kept vow to a routine intel event; a soldier in another role linked the founding to
+            // the Chapter Master's history twice, all as "This service recalled an earlier entry
+            // concerning ..." (user report, 2026-11-19). A shared planet or faction still raises
+            // the score.
+            HashSet<int> soldiers = anchor.Entities
+                .Where(entity => entity.Kind == CampaignEntityKind.Soldier
+                    && entity.Role == CampaignEventEntityRole.Subject)
+                .Select(entity => entity.EntityId).ToHashSet();
+            if (soldiers.Count == 0) return [];
             HashSet<long> repeated = (previouslyUsedCallbackIds ?? []).ToHashSet();
             return (history ?? [])
                 .Where(item => item.Id < anchor.Id && !excluded.Contains(item.Id)
                     && item.RecordedWeek <= anchor.RecordedWeek
-                    && item.Entities.Any(entity => shared.Contains((entity.Kind, entity.EntityId))))
+                    && item.Entities.Any(entity => entity.Kind == CampaignEntityKind.Soldier
+                        && soldiers.Contains(entity.EntityId)))
                 .Select(item => new
                 {
                     Event = item,

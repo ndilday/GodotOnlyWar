@@ -25,7 +25,9 @@ public enum CommandBriefCategory
 public enum CommandLens
 {
     Brief,
-    Chronicle
+    Chronicle,
+    // The mandate chooser, the active mandate and past vows (TDD §6.15 *Application*).
+    Mandates
 }
 
 public enum ChronicleFilter
@@ -61,7 +63,11 @@ public enum CampaignNavigationTargetKind
     Apothecarium,
     Recruitment,
     LastTurnReport,
-    Unavailable
+    Unavailable,
+    // The Chapter screen (the Chapter Master promotion) and the mandate chooser
+    // (TDD §6.15 *Application*).
+    Chapter,
+    Mandates
 }
 
 /// <summary>

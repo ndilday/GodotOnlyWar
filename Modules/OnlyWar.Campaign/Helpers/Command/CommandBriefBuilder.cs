@@ -41,7 +41,7 @@ namespace OnlyWar.Campaign.Command
             AddOperationsUnderway(items, sector);
             AddRecoveryAndReinforcement(items, currentDate, sector);
             AddStrategicSituation(items, currentDate, sector, lastTurnReport, recentEvents);
-            AddMandates(items, currentDate, sector);
+            AddMandates(items, currentDate, sector, rules);
 
             List<CommandBriefItem> ordered = items
                 .GroupBy(item => item.StableKey, StringComparer.Ordinal)
@@ -63,14 +63,101 @@ namespace OnlyWar.Campaign.Command
             return new CommandBriefModel(ordered, categories);
         }
 
-        // Mandates are intentionally a provider seam in Alpha 0.8. The category remains part of
-        // the shared workspace contract, but no mandate facts are invented until the campaign
-        // has an authoritative mandate substrate.
+        // Mandates, and the empty office of Chapter Master (PRD §4.25). Having no mandate carries no
+        // penalty; its card stays until the player chooses. The cards read live state only; the
+        // chooser lists the eligible mandates.
         private static void AddMandates(
             List<CommandBriefItem> items,
             Date currentDate,
-            Sector sector)
+            Sector sector,
+            GameRulesData rules)
         {
+            PlayerForce force = sector.PlayerForce;
+            if (force == null) return;
+            int week = currentDate.GetTotalWeeks();
+            CampaignNavigationTarget mandatesTarget = new(
+                CampaignNavigationTargetKind.Mandates,
+                Fallback: "Open the Chapter's mandates.",
+                DisplayNameSnapshot: "Mandates");
+
+            if (rules?.ChapterDoctrine != null && Mandates.ChapterMasterOffice.IsVacant(force, rules))
+            {
+                int captains = Mandates.ChapterMasterOffice.Candidates(force, rules).Count;
+                items.Add(new CommandBriefItem(
+                    "chapter/no-master",
+                    CommandBriefCategory.Mandates,
+                    CommandBriefPriority.Actionable,
+                    "The Chapter has no Master",
+                    captains > 0
+                        ? $"The office of Chapter Master is empty. Promote one of {captains} living "
+                            + $"Captain{(captains == 1 ? string.Empty : "s")} to fill it."
+                        : "The office of Chapter Master is empty, and no Captain lives to take it. "
+                            + "Promote a brother to Captain first.",
+                    "Office empty",
+                    "chapter",
+                    true,
+                    new CampaignNavigationTarget(
+                        CampaignNavigationTargetKind.Chapter,
+                        Fallback: "Open the Chapter screen.",
+                        DisplayNameSnapshot: "Chapter"),
+                    "Open Chapter",
+                    sortDomainKey: "chapter/no-master"));
+            }
+
+            Domain.Mandates.Mandate active = force.Mandates.Active;
+            if (active == null)
+            {
+                int eligible = Mandates.MandateCatalog.ListEligible(sector, rules).Count;
+                items.Add(new CommandBriefItem(
+                    "mandate/choose",
+                    CommandBriefCategory.Mandates,
+                    CommandBriefPriority.Actionable,
+                    "Choose a mandate",
+                    $"The Chapter has sworn no mandate. Choose the goal it will pursue next; "
+                        + $"{eligible} mandate{(eligible == 1 ? " is" : "s are")} eligible now.",
+                    "No active mandate",
+                    "chapter",
+                    true,
+                    mandatesTarget,
+                    "Choose Mandate",
+                    sortDomainKey: "mandate/choose"));
+                return;
+            }
+
+            Mandates.MandateEvaluation progress = Mandates.MandateEvaluator.Evaluate(
+                active, sector, rules, week, advance: false);
+            int? weeksLeft = active.DeadlineWeek - week;
+            List<CommandBriefRelatedLink> related = active.PlanetIds
+                .Select(id => sector.Planets.GetValueOrDefault(id))
+                .Where(planet => planet != null)
+                .Select(planet => new CommandBriefRelatedLink(
+                    $"mandate/{active.Id}/world/{planet.Id}",
+                    $"View {planet.Name}",
+                    new CampaignNavigationTarget(
+                        CampaignNavigationTargetKind.Planet,
+                        planet.Id,
+                        Fallback: $"View {planet.Name}.",
+                        DisplayNameSnapshot: planet.Name)))
+                .ToList();
+            items.Add(new CommandBriefItem(
+                $"mandate/{active.Id}/active",
+                CommandBriefCategory.Mandates,
+                weeksLeft is <= 4 ? CommandBriefPriority.Critical : CommandBriefPriority.Monitor,
+                active.Title,
+                $"{progress.Progress} Kept, the vow is worth {active.LegacyValue} legacy; broken, it costs "
+                    + $"{-Mandates.MandateConstants.FailureLegacy(active.LegacyValue)}.",
+                !weeksLeft.HasValue
+                    ? "No deadline"
+                    : weeksLeft <= 0
+                        ? "Deadline this turn"
+                        : $"Deadline in {weeksLeft} week{(weeksLeft == 1 ? string.Empty : "s")}",
+                "chapter",
+                false,
+                mandatesTarget,
+                "Review Mandate",
+                related,
+                active.DeadlineWeek,
+                $"mandate/{active.Id:D10}"));
         }
 
         private static CommandBriefItem ToAttentionItem(CommandAttentionFact fact)
@@ -476,6 +563,13 @@ namespace OnlyWar.Campaign.Command
                         CampaignEventType.WorldSaved => "World restored",
                         CampaignEventType.WorldLost => "World lost",
                         CampaignEventType.HiddenCultRevealed => "Hidden cult revealed",
+                        CampaignEventType.Oath when @event.Payload is MandateOathPayload => "Mandate sworn",
+                        CampaignEventType.MandateResolved when @event.Payload is MandateResolvedPayload resolved =>
+                            resolved.Result == Domain.Mandates.MandateState.Fulfilled
+                                ? "Mandate fulfilled"
+                                : "Mandate failed",
+                        CampaignEventType.ChapterMasterAppointed => "New Chapter Master",
+                        CampaignEventType.ChapterWorldRenounced => "Chapter World renounced",
                         CampaignEventType.SectorDispatch when @event.Payload is SectorDispatchPayload dispatch =>
                             CampaignEventNarrator.RenderDispatchTitle(dispatch),
                         _ => "Known Campaign Event"

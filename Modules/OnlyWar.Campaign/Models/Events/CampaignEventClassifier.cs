@@ -220,6 +220,29 @@ namespace OnlyWar.Campaign.Events
                 case CampaignEventType.MentorAssigned:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
                     break;
+                case CampaignEventType.Oath when candidate.Payload is MandateOathPayload oath:
+                    // The founding entry already tells the Promised World directive, so that oath
+                    // stays out of the Chronicle; its result still gets an entry (user, 2026-11-19).
+                    surfaces = oath.IsPromisedWorld
+                        ? CampaignEventSurfaceFlags.TurnReport
+                        : CampaignEventSurfaceFlags.TurnReport | CampaignEventSurfaceFlags.ChapterChronicle;
+                    importance = CampaignEventImportance.Notable;
+                    treatment = CampaignEventChronicleTreatment.Standalone;
+                    break;
+                case CampaignEventType.MandateResolved:
+                case CampaignEventType.ChapterWorldRenounced:
+                    surfaces = CampaignEventSurfaceFlags.TurnReport
+                        | CampaignEventSurfaceFlags.ChapterChronicle;
+                    importance = CampaignEventImportance.Major;
+                    treatment = CampaignEventChronicleTreatment.Standalone;
+                    break;
+                case CampaignEventType.ChapterMasterAppointed:
+                    surfaces = CampaignEventSurfaceFlags.ServiceRecord
+                        | CampaignEventSurfaceFlags.TurnReport
+                        | CampaignEventSurfaceFlags.ChapterChronicle;
+                    importance = CampaignEventImportance.Defining;
+                    treatment = CampaignEventChronicleTreatment.Standalone;
+                    break;
                 case CampaignEventType.NearDeathRecovery:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
                     reasons |= CampaignEventReasonFlags.NearDeathRecovery;

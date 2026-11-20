@@ -17,6 +17,11 @@ namespace OnlyWar.Campaign.Events
         private readonly ChapterChronicleLedger _chronicle;
         private readonly Func<int, PlayerSoldier> _soldierResolver;
         private readonly HashSet<(int SoldierId, long EventId)> _projectedSoldiers = new();
+        // First contacts seen in the generation warm-up, before the Chapter is founded. They are
+        // recorded just after the founding, so the Chronicle opens with the founding and its
+        // first contacts follow it, not precede it (user report, 2026-11-19).
+        private readonly List<CampaignEventCandidate> _firstContactsBeforeFounding = new();
+        internal const string FoundingDedupeKey = "chapter/founded";
         private CampaignIdentity _campaignIdentity = CampaignIdentity.Empty;
 
         public CampaignEventRecorder(
@@ -113,9 +118,18 @@ namespace OnlyWar.Campaign.Events
                     ? CampaignEventImportance.Notable
                     : CampaignEventImportance.Routine));
 
-            if (type == CampaignEventType.FactionPresenceConfirmed)
+            // First contact is the Chapter's own: the Chronicle says "the Chapter first learned the
+            // measure of" a faction and enters it "among the threats to the sector". So it is
+            // recorded only when the player faction confirms a hostile faction. Confirming the
+            // Imperial presence on a world made the Imperium a Chronicle threat, and the Imperium's
+            // own confirmations during sector generation (week 0) took the first-contact dedupe key
+            // before the Chapter saw anything (user report, 2026-11-19). The Imperial target is
+            // tested on its own as well: during sector generation a planet has no relationship
+            // ledger yet, and without one every pair resolves as hostile.
+            if (type == CampaignEventType.FactionPresenceConfirmed
+                && IsFirstContact(change.Observation.Observer.Faction, belief.TargetFaction, belief.Region.Planet))
             {
-                Record(new CampaignEventCandidate(
+                CampaignEventCandidate firstContact = new(
                     CampaignEventType.FactionFirstContact,
                     occurredWeek,
                     occurredWeek,
@@ -132,11 +146,24 @@ namespace OnlyWar.Campaign.Events
                         change.Current?.Evidence ?? 0f,
                         true,
                         CampaignEventType.FactionFirstContact),
-                    entities: @event.Entities));
+                    entities: @event.Entities);
+                if (_ledger.GetByDedupeKey(FoundingDedupeKey) != null)
+                {
+                    Record(firstContact);
+                }
+                else if (_firstContactsBeforeFounding.All(pending => pending.DedupeKey != firstContact.DedupeKey))
+                {
+                    _firstContactsBeforeFounding.Add(firstContact);
+                }
             }
 
             return @event;
         }
+
+        internal static bool IsFirstContact(Faction observer, Faction target, Planet planet) =>
+            observer?.IsPlayerFaction == true
+            && !FactionRelationshipService.IsImperial(target)
+            && FactionRelationshipService.AreHostile(observer, target, planet);
 
         public CampaignEvent RecordFactionRelationship(
             FactionRelationshipChangedEventArgs change,
@@ -212,7 +239,7 @@ namespace OnlyWar.Campaign.Events
                 date.GetTotalWeeks(),
                 date.GetTotalWeeks(),
                 null,
-                "chapter/founded",
+                FoundingDedupeKey,
                 1,
                 payload,
                 entities,
@@ -250,6 +277,17 @@ namespace OnlyWar.Campaign.Events
                 _chronicle,
                 @event,
                 _campaignIdentity);
+            // The founding is recorded here by more than one path (PlayerForceEvents and
+            // RecordChapterFounded), so the waiting first contacts are released here too.
+            if (@event.Type == CampaignEventType.ChapterFounded && _firstContactsBeforeFounding.Count > 0)
+            {
+                List<CampaignEventCandidate> waiting = [.. _firstContactsBeforeFounding];
+                _firstContactsBeforeFounding.Clear();
+                foreach (CampaignEventCandidate firstContact in waiting)
+                {
+                    Record(firstContact);
+                }
+            }
             return @event;
         }
 

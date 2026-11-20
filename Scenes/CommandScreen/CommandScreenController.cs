@@ -8,7 +8,11 @@ public partial class CommandScreenController : MainScreenController
 {
     private CommandScreenView _view;
     private ICommandScreenApplication _command;
+    private IMandateScreenApplication _mandates;
     private Guid _sessionToken;
+    private ConfirmationDialog _confirmDialog;
+    private AcceptDialog _messageDialog;
+    private Func<MandateCommandResult> _pendingCommand;
     private CommandLens _lens = CommandLens.Brief;
     private CommandBriefCategory? _briefFilter;
     private ChronicleFilter _chronicleFilter = ChronicleFilter.All;
@@ -20,11 +24,13 @@ public partial class CommandScreenController : MainScreenController
 
     public event EventHandler<CampaignNavigationTarget> NavigationRequested;
     public event EventHandler LastTurnReportRequested;
+    public event EventHandler CampaignChanged;
 
-    public void Configure(ICommandScreenApplication command)
+    public void Configure(ICommandScreenApplication command, IMandateScreenApplication mandates = null)
     {
         if (_command != null) _command.SessionChanged -= OnSessionChanged;
         _command = command ?? throw new ArgumentNullException(nameof(command));
+        _mandates = mandates;
         _command.SessionChanged += OnSessionChanged;
         _sessionToken = command.SessionToken;
     }
@@ -54,6 +60,14 @@ public partial class CommandScreenController : MainScreenController
         _view.NavigationRequested += OnNavigationRequested;
         _view.LastTurnReportRequested += OnLastTurnReportRequested;
         _view.LoadOlderRequested += OnLoadOlderRequested;
+        _view.SwearMandateRequested += OnSwearMandateRequested;
+        _view.AbandonMandateRequested += OnAbandonMandateRequested;
+        _view.RenounceChapterWorldRequested += OnRenounceChapterWorldRequested;
+        _confirmDialog = new ConfirmationDialog { DialogAutowrap = true, MinSize = new Vector2I(460, 0) };
+        _confirmDialog.Confirmed += OnPendingCommandConfirmed;
+        AddChild(_confirmDialog);
+        _messageDialog = new AcceptDialog { DialogAutowrap = true, MinSize = new Vector2I(420, 0) };
+        AddChild(_messageDialog);
         RefreshFromExternalChange();
     }
 
@@ -69,28 +83,41 @@ public partial class CommandScreenController : MainScreenController
         _view.NavigationRequested -= OnNavigationRequested;
         _view.LastTurnReportRequested -= OnLastTurnReportRequested;
         _view.LoadOlderRequested -= OnLoadOlderRequested;
+        _view.SwearMandateRequested -= OnSwearMandateRequested;
+        _view.AbandonMandateRequested -= OnAbandonMandateRequested;
+        _view.RenounceChapterWorldRequested -= OnRenounceChapterWorldRequested;
+        if (_confirmDialog != null) _confirmDialog.Confirmed -= OnPendingCommandConfirmed;
     }
 
     public override void RefreshFromExternalChange()
     {
         if (_view == null || _command == null || !_command.HasCampaign) return;
+        if (_lens == CommandLens.Mandates && _mandates == null) _lens = CommandLens.Brief;
         _view.SetLens(_lens);
+        _view.SetMandatesAvailable(_mandates != null);
         _view.SetLastTurnReportState(_command.HasLastTurnReport);
-        if (_lens == CommandLens.Brief)
+        switch (_lens)
         {
-            RenderBrief();
-            HasRenderedBrief = true;
-        }
-        else
-        {
-            RenderChronicle();
+            case CommandLens.Brief:
+                RenderBrief();
+                HasRenderedBrief = true;
+                break;
+            case CommandLens.Mandates:
+                RenderMandates();
+                break;
+            default:
+                RenderChronicle();
+                break;
         }
         RestoreScrollOffset();
     }
 
-    public void SelectBrief()
+    public void SelectBrief() => SelectLens(CommandLens.Brief);
+
+    public void SelectLens(CommandLens lens)
     {
-        _lens = CommandLens.Brief;
+        SaveScrollOffset();
+        _lens = lens;
         RefreshFromExternalChange();
     }
 
@@ -117,6 +144,81 @@ public partial class CommandScreenController : MainScreenController
         RenderChronicle();
         RestoreScrollOffset();
     }
+
+    // ---- Mandates: swear, abandon, renounce the Chapter World (TDD §6.15) ------------------------
+
+    private void OnSwearMandateRequested(object sender, MandateOptionView option)
+    {
+        if (_mandates == null || option == null) return;
+        Guid token = _mandates.SessionToken;
+        AskToConfirm(
+            "Swear the Mandate",
+            $"Swear to {LowerFirst(option.Title)}?\n\n{option.Goal}\n\nDeadline: {option.DeadlineLabel}. "
+                + $"Kept, the vow is worth {option.LegacyValue} legacy; broken or abandoned, it costs "
+                + $"{option.FailureCost}. The Chapter can hold only one mandate at a time.",
+            "Swear",
+            () => _mandates.SwearMandate(token, option.Key));
+    }
+
+    private void OnAbandonMandateRequested(object sender, ActiveMandateView active)
+    {
+        if (_mandates == null || active == null) return;
+        Guid token = _mandates.SessionToken;
+        AskToConfirm(
+            active.IsPromisedWorld ? "Give Up the Promised World" : "Abandon the Mandate",
+            active.AbandonWarning,
+            active.IsPromisedWorld ? "Give Up" : "Abandon",
+            () => _mandates.AbandonMandate(token));
+    }
+
+    private void OnRenounceChapterWorldRequested(object sender, MandateBoardView board)
+    {
+        if (_mandates == null || board?.CanRenounceChapterWorld != true) return;
+        Guid token = _mandates.SessionToken;
+        AskToConfirm(
+            "Renounce the Chapter World",
+            board.RenounceWarning,
+            "Renounce",
+            () => _mandates.RenounceChapterWorld(token));
+    }
+
+    private void AskToConfirm(string title, string message, string confirmLabel, Func<MandateCommandResult> command)
+    {
+        _pendingCommand = command;
+        _confirmDialog.Title = title;
+        _confirmDialog.DialogText = message;
+        _confirmDialog.OkButtonText = confirmLabel;
+        _confirmDialog.PopupCentered();
+    }
+
+    private void OnPendingCommandConfirmed()
+    {
+        Func<MandateCommandResult> command = _pendingCommand;
+        _pendingCommand = null;
+        if (command == null) return;
+        MandateCommandResult result = command();
+        if (result.Succeeded)
+        {
+            CampaignChanged?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            _messageDialog.Title = "Mandates";
+            _messageDialog.DialogText = result.Message;
+            _messageDialog.PopupCentered();
+        }
+        RefreshFromExternalChange();
+    }
+
+    private void RenderMandates()
+    {
+        MandateBoardView board = _mandates?.QueryMandates() ?? MandateBoardView.Empty;
+        _view.SetMandateRail(board);
+        _view.SetMandates(board);
+    }
+
+    private static string LowerFirst(string text) =>
+        string.IsNullOrEmpty(text) ? text : char.ToLowerInvariant(text[0]) + text[1..];
 
     private void OnBriefItemActionRequested(object sender, string stableKey)
     {
@@ -174,11 +276,18 @@ public partial class CommandScreenController : MainScreenController
             chronicle.Filters
                 .Select(option => (option.Filter, option.Label, option.Count)).ToList(),
             _chronicleFilter);
+        // The legacy graph and the per-master table head the whole Chronicle and its Chapter
+        // filter (TDD §6.15 *Application*).
+        MandateBoardView legacy = _mandates != null
+            && _chronicleFilter is ChronicleFilter.All or ChronicleFilter.Chapter
+                ? _mandates.QueryMandates()
+                : null;
         _view.SetChronicle(
             chronicle.Entries,
             _chronicleFilter,
             chronicle.HasOlder,
-            chronicle.HasAnyEntries);
+            chronicle.HasAnyEntries,
+            legacy);
     }
 
     private CommandBriefModel BuildBrief() => _command.QueryBrief();

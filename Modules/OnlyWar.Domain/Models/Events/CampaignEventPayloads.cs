@@ -76,7 +76,12 @@ namespace OnlyWar.Domain.Events
 
     public sealed record BattleResolvedPayload(
         string Title,
-        string Summary) : ICampaignEventPayload
+        string Summary,
+        // The strategic Battle Value both sides brought to the field, and whether the Chapter
+        // held it (null when nobody did). The legacy ledger's large-battle source reads these
+        // (TDD §6.15 *Turn step*). Null on battles recorded before them.
+        long? StartingStrategicValue = null,
+        bool? ChapterHeldField = null) : ICampaignEventPayload
     {
         public CampaignEventType EventType => CampaignEventType.BattleResolved;
         public ushort Version => 1;
@@ -335,6 +340,56 @@ namespace OnlyWar.Domain.Events
         bool CapitalMoved = false) : ICampaignEventPayload
     {
         public CampaignEventType EventType => CampaignEventType.SectorDispatch;
+        public ushort Version => 1;
+    }
+
+    /// <summary>The Chapter Master swore a mandate (TDD §6.15 *Events*).</summary>
+    public sealed record MandateOathPayload(
+        int MandateId,
+        Mandates.MandateFamily Family,
+        string Title,
+        string SubjectName,
+        int? DeadlineWeek,
+        int LegacyValue,
+        bool IsPromisedWorld,
+        string ChapterMasterName = null) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.Oath;
+        public ushort Version => 3;
+    }
+
+    /// <summary>A mandate was fulfilled, failed, or abandoned.</summary>
+    public sealed record MandateResolvedPayload(
+        int MandateId,
+        Mandates.MandateFamily Family,
+        string Title,
+        string SubjectName,
+        Mandates.MandateState Result,
+        int LegacyAmount,
+        string Reason,
+        bool IsPromisedWorld) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.MandateResolved;
+        public ushort Version => 1;
+    }
+
+    /// <summary>A soldier took the office of Chapter Master by promotion (§6.4).</summary>
+    public sealed record ChapterMasterAppointedPayload(
+        int SoldierId,
+        string SoldierName,
+        string FormerTemplateName,
+        string PreviousMasterName) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.ChapterMasterAppointed;
+        public ushort Version => 1;
+    }
+
+    /// <summary>The player gave up the Chapter World.</summary>
+    public sealed record ChapterWorldRenouncedPayload(
+        int PlanetId,
+        string PlanetName) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.ChapterWorldRenounced;
         public ushort Version => 1;
     }
 

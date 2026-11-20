@@ -14,9 +14,11 @@ namespace OnlyWar.Campaign.Battles.Aftermath
     public sealed class PlayerBattleAftermathSink :
         IPlayerBattleAftermathSink,
         IPlayerCampaignEventSink,
-        IPlayerNarrativeEventSink
+        IPlayerNarrativeEventSink,
+        IPlayerBattleScaleSink
     {
         private readonly PlayerForce _playerForce;
+        private BattleScaleSnapshot _pendingScale;
         private int _battleOrdinal;
         private int _activeBattleOrdinal = -1;
         private string _activeBattleCorrelation;
@@ -67,7 +69,10 @@ namespace OnlyWar.Campaign.Battles.Aftermath
             _activeBattleCorrelation = context.CorrelationKey;
             _activeBattleOrdinal = _battleOrdinal++;
             _battleHistoryRecorded = false;
+            _pendingScale = null;
         }
+
+        public void RecordBattleScale(BattleScaleSnapshot scale) => _pendingScale = scale;
 
         public CampaignEvent RecordBattleParticipation(
             Date date,
@@ -234,7 +239,9 @@ namespace OnlyWar.Campaign.Battles.Aftermath
                 title,
                 entries,
                 correlation,
-                $"battle/resolved/{date.GetTotalWeeks()}/{ordinal}");
+                $"battle/resolved/{date.GetTotalWeeks()}/{ordinal}",
+                _pendingScale?.StartingStrategicValue,
+                _pendingScale?.PlayerHeldField);
             // Keep the completed context until the next BeginBattle call.  The aftermath
             // policy is deliberately retryable, so a second completion must reuse the
             // same correlation and resolved-event dedupe key instead of opening a new

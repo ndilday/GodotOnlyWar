@@ -8,6 +8,11 @@ public partial class ChapterController : MainScreenController
     private readonly ChapterBrowserNavigator _navigator = new();
     private IChapterScreenApplication _application;
     private ILoadoutScreenApplication _loadoutApplication;
+    private IMandateScreenApplication _mandateApplication;
+    private PopupMenu _chapterMasterMenu;
+    private ConfirmationDialog _chapterMasterConfirmationDialog;
+    private IReadOnlyList<ChapterMasterCandidateView> _chapterMasterCandidates = [];
+    private int? _pendingChapterMasterId;
     private List<SoldierFilterCondition> _activeFilter = [];
     private IReadOnlyList<string> _transferOptions = [];
     private IReadOnlyList<int> _contextSoldierIds = [];
@@ -47,6 +52,19 @@ public partial class ChapterController : MainScreenController
         ChapterView.FilterButtonPressed += OnFilterButtonPressed;
         ChapterView.ChapterLoadoutsPressed += OnChapterLoadoutsPressed;
         ChapterView.ChapterMusterPressed += (_, _) => OpenMuster(_currentDetailSoldierId);
+        ChapterView.ChapterMasterPressed += OnChapterMasterPressed;
+
+        _chapterMasterMenu = new PopupMenu();
+        _chapterMasterMenu.IdPressed += OnChapterMasterCandidateSelected;
+        AddChild(_chapterMasterMenu);
+        _chapterMasterConfirmationDialog = new ConfirmationDialog
+        {
+            Title = "Promote to Chapter Master",
+            DialogAutowrap = true,
+            MinSize = new Vector2I(440, 0)
+        };
+        _chapterMasterConfirmationDialog.Confirmed += OnChapterMasterPromotionConfirmed;
+        AddChild(_chapterMasterConfirmationDialog);
 
         _transferConfirmationDialog = new ConfirmationDialog
         {
@@ -83,7 +101,9 @@ public partial class ChapterController : MainScreenController
     }
 
     public void Configure(
-        IChapterScreenApplication application, ILoadoutScreenApplication loadoutApplication)
+        IChapterScreenApplication application,
+        ILoadoutScreenApplication loadoutApplication,
+        IMandateScreenApplication mandateApplication = null)
     {
         if (_application != null)
         {
@@ -92,6 +112,7 @@ public partial class ChapterController : MainScreenController
 
         _application = application;
         _loadoutApplication = loadoutApplication;
+        _mandateApplication = mandateApplication;
         _loadoutDoctrineDialog?.Configure(loadoutApplication);
         _musterScreen?.Configure(application as IMusterScreenApplication);
         if (_application != null)
@@ -109,7 +130,88 @@ public partial class ChapterController : MainScreenController
         _historicalSoldierId = null;
         ClearPendingTransfer();
         _pendingRecallSoldierId = null;
+        _pendingChapterMasterId = null;
+        _chapterMasterCandidates = [];
         RenderCurrentPath();
+    }
+
+    // ---- The office of Chapter Master (PRD §4.25, TDD §6.15 *Succession*) ------------------------
+
+    /// <summary>
+    /// Shows who holds the office, or, when it is empty, the living Captains who can take it.
+    /// The Command Brief's "no Master" card opens this.
+    /// </summary>
+    public void OpenChapterMasterSuccession()
+    {
+        if (_mandateApplication == null) return;
+        ChapterMasterSuccessionView succession = _mandateApplication.QueryChapterMasterSuccession();
+        if (!succession.IsVacant || succession.Candidates.Count == 0)
+        {
+            ShowAcknowledgement(new ChapterPrompt(
+                ChapterPromptKind.Blocked, "Chapter Master", succession.Guidance));
+            return;
+        }
+
+        _chapterMasterCandidates = succession.Candidates;
+        _chapterMasterMenu.Clear();
+        _chapterMasterMenu.AddSeparator("Promote a Captain to Chapter Master");
+        foreach (ChapterMasterCandidateView candidate in succession.Candidates)
+        {
+            string readiness = candidate.IsDutyReady ? string.Empty : " (not duty-ready)";
+            _chapterMasterMenu.AddItem($"{candidate.Name}, {candidate.SquadName}{readiness}", candidate.SoldierId);
+        }
+        Vector2 mouse = GetGlobalMousePosition();
+        _chapterMasterMenu.Position = new Vector2I((int)mouse.X, (int)mouse.Y);
+        _chapterMasterMenu.ResetSize();
+        _chapterMasterMenu.Popup();
+    }
+
+    private void OnChapterMasterPressed(object sender, EventArgs e) => OpenChapterMasterSuccession();
+
+    private void OnChapterMasterCandidateSelected(long id)
+    {
+        if (_mandateApplication == null) return;
+        int soldierId = checked((int)id);
+        ChapterPrompt prompt = _mandateApplication.DescribeChapterMasterPromotion(soldierId);
+        if (prompt.Kind != ChapterPromptKind.Confirm)
+        {
+            ShowAcknowledgement(prompt);
+            return;
+        }
+        _pendingChapterMasterId = soldierId;
+        _chapterMasterConfirmationDialog.Title = prompt.Title;
+        _chapterMasterConfirmationDialog.DialogText = prompt.Message;
+        _chapterMasterConfirmationDialog.PopupCentered();
+    }
+
+    private void OnChapterMasterPromotionConfirmed()
+    {
+        if (_mandateApplication == null || !_pendingChapterMasterId.HasValue) return;
+        int soldierId = _pendingChapterMasterId.Value;
+        _pendingChapterMasterId = null;
+        MandateCommandResult result = _mandateApplication.PromoteToChapterMaster(
+            _mandateApplication.SessionToken, soldierId);
+        ShowAcknowledgement(new ChapterPrompt(
+            result.Succeeded ? ChapterPromptKind.Confirm : ChapterPromptKind.Blocked,
+            result.Succeeded ? "New Chapter Master" : "Promotion Blocked",
+            result.Message));
+        if (result.Succeeded)
+        {
+            CampaignChanged?.Invoke(this, EventArgs.Empty);
+        }
+        RenderCurrentPath();
+    }
+
+    private void RenderChapterMasterState()
+    {
+        if (ChapterView == null) return;
+        if (_mandateApplication == null)
+        {
+            ChapterView.SetChapterMasterState(false, false, null);
+            return;
+        }
+        ChapterMasterSuccessionView succession = _mandateApplication.QueryChapterMasterSuccession();
+        ChapterView.SetChapterMasterState(true, succession.IsVacant, succession.Guidance);
     }
 
     private void EnsureMusterScreen()
@@ -175,6 +277,15 @@ public partial class ChapterController : MainScreenController
         ChapterView.FilterButtonPressed -= OnFilterButtonPressed;
         ChapterView.ChapterLoadoutsPressed -= OnChapterLoadoutsPressed;
         ChapterView.DetailPrimaryActionPressed -= OnDetailPrimaryActionPressed;
+        ChapterView.ChapterMasterPressed -= OnChapterMasterPressed;
+        if (_chapterMasterMenu != null)
+        {
+            _chapterMasterMenu.IdPressed -= OnChapterMasterCandidateSelected;
+        }
+        if (_chapterMasterConfirmationDialog != null)
+        {
+            _chapterMasterConfirmationDialog.Confirmed -= OnChapterMasterPromotionConfirmed;
+        }
         if (_transferConfirmationDialog != null)
         {
             _transferConfirmationDialog.Confirmed -= OnTransferConfirmed;
@@ -497,6 +608,7 @@ public partial class ChapterController : MainScreenController
         _contextSoldierIds = view.ContextSoldierIds;
         _currentDetailSoldierId = view.DetailSoldierId;
         _currentDetailSquadId = view.DetailSoldierSquadId;
+        RenderChapterMasterState();
     }
 
     private static int IndexOf(IReadOnlyList<int> ids, int value)

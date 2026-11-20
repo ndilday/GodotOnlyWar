@@ -133,6 +133,12 @@ namespace OnlyWar.Campaign.Command
                     case CampaignEventType.LegacyChapterHistory:
                         categories.Add(ChronicleFilter.Battles);
                         break;
+                    case CampaignEventType.Oath:
+                    case CampaignEventType.MandateResolved:
+                    case CampaignEventType.ChapterMasterAppointed:
+                    case CampaignEventType.ChapterWorldRenounced:
+                        categories.Add(ChronicleFilter.Chapter);
+                        break;
                 }
 
                 if (@event.Entities.Any(entity => entity.Kind == CampaignEntityKind.Planet

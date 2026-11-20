@@ -248,6 +248,15 @@ CREATE TABLE WorldControlEpisode (PlanetId INTEGER PRIMARY KEY REFERENCES Planet
 -- row means the seat was not yet observed; a row with a null CharacterId means it was vacant.
 CREATE TABLE SectorDispatchPlanet (PlanetId INTEGER PRIMARY KEY REFERENCES Planet (Id), InDanger BOOLEAN NOT NULL, RevoltActive BOOLEAN NOT NULL, RevoltChapterParticipated BOOLEAN NOT NULL);
 CREATE TABLE SectorDispatchSectorLord (Id INTEGER PRIMARY KEY CHECK (Id = 1), CharacterId INTEGER, CapitalPlanetId INTEGER);
+-- Chapter mandates, the legacy ledger and Chapter Master tenure (OnlyWar_TDD.md §6.15).
+-- Mandate.PlanetIds is a comma-separated id list. No foreign keys: a mandate keeps the identities
+-- it named when it was sworn, and those may no longer exist (§5 notes). LegacyLedgerEntry.SourceKey
+-- is unique so one source outcome writes one entry; ChapterMasterId is null while the office was
+-- empty. MandateRaisedCompany lists the companies that once reached the Rebuild threshold (D28).
+CREATE TABLE Mandate (Id INTEGER PRIMARY KEY, Family INTEGER NOT NULL, IsPromisedWorld BOOLEAN NOT NULL, Title TEXT NOT NULL, SubjectName TEXT NOT NULL, StartWeek INTEGER NOT NULL, DeadlineWeek INTEGER, PlanetIds TEXT NOT NULL, UnitId INTEGER, FactionId INTEGER, InvasionForceId INTEGER, ThreatKind INTEGER NOT NULL, BaselinePledgeId INTEGER NOT NULL, LegacyValue INTEGER NOT NULL, State INTEGER NOT NULL, ResolvedWeek INTEGER, CleanWeeks INTEGER NOT NULL);
+CREATE TABLE LegacyLedgerEntry (Id INTEGER PRIMARY KEY, Week INTEGER NOT NULL, Amount INTEGER NOT NULL, SourceKind INTEGER NOT NULL, SourceKey TEXT NOT NULL UNIQUE, CampaignEventId INTEGER, ChapterMasterId INTEGER, Description TEXT NOT NULL);
+CREATE TABLE ChapterMasterTenure (Id INTEGER PRIMARY KEY, SoldierId INTEGER NOT NULL, SoldierName TEXT NOT NULL, StartWeek INTEGER NOT NULL, EndWeek INTEGER);
+CREATE TABLE MandateRaisedCompany (UnitId INTEGER PRIMARY KEY);
 CREATE INDEX IX_CampaignEvent_OccurredWeek ON CampaignEvent (OccurredWeek, Id);
 CREATE INDEX IX_CampaignEvent_RecordedWeek ON CampaignEvent (RecordedWeek, Id);
 CREATE INDEX IX_CampaignEvent_Correlation ON CampaignEvent (CorrelationKey, Id);

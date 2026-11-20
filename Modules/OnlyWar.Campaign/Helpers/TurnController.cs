@@ -33,6 +33,7 @@ namespace OnlyWar.Campaign
         private readonly PlanetIntelligenceProcessor _planetIntelligenceProcessor;
         private readonly PlanetForwardSimulator _planetForwardSimulator;
         private readonly ScenarioTurnProcessor _scenarioTurnProcessor;
+        private readonly MandateTurnProcessor _mandateTurnProcessor;
         private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
         private readonly RecruitmentTurnProcessor _recruitmentTurnProcessor;
         private readonly FactionCapabilityCampaignProcessor _factionCapabilityCampaignProcessor;
@@ -147,6 +148,8 @@ namespace OnlyWar.Campaign
                 _intelLedger,
                 _lastResult);
             _scenarioTurnProcessor = new ScenarioTurnProcessor(
+                _turn, _personnel, _commitments);
+            _mandateTurnProcessor = new MandateTurnProcessor(
                 _turn, _personnel, _commitments);
             _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_turn);
             _recruitmentTurnProcessor = new RecruitmentTurnProcessor(
@@ -277,6 +280,8 @@ namespace OnlyWar.Campaign
             {
                 _lastResult.ScenarioNotification = scenarioNotification;
             }
+            // After the scenario, so a Promised World result this week resolves its mandate.
+            _mandateTurnProcessor.Process(sector, _turn.Sector.PlayerForce?.CurrentTurnEvents);
             ScenarioMetricsCollector.LogScenarioRegionMetrics($"date={_turn.CurrentDate}");
             ScenarioMetricsCollector.EndScenarioRegionMetrics();
             MissionAftermathProcessor.CleanupResolvedPlayerOrders(sector, playerOrdersThisTurn);

@@ -134,10 +134,17 @@ namespace OnlyWar.Application.Adapters.Generation
             int? chapterMasterId,
             string chapterMasterName,
             int promisedPlanetId,
-            string promisedPlanetName) =>
+            string promisedPlanetName)
+        {
             playerForce.RecordChapterFounded(
                 date, payload, chapterMasterId, chapterMasterName,
                 promisedPlanetId, promisedPlanetName);
+            // The founding master's tenure and the Promised World as the first mandate
+            // (TDD §6.15 *Lifecycle*).
+            OnlyWar.Campaign.Mandates.MandateService.BeginCampaign(
+                playerForce, date, chapterMasterId, chapterMasterName,
+                promisedPlanetId, promisedPlanetName);
+        }
 
         public void ReconcileChronicle(PlayerForce playerForce) =>
             ChapterChronicleProjector.Reconcile(

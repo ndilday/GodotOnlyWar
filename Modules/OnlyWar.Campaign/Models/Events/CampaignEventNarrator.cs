@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using OnlyWar.Domain.Mandates;
 using OnlyWar.Domain.Missions;
 
 namespace OnlyWar.Campaign.Events
@@ -188,6 +189,24 @@ namespace OnlyWar.Campaign.Events
             };
         }
 
+        private static string RenderMandateOath(MandateOathPayload oath) =>
+            oath.IsPromisedWorld
+                ? $"The Chapter's first vow: {oath.Title}."
+                : $"The Chapter Master has sworn to {LowerFirst(oath.Title)}"
+                    + (oath.DeadlineWeek.HasValue ? $", by week {oath.DeadlineWeek.Value}." : ".");
+
+        private static string RenderMandateResolved(MandateResolvedPayload resolved)
+        {
+            string legacy = resolved.LegacyAmount == 0
+                ? string.Empty
+                : $" Legacy {(resolved.LegacyAmount > 0 ? "+" : string.Empty)}{resolved.LegacyAmount}.";
+            string reason = string.IsNullOrWhiteSpace(resolved.Reason) ? string.Empty : $" {resolved.Reason}";
+            return $"{resolved.Title}.{reason}{legacy}";
+        }
+
+        private static string LowerFirst(string text) =>
+            string.IsNullOrEmpty(text) ? text : char.ToLowerInvariant(text[0]) + text[1..];
+
         private static string JoinFormations(System.Collections.Generic.IReadOnlyList<string> names)
         {
             string[] formations = (names ?? [])
@@ -267,6 +286,13 @@ namespace OnlyWar.Campaign.Events
                 ChapterFoundedPayload founding =>
                     $"The {founding.ChapterName} was founded with {founding.InitialActiveStrength:N0} "
                     + $"active battle brothers. {founding.OpeningDirective}",
+                MandateOathPayload oath => RenderMandateOath(oath),
+                MandateResolvedPayload resolved => RenderMandateResolved(resolved),
+                ChapterMasterAppointedPayload appointed =>
+                    $"{appointed.SoldierName} was raised from {appointed.FormerTemplateName ?? "the captaincy"} "
+                    + "to the office of Chapter Master.",
+                ChapterWorldRenouncedPayload renounced =>
+                    $"The Chapter renounced {renounced.PlanetName} as its Chapter World.",
                 LegacyChapterHistoryPayload chapter => string.Join(" ", chapter.SubEvents ?? []),
                 LegacySoldierEventPayload legacy => legacy.Detail,
                 _ => throw new NotSupportedException(
@@ -299,6 +325,17 @@ namespace OnlyWar.Campaign.Events
                         + $"{world.CurrentControllingFactionId}; the episode began in week {world.EpisodeStartedWeek}.",
                 HiddenCultRevealedPayload cult =>
                     $"CULT REVEALED — {cult.FactionName} has been publicly exposed on {cult.PlanetName}.",
+                MandateOathPayload oath => $"MANDATE SWORN — {RenderMandateOath(oath)}",
+                MandateResolvedPayload resolved => resolved.Result switch
+                {
+                    Domain.Mandates.MandateState.Fulfilled => $"MANDATE FULFILLED — {RenderMandateResolved(resolved)}",
+                    Domain.Mandates.MandateState.Abandoned => $"MANDATE ABANDONED — {RenderMandateResolved(resolved)}",
+                    _ => $"MANDATE FAILED — {RenderMandateResolved(resolved)}"
+                },
+                ChapterMasterAppointedPayload =>
+                    $"NEW CHAPTER MASTER — {RenderServiceRecord(@event, identity)}",
+                ChapterWorldRenouncedPayload =>
+                    $"CHAPTER WORLD RENOUNCED — {RenderServiceRecord(@event, identity)}",
                 FactionIntelEventPayload or FactionRelationshipEventPayload => RenderServiceRecord(@event, identity),
                 BattleParticipationPayload or IncapacitatedPayload or DeathPayload
                     or GeneseedRecoveryPayload or NearDeathRecoveryPayload
@@ -349,7 +386,7 @@ namespace OnlyWar.Campaign.Events
                         .Replace("{planet}", cult.PlanetName, StringComparison.Ordinal)
                         .Replace("{faction}", cult.FactionName, StringComparison.Ordinal),
                 FactionIntelEventPayload intel when intel.EventType == CampaignEventType.FactionFirstContact =>
-                    $"The Chapter first learned the measure of {EntityName(@event, CampaignEntityKind.Faction, "the enemy")}. "
+                    $"The Chapter first learned the measure of {FactionWithArticle(EntityName(@event, CampaignEntityKind.Faction, null))}. "
                     + "Their presence was entered among the threats to the sector.",
                 FactionIntelEventPayload intel =>
                     RenderFactionIntel(@event, intel) + " The finding was entered in the Chapter's record.",
@@ -365,6 +402,31 @@ namespace OnlyWar.Campaign.Events
                     or SquadLeaderUnavailablePayload or SectorDispatchPayload =>
                     RenderServiceRecord(@event, identity),
                 DeathPayload death => RenderDeath(SubjectName(@event), death),
+                MandateOathPayload oath => oath.IsPromisedWorld
+                    ? $"The Chapter took up the charge laid upon it: {oath.Title}. "
+                        + "Its first vow was entered in the annals."
+                    : $"{(string.IsNullOrWhiteSpace(oath.ChapterMasterName) ? "The Chapter" : $"Chapter Master {oath.ChapterMasterName}")} "
+                        + $"swore that the Chapter would {LowerFirst(oath.Title)}. "
+                        + (oath.DeadlineWeek.HasValue
+                            ? $"The vow was to be kept by week {oath.DeadlineWeek.Value}."
+                            : "The vow was entered in the annals."),
+                MandateResolvedPayload resolved => resolved.Result switch
+                {
+                    Domain.Mandates.MandateState.Fulfilled =>
+                        $"The vow to {LowerFirst(resolved.Title)} was kept. {resolved.Reason}",
+                    Domain.Mandates.MandateState.Abandoned =>
+                        $"The vow to {LowerFirst(resolved.Title)} was set aside. The annals record it as broken.",
+                    _ => $"The vow to {LowerFirst(resolved.Title)} was not kept. {resolved.Reason}"
+                },
+                ChapterMasterAppointedPayload appointed =>
+                    $"{appointed.SoldierName} was raised to the office of Chapter Master"
+                    + (string.IsNullOrWhiteSpace(appointed.PreviousMasterName)
+                        ? "."
+                        : $", in succession to {appointed.PreviousMasterName}.")
+                    + " The Chapter's vows passed into his keeping.",
+                ChapterWorldRenouncedPayload renounced =>
+                    $"The Chapter gave up its claim to {renounced.PlanetName}. "
+                    + "The world is no longer its home.",
                 _ => throw new NotSupportedException(
                     $"No Chronicle renderer exists for {@event.Type} payload {@event.Payload.GetType().Name}.")
             };
@@ -470,6 +532,11 @@ namespace OnlyWar.Campaign.Events
                 _ => throw new NotSupportedException($"No faction-intelligence renderer exists for {intel.EventType}.")
             };
         }
+
+        // Faction names are plural or collective nouns ("Tyranids", "Genestealer Cult"), which
+        // read as prose only with "the" in front.
+        private static string FactionWithArticle(string name) =>
+            string.IsNullOrWhiteSpace(name) ? "the enemy" : $"the {name}";
 
         private static string EntityName(CampaignEvent @event, CampaignEntityKind kind, string fallback) =>
             @event.Entities.FirstOrDefault(entity => entity.Kind == kind

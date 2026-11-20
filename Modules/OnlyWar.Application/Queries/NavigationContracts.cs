@@ -20,7 +20,10 @@ public enum CampaignNavigationRouteKind
     RegionOperations,
     Diplomacy,
     Apothecarium,
-    SectorMap
+    SectorMap,
+    // TDD §6.15 *Application*.
+    Chapter,
+    Mandates
 }
 
 public sealed record CampaignNavigationRoute(

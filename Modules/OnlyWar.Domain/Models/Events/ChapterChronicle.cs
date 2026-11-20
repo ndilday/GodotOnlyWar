@@ -35,6 +35,12 @@ namespace OnlyWar.Domain.Events
                         categories.Add(ChapterChronicleCategory.Chapter);
                         categories.Add(ChapterChronicleCategory.Defining);
                         break;
+                    case CampaignEventType.Oath:
+                    case CampaignEventType.MandateResolved:
+                    case CampaignEventType.ChapterMasterAppointed:
+                    case CampaignEventType.ChapterWorldRenounced:
+                        categories.Add(ChapterChronicleCategory.Chapter);
+                        break;
                     case CampaignEventType.BattleResolved:
                     case CampaignEventType.FirstBlood:
                     case CampaignEventType.KillMilestone:

@@ -36,6 +36,10 @@ internal sealed class CampaignNavigationContext
                 return new CampaignNavigationRoute(CampaignNavigationRouteKind.Recruitment);
             case CampaignNavigationTargetKind.SectorMap:
                 return new CampaignNavigationRoute(CampaignNavigationRouteKind.SectorMap);
+            case CampaignNavigationTargetKind.Chapter:
+                return new CampaignNavigationRoute(CampaignNavigationRouteKind.Chapter);
+            case CampaignNavigationTargetKind.Mandates:
+                return new CampaignNavigationRoute(CampaignNavigationRouteKind.Mandates);
             case CampaignNavigationTargetKind.Diplomacy:
                 return new CampaignNavigationRoute(
                     CampaignNavigationRouteKind.Diplomacy, FocusId: primaryId);

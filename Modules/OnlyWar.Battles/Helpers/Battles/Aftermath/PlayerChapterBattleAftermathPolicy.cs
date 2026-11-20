@@ -255,11 +255,15 @@ namespace OnlyWar.Battles.Aftermath
         /// sides free to recover their own -- the same rule
         /// <c>BattleTurnResolver.FinishOffAbandonedWounded</c> applies to everyone else.
         /// </summary>
-        private bool PlayerHeldTheField()
+        private bool PlayerHeldTheField() => PlayerHeldFieldOrNull() ?? true;
+
+        // Null when no side held the field: a battle nobody won is neither won nor lost for the
+        // legacy ledger, though both sides recover their own wounded from it.
+        private bool? PlayerHeldFieldOrNull()
         {
             if (_context.BattleHistory.Outcome?.SideHoldingField is not BattleSide holder)
             {
-                return true;
+                return null;
             }
             BattleSoldier anyPlayerSoldier = _context.StartingPlayerSoldiers.FirstOrDefault();
             BattleSide playerSide = _context.IsSecondSide(anyPlayerSoldier)
@@ -585,6 +589,12 @@ namespace OnlyWar.Battles.Aftermath
         {
             List<string> subEvents = GetBattleLog(disposition);
             string title = $"A skirmish in {_context.Region.Name}, {_context.Region.Planet.Name}";
+            if (_dependencies.PlayerSink is IPlayerBattleScaleSink scaleSink)
+            {
+                scaleSink.RecordBattleScale(new BattleScaleSnapshot(
+                    _context.StartingSoldiers.Sum(soldier => (long)(soldier.Soldier?.StrategicValue ?? 0)),
+                    PlayerHeldFieldOrNull()));
+            }
             _dependencies.PlayerSink.AddToBattleHistory(_dependencies.Date, title, subEvents);
         }
 

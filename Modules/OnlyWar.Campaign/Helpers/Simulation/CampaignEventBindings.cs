@@ -19,8 +19,13 @@ public static class CampaignEventBindings
                     || (!observer.Faction.IsPlayerFaction && !observer.Faction.IsDefaultFaction)) return;
                 var belief = change.Current ?? change.Previous;
                 if (belief?.Region?.Planet == null) return;
+                // The event happens now, so it takes the session week, as relationship changes do.
+                // Most observations (battle and patrol contact, recon, strategic combat, public
+                // activity seen at generation) pass evidence week 0, which dated the opening first
+                // contacts before the Chapter's founding (user report, 2026-11-19).
                 sector.PlayerForce?.GetCampaignEventRecorder()?.RecordFactionIntel(
-                    change, belief.Region.Planet.Id, change.Observation.EvidenceWeek);
+                    change, belief.Region.Planet.Id,
+                    System.Math.Max(change.Observation.EvidenceWeek, Date.GetTotalWeeks()));
             };
             sector.StanceChanged += (_, change) =>
             {

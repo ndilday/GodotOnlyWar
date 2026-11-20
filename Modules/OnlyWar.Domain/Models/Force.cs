@@ -156,6 +156,8 @@ namespace OnlyWar.Domain
         public ChapterChronicleLedger ChapterChronicle { get; } = new();
         public WorldControlEpisodeTracker WorldControlEpisodes { get; private set; } = new();
         public SectorDispatchTracker SectorDispatches { get; private set; } = new();
+        // Mandates, the legacy ledger and Chapter Master tenure (TDD §6.15).
+        public global::OnlyWar.Domain.Mandates.ChapterMandates Mandates { get; private set; } = new();
         private CampaignIdentity _campaignIdentity;
         public CampaignIdentity CampaignIdentity
         {
@@ -207,6 +209,9 @@ namespace OnlyWar.Domain
             HomeWorldPlanetId = null;
             RecruitmentProgram = null;
         }
+
+        public void RestoreMandates(global::OnlyWar.Domain.Mandates.ChapterMandates mandates) =>
+            Mandates = mandates ?? throw new ArgumentNullException(nameof(mandates));
 
         public void RestoreWorldControlEpisodes(IEnumerable<WorldControlEpisodeState> states) =>
             WorldControlEpisodes = new WorldControlEpisodeTracker(states);

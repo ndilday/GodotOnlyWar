@@ -57,6 +57,30 @@ public class NewGameSaveTests : IClassFixture<NewGameSaveFixture>
         }
     }
 
+    // The opening Chronicle of a real new game (user reports, 2026-11-19). It is here, not in a
+    // narrative test class, so it reads this fixture's sector instead of generating a second one.
+    // The founding is the first entry; first contacts seen in the generation warm-up follow it, in
+    // the founding week, with their own title; the Imperium is never a first contact; and no entry
+    // recalls an intel report or the Chapter Master's history.
+    [Fact]
+    public void NewGame_ChronicleOpensWithTheFoundingAndItsFirstContacts()
+    {
+        IReadOnlyList<OnlyWar.Domain.Events.ChapterChronicleEntry> entries =
+            _sector.PlayerForce.ChapterChronicle.Entries.OrderBy(entry => entry.Id).ToList();
+        Assert.NotEmpty(entries);
+        OnlyWar.Domain.Events.ChapterChronicleEntry founding = entries[0];
+        Assert.EndsWith("is Founded", founding.Title);
+
+        List<OnlyWar.Domain.Events.ChapterChronicleEntry> firstContacts = entries
+            .Where(entry => entry.Title.StartsWith("First Contact with the ", StringComparison.Ordinal))
+            .ToList();
+        Assert.NotEmpty(firstContacts);
+        Assert.All(firstContacts, entry => Assert.Equal(founding.OccurredWeek, entry.OccurredWeek));
+        Assert.DoesNotContain(entries, entry => entry.Title.Contains(_data.DefaultFaction.Name, StringComparison.Ordinal));
+        Assert.DoesNotContain(entries, entry => entry.Title == "Campaign Service Record");
+        Assert.DoesNotContain(entries, entry => entry.Body.Contains("recalled an earlier entry", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void FailedSave_LeavesPreviousSaveIntact_AndNoTempFiles()
     {

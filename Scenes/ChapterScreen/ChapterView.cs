@@ -13,6 +13,7 @@ public partial class ChapterView : MainScreenView
     private LinkButton _detailLocationLink;
     private Button _loadoutsButton;
     private Button _musterButton;
+    private Button _chapterMasterButton;
     private Label _leftTitleLabel;
     private Button _filterButton;
     private VBoxContainer _leftMenuVBox;
@@ -36,6 +37,7 @@ public partial class ChapterView : MainScreenView
     public event EventHandler FilterButtonPressed;
     public event EventHandler ChapterLoadoutsPressed;
     public event EventHandler ChapterMusterPressed;
+    public event EventHandler ChapterMasterPressed;
 
     public override void _Ready()
     {
@@ -69,6 +71,19 @@ public partial class ChapterView : MainScreenView
         _musterButton.Text = "Bulk Transfer";
         _musterButton.TooltipText = "Open Chapter Muster to promote, transfer, and organize multiple soldiers as one staged plan.";
         _musterButton.Pressed += () => ChapterMusterPressed?.Invoke(this, EventArgs.Empty);
+        // The office of Chapter Master (TDD §6.15 *Succession*). Built in code beside
+        // the muster button so the scene file does not change.
+        _chapterMasterButton = new Button
+        {
+            Name = "ChapterMasterButton",
+            Text = "Chapter Master",
+            MouseDefaultCursorShape = CursorShape.PointingHand,
+            FocusMode = FocusModeEnum.All
+        };
+        SetHeroElementHeight(_chapterMasterButton);
+        IconAtlas.Apply(_chapterMasterButton, "chapter");
+        _chapterMasterButton.Pressed += () => ChapterMasterPressed?.Invoke(this, EventArgs.Empty);
+        _musterButton.GetParent().AddChild(_chapterMasterButton);
         _detailIcon.CustomMinimumSize = new Vector2(RosterRowStyle.IconSize, RosterRowStyle.IconSize);
         _detailIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         _detailActionButton.Pressed += () => DetailPrimaryActionPressed?.Invoke(this, EventArgs.Empty);
@@ -122,6 +137,23 @@ public partial class ChapterView : MainScreenView
     public void SetFilterActive(int conditionCount)
     {
         _filterButton.Text = conditionCount > 0 ? $"Filter ({conditionCount})" : "Filter";
+    }
+
+    // An empty office shows as a warning, so the player can see it from the Chapter screen.
+    public void SetChapterMasterState(bool available, bool isVacant, string tooltip)
+    {
+        if (_chapterMasterButton == null) return;
+        _chapterMasterButton.Visible = available;
+        _chapterMasterButton.Text = isVacant ? "Appoint Master" : "Chapter Master";
+        _chapterMasterButton.TooltipText = tooltip ?? string.Empty;
+        if (isVacant)
+        {
+            _chapterMasterButton.AddThemeColorOverride("font_color", OnlyWarStyle.MedicalWarning);
+        }
+        else
+        {
+            _chapterMasterButton.RemoveThemeColorOverride("font_color");
+        }
     }
 
     public void SetDetail(ChapterBrowserDetail detail)

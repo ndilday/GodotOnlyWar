@@ -30,6 +30,7 @@ public sealed class CampaignApplication :
     IFleetScreenApplication,
     ILoadoutScreenApplication,
     IMainScreenApplication,
+    IMandateScreenApplication,
     IMedicalScreenApplication,
     IMusterScreenApplication,
     IOperationsScreenApplication,
@@ -54,6 +55,7 @@ public sealed class CampaignApplication :
     private readonly SessionControlApplication _sessionControl;
     private readonly SystemInspectorApplication _systemInspector;
     private readonly TrainingScreenApplication _training;
+    private readonly MandateScreenApplication _mandates;
 
     public CampaignApplication(CampaignServices services)
     {
@@ -74,6 +76,7 @@ public sealed class CampaignApplication :
         _systemInspector = new SystemInspectorApplication(
             _context, _operations.Queries, _fleet);
         _training = new TrainingScreenApplication(_context);
+        _mandates = new MandateScreenApplication(_context);
     }
 
     // The public facade deliberately publishes screen contracts and lifecycle commands, not the
@@ -106,6 +109,7 @@ public sealed class CampaignApplication :
     // These properties are useful to alternate hosts that want one screen contract without the
     // aggregate facade. The ordinary Godot host continues to inject CampaignApplication itself.
     public IArmoryScreenApplication ArmoryScreen => _armory;
+    public IMandateScreenApplication MandateScreen => _mandates;
     public ICampaignNavigationApplication Navigation => _navigation;
     public IChapterScreenApplication ChapterScreen => _chapter;
     public ICommandScreenApplication CommandScreen => _command;
@@ -197,6 +201,19 @@ public sealed class CampaignApplication :
         _armory.Promote(sessionToken, soldierId, templateId);
     public ArmoryCommandResult SetMarsReturnDestination(Guid sessionToken, string destinationKey) =>
         _armory.SetMarsReturnDestination(sessionToken, destinationKey);
+
+    public MandateBoardView QueryMandates() => _mandates.QueryMandates();
+    public MandateCommandResult SwearMandate(Guid sessionToken, string optionKey) =>
+        _mandates.SwearMandate(sessionToken, optionKey);
+    public MandateCommandResult AbandonMandate(Guid sessionToken) => _mandates.AbandonMandate(sessionToken);
+    public MandateCommandResult RenounceChapterWorld(Guid sessionToken) =>
+        _mandates.RenounceChapterWorld(sessionToken);
+    public ChapterMasterSuccessionView QueryChapterMasterSuccession() =>
+        _mandates.QueryChapterMasterSuccession();
+    public ChapterPrompt DescribeChapterMasterPromotion(int soldierId) =>
+        _mandates.DescribeChapterMasterPromotion(soldierId);
+    public MandateCommandResult PromoteToChapterMaster(Guid sessionToken, int soldierId) =>
+        _mandates.PromoteToChapterMaster(sessionToken, soldierId);
 
     // ICampaignNavigationApplication
     public CampaignNavigationRoute ResolveNavigation(

@@ -1323,15 +1323,20 @@ behavior changed.
 
 ### 4.25 Chapter Mandates & Legacy Objectives
 
-**Description.** The Promised World gives a new campaign a strong opening horizon, but its resolution must not leave the sandbox directionless. Chapter Mandates are generated, medium-term objectives that express what the Chapter is trying to become without imposing a rigid victory screen or ending the campaign.
+**Description.** The Promised World gives a new campaign a strong opening horizon, but its resolution must not leave the sandbox directionless. A Chapter Mandate is a medium-term goal the Chapter Master (the player) swears: the activity the Chapter will focus on next. Mandates are an internal measure of the Chapter's purpose, not requests from outside — governor petitions already fill that role. **Legacy points** measure how well the Chapter, and each Chapter Master, keeps the vows it makes and meets its duties, and give the Chronicle a long-term shape. Neither imposes a victory screen or ends the campaign. Implementation: TDD §6.15; follow-through in §5.8 *Chapter Mandates follow-through*.
 
-**Acceptance Criteria (Planned — 0.8):**
-- Once the Promised World resolves, the campaign offers a small set of state-aware mandates rather than a fixed universal quest chain. The player chooses or accepts a limited number so the system supplies direction without becoming a task list.
-- Initial mandate families include: establish or secure a Chapter World; rebuild a depleted company; protect several strategic Imperial worlds; eradicate a named regional threat; reach a defined reputation with sector authorities; and establish a functioning supply network.
-- Mandates are generated only when their prerequisites and completion conditions are meaningful in the current sector. A mandate cannot ask the player to interact with content or systems absent from that campaign.
-- Progress, stakes, and rewards are visible in the Command Brief. Relevant events deep-link to the affected worlds, forces, characters, or supply lines.
-- Completion produces an appropriate persistent consequence — reputation, Requisition, a pledge/right, a Chronicle entry, or a new mandate horizon. Failure or expiration changes relationships or sector state but is not a campaign-ending fail state.
-- Mandates coexist with free-form play. The player may ignore them and continue the sandbox, accepting the simulated and political consequences.
+**Acceptance Criteria (Implemented — 0.8.1; implementation in TDD §6.15; checked in Godot 2026-11-19):**
+- **One active mandate at a time, chosen by the player.** The Promised World is the first mandate: its win is a fulfilled mandate and its lapse a failed one. It has no deadline, and the player can abandon it, with the same result as a lapse. Whenever no mandate is active, an Actionable Command Brief card opens a chooser that lists every eligible mandate, grouped by family. Having no mandate carries no penalty; the card stays until the player chooses.
+- **Six families:** establish a Chapter World; secure the Chapter World; rebuild a company (only a company that once reached 60% duty-ready strength, never the Scout Company); protect up to three of the sector's most important Imperial worlds; eradicate a named public threat (a Waaagh! must have no public presence on any world); raise the Sector Lord's opinion to warm; and gain three new pledges from three different worlds. Each family has its own deadline and legacy value.
+- A mandate is offered only when it is meaningful in the current sector, and it keeps the worlds, companies or threats it named when it was sworn. Eradication and liberation are judged by public presence, so a hidden remnant is never disclosed.
+- A mandate is fulfilled when its goal is met, and failed when its deadline passes, its fail condition occurs, or the player abandons it. Neither result is a campaign-ending fail state.
+- **Mandates give no practical reward** — no Requisition and no opinion change. Establish a Chapter World is the one exception: like the Promised World, it is both a grant and a goal, so its win grants the world as the Chapter World and raises the Sector Lord's opinion, and its failure lowers it.
+- **The Chapter World is never taken away by the simulation.** An overrun Chapter World stays the Chapter World until the player renounces it; renouncing makes Establish eligible again.
+- Swearing, fulfilling and failing a mandate each record a Chronicle entry, except the Promised World oath: the founding entry already tells that charge. The Brief shows the active mandate's progress and weeks left, with links to the worlds, companies or threats it names.
+- **A persisted legacy ledger** records every gain and loss with its week, source and the Chapter Master in office. Sources: mandates (fulfilled: the family's value; failed or abandoned: half of it); worlds saved and lost where the Chapter took part; governor requests fulfilled and failed, scaled by severity (a request the Chapter ignored counts as failed); large battles won and lost, where large is measured by both sides' starting strategic Battle Value; and the Chapter's own dead, scaled by rank. One outcome can earn entries under more than one source. Totals are sums over the ledger.
+- The Chronicle lens shows a graph of the Chapter's legacy over time and a table of points earned and lost under each Chapter Master.
+- **Chapter Master succession.** A tenure record starts when a soldier takes the office and ends when the office empties. While it is empty, an Actionable Brief card links to the Chapter screen, where the player promotes a living Captain (duty-ready or not) to Chapter Master. The promotion changes rank only: he stays in his squad until the player moves him, and his company's Captain post becomes vacant. If no Captain lives, the player first promotes one through the muster.
+- Tuning values are named code constants.
 
 ---
 
@@ -1504,7 +1509,7 @@ The work that remained open at the end of 0.8, together with the connective item
 - ✅ **Techmarine Cybernetic Repair** — Techmarines repair damaged augmetics on a daily working-time budget, in field and garrison pools like field care; the player queues and pays for each repair from the Apothecarium. Installed augmetics gained their own armor and constitution, the skill curve now rewards every fraction of a point, and Master Techmarines count as Techmarines. §4.8, §4.28; TDD §6.6.1. *(Save format 24.)* Godot check outstanding.
 - ✅ **Vital-location replacement** — a severed Vitals is survived 25% of the time and a Torso crippled in battle fails to heal 25% of the time; either then needs an organ replacement, cybernetic or vat-grown, at one price. A cybernetic organ replacement adds an augmetic organ that a later penetrating hit can strike and a Techmarine repairs. §4.8; TDD §5.3, §6.6.1. *(Save format 25.)* Checked in Godot 2026-10-15.
 - ✅ **Near death for a survived severed Vitals** — a brother who survives a severed Vitals now opens a near-death episode, so the end of his organ replacement records a near-death recovery, and his service record says the location needs an organ replacement. TDD §6.6 *Player aftermath event emission*. Godot check outstanding.
-- ⬜ **Chapter Mandates** — player-chosen mandates shown in the Command Brief, the legacy-point ledger, and Chapter Master tenure and succession. §4.25; `Design/Active/ChapterMandates.md` (design complete, not started; the constants' starting values are still to be chosen).
+- ✅ **Chapter Mandates** — player-chosen mandates shown in the Command Brief and a MANDATES lens of the Command screen, the legacy-point ledger with its graph and per-master table in the Chronicle, and Chapter Master tenure and succession (promotion on the Chapter screen). §4.25; TDD §6.15 (starting constants in `MandateConstants`). *(Save format 27.)* Checked in Godot 2026-11-19 (lenses, dialogs, the Promised World win and Chapter Master appointment); the Chronicle fixes of that day need a new game.
 - ⬜ **Display mode and UI/text scaling** — the §4.27 requirement.
 - ✅ **Refugees into depopulated regions.** Refugees resettle any adjacent region with no public
   enemy, weighted by its visibly available carrying capacity, so that liberated land fills with
@@ -1516,6 +1521,10 @@ The work that remained open at the end of 0.8, together with the connective item
   assault launch threshold, sabotage damage on the day it succeeds, and no Anti-Air sabotage.
   `Design/Active/SpecialOperations.md` (design complete, not started; starting values to tune).
   *(Save format change.)*
+- ⬜ **Refugee protection and swarm expansion valuation.** Refugees weigh a destination's Imperial
+  garrison and carrying capacity against its visible enemies, and the Tyranid swarm weighs believed
+  resistance (drawn to fights it can win) as well as biomass when it expands. §4.24;
+  `Design/Active/RefugeesAndSwarmExpansion.md` (design complete, not started).
 
 ### 5.7 Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat
 
@@ -1687,6 +1696,13 @@ support dynamic unit membership and new effect channels. Design record:
 **Strategic:** Supply economy remainder (§4.23 — the typed **materiel pledges** driven by strategic classification §4.1, the **Armory wargear inventory** §6.9, **pledge interdiction** §6.10, and **Inquisition negative-requisition** §6.5; the Requisition currency and the Requisition-delivering pledge/supply-line layer ship earlier as Phases 1–2 in 0.7 and 0.7.1, §5.2/§5.3), Diplomacy system, Space Combat and Boarding, Strategic Planetary Maps (regional types), Factional Fleets with independent movement, Sector Generation Customization (difficulty, era, story threads), Chapter Customization at start (founding legion, **progenitor chapter** — the chapter whose gene-seed the new chapter descends from, which until then the founding myth gives as "a gene-seed of uncertain lineage" — perks/disadvantages).
 
 **Living Universe:** Imperial Guard movement and inter-planet logistics (Phase 4); Character personality development over time (Phase 5).
+
+**Chapter Mandates follow-through** (§4.25; moved here from the mandates design when it was deleted, 2026-11-19):
+
+- *Legacy-shaped chapter history.* A generated chapter history whose tone follows the gains and losses of legacy over periods and events. It reads the legacy ledger, and it is related to the Founding myth (§5.6).
+- *Sandbox starts.* A campaign with no Promised World opens the mandate chooser on turn 1. Sandbox starts themselves are not designed.
+- *Legacy for inaction.* A world saved or lost counts only where the Chapter took part, so a Chapter that lets nearby worlds fall without acting loses nothing. A refinement could count a world lost while the Chapter had forces in the same system or subsector and did not commit them. Not designed; this rule was accepted with that reservation.
+- *Mandates for NPC factions.* Not designed.
 
 **Soldier Screen — awards as icons.** Replace the textual awards list on the Soldier Screen (§4.7) with an icon strip in the screen's top panel: one icon per award the marine holds, with the date the award was earned shown as hover text. The existing display rule still applies — for a multi-tier award type, only the most recent / highest tier is shown (one icon, not one per tier). Small UI/presentation item; depends on an icon set for the award types.
 

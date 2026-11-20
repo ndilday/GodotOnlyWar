@@ -60,7 +60,8 @@ namespace OnlyWar.Application.Storage
                 mechanicusLoanActive: force.IsMechanicusLoanActive,
                 marsReturnDestination: force.MarsReturnDestination,
                 cyberneticRepairJobs: force.Army.CyberneticRepairJobs,
-                sectorDispatches: force.SectorDispatches);
+                sectorDispatches: force.SectorDispatches,
+                mandates: force.Mandates);
             // A current-format save has committed successfully at this point. SaveData is
             // atomic, so reaching this line is the success boundary.
             if (session is GameSession applicationSession)

@@ -73,11 +73,19 @@ public enemy, weighted by visibly available carrying capacity) was implemented, 
 *Imperial remnants and refugees* with the player rules in PRD §4.24, and deleted on 2026-10-17. Nothing
 in it met the `Reference/` bar: it held decisions and a test list, and no rejected alternatives. Its
 Godot check was still outstanding when it was deleted.
+`ChapterMandates.md` (player-chosen mandates, the legacy ledger, and Chapter Master tenure and
+succession) was implemented, checked in Godot, distilled into TDD §6.15 with the player rules in PRD
+§4.25, and deleted on 2026-11-19. It was never committed. Nothing in it met the `Reference/` bar: its
+starting constants live in `MandateConstants`, and its three rejected alternatives (a random or capped
+chooser, practical rewards, legacy for inaction) fold into TDD §6.15 in a sentence each. Four
+out-of-scope items moved to PRD §5.8 *Chapter Mandates follow-through* before deletion. About 35 code
+comments that cited it by decision number were reworded to state the rule and point at the TDD or PRD.
 
 Active designs:
 
-- `Active/ChapterMandates.md` — player-chosen mandates and the legacy-point ledger (PRD §4.25,
-  Alpha 0.8.1). Created 2026-10-13; design complete, not started.
+- `Active/RefugeesAndSwarmExpansion.md` — refugees weigh protection and danger, and the Tyranid
+  swarm weighs believed resistance when it expands (PRD §4.24, Alpha 0.8.1). Created 2026-11-18;
+  design complete, not started.
 - `Active/FoundingMyth.md` — a generated founding history as the first Chronicle entry, and the
   chapter's founding, which sets the starting year (PRD §4.19, Alpha 0.8.1). Created 2026-10-13;
   design complete, not started.

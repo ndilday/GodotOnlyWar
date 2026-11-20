@@ -43,7 +43,9 @@ public static class PlayerForceEvents
             string title,
             IReadOnlyList<string> subEvents,
             string correlationKey,
-            string dedupeKey)
+            string dedupeKey,
+            long? startingStrategicValue = null,
+            bool? chapterHeldField = null)
         {
             if (date == null) throw new ArgumentNullException(nameof(date));
             if (string.IsNullOrWhiteSpace(title))
@@ -61,7 +63,11 @@ public static class PlayerForceEvents
                 correlationKey,
                 dedupeKey,
                 1,
-                new BattleResolvedPayload(title, string.Join(" ", entries))));
+                new BattleResolvedPayload(
+                    title,
+                    string.Join(" ", entries),
+                    startingStrategicValue,
+                    chapterHeldField)));
         }
 
         public static CampaignEvent RecordChapterFounded(this PlayerForce force, 
@@ -100,7 +106,7 @@ public static class PlayerForceEvents
                 date.GetTotalWeeks(),
                 date.GetTotalWeeks(),
                 null,
-                "chapter/founded",
+                CampaignEventRecorder.FoundingDedupeKey,
                 1,
                 payload,
                 entities,

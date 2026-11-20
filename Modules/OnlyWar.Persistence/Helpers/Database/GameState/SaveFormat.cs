@@ -45,7 +45,10 @@ namespace OnlyWar.Persistence.Database.GameState
         // 26: SectorDispatchPlanet and SectorDispatchSectorLord hold sector dispatch detection
         //     state (OnlyWar_TDD.md §6.1). This is a deliberate incompatible save
         //     break.
-        public const int CurrentVersion = 26;
+        // 27: Mandate, LegacyLedgerEntry, ChapterMasterTenure and MandateRaisedCompany hold chapter
+        //     mandates, the legacy ledger and Chapter Master tenure
+        //     (OnlyWar_TDD.md §6.15). This is a deliberate incompatible save break.
+        public const int CurrentVersion = 27;
         public const int MinimumSupportedVersion = CurrentVersion;
     }
 }

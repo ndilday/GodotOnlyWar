@@ -38,6 +38,7 @@ public sealed class CampaignApplicationContext
     internal MusterScreenContext Muster { get; private set; }
     internal LoadoutScreenContext Loadout { get; private set; }
     internal ArmoryScreenContext Armory { get; private set; }
+    internal MandateScreenContext Mandates { get; private set; }
     public Guid SessionToken { get; private set; } = Guid.NewGuid();
     // What the turn in progress is doing now. A host resolving the turn off its UI thread polls
     // this to tell the player where a long end of turn has got to.
@@ -136,6 +137,7 @@ public sealed class CampaignApplicationContext
             session.Rules,
             session.CurrentDate,
             Services.Operations.Commitments);
+        Mandates = new MandateScreenContext(session.Sector, session.Rules, session.CurrentDate);
         ReplaceSessionToken();
     }
 
@@ -160,6 +162,7 @@ public sealed class CampaignApplicationContext
         Muster = null;
         Loadout = null;
         Armory = null;
+        Mandates = null;
         ReplaceSessionToken();
     }
 
