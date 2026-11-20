@@ -25,6 +25,8 @@ public interface ICommandScreenApplication
     CommandBriefModel QueryBrief();
 
     ChronicleView QueryChronicle(ChronicleFilter filter, int page);
+    // The page of the unfiltered Chronicle that holds an entry, or -1.
+    int FindChroniclePage(long entryId);
 }
 
 public sealed class CommandScreenApplication : CampaignScreenApplication,
@@ -44,4 +46,6 @@ public sealed class CommandScreenApplication : CampaignScreenApplication,
     public ChronicleView QueryChronicle(ChronicleFilter filter, int page) =>
         Screen?.QueryChronicle(filter, page)
         ?? new ChronicleView([], ChronicleFilter.All, [], false, false);
+
+    public int FindChroniclePage(long entryId) => Screen?.FindChroniclePage(entryId) ?? -1;
 }

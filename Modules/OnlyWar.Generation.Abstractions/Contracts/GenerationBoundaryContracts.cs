@@ -35,6 +35,35 @@ public readonly struct BriefingTokens
 }
 
 /// <summary>
+/// The facts the founding myth states (TDD §6.9), resolved by Generation
+/// from the founding and the generated chapter. The invented facts (aspirant world, aspirant count,
+/// legend) are the narrative owner's choice, made from <see cref="Seed"/>; the aspirant world must
+/// not be named like any sector world in <see cref="SectorWorldNames"/>. A founder name is null
+/// when the chapter founded without that office.
+/// </summary>
+public sealed record FoundingMythTokens
+{
+    public string ChapterName { get; init; }
+    public int Seed { get; init; }
+    public ChapterFounding Founding { get; init; }
+    public Date CampaignStartDate { get; init; }
+    public int FounderCount { get; init; }
+    public string ChapterMasterName { get; init; }
+    public string ChampionName { get; init; }
+    public string AncientName { get; init; }
+    public string LibrarianName { get; init; }
+    public string FirstCaptainName { get; init; }
+    public int MarsCohortCount { get; init; }
+    public string AuthorityTitle { get; init; }
+    public string AuthorityName { get; init; }
+    public string PlanetName { get; init; }
+    public string SubsectorName { get; init; }
+    public string EnemyName { get; init; }
+    public bool Invasion { get; init; }
+    public IReadOnlyCollection<string> SectorWorldNames { get; init; } = [];
+}
+
+/// <summary>
 /// Latent-population and invasion seeding Generation asks for but does not own. The capability
 /// rules behind these live with the faction owner; Generation only says when they apply during the
 /// authored opening (SB-09).
@@ -67,6 +96,12 @@ public interface IGenerationNarrativePort
     /// of generation are captured. Recorder lifetime is campaign event policy, not generation.
     /// </summary>
     void AttachEventRecorder(PlayerForce playerForce);
+
+    /// <summary>
+    /// Composes the founding myth and records it as a campaign event dated at the founding.
+    /// Call it before <see cref="RecordChapterFounding"/>, so the myth is the earlier event.
+    /// </summary>
+    void RecordFoundingMyth(PlayerForce playerForce, Date recordedDate, FoundingMythTokens tokens);
 
     /// <summary>Records the founding of the chapter as a campaign event.</summary>
     void RecordChapterFounding(

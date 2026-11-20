@@ -115,7 +115,45 @@ public static class PlayerForceEvents
                 chronicleTreatmentHint: CampaignEventChronicleTreatment.Standalone));
         }
 
-        public static CampaignEvent RecordProceduralDeath(this PlayerForce force, 
+        /// <summary>
+        /// Records the founding myth (TDD §6.9): dated at the founding
+        /// decree, recorded on the campaign's first week, and recorded before ChapterFounded.
+        /// </summary>
+        public static CampaignEvent RecordFoundingMyth(this PlayerForce force,
+            ChapterFoundingMythPayload payload,
+            Date foundingDate,
+            Date recordedDate)
+        {
+            if (payload == null) throw new ArgumentNullException(nameof(payload));
+            if (foundingDate == null) throw new ArgumentNullException(nameof(foundingDate));
+            if (recordedDate == null) throw new ArgumentNullException(nameof(recordedDate));
+            int occurredWeek = foundingDate.GetTotalWeeks();
+            return force.GetCampaignEventRecorder().Record(new CampaignEventCandidate(
+                CampaignEventType.ChapterFoundingMyth,
+                occurredWeek,
+                Math.Max(occurredWeek, recordedDate.GetTotalWeeks()),
+                null,
+                CampaignEventRecorder.FoundingMythDedupeKey,
+                1,
+                payload,
+                [
+                    new CampaignEventEntityRef(
+                        CampaignEntityKind.Chapter,
+                        0,
+                        CampaignEventEntityRole.Subject,
+                        payload.ChapterName)
+                ],
+                surfaceHint: CampaignEventSurfaceFlags.ChapterChronicle,
+                importanceHint: CampaignEventImportance.Defining,
+                chronicleTreatmentHint: CampaignEventChronicleTreatment.Standalone));
+        }
+
+        /// <summary>The recorded founding myth, or null for a campaign that has none.</summary>
+        public static ChapterFoundingMythPayload GetFoundingMyth(this PlayerForce force) =>
+            force?.CampaignEventLedger?.GetByDedupeKey(CampaignEventRecorder.FoundingMythDedupeKey)
+                ?.Payload as ChapterFoundingMythPayload;
+
+        public static CampaignEvent RecordProceduralDeath(this PlayerForce force,
             Date date,
             PlayerSoldier soldier,
             string detail)

@@ -485,6 +485,26 @@ namespace OnlyWar.Campaign.Command
                     soldierName);
         }
 
+        // On the first turn the Founding Directive links to the founding myth's Chronicle entry
+        // (TDD §6.9). A campaign without a myth gets no link.
+        private static IEnumerable<CommandBriefRelatedLink> FoundingMythLinks(Sector sector, Date currentDate)
+        {
+            PlayerForce force = sector.PlayerForce;
+            CampaignEvent myth = force?.CampaignEventLedger?.GetByDedupeKey(
+                CampaignEventRecorder.FoundingMythDedupeKey);
+            if (myth == null || myth.RecordedWeek != currentDate.GetTotalWeeks()) yield break;
+            ChapterChronicleEntry entry = force.ChapterChronicle?.GetByDedupeKey($"chronicle/event/{myth.Id}");
+            if (entry == null) yield break;
+            yield return new CommandBriefRelatedLink(
+                "founding-myth",
+                "Read the Founding",
+                new CampaignNavigationTarget(
+                    CampaignNavigationTargetKind.ChronicleEntry,
+                    (int)entry.Id,
+                    Fallback: $"Read {entry.Title} in the Chronicle.",
+                    DisplayNameSnapshot: entry.Title));
+        }
+
         private static void AddStrategicSituation(
             List<CommandBriefItem> items,
             Date currentDate,
@@ -529,6 +549,7 @@ namespace OnlyWar.Campaign.Command
                             Fallback: $"View {promisedWorld.Name}.",
                             DisplayNameSnapshot: promisedWorld.Name),
                     "View World",
+                    relatedLinks: FoundingMythLinks(sector, currentDate),
                     sortWeek: currentDate.GetTotalWeeks(),
                     sortDomainKey: "scenario/founding-directive"));
 

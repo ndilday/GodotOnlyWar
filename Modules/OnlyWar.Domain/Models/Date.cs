@@ -126,5 +126,25 @@ namespace OnlyWar.Domain
         {
             return ((Millenium - 1) * 52000) + ((Year - 1) * 52) + Week;
         }
+
+        /// <summary>
+        /// The year counted from the start of the calendar: (millennium - 1) * 1000 + year, so
+        /// 496.M39 is 38496. It agrees with <see cref="GetTotalWeeks"/>, including the calendar's
+        /// year 000, which is the last year of the previous millennium (000.M39 is 38000).
+        /// </summary>
+        public int AbsoluteYear => ((Millenium - 1) * 1000) + Year;
+
+        /// <summary>
+        /// The date in week <paramref name="week"/> of an absolute year. Arithmetic on absolute
+        /// years crosses a millennium correctly, where "Year - 4" on a 002.M41 date does not.
+        /// </summary>
+        public static Date FromAbsoluteYear(int absoluteYear, int week = 1)
+        {
+            if (week < 1 || week > 52) throw new ArgumentOutOfRangeException(nameof(week));
+            return FromTotalWeeks(((absoluteYear - 1) * 52) + week);
+        }
+
+        /// <summary>The year and millennium in the Imperial form, for example "496.M39".</summary>
+        public string ToYearString() => $"{Year:000}.M{Millenium}";
     }
 }

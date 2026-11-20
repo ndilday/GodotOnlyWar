@@ -37,6 +37,8 @@ namespace OnlyWar.Campaign.Events {
                     ((LegacyChapterHistoryPayload)anchor.Payload).Title,
                 CampaignEventType.ChapterFounded when anchor.Payload is ChapterFoundedPayload founding =>
                     $"The {founding.ChapterName} is Founded",
+                CampaignEventType.ChapterFoundingMyth when anchor.Payload is ChapterFoundingMythPayload myth =>
+                    myth.Title,
                 CampaignEventType.WorldSaved when anchor.Payload is WorldControlChangedPayload world =>
                     $"The Restoration of {world.PlanetName}",
                 CampaignEventType.WorldLost when anchor.Payload is WorldControlChangedPayload world =>

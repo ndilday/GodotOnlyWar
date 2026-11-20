@@ -286,6 +286,7 @@ namespace OnlyWar.Campaign.Events
                 ChapterFoundedPayload founding =>
                     $"The {founding.ChapterName} was founded with {founding.InitialActiveStrength:N0} "
                     + $"active battle brothers. {founding.OpeningDirective}",
+                ChapterFoundingMythPayload myth => myth.Text,
                 MandateOathPayload oath => RenderMandateOath(oath),
                 MandateResolvedPayload resolved => RenderMandateResolved(resolved),
                 ChapterMasterAppointedPayload appointed =>
@@ -314,6 +315,7 @@ namespace OnlyWar.Campaign.Events
                 ChapterFoundedPayload founding =>
                     $"The {founding.ChapterName} was founded with {founding.InitialActiveStrength:N0} "
                     + "active battle brothers.",
+                ChapterFoundingMythPayload myth => myth.Title,
                 LastSurvivorPayload or SquadHeldAgainstOddsPayload => RenderServiceRecord(@event, identity),
                 SquadLeaderUnavailablePayload unavailable =>
                     $"COMMAND DISRUPTION — {SubjectName(@event)} cannot deploy; "
@@ -371,6 +373,8 @@ namespace OnlyWar.Campaign.Events
                         .Replace("{master}", founding.ChapterMasterName, StringComparison.Ordinal)
                         .Replace("{authority}", founding.OpeningAuthorityName, StringComparison.Ordinal)
                         .Replace("{directive}", founding.OpeningDirective, StringComparison.Ordinal),
+                // Frozen when the campaign was generated (TDD §6.9).
+                ChapterFoundingMythPayload myth => myth.Text,
                 WorldControlChangedPayload world when world.EventType == CampaignEventType.WorldSaved =>
                     SelectFamily(WorldSavedChronicleVariants, @event, identity, "chronicle/world-saved")
                         .Replace("{planet}", world.PlanetName, StringComparison.Ordinal)

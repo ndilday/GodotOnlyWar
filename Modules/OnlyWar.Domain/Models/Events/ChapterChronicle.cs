@@ -32,6 +32,7 @@ namespace OnlyWar.Domain.Events
                 switch (@event.Type)
                 {
                     case CampaignEventType.ChapterFounded:
+                    case CampaignEventType.ChapterFoundingMyth:
                         categories.Add(ChapterChronicleCategory.Chapter);
                         categories.Add(ChapterChronicleCategory.Defining);
                         break;
@@ -218,6 +219,14 @@ namespace OnlyWar.Domain.Events
             return _byCategory.TryGetValue(category, out List<ChapterChronicleEntry> entries)
                 ? entries.Skip(page * pageSize).Take(pageSize).ToList()
                 : Array.Empty<ChapterChronicleEntry>();
+        }
+
+        /// <summary>The unfiltered page that holds an entry, or -1 if the entry is not recorded.</summary>
+        public int GetPageOf(long entryId, int pageSize)
+        {
+            if (pageSize <= 0) throw new ArgumentOutOfRangeException(nameof(pageSize));
+            int index = _pageOrder.FindIndex(entry => entry.Id == entryId);
+            return index < 0 ? -1 : index / pageSize;
         }
 
         public int GetCategoryCount(ChapterChronicleCategory category) =>

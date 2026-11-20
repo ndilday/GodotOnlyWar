@@ -73,6 +73,10 @@ namespace OnlyWar.Campaign.Command
                     : chronicle.GetCategoryCount(ToCategory(filter));
         }
 
+        /// <summary>The page of the unfiltered Chronicle that holds an entry, or -1.</summary>
+        public static int FindPage(ChapterChronicleLedger chronicle, long entryId) =>
+            chronicle?.GetPageOf(entryId, PageSize) ?? -1;
+
         private static bool HasAny(
             ChapterChronicleLedger chronicle,
             CampaignEventLedger events,
@@ -114,6 +118,7 @@ namespace OnlyWar.Campaign.Command
                 switch (@event.Type)
                 {
                     case CampaignEventType.ChapterFounded:
+                    case CampaignEventType.ChapterFoundingMyth:
                         categories.Add(ChronicleFilter.Chapter);
                         categories.Add(ChronicleFilter.Defining);
                         break;

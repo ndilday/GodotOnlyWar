@@ -51,6 +51,24 @@ namespace OnlyWar.Domain.Events
         }
     }
 
+    /// <summary>
+    /// A choice that depends only on the campaign seed and a stream key. Unlike
+    /// <see cref="NarrativeVariantSelector"/> it ignores the campaign's random id, so the same seed
+    /// gives the same founding and founding myth (TDD §6.9), and it never
+    /// draws from the shared RNG stream.
+    /// </summary>
+    public static class SeededSelection
+    {
+        public static int Select(long seed, string streamKey, int count)
+        {
+            if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+            byte[] bytes = StableDerivation.BuildBytes(
+                new CampaignIdentity(Guid.Empty, seed), 0, streamKey, 1);
+            uint value = BinaryPrimitives.ReadUInt32LittleEndian(SHA256.HashData(bytes).AsSpan(0, 4));
+            return (int)(value % (uint)count);
+        }
+    }
+
     public static class StableDerivation
     {
         public static byte[] BuildBytes(

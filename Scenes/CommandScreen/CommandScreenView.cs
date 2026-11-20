@@ -169,6 +169,22 @@ public partial class CommandScreenView : MainScreenView
         _bodyScroll.ScrollVertical = Math.Max(0, offset);
     }
 
+    // Scrolls a Chronicle card into view once the new page has its layout. A card panel takes no
+    // focus, so FocusStableKey cannot do this.
+    public void ScrollToChronicleEntry(long entryId)
+    {
+        if (_bodyScroll == null || _cardStack == null) return;
+        Control card = _cardStack.GetNodeOrNull<Control>($"chronicle_{entryId}");
+        if (card == null) return;
+        Callable.From(() =>
+        {
+            if (IsInstanceValid(card) && IsInstanceValid(_bodyScroll))
+            {
+                _bodyScroll.EnsureControlVisible(card);
+            }
+        }).CallDeferred();
+    }
+
     public void FocusStableKey(string stableKey)
     {
         // Dynamic card controls are intentionally not indexed by position. The next refresh can

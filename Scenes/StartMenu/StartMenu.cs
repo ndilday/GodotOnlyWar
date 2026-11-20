@@ -118,7 +118,9 @@ public partial class StartMenu : Control
 					new SeededRNG(settings.Seed), _storage));
 			_campaignApplication.StartNewCampaign(
 				_newGameRulesData ?? OnlyWar.Persistence.Database.GameRules.GameRulesLoader.Load(_storage.RulesDatabasePath),
-                new Date(39, 500, 1),
+                // No date: the seed chooses the chapter's founding, which sets the starting year
+                // (TDD §6.9).
+                null,
                 settings.ChapterName,
                 settings.Seed,
                 ToScenarioFactionSelection(settings.InvaderSelection));

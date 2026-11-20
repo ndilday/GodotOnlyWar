@@ -77,6 +77,7 @@ namespace OnlyWar.Campaign.Events
                     }
                     break;
                 case CampaignEventType.ChapterFounded:
+                case CampaignEventType.ChapterFoundingMyth:
                     surfaces = CampaignEventSurfaceFlags.ChapterChronicle;
                     importance = CampaignEventImportance.Defining;
                     treatment = CampaignEventChronicleTreatment.Standalone;

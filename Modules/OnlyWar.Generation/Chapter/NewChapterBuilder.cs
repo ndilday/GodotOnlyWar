@@ -165,7 +165,8 @@ namespace OnlyWar.Generation.Chapter
                     // add psychic specific training here
                 }
                 trainingService.EvaluateSoldier(soldier, trainingEndDate);
-                soldier.ProgenoidImplantDate = new Date(date.Millenium, date.Year - 2, RNG.GetIntBelowMax(1, 53));
+                soldier.ProgenoidImplantDate = Date.FromAbsoluteYear(
+                    Math.Max(1, date.AbsoluteYear - 2), RNG.GetIntBelowMax(1, 53));
             }
             return soldiers;
         }

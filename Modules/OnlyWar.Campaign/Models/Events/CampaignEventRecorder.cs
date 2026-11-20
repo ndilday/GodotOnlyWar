@@ -22,6 +22,7 @@ namespace OnlyWar.Campaign.Events
         // first contacts follow it, not precede it (user report, 2026-11-19).
         private readonly List<CampaignEventCandidate> _firstContactsBeforeFounding = new();
         internal const string FoundingDedupeKey = "chapter/founded";
+        public const string FoundingMythDedupeKey = "chapter/founding-myth";
         private CampaignIdentity _campaignIdentity = CampaignIdentity.Empty;
 
         public CampaignEventRecorder(

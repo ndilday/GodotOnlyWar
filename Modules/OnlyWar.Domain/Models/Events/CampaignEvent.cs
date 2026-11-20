@@ -54,7 +54,10 @@ namespace OnlyWar.Domain.Events
         // is an Oath (104) with a MandateOathPayload.
         MandateResolved = 2210,
         ChapterMasterAppointed = 2211,
-        ChapterWorldRenounced = 2212
+        ChapterWorldRenounced = 2212,
+        // The founding myth: the chapter's generated history before the first turn
+        // (TDD §6.9). Dated at the founding decree.
+        ChapterFoundingMyth = 2213
     }
 
     public enum CampaignEntityKind
@@ -392,6 +395,7 @@ namespace OnlyWar.Domain.Events
                     or CampaignEventType.LegacyChapterHistory
                     or CampaignEventType.BattleResolved
                     or CampaignEventType.ChapterFounded
+                    or CampaignEventType.ChapterFoundingMyth
                     or CampaignEventType.FactionPresenceConfirmed
                     or CampaignEventType.FactionPresenceLocated
                     or CampaignEventType.FactionPresenceDisproven
@@ -412,6 +416,7 @@ namespace OnlyWar.Domain.Events
             Register<LegacyChapterHistoryPayload>(CampaignEventType.LegacyChapterHistory, 1);
             Register<BattleResolvedPayload>(CampaignEventType.BattleResolved, 1);
             Register<ChapterFoundedPayload>(CampaignEventType.ChapterFounded, 1);
+            Register<ChapterFoundingMythPayload>(CampaignEventType.ChapterFoundingMyth, 1);
             Register<FactionIntelEventPayload>(CampaignEventType.FactionPresenceConfirmed, 1);
             Register<FactionIntelEventPayload>(CampaignEventType.FactionPresenceLocated, 1);
             Register<FactionIntelEventPayload>(CampaignEventType.FactionPresenceDisproven, 1);

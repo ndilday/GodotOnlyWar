@@ -24,9 +24,13 @@ namespace OnlyWar.Generation.World
                                             GenerationSupport support,
                                             string chapterName = null,
                                             ScenarioFactionSelection invaderSelection = null,
-                                            NameGenerator nameGenerator = null)
+                                            NameGenerator nameGenerator = null,
+                                            ChapterFounding founding = null)
         {
             if (support == null) throw new ArgumentNullException(nameof(support));
+            // The founding the chapter belongs to. A caller that chose the start date itself gets
+            // the founding that agrees with it (TDD §6.9).
+            founding ??= FoundingSelector.ForCampaignStart(data, currentDate);
             nameGenerator ??= new NameGenerator();
             List<Planet> planetList = [];
             List<Character> characterList = [];
@@ -57,7 +61,10 @@ namespace OnlyWar.Generation.World
                 }
             }
 
-            Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
+            // Training began at the founding decree. Absolute-year arithmetic also holds when the
+            // campaign starts in the first years of a millennium.
+            Date trainingStartDate = Date.FromAbsoluteYear(
+                Math.Max(1, currentDate.AbsoluteYear - ChapterFounding.TrainingYears));
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(
                 data, support, trainingStartDate, currentDate, chapterName,
                 nameGenerator: nameGenerator);
@@ -77,7 +84,7 @@ namespace OnlyWar.Generation.World
             // campaign (SB-09).
             sector.Scenario = ScenarioBuilder.StampPromisedWorld(
                 sector, data, currentDate, support, playerForce, planetList, characterList,
-                nameGenerator, invaderSelection);
+                nameGenerator, founding, seed, invaderSelection);
             support.Narrative.ReconcileChronicle(playerForce);
             return sector;
         }

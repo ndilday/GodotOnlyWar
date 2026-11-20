@@ -172,7 +172,8 @@ namespace OnlyWar.Persistence.Database.GameRules
                 SectorGenerationProfiles = sectorGenerationProfiles,
                 FactionBehaviorRulesProfiles = factionBehaviorRulesProfiles,
                 FactionDoctrines = GetFactionDoctrines(dbCon),
-                CyberneticOptions = GetCyberneticOptions(dbCon)
+                CyberneticOptions = GetCyberneticOptions(dbCon),
+                Foundings = GetFoundings(dbCon)
             };
             RulesDatabaseValidator.Validate(rules);
             return rules;
@@ -230,6 +231,29 @@ namespace OnlyWar.Persistence.Database.GameRules
                     Convert.ToBoolean(reader[4])));
             }
             return options;
+        }
+
+        /// <summary>
+        /// The Imperial foundings (TDD §6.9). Years are absolute
+        /// (<see cref="Date.AbsoluteYear"/>).
+        /// </summary>
+        private static List<Founding> GetFoundings(IDbConnection connection)
+        {
+            List<Founding> foundings = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT Id, Number, Epithet, EarliestYear, LatestYear FROM Founding ORDER BY Number";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                foundings.Add(new Founding(
+                    reader.GetInt32(0),
+                    reader.GetInt32(1),
+                    reader.IsDBNull(2) ? null : reader[2].ToString(),
+                    reader.GetInt32(3),
+                    reader.GetInt32(4)));
+            }
+            return foundings;
         }
 
         private List<Faction> GetFactionTemplates(IDbConnection connection,

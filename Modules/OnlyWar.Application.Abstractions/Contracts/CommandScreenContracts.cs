@@ -67,7 +67,10 @@ public enum CampaignNavigationTargetKind
     // The Chapter screen (the Chapter Master promotion) and the mandate chooser
     // (TDD §6.15 *Application*).
     Chapter,
-    Mandates
+    Mandates,
+    // One Chapter Chronicle entry, by its id in PrimaryId. The Command screen opens it in its own
+    // Chronicle lens (TDD §6.9).
+    ChronicleEntry
 }
 
 /// <summary>

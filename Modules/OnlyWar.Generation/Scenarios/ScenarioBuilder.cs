@@ -33,6 +33,8 @@ namespace OnlyWar.Generation.Scenarios
             Sector sector, GameRulesData data, Date currentDate, GenerationSupport support,
             PlayerForce playerForce, List<Planet> planetList, List<Character> characterList,
             NameGenerator nameGenerator,
+            ChapterFounding founding,
+            int seed,
             ScenarioFactionSelection invaderSelection = null)
         {
             invaderSelection ??= ScenarioFactionSelection.Default;
@@ -99,6 +101,13 @@ namespace OnlyWar.Generation.Scenarios
                 .GetAllMembers()
                 .OfType<PlayerSoldier>()
                 .FirstOrDefault(soldier => soldier.Template == data.ChapterDoctrine.ChapterMaster);
+            // The myth is recorded first, so it is the earlier event (TDD §6.9).
+            support.Narrative.RecordFoundingMyth(
+                playerForce,
+                currentDate,
+                BuildFoundingMythTokens(
+                    sector, data, playerForce, chapterMaster, promised, authority, authorityTier,
+                    invader, founding, seed, currentDate, support));
             support.Narrative.RecordChapterFounding(
                 playerForce,
                 currentDate,
@@ -769,6 +778,62 @@ namespace OnlyWar.Generation.Scenarios
                 + "become the Chapter's home."
             });
             return briefingText;
+        }
+
+        // The facts the founding myth states (TDD §6.9). Founders are found
+        // by their offices; an office the chapter founded without leaves its name null.
+        private static FoundingMythTokens BuildFoundingMythTokens(
+            Sector sector,
+            GameRulesData data,
+            PlayerForce playerForce,
+            PlayerSoldier chapterMaster,
+            Planet promised,
+            Character authority,
+            GovernanceTier authorityTier,
+            Faction invader,
+            ChapterFounding founding,
+            int seed,
+            Date currentDate,
+            GenerationSupport support)
+        {
+            ChapterGenerationDoctrine doctrine = data.ChapterDoctrine;
+            List<PlayerSoldier> founders = playerForce.Army.PlayerSoldierMap.Values
+                .OrderBy(soldier => soldier.Id)
+                .ToList();
+            string NameOf(params SoldierTemplate[] templates) => templates
+                .Where(template => template != null)
+                .Select(template => founders.FirstOrDefault(soldier => soldier.Template == template))
+                .FirstOrDefault(soldier => soldier != null)?.Name;
+            List<PlayerSoldier> captains = founders
+                .Where(soldier => doctrine.Captain != null && soldier.Template == doctrine.Captain)
+                .ToList();
+            PlayerSoldier firstCaptain = captains.FirstOrDefault(soldier =>
+                    doctrine.VeteranCompanyHeadquarters != null
+                    && soldier.AssignedSquad?.SquadTemplate == doctrine.VeteranCompanyHeadquarters)
+                ?? captains.FirstOrDefault();
+
+            return new FoundingMythTokens
+            {
+                ChapterName = playerForce.Army.OrderOfBattle.Name,
+                Seed = seed,
+                Founding = founding,
+                CampaignStartDate = currentDate,
+                FounderCount = founders.Count,
+                ChapterMasterName = chapterMaster?.Name,
+                ChampionName = NameOf(doctrine.Champion),
+                AncientName = NameOf(doctrine.Ancient),
+                LibrarianName = NameOf(doctrine.MasterOfTheLibrarium, doctrine.Codicier, doctrine.Lexicanium),
+                FirstCaptainName = firstCaptain?.Name,
+                MarsCohortCount = founders.Count(soldier =>
+                    soldier.IndividualPosting?.Purpose == IndividualPostingPurpose.Mechanicus),
+                AuthorityTitle = support.Narrative.GetAuthorityTitle(authorityTier),
+                AuthorityName = authority.Name,
+                PlanetName = promised.Name,
+                SubsectorName = ResolveSubsectorName(sector, promised),
+                EnemyName = invader.Name,
+                Invasion = FactionCapabilities.GeneratesInvasions(invader),
+                SectorWorldNames = sector.Planets.Values.Select(planet => planet.Name).ToList()
+            };
         }
 
         // §4 token sourcing — subsectors have no authored name, so name the promised world's

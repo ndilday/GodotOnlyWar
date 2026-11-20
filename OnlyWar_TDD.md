@@ -2040,6 +2040,37 @@ training/rating policy, and `ICandidateWarmupSimulator`. `CandidateGenerationSup
 implementations. The simulator uses an `ICampaignSimulationSession` for the candidate sector, so
 Generation depends on a port rather than on Campaign turn implementation and the graph remains acyclic.
 
+**Founding and founding myth** (PRD §4.19). The rules database's `Founding` table (id, number,
+optional epithet, earliest and latest year) lists the numbered foundings a chapter can belong to.
+Its years are absolute (`Date.AbsoluteYear` = (millennium − 1) × 1000 + year, so 496.M39 is
+38496), so a range may cross a millennium, and `GameRulesData.Foundings` rejects a founding that
+begins before a lower-numbered one ends. The rows follow the lore (fandom wiki, Lexicanum, and book
+citations collected on Bolter & Chainsword, checked 2026-11-18), which does not agree with itself:
+the 21st Founding has a book date of 991.M35 (6th-edition rulebook; Imperial Armour 9), yet the
+lore dates the 13th and 19th later. The rule is that the number sets the order, a book date is kept,
+and an approximate date moves as little as possible, so the 13th and 19th sit in late M35 rather than
+the 21st moving. The 2nd (lineage always known), the Ultima (Primaris) and the undated foundings are
+left out; the 17th is left out because its only date, from one chapter, would contradict the 13th's. `FoundingSelector.Select` picks a row and a year in its
+range from the seed through `SeededSelection` (a hash of the seed and a stream key, not the shared
+RNG and not the campaign's random id), and `ChapterFounding.CampaignStartDate` is week 1 of the year
+`ChapterFounding.TrainingYears` (4) later. `CampaignApplication.CreateNewCampaign` with a null date
+uses this; the start menu passes null. A caller that passes a date gets
+`FoundingSelector.ForCampaignStart`, the founding whose range holds the start year less four, or an
+unnumbered founding when none does; tests and the debug preview start on 500.M39, the 24th Founding
+of 496.M39. The era has no other effect yet. Before `ChapterFounded`, `ScenarioBuilder` resolves
+`FoundingMythTokens` (the founding, founders by office, the Mars cohort size, the charge) and calls
+`IGenerationNarrativePort.RecordFoundingMyth`. `FoundingMythComposer` (`OnlyWar.Campaign.Narrative`)
+writes four or five paragraphs from five `NarrativeSection` pools (Origin, Trial, Election, Charge,
+Legend; a legend about the vote joins the Election paragraph), each variant chosen from the seed and
+the section key. It invents the aspirant world (never a sector world's name), the aspirant count and
+the legend, and returns a `ChapterFoundingMythPayload` holding those facts and the frozen text. The
+`ChapterFoundingMyth` event (dedupe key `chapter/founding-myth`) occurs at the founding decree and is
+recorded on the first week; it is a standalone, defining Chronicle entry in the Chapter category.
+`PlayerForceEvents.GetFoundingMyth` reads it back for later prose. On the first week the Founding
+Directive card carries a `ChronicleEntry` related link, which the Command screen resolves itself:
+`ICommandScreenApplication.FindChroniclePage` finds the unfiltered page, and the view scrolls the card
+into sight. The payload is event JSON, so the save format did not change.
+
 On load, `SectorTopologyBuilder` reconstructs the derived subsectors, warp lanes, and governance seats from the saved sector and rules profile; loading does not invoke new-campaign generation.
 
 Subsectors, warp lanes, and governance designations are derived runtime structures, not rules-database

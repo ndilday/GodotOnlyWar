@@ -127,6 +127,16 @@ namespace OnlyWar.Application.Adapters.Generation
         public void AttachEventRecorder(PlayerForce playerForce) =>
             playerForce?.GetCampaignEventRecorder();
 
+        public void RecordFoundingMyth(PlayerForce playerForce, Date recordedDate, FoundingMythTokens tokens)
+        {
+            if (playerForce == null) throw new ArgumentNullException(nameof(playerForce));
+            if (tokens == null) throw new ArgumentNullException(nameof(tokens));
+            playerForce.RecordFoundingMyth(
+                FoundingMythComposer.Compose(tokens),
+                tokens.Founding.FoundingDate,
+                recordedDate);
+        }
+
         public void RecordChapterFounding(
             PlayerForce playerForce,
             Date date,

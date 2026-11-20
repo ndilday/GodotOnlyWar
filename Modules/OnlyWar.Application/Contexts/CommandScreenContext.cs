@@ -67,6 +67,9 @@ internal sealed class CommandScreenContext
             force.ChapterChronicle.Entries.Count > 0);
     }
 
+    internal int FindChroniclePage(long entryId) =>
+        ChapterChronicleBrowser.FindPage(_sector.PlayerForce?.ChapterChronicle, entryId);
+
     private static string ChronicleFilterLabel(ChronicleFilter filter) => filter switch
     {
         ChronicleFilter.Defining => "Defining",

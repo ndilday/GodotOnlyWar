@@ -80,14 +80,17 @@ starting constants live in `MandateConstants`, and its three rejected alternativ
 chooser, practical rewards, legacy for inaction) fold into TDD §6.15 in a sentence each. Four
 out-of-scope items moved to PRD §5.8 *Chapter Mandates follow-through* before deletion. About 35 code
 comments that cited it by decision number were reworded to state the rule and point at the TDD or PRD.
+`FoundingMyth.md` (the chapter's founding, which sets the starting year, and the generated founding
+myth as the first Chronicle entry) was implemented, distilled into TDD §6.9 *Founding and founding
+myth* with the player rules in PRD §4.19, and deleted on 2026-11-20. It was never committed. Its lore
+sources and the rule that ordered the foundings fold into TDD §6.9 in a few sentences; the founding
+rows live in the rules database. Three out-of-scope items moved to PRD §5.8 *Founding myth
+follow-through* before deletion. Its Godot check was still outstanding when it was deleted.
 
 Active designs:
 
 - `Active/RefugeesAndSwarmExpansion.md` — refugees weigh protection and danger, and the Tyranid
   swarm weighs believed resistance when it expands (PRD §4.24, Alpha 0.8.1). Created 2026-11-18;
-  design complete, not started.
-- `Active/FoundingMyth.md` — a generated founding history as the first Chronicle entry, and the
-  chapter's founding, which sets the starting year (PRD §4.19, Alpha 0.8.1). Created 2026-10-13;
   design complete, not started.
 - `Active/SpecialOperations.md` — sabotage, ambush and assassination for every faction, from each
   faction's own intelligence, with believed enemy works (PRD §5.6, Alpha 0.8.1). Created

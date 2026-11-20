@@ -233,7 +233,25 @@ public partial class CommandScreenController : MainScreenController
     {
         if (target == null || !target.IsAvailable) return;
         SaveScrollOffset();
+        if (target.Kind == CampaignNavigationTargetKind.ChronicleEntry && target.PrimaryId.HasValue)
+        {
+            OpenChronicleEntry(target.PrimaryId.Value);
+            return;
+        }
         NavigationRequested?.Invoke(this, target);
+    }
+
+    // A Chronicle entry opens in this screen's own Chronicle lens, on the unfiltered page that
+    // holds it (TDD §6.9).
+    private void OpenChronicleEntry(long entryId)
+    {
+        int page = _command.FindChroniclePage(entryId);
+        if (page < 0) return;
+        _lens = CommandLens.Chronicle;
+        _chronicleFilter = ChronicleFilter.All;
+        _chroniclePages[ChronicleFilter.All] = page;
+        RefreshFromExternalChange();
+        _view.ScrollToChronicleEntry(entryId);
     }
 
     private void OnFocusedStableKeyChanged(object sender, string stableKey)

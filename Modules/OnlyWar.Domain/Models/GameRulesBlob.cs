@@ -45,6 +45,8 @@ namespace OnlyWar.Domain
         public IReadOnlyDictionary<int, ForceDoctrineWeights> FactionDoctrines { get; set; }
         // Installed augmetic tiers (OnlyWar_TDD.md §5.3), by Id.
         public IReadOnlyList<CyberneticOption> CyberneticOptions { get; set; }
+        // The Imperial foundings a new chapter can belong to (TDD §6.9).
+        public IReadOnlyList<Founding> Foundings { get; set; }
 
     }
 

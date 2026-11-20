@@ -103,6 +103,33 @@ namespace OnlyWar.Domain.Events
     }
 
     /// <summary>
+    /// The founding myth (TDD §6.9): its frozen text and the facts it states
+    /// about the time before the campaign. The invented facts are the aspirant world, the
+    /// aspirant count and the legend; no system reads them, and later text reads them here so it
+    /// cannot contradict the myth. <see cref="FoundingNumber"/> is 0 for a founding whose number
+    /// the records do not preserve. <see cref="FoundingYear"/> is absolute
+    /// (<see cref="Date.AbsoluteYear"/>).
+    /// </summary>
+    public sealed record ChapterFoundingMythPayload(
+        string ChapterName,
+        int? FoundingId,
+        int FoundingNumber,
+        string FoundingEpithet,
+        int FoundingYear,
+        string AspirantWorldName,
+        string AspirantWorldKind,
+        int AspirantCount,
+        int FounderCount,
+        int MarsCohortCount,
+        string LegendKey,
+        string Title,
+        string Text) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.ChapterFoundingMyth;
+        public ushort Version => 1;
+    }
+
+    /// <summary>
     /// Immutable facts shared by every typed event emitted from one tactical battle. The envelope
     /// correlation key remains authoritative; repeating it here makes the payload self-describing
     /// for consumers that do not first join the relational event row.

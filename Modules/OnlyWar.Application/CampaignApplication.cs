@@ -140,7 +140,13 @@ public sealed class CampaignApplication :
         ScenarioFactionSelection invaderSelection = null)
     {
         if (rules == null) throw new ArgumentNullException(nameof(rules));
-        if (date == null) throw new ArgumentNullException(nameof(date));
+
+        // No date: the seed chooses the founding, and the founding sets the start date
+        // (TDD §6.9). A given date keeps the founding that agrees with it.
+        ChapterFounding founding = date == null
+            ? FoundingSelector.Select(rules, seed)
+            : FoundingSelector.ForCampaignStart(rules, date);
+        date ??= founding.CampaignStartDate;
 
         PersistentIdAllocator identity = new();
         Sector candidate = SectorBuilder.GenerateSector(
@@ -150,7 +156,8 @@ public sealed class CampaignApplication :
             Services.Generation.CreateSupport(rules, date, Services.Random, identity),
             chapterName,
             invaderSelection,
-            nameGenerator: Services.NameGenerator);
+            nameGenerator: Services.NameGenerator,
+            founding: founding);
         return new GameSession(rules, candidate, date, Services.Random, identity);
     }
 
@@ -249,6 +256,7 @@ public sealed class CampaignApplication :
     public CommandBriefModel QueryBrief() => _command.QueryBrief();
     public ChronicleView QueryChronicle(ChronicleFilter filter, int page) =>
         _command.QueryChronicle(filter, page);
+    public int FindChroniclePage(long entryId) => _command.FindChroniclePage(entryId);
 
     // IDiplomacyScreenApplication
     public DiplomacyBoardView QueryDiplomacy() => _diplomacy.QueryDiplomacy();

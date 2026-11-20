@@ -87,6 +87,9 @@ namespace OnlyWar.Domain
         public AwardFamilyCatalog AwardCatalog { get; }
         public SupplyEconomyRules SupplyEconomyRules { get; }
         public ScenarioProfileCatalog ScenarioProfiles { get; }
+        // In founding-number order. Empty in hand-built rules; generation then uses a founding
+        // whose number the records do not preserve (TDD §6.9).
+        public IReadOnlyList<Founding> Foundings { get; }
         public FactionPlanetPresenceCatalog FactionPlanetPresence { get; }
         // Validated registry of code-owned skill roles resolved through stable rules-data keys
         // (see TDD §8.3). Resolved and validated at load; fails fast if missing.
@@ -141,6 +144,7 @@ namespace OnlyWar.Domain
             SectorFactions = new SectorGenerationFactions(
                 _factions, gameBlob.FactionRoleAssignments);
             ScenarioProfiles = new ScenarioProfileCatalog(gameBlob.ScenarioProfiles);
+            Foundings = ResolveFoundings(gameBlob.Foundings);
             FactionPlanetPresence = new FactionPlanetPresenceCatalog(
                 gameBlob.FactionPlanetPresenceRules);
             FactionBehaviorRulesProfiles = ResolveFactionBehaviorRulesProfiles(
@@ -155,6 +159,30 @@ namespace OnlyWar.Domain
             ValidateFactionGenerationPolicies(gameBlob.ScenarioInfiltratorOverrides);
             ValidateRatingDefinitions();
             ValidateSoldierTemplateRequirements();
+        }
+
+        // Numbers order the foundings in time (§5.1), so a higher number never starts earlier
+        // than a lower one ends.
+        private static IReadOnlyList<Founding> ResolveFoundings(IReadOnlyList<Founding> foundings)
+        {
+            List<Founding> ordered = (foundings ?? []).OrderBy(founding => founding.Number).ToList();
+            for (int i = 1; i < ordered.Count; i++)
+            {
+                Founding earlier = ordered[i - 1];
+                Founding later = ordered[i];
+                if (later.Number == earlier.Number)
+                {
+                    throw new InvalidOperationException(
+                        $"Rules database contains founding number {later.Number} twice.");
+                }
+                if (later.EarliestYear < earlier.LatestYear)
+                {
+                    throw new InvalidOperationException(
+                        $"Founding {later.Number} begins (year {later.EarliestYear}) before founding "
+                        + $"{earlier.Number} ends (year {earlier.LatestYear}).");
+                }
+            }
+            return ordered.AsReadOnly();
         }
 
         private static IReadOnlyDictionary<string, FactionBehaviorRulesProfile>
